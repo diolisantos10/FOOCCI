@@ -2211,3 +2211,108 @@ Hierarquia 9 · Tipografia 9 · Espaçamento 9 · Consistência 9.
 375/768/1280, **inclusive com a gaveta "Fora de operação" aberta**.
 
 — interface, branch `claude/canais-central-canal-morto`
+
+---
+
+## 2026-08-14 · Dioli Client Command Center — porte da interface aprovada
+
+**Pedido:** implantar, sem redesenhar, a interface aprovada do `CLAUDE_HANDOFF.md`
+(ZIP `dioli-dashboard`), ligar aos dados reais e deixar explícita no CÓDIGO a
+fronteira entre painel interno da agência e portal do cliente.
+
+### O que a referência era, de verdade
+
+`app/page.tsx` (48 KB) minificado em 48 linhas, mais `globals.css` + `complete.css`
+(51 KB) também minificados. Um app Next inteiro, escrito em `html`, `body`, `*` e
+em nomes genéricos (`.card`, `.head`, `.pill`, `.kpis`). **Colado como está, ele
+reescreveria o painel Foocci inteiro.**
+
+O porte foi mecânico e verificável, não "reescrita inspirada":
+- `prettier` para desminificar; nada de reimplementar de olho.
+- Um script `postcss` prefixou TODO seletor com `.dioliOS`. `:root`/`html`/`body`
+  viraram `.dioliOS`; `*` virou `.dioliOS *`.
+- A referência era Tailwind **v4** e o Foocci é **v3**. O preflight do v4 zera
+  margem e padding de tudo; o do v3 não. Sem reproduzir isso DENTRO do escopo, o
+  layout abre buracos que parecem "erro de porte" e não são. Bloco NORMALIZE no
+  topo de `dioli.css`.
+- `Sora` embarcada como arquivo local a partir do próprio ZIP. `next/font/google`
+  faria o build de produção depender de rede para desenhar uma tela.
+
+**A trava:** `src/components/agencia/dioli-css-scope.test.ts` reprova qualquer
+seletor que não comece por `.dioliOS`. O comentário no topo do CSS pede escopo;
+o teste é quem obriga (guardrail 4).
+
+### O que a referência escondia, e só o navegador contou
+
+Rodei os 13 estados × 3 tamanhos num harness que monta os componentes REAIS
+(esbuild + Playwright), medindo estouro em vez de olhar print:
+
+1. **A 375px a página nascia com 455px de largura.** Causa raiz única e chata:
+   item de grade nasce com `min-width:auto` e não encolhe abaixo do próprio
+   conteúdo. O menor ponto de quebra da folha aprovada é 600px e ela só colapsa
+   três grades — as sete que vieram no `complete.css` ficaram de fora.
+2. **Falso positivo que quase virou correção errada:** `offsetHeight -
+   clientHeight` acusava "barra de rolagem" de 1–2px em `.socialNav` e
+   `.deptNav`. Era **borda**. Descontar `borderTopWidth`/`borderBottomWidth`
+   antes de concluir — senão você "conserta" o que não está quebrado e some com
+   a borda do desenho aprovado.
+3. **A folha apagava a "Ficha do cliente" de 900px para baixo**
+   (`.clientHeadActions > button:first-child{display:none}`). É um dos doze
+   módulos nomeados no handoff: no celular e no tablet ele ficava inalcançável.
+4. **A folha apagava `Somente leitura` da linha de integração a partir de 900px.**
+   Esse `<em>` não é enfeite de desktop — é a regra de permissão da tela, a que
+   diz que a agência não mexe na credencial do cliente.
+5. **`.mood > div > button` pegava também o botão do cabeçalho** (`div.head >
+   button`), virando um bloco degradê de 90px onde os outros vinte cards
+   desenham um link de texto.
+
+As cinco correções vivem em blocos comentados no fim de `dioli.css`, cada uma
+com o motivo. São reversíveis uma a uma.
+
+### O que NÃO consertei, e por quê
+
+**A tipografia da referência tem piso de 5px.** Rótulo de KPI, hint, `small` de
+card e o `Somente leitura` são 5px; corpo é 6px; `h3` de card é 11px. Ao lado
+disso, `.pmChat > footer .send` não declara tamanho e herda 16px do root — um
+salto de 3,2× sem degrau no meio. Isso não é opinião de gosto: é medida, está em
+`dioli.css` e dá para conferir com `getComputedStyle`.
+
+Não mexi. A ordem foi "sem mudar nada" e a tela foi aprovada pelo CEO. Mas
+**minha nota de tipografia é 5, e a regra da casa manda iterar abaixo de 8.**
+Iterar aqui seria redesenhar a escala de uma tela aprovada — decisão que não é
+minha. Então **escalei em vez de iterar**. É o caso que a doutrina não cobre bem:
+"itere sozinho" pressupõe que o desenho é meu.
+
+### Fronteira agência × portal — como ficou travada
+
+Três camadas, não um aviso:
+1. `ClientPortalView` é montada **campo a campo** por `toClientPortalView()`
+   (allowlist). Campo interno novo não vaza por esquecimento — o esquecimento
+   vira ausência (guardrail 2).
+2. `findInternalLeak()` varre em profundidade e devolve o **caminho** do
+   vazamento, não só "vazou" (guardrail 6).
+3. Os `select` do Prisma não pedem `accessToken`, `configBlob`,
+   `pageAccessTokenEncrypted` nem `webhookVerifyToken`. O ciphertext não é lido
+   e não trafega.
+
+### Dado real × vazio honesto
+
+O eixo virou o CLIENTE (`Restaurant`). Casaram: projetos (`AgencyProject`),
+entregas (`StrategyRoomSession`), aprovações (`AgencyProject` em
+`PROPOSAL_READY`), integrações (4 tabelas), Brand Hub
+(`RestaurantBrandConfig`), ficha (`+ SdrEntrevista`).
+
+Não existe tabela para: solicitação de cliente, chat do PM, métrica de social,
+mídia paga, receita atribuída, NPS, custo, margem, Decision Log. **Tudo isso sai
+"—" com o motivo escrito**, no mesmo slot e com a mesma classe do número real.
+`Conversation` seria o substituto tentador para o chat do PM e **não serve**: é
+cliente final ↔ restaurante, outro domínio.
+
+`progressOf()` deriva do ESTÁGIO registrado; estágio que não diz nada sobre
+avanço (`DRAFT`, `ACTIVE`) devolve `null` e a barra fica vazia. Barra de
+progresso é o lugar clássico onde se inventa número sem perceber.
+
+**Verificação:** `tsc` limpo · `next build` limpo · `vitest` 6373 verdes (488
+arquivos) · rolagem horizontal **zero** nas 48 cenas medidas.
+
+— interface, branch `claude/foocci-brain-vaamrx`

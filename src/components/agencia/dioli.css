@@ -1,0 +1,4093 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Dioli Client Command Center — folha de estilo APROVADA, portada sem alterar
+   nenhum valor de design.
+
+   Origem: CLAUDE_HANDOFF.md (14/08/2026) · `app/globals.css` + `app/complete.css`
+   do ZIP de referência `dioli-dashboard`, concatenados nessa ordem.
+
+   O QUE FOI ALTERADO NO PORTE — e só isto:
+   1. Todo seletor foi prefixado com `.dioliOS`. A referência era um app inteiro
+      e escrevia em `html`, `body`, `*` e em nomes genéricos (`.card`, `.head`,
+      `.pill`). Sem o escopo, essa folha reescreveria o painel Foocci inteiro.
+      `:root`/`html`/`body` viraram `.dioliOS`; `*` virou `.dioliOS *`.
+   2. `@import "tailwindcss"` foi removido — o Foocci já carrega o Tailwind.
+      Em troca, o bloco NORMALIZE abaixo reproduz, DENTRO do escopo, o preflight
+      do Tailwind v4 que a referência assumia (margem/padding zerados em tudo).
+      Sem ele o layout abre buracos, porque o Foocci está no Tailwind v3.
+   3. `var(--inter)` e `var(--sora)` foram religados às variáveis de fonte do
+      Foocci na regra de ponte logo abaixo. Nenhum `font:` foi tocado.
+
+   Nenhum tamanho, cor, raio, espaçamento ou peso foi modificado.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── NORMALIZE (equivalente ao preflight do Tailwind v4, escopado) ────────── */
+.dioliOS *,
+.dioliOS *::before,
+.dioliOS *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+}
+.dioliOS button,
+.dioliOS input,
+.dioliOS optgroup,
+.dioliOS select,
+.dioliOS textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+.dioliOS button {
+  cursor: pointer;
+  text-align: left;
+}
+.dioliOS ul,
+.dioliOS ol {
+  list-style: none;
+}
+.dioliOS svg {
+  display: block;
+}
+.dioliOS h1,
+.dioliOS h2,
+.dioliOS h3,
+.dioliOS h4 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* ── Ponte de fontes: os nomes da referência → os tokens do Foocci ────────── */
+.dioliOS {
+  --inter: var(--font-inter);
+  --sora: var(--font-sora);
+}
+
+.dioliOS {
+  --navy: #070c21;
+  --cyan: #74e7ea;
+  --cyan2: #20cbd3;
+  --off: #f5f7f7;
+  --line: #dfe6e8;
+  --muted: #718087;
+  --green: #25aa72;
+  --amber: #df9824;
+  --red: #e4535e;
+}
+.dioliOS * {
+  box-sizing: border-box;
+}
+.dioliOS,.dioliOS {
+  margin: 0;
+  background: #f4f6f9;
+  color: var(--navy);
+  font-family: var(--inter), Arial;
+}
+.dioliOS button,.dioliOS textarea {
+  font: inherit;
+  color: inherit;
+}
+.dioliOS .agencyBar {
+  height: 47px;
+  background: #fff;
+  border-bottom: 1px solid #e2e6ea;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  gap: 36px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.dioliOS .agencyLogo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.dioliOS .agencyLogo i {
+  font: 600 19px var(--sora);
+  font-style: normal;
+}
+.dioliOS .agencyLogo b {
+  font: 700 16px var(--sora);
+}
+.dioliOS .agencyLogo small {
+  font-size: 5px;
+  letter-spacing: 2px;
+  margin-left: 2px;
+}
+.dioliOS .agencySearch {
+  width: 290px;
+  background: #f4f6f8;
+  border: 1px solid #e4e8eb;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #8a949b;
+  font-size: 7px;
+}
+.dioliOS .agencyActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dioliOS .agencyActions button {
+  background: var(--navy);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-size: 7px;
+}
+.dioliOS .agencyActions i {
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--cyan);
+  font-style: normal;
+  font-size: 7px;
+  font-weight: 800;
+}
+.dioliOS .projectPage {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 17px 22px 50px;
+}
+.dioliOS .projectHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.dioliOS .projectHead h1 {
+  font: 600 21px var(--sora);
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.dioliOS .projectHead p {
+  font-size: 9px;
+  color: #66747b;
+  margin: 7px 0;
+}
+.dioliOS .projectHead > div > div {
+  display: flex;
+  gap: 7px;
+}
+.dioliOS .projectHead > div > div span {
+  border-radius: 5px;
+  padding: 5px 9px;
+  background: #dff9ea;
+  color: #168145;
+  font-size: 7px;
+  font-weight: 700;
+}
+.dioliOS .projectHead > div > div span:nth-child(2) {
+  background: #ffe6e6;
+  color: #c33;
+}
+.dioliOS .projectHead > div > div span:last-child {
+  background: none;
+  color: #5f6e75;
+  padding-left: 0;
+}
+.dioliOS .projectHead > button {
+  background: #fff;
+  border: 1px solid #dce2e6;
+  border-radius: 7px;
+  padding: 9px 15px;
+  font-size: 8px;
+  box-shadow: 0 1px 3px #1122330d;
+}
+.dioliOS .progress {
+  margin: 22px 0 13px;
+}
+.dioliOS .progress span {
+  display: block;
+  font-size: 8px;
+  color: #607078;
+}
+.dioliOS .progress span b {
+  float: right;
+  color: #344249;
+}
+.dioliOS .progress > i {
+  height: 5px;
+  border-radius: 5px;
+  background: #dfe4e6;
+  display: block;
+  margin-top: 8px;
+}
+.dioliOS .progress > i b {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--navy);
+  border-radius: 5px;
+}
+.dioliOS .projectTabs {
+  height: 42px;
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #dce2e5;
+}
+.dioliOS .projectTabs button {
+  border: 0;
+  background: none;
+  padding: 0 15px;
+  font-size: 9px;
+  position: relative;
+}
+.dioliOS .projectTabs button.active {
+  color: #071022;
+  font-weight: 700;
+}
+.dioliOS .projectTabs button.active:after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--navy);
+}
+.dioliOS .projectTabs em {
+  font-style: normal;
+  background: #e5fafa;
+  color: #118d93;
+  border-radius: 9px;
+  padding: 2px 5px;
+  font-size: 6px;
+  margin-left: 4px;
+}
+.dioliOS .brandingTab {
+  padding-top: 14px;
+}
+.dioliOS .brandHeader {
+  height: 172px;
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(110deg, #071022, #0c1a31 70%, #102b3b);
+  color: #fff;
+  padding: 24px 27px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.dioliOS .brandIdentity {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  z-index: 2;
+}
+.dioliOS .brandMark {
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  background: var(--cyan);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+  font: 700 24px var(--sora);
+  box-shadow: 0 0 30px #74e7ea44;
+}
+.dioliOS .brandIdentity > div:last-child > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .brandIdentity > div:last-child > span > small {
+  font-size: 6px;
+  color: #72859b;
+}
+.dioliOS .brandIdentity h2 {
+  font: 650 25px var(--sora);
+  margin: 12px 0 5px;
+  letter-spacing: -1px;
+}
+.dioliOS .brandIdentity p {
+  font-size: 8px;
+  color: #a9b7c4;
+  max-width: 510px;
+}
+.dioliOS .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 11px;
+  padding: 4px 7px;
+  background: #e6fafa;
+  color: #11878c;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.dioliOS .pill i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cyan2);
+}
+.dioliOS .brandHealth {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-left: auto;
+  margin-right: 74px;
+  z-index: 2;
+}
+.dioliOS .ring {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background: conic-gradient(var(--cyan) var(--p), #304158 0);
+  padding: 6px;
+}
+.dioliOS .ring > div {
+  height: 100%;
+  border-radius: 50%;
+  background: #0d192d;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  padding-top: 25px;
+}
+.dioliOS .ring b {
+  font: 700 20px var(--sora);
+}
+.dioliOS .ring small {
+  font-size: 5px;
+  color: #8290a1;
+}
+.dioliOS .brandHealth > span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .brandHealth > span small {
+  font-size: 5px;
+  color: #78899e;
+  letter-spacing: 1px;
+}
+.dioliOS .brandHealth > span b {
+  font-size: 8px;
+  margin: 4px 0;
+}
+.dioliOS .brandHealth > span em {
+  font-size: 6px;
+  color: #4ed6aa;
+  font-style: normal;
+}
+.dioliOS .brandAura {
+  position: absolute;
+  right: -42px;
+  width: 250px;
+  height: 130px;
+  border: 1px solid #3a4b61;
+  border-radius: 50%;
+  transform: rotate(-10deg);
+}
+.dioliOS .brandAura:after {
+  content: "";
+  position: absolute;
+  inset: 26px;
+  border: 1px solid #2f4056;
+  border-radius: 50%;
+}
+.dioliOS .brandAura i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  left: -3px;
+  top: 62px;
+}
+.dioliOS .brandAura i:nth-child(2) {
+  left: auto;
+  right: 15px;
+  top: 19px;
+  background: #246cff;
+}
+.dioliOS .brandAura b {
+  position: absolute;
+  left: 115px;
+  top: 53px;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: var(--cyan);
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+  z-index: 2;
+  box-shadow: 0 0 20px var(--cyan);
+  font: 700 10px var(--sora);
+}
+.dioliOS .brandTools {
+  height: 50px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  margin-bottom: 10px;
+}
+.dioliOS .brandTools nav {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+}
+.dioliOS .brandTools nav button {
+  border: 0;
+  background: none;
+  font-size: 7px;
+  padding: 0 9px;
+  white-space: nowrap;
+  position: relative;
+  color: #69777d;
+}
+.dioliOS .brandTools nav button.active {
+  color: #071022;
+  font-weight: 800;
+}
+.dioliOS .brandTools nav button.active:after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan2);
+}
+.dioliOS .interviewButton {
+  margin-left: auto;
+  border: 0;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 7px;
+  white-space: nowrap;
+}
+.dioliOS .interviewButton span {
+  color: var(--cyan);
+  margin-left: 5px;
+}
+.dioliOS .controlGrid {
+  display: grid;
+  grid-template-columns: 1.55fr 0.8fr;
+  gap: 10px;
+}
+.dioliOS .mainCol,.dioliOS .rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dioliOS .signals {
+  height: 70px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.dioliOS .signals > div {
+  padding: 13px;
+  border-right: 1px solid #e8ecee;
+  display: grid;
+  grid-template-columns: 1fr auto;
+}
+.dioliOS .signals > div:last-child {
+  border: 0;
+}
+.dioliOS .signals small {
+  grid-column: 1/-1;
+  font-size: 5px;
+  color: #899499;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.dioliOS .signals b {
+  font: 700 16px var(--sora);
+  margin-top: 5px;
+}
+.dioliOS .signals span {
+  font-size: 5px;
+  color: #718087;
+  align-self: end;
+  margin-bottom: 2px;
+}
+.dioliOS .signals .amber {
+  color: #bd7611;
+}
+.dioliOS .signals .green {
+  color: #26875f;
+  font-size: 12px;
+  align-self: end;
+}
+.dioliOS .card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 16px;
+  box-shadow: 0 4px 14px #11272e05;
+}
+.dioliOS .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.dioliOS .head small {
+  font-size: 5px;
+  letter-spacing: 1.1px;
+  color: #899499;
+  font-weight: 800;
+}
+.dioliOS .head h3 {
+  font: 700 11px var(--sora);
+  margin: 4px 0 0;
+}
+.dioliOS .head button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+  font-weight: 700;
+}
+.dioliOS .readiness > p,.dioliOS .gatePanel > p {
+  font-size: 6px;
+  color: #778389;
+  margin: 7px 0 13px;
+}
+.dioliOS .knowledge {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.dioliOS .knowledge button {
+  border: 1px solid #e8ecec;
+  background: #f8faf9;
+  border-radius: 6px;
+  padding: 9px;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 1fr 25px;
+  gap: 4px;
+}
+.dioliOS .knowledge button > span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .knowledge button b {
+  font-size: 7px;
+}
+.dioliOS .knowledge button small {
+  font-size: 5px;
+  color: #849095;
+  margin-top: 3px;
+}
+.dioliOS .knowledge button > i {
+  height: 4px;
+  background: #e5ebea;
+  border-radius: 4px;
+  overflow: hidden;
+  grid-column: 1/2;
+}
+.dioliOS .knowledge button > i b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan2), #36b9c1);
+}
+.dioliOS .knowledge strong {
+  grid-row: 1/3;
+  grid-column: 2;
+  font-size: 7px;
+  text-align: right;
+}
+.dioliOS .flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.dioliOS .flow > div {
+  height: 55px;
+  background: #f4f7f6;
+  border-radius: 6px;
+  padding: 9px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .flow .f1 {
+  background: #e9fbfb;
+}
+.dioliOS .flow .f2 {
+  background: #fff3df;
+}
+.dioliOS .flow .f3 {
+  background: #eaf8f2;
+}
+.dioliOS .flow b {
+  font: 700 15px var(--sora);
+}
+.dioliOS .flow small {
+  font-size: 5px;
+  color: #758287;
+  margin-top: 3px;
+}
+.dioliOS .flow em {
+  position: absolute;
+  right: -6px;
+  top: 21px;
+  color: #aebabc;
+  font-style: normal;
+  z-index: 2;
+}
+.dioliOS .blocked {
+  margin-top: 9px;
+  background: #fff3f3;
+  border: 1px solid #f0dada;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+}
+.dioliOS .blocked span {
+  font-size: 7px;
+  color: #c54a52;
+}
+.dioliOS .blocked span b {
+  margin-left: 5px;
+}
+.dioliOS .blocked small {
+  display: block;
+  color: #8b7476;
+  font-size: 5px;
+  margin: 3px 0 0 12px;
+}
+.dioliOS .blocked button {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: #b83c45;
+  font-size: 6px;
+  font-weight: 800;
+}
+.dioliOS .mood > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+.dioliOS .mood > div > button {
+  height: 90px;
+  border: 0;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #071022, #2a5460 55%, #74e7ea);
+  text-align: left;
+}
+.dioliOS .mood .m2 {
+  background:
+    radial-gradient(circle at 70% 30%, #74e7ea 0 9%, transparent 10%),
+    linear-gradient(135deg, #b5cbc9, #233a4b);
+}
+.dioliOS .mood .m3 {
+  background: linear-gradient(150deg, #f4f5ee 0 55%, #071022 55%);
+}
+.dioliOS .mood button:after {
+  content: "";
+  position: absolute;
+  inset: 40% 0 0;
+  background: linear-gradient(transparent, #071022e8);
+}
+.dioliOS .mood button span {
+  position: absolute;
+  left: 8px;
+  bottom: 7px;
+  color: #fff;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .mood button b {
+  font-size: 7px;
+}
+.dioliOS .mood button small {
+  font-size: 5px;
+  color: #afbdc7;
+  margin-top: 3px;
+}
+.dioliOS .agentCard {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .agentTop {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dioliOS .agentTop > i {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--cyan);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 15px;
+}
+.dioliOS .agentTop > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .agentTop small {
+  font-size: 5px;
+  color: #7890a6;
+  letter-spacing: 1px;
+}
+.dioliOS .agentTop h3 {
+  font: 700 12px var(--sora);
+  margin: 4px 0 0;
+}
+.dioliOS .agentCard > p {
+  font-size: 6px;
+  color: #9facb9;
+  line-height: 1.55;
+  margin: 12px 0;
+}
+.dioliOS .agentFocus {
+  background: #111f35;
+  border: 1px solid #23344c;
+  border-radius: 7px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .agentFocus small {
+  font-size: 5px;
+  color: #67d9dd;
+}
+.dioliOS .agentFocus b {
+  font-size: 7px;
+  line-height: 1.4;
+  margin: 5px 0;
+}
+.dioliOS .agentFocus span {
+  font-size: 5px;
+  color: #8d9cad;
+  line-height: 1.5;
+}
+.dioliOS .agentCard > button {
+  width: 100%;
+  border: 0;
+  background: var(--cyan);
+  color: var(--navy);
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 7px;
+  font-weight: 800;
+  margin-top: 9px;
+}
+.dioliOS .agentCard footer {
+  display: flex;
+  gap: 13px;
+  margin-top: 9px;
+  font-size: 5px;
+  color: #8494a6;
+}
+.dioliOS .agentCard footer i {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #4dd3a6;
+}
+.dioliOS .scan {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #eefafa;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 11px 0;
+}
+.dioliOS .scan > i {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--navy);
+  color: var(--cyan);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .scan > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .scan b {
+  font-size: 6px;
+}
+.dioliOS .scan small {
+  font-size: 5px;
+  color: #7d898f;
+  margin-top: 2px;
+}
+.dioliOS .score {
+  display: grid;
+  grid-template-columns: 75px 1fr 20px;
+  gap: 6px;
+  align-items: center;
+  font-size: 5px;
+  margin: 8px 0;
+}
+.dioliOS .score > i,.dioliOS .maturity > div > i {
+  height: 4px;
+  background: #e8eeee;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dioliOS .score > i b,.dioliOS .maturity > div > i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+}
+.dioliOS .score strong {
+  text-align: right;
+}
+.dioliOS .aiAudit > button {
+  width: 100%;
+  border: 0;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 5px;
+  padding: 7px;
+  font-size: 6px;
+  margin-top: 4px;
+}
+.dioliOS .sources > div:not(.head) {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid #edf0f0;
+  height: 35px;
+}
+.dioliOS .sources > div > i {
+  font-style: normal;
+  color: #159ba2;
+}
+.dioliOS .sources > div > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .sources > div b {
+  font-size: 6px;
+}
+.dioliOS .sources > div small {
+  font-size: 5px;
+  color: #899499;
+  margin-top: 2px;
+}
+.dioliOS .sources > div em {
+  font-style: normal;
+  color: #39ad7d;
+}
+.dioliOS .detailIntro {
+  height: 130px;
+  border-radius: 9px;
+  background: linear-gradient(110deg, #071022, #102b3b);
+  color: #fff;
+  padding: 22px 26px;
+}
+.dioliOS .detailIntro > button {
+  border: 0;
+  background: none;
+  color: #899aab;
+  font-size: 6px;
+  margin-right: 8px;
+  padding: 0;
+}
+.dioliOS .detailIntro h2 {
+  font: 650 23px var(--sora);
+  margin: 13px 0 5px;
+}
+.dioliOS .detailIntro p {
+  font-size: 7px;
+  color: #aab7c3;
+}
+.dioliOS .detailGrid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.75fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.dioliOS .capabilities > div:last-child {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 13px;
+}
+.dioliOS .capabilities button {
+  border: 1px solid #e8ecec;
+  background: #f8f9f8;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  text-align: left;
+  align-items: center;
+}
+.dioliOS .capabilities button > i {
+  font: 700 6px var(--sora);
+  font-style: normal;
+  color: #18a2a9;
+  margin-right: 8px;
+}
+.dioliOS .capabilities button > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .capabilities button b {
+  font-size: 7px;
+}
+.dioliOS .capabilities button small {
+  font-size: 5px;
+  color: #879195;
+  margin-top: 3px;
+}
+.dioliOS .capabilities button em {
+  font-style: normal;
+}
+.dioliOS .maturity > div:not(.head) {
+  display: grid;
+  grid-template-columns: 60px 1fr 20px;
+  gap: 6px;
+  align-items: center;
+  font-size: 6px;
+  margin: 13px 0;
+}
+.dioliOS .maturity strong {
+  text-align: right;
+}
+.dioliOS .maturity > aside {
+  background: #eafafa;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .maturity aside small {
+  font-size: 5px;
+  color: #21898d;
+}
+.dioliOS .maturity aside b {
+  font-size: 7px;
+  margin: 4px 0 7px;
+}
+.dioliOS .maturity aside button {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 0;
+  color: #14858a;
+  font-size: 6px;
+  font-weight: 800;
+}
+/* Interview */
+.dioliOS .modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: #071022b8;
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.dioliOS .interview {
+  width: min(880px, 94vw);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px #0005;
+  overflow: hidden;
+}
+.dioliOS .interview > header {
+  height: 77px;
+  background: var(--navy);
+  color: #fff;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.dioliOS .agentMini {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--cyan);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+}
+.dioliOS .interview > header > div:nth-child(2) {
+  flex: 1;
+}
+.dioliOS .interview > header small {
+  font-size: 5px;
+  color: #7b8da1;
+  letter-spacing: 1px;
+}
+.dioliOS .interview > header h2 {
+  font: 700 15px var(--sora);
+  margin: 4px 0 0;
+}
+.dioliOS .interview > header button {
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 20px;
+}
+.dioliOS .interviewProgress {
+  padding: 12px 22px;
+  border-bottom: 1px solid #e5e9ea;
+}
+.dioliOS .interviewProgress span {
+  display: block;
+  font-size: 6px;
+  color: #68777e;
+}
+.dioliOS .interviewProgress span b {
+  float: right;
+}
+.dioliOS .interviewProgress > i {
+  display: block;
+  height: 4px;
+  background: #e8eeee;
+  border-radius: 4px;
+  margin-top: 7px;
+}
+.dioliOS .interviewProgress > i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+  border-radius: 4px;
+}
+.dioliOS .conversation {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  min-height: 360px;
+}
+.dioliOS .conversation > aside {
+  background: #f5f8f7;
+  border-right: 1px solid #e3e8e8;
+  padding: 21px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.dioliOS .conversation > aside b {
+  font-size: 8px;
+  margin-bottom: 3px;
+}
+.dioliOS .conversation > aside span {
+  font-size: 6px;
+  color: #31815f;
+}
+.dioliOS .conversation > aside .pending {
+  color: #a6701d;
+}
+.dioliOS .conversation > main {
+  padding: 26px 31px;
+}
+.dioliOS .conversation h3 {
+  font: 650 19px/1.35 var(--sora);
+  max-width: 560px;
+  margin: 15px 0 7px;
+}
+.dioliOS .conversation p {
+  font-size: 7px;
+  color: #738087;
+}
+.dioliOS .choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 15px 0 10px;
+}
+.dioliOS .choices button {
+  border: 1px solid #cfe4e4;
+  background: #f3fbfb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 7px;
+}
+.dioliOS .choices button:focus {
+  background: #dff9f9;
+  border-color: #24cbd2;
+}
+.dioliOS .conversation textarea {
+  width: 100%;
+  height: 75px;
+  resize: none;
+  border: 1px solid #dfe5e5;
+  border-radius: 7px;
+  padding: 10px;
+  font-size: 7px;
+  outline: none;
+}
+.dioliOS .why {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eefafa;
+  border-radius: 6px;
+  padding: 9px;
+  margin-top: 10px;
+}
+.dioliOS .why > i {
+  font-style: normal;
+  color: #159ba2;
+}
+.dioliOS .why span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .why b {
+  font-size: 6px;
+}
+.dioliOS .why small {
+  font-size: 5px;
+  color: #708085;
+  margin-top: 3px;
+}
+.dioliOS .interview > footer {
+  height: 62px;
+  border-top: 1px solid #e3e8e8;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dioliOS .interview > footer button {
+  border: 1px solid #dfe4e5;
+  background: #fff;
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-size: 6px;
+}
+.dioliOS .interview > footer span {
+  font-size: 5px;
+  color: #849095;
+  flex: 1;
+  text-align: center;
+}
+.dioliOS .interview > footer .next {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+@media (max-width: 900px) {
+  .dioliOS .projectPage {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .dioliOS .agencySearch {
+    display: none;
+  }
+  .dioliOS .brandHealth {
+    margin-right: 15px;
+  }
+  .dioliOS .brandTools {
+    height: auto;
+    min-height: 50px;
+    align-items: stretch;
+  }
+  .dioliOS .brandTools nav {
+    overflow-x: auto;
+  }
+  .dioliOS .interviewButton span {
+    display: none;
+  }
+  .dioliOS .controlGrid {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .rightCol {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .sources {
+    grid-column: span 2;
+  }
+  .dioliOS .projectTabs {
+    overflow-x: auto;
+  }
+  .dioliOS .signals {
+    grid-template-columns: repeat(3, 1fr);
+    height: auto;
+  }
+  .dioliOS .signals > div {
+    min-height: 62px;
+  }
+}
+@media (max-width: 600px) {
+  .dioliOS .agencyLogo small,.dioliOS .projectHead p,.dioliOS .brandAura,.dioliOS .brandHealth > span {
+    display: none;
+  }
+  .dioliOS .projectHead h1 {
+    font-size: 16px;
+  }
+  .dioliOS .projectTabs {
+    gap: 0;
+  }
+  .dioliOS .projectTabs button {
+    padding: 0 9px;
+  }
+  .dioliOS .brandHeader {
+    height: 200px;
+    padding: 18px;
+  }
+  .dioliOS .brandIdentity h2 {
+    font-size: 20px;
+  }
+  .dioliOS .brandHealth {
+    margin-left: auto;
+  }
+  .dioliOS .brandTools {
+    display: block;
+    padding: 0;
+  }
+  .dioliOS .brandTools nav {
+    height: 43px;
+  }
+  .dioliOS .interviewButton {
+    width: 100%;
+    border-radius: 0 0 6px 6px;
+  }
+  .dioliOS .rightCol,.dioliOS .detailGrid {
+    display: flex;
+    flex-direction: column;
+  }
+  .dioliOS .sources {
+    grid-column: auto;
+  }
+  .dioliOS .knowledge,.dioliOS .capabilities > div:last-child {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .mood > div:last-child {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .mood .m3 {
+    display: none;
+  }
+  .dioliOS .conversation {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .conversation > aside {
+    display: none;
+  }
+  .dioliOS .interview > footer span,.dioliOS .interview > footer button:first-child {
+    display: none;
+  }
+  .dioliOS .conversation > main {
+    padding: 20px;
+  }
+  .dioliOS .brandMark {
+    width: 42px;
+    height: 42px;
+  }
+  .dioliOS .signalBar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Client OS */
+.dioliOS .clientWorkspace {
+  max-width: 1220px;
+}
+.dioliOS .clientTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dioliOS .clientTitle > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
+  background: var(--cyan);
+  display: grid;
+  place-items: center;
+  font: 700 20px var(--sora);
+}
+.dioliOS .clientHead {
+  align-items: center;
+}
+.dioliOS .clientHead h1 {
+  font-size: 24px;
+}
+.dioliOS .clientPulse {
+  height: 53px;
+  margin-top: 15px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: center;
+}
+.dioliOS .clientPulse > span {
+  padding: 0 18px;
+  border-right: 1px solid #e7ebed;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .clientPulse small {
+  font-size: 5px;
+  color: #899499;
+}
+.dioliOS .clientPulse b {
+  font-size: 7px;
+  margin-top: 4px;
+}
+.dioliOS .clientPulse > button {
+  margin-left: auto;
+  margin-right: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 5px;
+  padding: 7px 9px;
+  font-size: 6px;
+}
+.dioliOS .clientTabs {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  padding: 0 5px;
+  margin-bottom: 14px;
+}
+.dioliOS .workspaceTab {
+  padding-top: 2px;
+}
+.dioliOS .tabTitle {
+  min-height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dioliOS .tabTitle h2 {
+  font: 650 23px var(--sora);
+  margin: 9px 0 5px;
+}
+.dioliOS .tabTitle p {
+  font-size: 7px;
+  color: #6f7d84;
+}
+.dioliOS .tabTitle > div:last-child {
+  display: flex;
+  gap: 7px;
+}
+.dioliOS .tabTitle button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 6px;
+}
+.dioliOS .tabTitle .primary,.dioliOS .requestModal .primary {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.dioliOS .kpis > div {
+  height: 69px;
+  border-right: 1px solid #e7ebec;
+  padding: 13px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+}
+.dioliOS .kpis small {
+  grid-column: 1/-1;
+  font-size: 5px;
+  color: #899499;
+  font-weight: 800;
+}
+.dioliOS .kpis b {
+  font: 700 15px var(--sora);
+  margin-top: 5px;
+}
+.dioliOS .kpis span {
+  font-size: 5px;
+  color: #278a64;
+  align-self: end;
+}
+.dioliOS .overviewGrid {
+  display: grid;
+  grid-template-columns: 1.55fr 0.8fr;
+  gap: 10px;
+}
+.dioliOS .perf {
+  min-height: 270px;
+}
+.dioliOS .fakeChart {
+  height: 145px;
+  margin: 12px 0 5px;
+  border-bottom: 1px solid #e6ebeb;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 35px,
+    #eef1f1 36px
+  );
+}
+.dioliOS .fakeChart svg {
+  width: 100%;
+  height: 100%;
+}
+.dioliOS .channelStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.dioliOS .channelStrip button,.dioliOS .agentHealth > button {
+  border: 0;
+  border-right: 1px solid #e7ebec;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  text-align: left;
+}
+.dioliOS .channelStrip i,.dioliOS .agentHealth > button > i {
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  background: #e9fafa;
+  color: #159ba2;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .channelStrip span,.dioliOS .agentHealth span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .channelStrip b,.dioliOS .agentHealth b {
+  font-size: 6px;
+}
+.dioliOS .channelStrip small,.dioliOS .agentHealth small {
+  font-size: 5px;
+  color: #839095;
+  margin-top: 3px;
+}
+.dioliOS .agentHealth > button {
+  width: 100%;
+  height: 42px;
+  border-bottom: 1px solid #edf0f0;
+}
+.dioliOS .agentHealth strong {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #e8f8f1;
+  color: #278a64;
+  display: grid;
+  place-items: center;
+  font-size: 6px;
+}
+.dioliOS .priorities > div,.dioliOS .reqMini > div:not(.head) {
+  height: 43px;
+  border-bottom: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .priorities time {
+  width: 48px;
+  font-size: 6px;
+}
+.dioliOS .priorities span,.dioliOS .reqMini span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .priorities b,.dioliOS .reqMini b {
+  font-size: 7px;
+}
+.dioliOS .priorities small,.dioliOS .reqMini small {
+  font-size: 5px;
+  color: #859095;
+}
+.dioliOS .priorities em {
+  font-style: normal;
+  font-size: 5px;
+  background: #ffe7e8;
+  color: #b83a45;
+  border-radius: 8px;
+  padding: 3px 6px;
+}
+.dioliOS .nps {
+  height: 65px;
+  background: #effafa;
+  border-radius: 7px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+}
+.dioliOS .nps > b {
+  font: 700 24px var(--sora);
+  color: #148f96;
+  margin-right: 10px;
+}
+.dioliOS .nps span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .nps strong {
+  font-size: 6px;
+}
+.dioliOS .nps small {
+  font-size: 5px;
+  color: #76858a;
+}
+.dioliOS .radar > div:not(.head):not(.nps) {
+  height: 29px;
+  border-bottom: 1px solid #edf0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 6px;
+}
+.dioliOS .departments > button {
+  width: 100%;
+  height: 43px;
+  border: 0;
+  border-bottom: 1px solid #edf0f0;
+  background: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr 30px;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+}
+.dioliOS .departments button > span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .departments button b {
+  font-size: 7px;
+}
+.dioliOS .departments button small {
+  font-size: 5px;
+  color: #879297;
+}
+.dioliOS .departments button > i {
+  height: 4px;
+  background: #e7eceb;
+}
+.dioliOS .departments button > i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+}
+.dioliOS .departments button > strong {
+  font-size: 6px;
+}
+.dioliOS .reqMini > div > i {
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  background: #eafafa;
+  color: #159ba2;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+/* Requests */
+.dioliOS .requestKpis {
+  grid-template-columns: repeat(5, 1fr);
+}
+.dioliOS .requestGrid {
+  display: grid;
+  grid-template-columns: 1.6fr 0.72fr;
+  gap: 10px;
+}
+.dioliOS .requestGrid > aside {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dioliOS .requestRow {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-top: 1px solid #edf0f0;
+  background: none;
+  display: grid;
+  grid-template-columns: 8px 52px 1fr 95px 64px 12px;
+  gap: 7px;
+  align-items: center;
+  text-align: left;
+  font-size: 6px;
+}
+.dioliOS .requestRow > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.dioliOS .requestRow > i.high {
+  background: var(--red);
+}
+.dioliOS .requestRow > i.done {
+  background: var(--green);
+}
+.dioliOS .requestRow > span:nth-child(3) {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .requestRow b {
+  font-size: 7px;
+}
+.dioliOS .requestRow small {
+  font-size: 5px;
+  color: #879297;
+}
+.dioliOS .requestRow time {
+  font-size: 5px;
+}
+.dioliOS .orchestrator {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .orchestrator > p {
+  font-size: 6px;
+  color: #9aa9b8;
+}
+.dioliOS .orchestrator > div:nth-of-type(2) {
+  display: flex;
+  flex-direction: column;
+  background: #122138;
+  border-radius: 6px;
+  padding: 9px;
+}
+.dioliOS .orchestrator > div small {
+  font-size: 5px;
+  color: var(--cyan);
+}
+.dioliOS .orchestrator > div b {
+  font-size: 7px;
+  margin: 5px 0;
+}
+.dioliOS .orchestrator > div span {
+  font-size: 5px;
+  color: #8798aa;
+}
+.dioliOS .orchestrator > button {
+  width: 100%;
+  border: 0;
+  background: var(--cyan);
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 6px;
+  font-weight: 800;
+  margin-top: 9px;
+}
+.dioliOS .routing > div:not(.head) {
+  display: grid;
+  grid-template-columns: 65px 1fr 18px;
+  gap: 7px;
+  align-items: center;
+  margin: 10px 0;
+  font-size: 6px;
+}
+.dioliOS .routing i {
+  height: 4px;
+  background: #e7eceb;
+}
+.dioliOS .routing i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+}
+.dioliOS .requestModal {
+  width: min(780px, 94vw);
+  background: #fff;
+  border-radius: 11px;
+  overflow: hidden;
+}
+.dioliOS .requestModal > header {
+  height: 75px;
+  background: var(--navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 21px;
+}
+.dioliOS .requestModal > header > div:nth-child(2) {
+  flex: 1;
+}
+.dioliOS .requestModal > header small {
+  font-size: 5px;
+}
+.dioliOS .requestModal > header h2 {
+  font: 700 14px var(--sora);
+}
+.dioliOS .requestModal > header > button {
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 19px;
+}
+.dioliOS .requestModal > p,.dioliOS .requestModal > nav,.dioliOS .hints {
+  padding-left: 22px;
+  padding-right: 22px;
+}
+.dioliOS .requestModal > p {
+  font-size: 7px;
+  color: #728087;
+}
+.dioliOS .requestModal > nav {
+  display: flex;
+  gap: 6px;
+}
+.dioliOS .requestModal > nav button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 5px;
+  padding: 7px 9px;
+  font-size: 6px;
+}
+.dioliOS .requestModal > nav button.active {
+  background: #e7fafa;
+}
+.dioliOS .requestInput {
+  margin: 12px 22px;
+  height: 155px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.dioliOS .requestInput textarea {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  padding: 13px;
+  font-size: 7px;
+}
+.dioliOS .requestInput > div {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.dioliOS .requestInput > div i {
+  font-size: 20px;
+  color: #14a3aa;
+}
+.dioliOS .requestInput > div b {
+  font-size: 8px;
+  margin: 8px;
+}
+.dioliOS .requestInput > div small {
+  font-size: 6px;
+}
+.dioliOS .hints {
+  display: flex;
+  gap: 6px;
+}
+.dioliOS .hints span {
+  font-size: 6px;
+  background: #f3f6f5;
+  border-radius: 9px;
+  padding: 4px 7px;
+}
+.dioliOS .requestModal > footer {
+  height: 60px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  gap: 8px;
+}
+.dioliOS .requestModal > footer button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 6px;
+}
+.dioliOS .requestModal > footer span {
+  flex: 1;
+  text-align: center;
+  font-size: 5px;
+}
+/* Social */
+.dioliOS .socialHero {
+  height: 150px;
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(110deg, #071022, #103344);
+  color: #fff;
+  padding: 23px 27px;
+  display: flex;
+  align-items: center;
+}
+.dioliOS .socialHero h2 {
+  font: 650 24px var(--sora);
+  margin: 11px 0 5px;
+}
+.dioliOS .socialHero p {
+  font-size: 7px;
+  color: #a7b5c2;
+}
+.dioliOS .socialScore {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.dioliOS .socialScore > span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .socialScore small {
+  font-size: 5px;
+}
+.dioliOS .socialScore span b {
+  font-size: 8px;
+}
+.dioliOS .socialScore em {
+  font-size: 5px;
+  color: #4fd3a8;
+}
+.dioliOS .socialNav {
+  height: 47px;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: flex;
+  padding: 0 9px;
+  margin-bottom: 10px;
+}
+.dioliOS .socialNav button {
+  border: 0;
+  background: none;
+  padding: 0 10px;
+  font-size: 6px;
+  position: relative;
+}
+.dioliOS .socialNav button.active:after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan2);
+}
+.dioliOS .socialNav .create {
+  margin-left: auto;
+  background: var(--navy);
+  color: #fff;
+  height: 29px;
+  align-self: center;
+  border-radius: 5px;
+}
+.dioliOS .socialGrid {
+  display: grid;
+  grid-template-columns: 1.45fr 0.8fr;
+  gap: 10px;
+}
+.dioliOS .week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  margin: 12px 0;
+}
+.dioliOS .week > div {
+  height: 51px;
+  background: #f4f7f6;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.dioliOS .week > div.today {
+  background: #e7fafa;
+}
+.dioliOS .week b {
+  font-size: 5px;
+}
+.dioliOS .week small {
+  font-size: 10px;
+}
+.dioliOS .week span {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 5px;
+  display: grid;
+  place-items: center;
+}
+.dioliOS .agenda {
+  height: 42px;
+  border-top: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+}
+.dioliOS .agenda time {
+  width: 43px;
+  font-size: 6px;
+}
+.dioliOS .agenda > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .agenda b {
+  font-size: 7px;
+}
+.dioliOS .agenda small {
+  font-size: 5px;
+}
+.dioliOS .socialAgent {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .socialAgent > p {
+  font-size: 6px;
+  color: #9baaba;
+}
+.dioliOS .socialAgent > div:nth-of-type(2) {
+  background: #13223a;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .socialAgent > div small {
+  font-size: 5px;
+  color: var(--cyan);
+}
+.dioliOS .socialAgent > div b {
+  font-size: 7px;
+  margin: 5px 0;
+}
+.dioliOS .socialAgent > div span {
+  font-size: 5px;
+}
+.dioliOS .socialAgent > div button {
+  border: 0;
+  background: var(--cyan);
+  border-radius: 4px;
+  padding: 7px;
+  font-size: 6px;
+  margin-top: 9px;
+}
+.dioliOS .pipeline > div:nth-of-type(2) {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  margin: 12px 0;
+}
+.dioliOS .pipeline > div button {
+  border: 0;
+  background: #f5f7f6;
+  border-radius: 5px;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .pipeline button > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7ce2e6;
+}
+.dioliOS .pipeline button > b {
+  font: 700 14px var(--sora);
+}
+.dioliOS .pipeline button small {
+  font-size: 5px;
+}
+.dioliOS .pipeline aside {
+  background: #fff4e1;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dioliOS .pipeline aside > span {
+  font-size: 6px;
+  flex: 1;
+}
+.dioliOS .pipeline aside > button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+}
+.dioliOS .socialChannels > button {
+  width: 100%;
+  height: 39px;
+  border: 0;
+  border-bottom: 1px solid #edf0f0;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.dioliOS .socialChannels button > i {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #e8fafa;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .socialChannels button > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .socialChannels button b {
+  font-size: 6px;
+}
+.dioliOS .socialChannels button small {
+  font-size: 5px;
+}
+.dioliOS .socialChannels button strong {
+  font-size: 6px;
+  color: #288a64;
+}
+.dioliOS .listening > div:nth-of-type(2) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 12px 0;
+}
+.dioliOS .listening > div span {
+  display: flex;
+  flex-direction: column;
+  padding-left: 8px;
+}
+.dioliOS .listening span b {
+  font: 700 14px var(--sora);
+}
+.dioliOS .listening span small {
+  font-size: 5px;
+}
+.dioliOS .listening p {
+  height: 29px;
+  margin: 0;
+  border-top: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  font-size: 6px;
+}
+.dioliOS .listening p span {
+  flex: 1;
+}
+.dioliOS .socialDetail > div:first-child {
+  height: 130px;
+  background: linear-gradient(110deg, #071022, #103344);
+  border-radius: 9px;
+  color: #fff;
+  padding: 24px;
+}
+.dioliOS .socialDetail h2 {
+  font: 650 22px var(--sora);
+}
+.dioliOS .socialDetail p {
+  font-size: 7px;
+}
+.dioliOS .socialDetail > section {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin-top: 10px;
+}
+.dioliOS .socialDetail article {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dioliOS .socialDetail article > i {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: #e7fafa;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .socialDetail article > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .socialDetail article b {
+  font-size: 7px;
+}
+.dioliOS .socialDetail article small {
+  font-size: 5px;
+}
+.dioliOS .socialDetail article button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+}
+.dioliOS .designKpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+.dioliOS .designKpis article {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .designKpis b {
+  font: 700 20px var(--sora);
+}
+.dioliOS .designBoard {
+  margin-top: 10px;
+}
+.dioliOS .designBoard > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 15px;
+}
+.dioliOS .designBoard > div > span {
+  height: 65px;
+  background: #f5f7f6;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .designBoard span b {
+  font: 700 16px var(--sora);
+}
+.dioliOS .designBoard span small {
+  font-size: 5px;
+}
+.dioliOS .emptyTab {
+  padding: 70px;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .dioliOS .clientPulse span:nth-child(3),.dioliOS .clientPulse span:nth-child(4) {
+    display: none;
+  }
+  .dioliOS .kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .dioliOS .overviewGrid,.dioliOS .requestGrid,.dioliOS .socialGrid {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .socialDetail > section {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .dioliOS .clientPulse {
+    display: none;
+  }
+  .dioliOS .clientTabs {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+  }
+  .dioliOS .tabTitle {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .dioliOS .kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dioliOS .requestRow {
+    grid-template-columns: 7px 1fr 70px;
+  }
+  .dioliOS .requestRow > span:nth-child(2),.dioliOS .requestRow time,.dioliOS .requestRow em {
+    display: none;
+  }
+  .dioliOS .socialNav {
+    overflow-x: auto;
+  }
+  .dioliOS .socialNav .create {
+    display: none;
+  }
+  .dioliOS .pipeline > div:nth-of-type(2) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .dioliOS .socialDetail > section {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .designKpis {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.dioliOS .deptNav {
+  height: 45px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: flex;
+  padding: 0 8px;
+  margin-bottom: 10px;
+}
+.dioliOS .deptNav button {
+  border: 0;
+  background: none;
+  padding: 0 12px;
+  font-size: 6px;
+  position: relative;
+}
+.dioliOS .deptNav button.active {
+  font-weight: 800;
+}
+.dioliOS .deptNav button.active:after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan2);
+}
+.dioliOS .deptNav em {
+  font-style: normal;
+  background: #fff0da;
+  color: #a36912;
+  border-radius: 8px;
+  padding: 2px 4px;
+  margin-left: 4px;
+}
+.dioliOS .designKpis {
+  grid-template-columns: repeat(5, 1fr);
+  margin-bottom: 10px;
+}
+.dioliOS .designFullGrid,.dioliOS .trafficGrid,.dioliOS .intelGrid {
+  display: grid;
+  grid-template-columns: 1.45fr 0.8fr;
+  gap: 10px;
+}
+.dioliOS .designBoard > aside {
+  margin-top: 12px;
+  background: #fff3df;
+  border-radius: 6px;
+  padding: 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .designBoard > aside span {
+  font-size: 6px;
+  flex: 1;
+}
+.dioliOS .designBoard > aside button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+}
+.dioliOS .designAgent,.dioliOS .growthAgent {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .designAgent > p,.dioliOS .growthAgent > p {
+  font-size: 6px;
+  color: #9daaba;
+}
+.dioliOS .designAgent > div:nth-of-type(2),.dioliOS .growthAgent > div:nth-of-type(2) {
+  background: #132239;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .designAgent > div small,.dioliOS .growthAgent > div small {
+  font-size: 5px;
+  color: var(--cyan);
+}
+.dioliOS .designAgent > div b,.dioliOS .growthAgent > div b {
+  font-size: 7px;
+  margin: 5px 0;
+}
+.dioliOS .designAgent > div span,.dioliOS .growthAgent > div span {
+  font-size: 5px;
+  color: #8fa0b0;
+}
+.dioliOS .designAgent > button,.dioliOS .growthAgent > button {
+  width: 100%;
+  border: 0;
+  background: var(--cyan);
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 6px;
+  font-weight: 800;
+  margin-top: 9px;
+}
+.dioliOS .activePieces > div:not(.head),.dioliOS .campaigns > div:not(.head),.dioliOS .dataSources > div:not(.head) {
+  height: 42px;
+  border-bottom: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .activePieces > div > i,.dioliOS .campaigns > div > i {
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  background: #e8fafa;
+}
+.dioliOS .activePieces > div > span,.dioliOS .campaigns > div > span,.dioliOS .dataSources > div > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .activePieces b,.dioliOS .campaigns b,.dioliOS .dataSources b {
+  font-size: 7px;
+}
+.dioliOS .activePieces small,.dioliOS .campaigns small,.dioliOS .dataSources small {
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .activePieces strong,.dioliOS .campaigns strong,.dioliOS .dataSources strong {
+  font-size: 6px;
+}
+.dioliOS .quality > div:not(.head),.dioliOS .experiments > div:not(.head) {
+  display: grid;
+  grid-template-columns: 80px 1fr 22px;
+  gap: 7px;
+  align-items: center;
+  margin: 11px 0;
+  font-size: 6px;
+}
+.dioliOS .quality > div > i,.dioliOS .experiments > div > i {
+  height: 4px;
+  background: #e8eded;
+}
+.dioliOS .quality > div > i b,.dioliOS .experiments > div > i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+}
+.dioliOS .quality aside {
+  background: #eafafa;
+  border-radius: 6px;
+  padding: 9px;
+  display: flex;
+  align-items: center;
+}
+.dioliOS .quality aside b {
+  font: 700 18px var(--sora);
+  margin-right: 8px;
+}
+.dioliOS .quality aside span {
+  font-size: 6px;
+}
+.dioliOS .departmentModule > div:first-child {
+  height: 125px;
+  background: linear-gradient(110deg, #071022, #103344);
+  border-radius: 9px;
+  color: #fff;
+  padding: 23px;
+}
+.dioliOS .departmentModule h2 {
+  font: 650 22px var(--sora);
+  margin: 11px 0 5px;
+}
+.dioliOS .departmentModule p {
+  font-size: 7px;
+  color: #a8b6c3;
+}
+.dioliOS .departmentModule > section {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin-top: 10px;
+}
+.dioliOS .departmentModule article {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dioliOS .departmentModule article > i {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: #e7fafa;
+  color: #159ba2;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .departmentModule article > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .departmentModule article b {
+  font-size: 7px;
+}
+.dioliOS .departmentModule article small {
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .departmentModule article button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+}
+.dioliOS .growthKpis {
+  margin-bottom: 10px;
+}
+.dioliOS .spendChart {
+  min-height: 275px;
+}
+.dioliOS .growthChart {
+  height: 180px;
+  margin-top: 10px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 43px,
+    #eef1f1 44px
+  );
+}
+.dioliOS .growthChart > div {
+  display: flex;
+  gap: 22px;
+  padding: 7px;
+}
+.dioliOS .growthChart span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .growthChart span b {
+  font: 700 14px var(--sora);
+}
+.dioliOS .growthChart span small {
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .growthChart svg {
+  width: 100%;
+  height: 125px;
+}
+.dioliOS .platforms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.dioliOS .platforms button {
+  border: 0;
+  border-right: 1px solid #e7ebec;
+  background: none;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
+}
+.dioliOS .platforms button > i {
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
+  background: #e8fafa;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .platforms button > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .platforms b {
+  font-size: 6px;
+}
+.dioliOS .platforms small {
+  font-size: 5px;
+}
+.dioliOS .platforms strong {
+  font-size: 7px;
+  color: #278a64;
+}
+.dioliOS .campaigns > div > i.g1 {
+  background: #fff1d9;
+}
+.dioliOS .campaigns > div > i.g2 {
+  background: #eeeaff;
+}
+.dioliOS .campaigns > div > i.g3 {
+  background: #e8f7ef;
+}
+.dioliOS .experiments > div:not(.head) {
+  grid-template-columns: 1fr 1fr 25px;
+}
+.dioliOS .experiments span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .experiments span b {
+  font-size: 7px;
+}
+.dioliOS .experiments span small {
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .projectKpis {
+  grid-template-columns: repeat(5, 1fr);
+}
+.dioliOS .projectPortfolio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+.dioliOS .projectPortfolio article header {
+  display: flex;
+  justify-content: space-between;
+}
+.dioliOS .projectPortfolio header > i {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #e8fafa;
+}
+.dioliOS .projectPortfolio article > small {
+  display: block;
+  font-size: 5px;
+  color: #159ba2;
+  margin-top: 12px;
+}
+.dioliOS .projectPortfolio h3 {
+  font: 700 11px var(--sora);
+  margin: 5px 0;
+}
+.dioliOS .projectPortfolio p {
+  font-size: 6px;
+  color: #7d898e;
+}
+.dioliOS .projectPortfolio article > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dioliOS .projectPortfolio article > div > i {
+  height: 4px;
+  background: #e8eded;
+  flex: 1;
+}
+.dioliOS .projectPortfolio article > div > i b {
+  display: block;
+  height: 100%;
+  background: var(--cyan2);
+}
+.dioliOS .projectPortfolio article > div strong {
+  font-size: 6px;
+}
+.dioliOS .projectPortfolio footer {
+  border-top: 1px solid #edf0f0;
+  margin-top: 12px;
+  padding-top: 9px;
+  display: flex;
+  gap: 10px;
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .projectPortfolio footer button {
+  margin-left: auto;
+  border: 0;
+  background: none;
+}
+.dioliOS .roadmap > div:not(.head) {
+  display: grid;
+  grid-template-columns: 140px 1fr 30px;
+  gap: 9px;
+  align-items: center;
+  margin: 15px 0;
+  font-size: 7px;
+}
+.dioliOS .roadmap > div > i {
+  height: 12px;
+  background: #edf1f0;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.dioliOS .roadmap > div > i b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan2), #258eaa);
+  border-radius: 7px;
+}
+.dioliOS .briefHero {
+  display: flex;
+  gap: 12px;
+  background: #edfafa;
+  border-radius: 7px;
+  padding: 13px;
+  margin: 12px 0;
+}
+.dioliOS .briefHero > i {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--navy);
+  color: var(--cyan);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .briefHero > div {
+  flex: 1;
+}
+.dioliOS .briefHero small {
+  font-size: 5px;
+  color: #15939a;
+}
+.dioliOS .briefHero h3 {
+  font: 700 11px/1.4 var(--sora);
+  margin: 5px 0;
+}
+.dioliOS .briefHero p {
+  font-size: 6px;
+  color: #718087;
+}
+.dioliOS .briefItem {
+  height: 40px;
+  border-top: 1px solid #edf0f0;
+  display: grid;
+  grid-template-columns: 76px 1fr 45px;
+  align-items: center;
+  font-size: 6px;
+}
+.dioliOS .briefItem > b {
+  font-size: 5px;
+  color: #15939a;
+}
+.dioliOS .briefItem button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+}
+.dioliOS .dataSources > div > i {
+  color: #289268;
+  font-style: normal;
+}
+.dioliOS .forecastValues {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 14px 0;
+}
+.dioliOS .forecastValues span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .forecastValues small {
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .forecastValues b {
+  font: 700 15px var(--sora);
+  margin: 5px 0;
+}
+.dioliOS .forecastValues em {
+  font-size: 5px;
+  color: #278a64;
+  font-style: normal;
+}
+.dioliOS .forecastChart {
+  height: 90px;
+  display: flex;
+  gap: 7px;
+  align-items: flex-end;
+}
+.dioliOS .forecastChart i {
+  flex: 1;
+  background: linear-gradient(#20cbd3, #82eaed);
+  height: 35%;
+  border-radius: 4px 4px 0 0;
+}
+.dioliOS .forecastChart i:nth-child(2) {
+  height: 48%;
+}
+.dioliOS .forecastChart i:nth-child(3) {
+  height: 43%;
+}
+.dioliOS .forecastChart i:nth-child(4) {
+  height: 67%;
+}
+.dioliOS .forecastChart i:nth-child(5) {
+  height: 76%;
+}
+.dioliOS .forecastChart i:nth-child(6) {
+  height: 91%;
+}
+.dioliOS .decisionLog > div:not(.head) {
+  height: 42px;
+  border-top: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .decisionLog time {
+  width: 40px;
+  font-size: 5px;
+  color: #849095;
+}
+.dioliOS .decisionLog span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .decisionLog b {
+  font-size: 7px;
+}
+.dioliOS .decisionLog small {
+  font-size: 5px;
+  color: #278a64;
+}
+@media (max-width: 900px) {
+  .dioliOS .designFullGrid,.dioliOS .trafficGrid,.dioliOS .intelGrid {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .departmentModule > section {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .projectPortfolio {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .designKpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .dioliOS .deptNav {
+    overflow-x: auto;
+  }
+  .dioliOS .deptNav button {
+    white-space: nowrap;
+  }
+  .dioliOS .departmentModule > section,.dioliOS .projectPortfolio {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .projectKpis {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .designKpis {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .roadmap > div:not(.head) {
+    grid-template-columns: 85px 1fr 25px;
+  }
+}
+
+/* Integrations */
+.dioliOS .accessBanner {
+  height: 58px;
+  border: 1px solid #bde8e8;
+  background: linear-gradient(90deg, #eafafa, #f7ffff);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.dioliOS .accessBanner > i {
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+  background: var(--navy);
+  color: var(--cyan);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .accessBanner > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .accessBanner b {
+  font-size: 7px;
+}
+.dioliOS .accessBanner span {
+  font-size: 5px;
+  color: #708087;
+  margin-top: 3px;
+}
+.dioliOS .integrationKpis {
+  margin-bottom: 10px;
+}
+.dioliOS .integrationFilters {
+  height: 42px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  margin-bottom: 10px;
+}
+.dioliOS .integrationFilters button {
+  border: 0;
+  background: none;
+  padding: 0 10px;
+  height: 100%;
+  font-size: 6px;
+  position: relative;
+}
+.dioliOS .integrationFilters button.active {
+  font-weight: 800;
+}
+.dioliOS .integrationFilters button.active:after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan2);
+}
+.dioliOS .integrationFilters > span {
+  margin-left: auto;
+  font-size: 5px;
+  color: #7e8b90;
+}
+.dioliOS .integrationGrid {
+  display: grid;
+  grid-template-columns: 1.55fr 0.72fr;
+  gap: 10px;
+}
+.dioliOS .integrationGrid > aside {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dioliOS .integrationList {
+  padding-bottom: 8px;
+}
+.dioliOS .integrationHeader {
+  display: grid;
+  grid-template-columns: 1fr 82px 70px 58px 84px;
+  gap: 7px;
+  padding: 10px 18px 7px 46px;
+  background: #f6f8f7;
+  color: #859095;
+  font-size: 5px;
+  font-weight: 800;
+}
+.dioliOS .integrationRow {
+  min-height: 57px;
+  border-top: 1px solid #edf0f0;
+  display: grid;
+  grid-template-columns: 31px 1fr 82px 70px 58px 84px 13px;
+  gap: 7px;
+  align-items: center;
+}
+.dioliOS .integrationRow > i {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #e8fafa;
+  color: #128f96;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-weight: 800;
+}
+.dioliOS .integrationRow > span {
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .integrationRow > span b {
+  font-size: 7px;
+}
+.dioliOS .integrationRow > span small {
+  font-size: 5px;
+  color: #849095;
+  margin-top: 3px;
+}
+.dioliOS .integrationRow time,.dioliOS .integrationRow strong,.dioliOS .integrationRow em {
+  font-size: 5px;
+  font-style: normal;
+}
+.dioliOS .integrationRow em {
+  color: #66767c;
+}
+.dioliOS .integrationRow > button {
+  border: 0;
+  background: none;
+}
+.dioliOS .pill.warn {
+  background: #fff0db;
+  color: #9d6514;
+}
+.dioliOS .pill.warn i {
+  background: #e49b28;
+}
+.dioliOS .pill.partial {
+  background: #fff5d8;
+  color: #967015;
+}
+.dioliOS .pill.partial i {
+  background: #d6a323;
+}
+.dioliOS .pill.off {
+  background: #f0f2f2;
+  color: #6f7b80;
+}
+.dioliOS .pill.off i {
+  background: #8d979b;
+}
+.dioliOS .systemDoctor {
+  background: var(--navy);
+  color: #fff;
+}
+.dioliOS .systemDoctor > p {
+  font-size: 6px;
+  color: #9caaba;
+}
+.dioliOS .systemDoctor > div:nth-of-type(2) {
+  background: #132239;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .systemDoctor > div small {
+  font-size: 5px;
+  color: var(--cyan);
+}
+.dioliOS .systemDoctor > div b {
+  font-size: 7px;
+  margin: 5px 0;
+}
+.dioliOS .systemDoctor > div span {
+  font-size: 5px;
+  color: #91a1b1;
+  line-height: 1.45;
+}
+.dioliOS .systemDoctor > button {
+  width: 100%;
+  border: 0;
+  background: var(--cyan);
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 6px;
+  font-weight: 800;
+  margin-top: 9px;
+}
+.dioliOS .integrationAlerts > div:not(.head) {
+  min-height: 48px;
+  border-top: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dioliOS .integrationAlerts > div > i {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .integrationAlerts i.warn {
+  background: #fff0d8;
+  color: #a86a11;
+}
+.dioliOS .integrationAlerts i.partial {
+  background: #edfafa;
+  color: #168c92;
+}
+.dioliOS .integrationAlerts i.off {
+  background: #f0f2f2;
+  color: #69777c;
+}
+.dioliOS .integrationAlerts > div > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .integrationAlerts b {
+  font-size: 6px;
+}
+.dioliOS .integrationAlerts small {
+  font-size: 5px;
+  color: #849095;
+  margin-top: 3px;
+}
+.dioliOS .permissionMap > div:not(.head) {
+  height: 34px;
+  border-top: 1px solid #edf0f0;
+  display: flex;
+  align-items: center;
+  font-size: 6px;
+}
+.dioliOS .permissionMap > div span {
+  flex: 1;
+}
+.dioliOS .permissionMap > div b {
+  font-size: 5px;
+  color: #16898f;
+}
+.dioliOS .clientTabs button {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .dioliOS .integrationGrid {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .integrationGrid > aside {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .systemDoctor {
+    grid-row: span 2;
+  }
+  .dioliOS .integrationHeader {
+    display: none;
+  }
+  .dioliOS .integrationRow {
+    grid-template-columns: 31px 1fr 82px 64px 60px;
+  }
+  .dioliOS .integrationRow time,.dioliOS .integrationRow em {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .dioliOS .accessBanner .pill,.dioliOS .integrationFilters > span {
+    display: none;
+  }
+  .dioliOS .integrationGrid > aside {
+    display: flex;
+  }
+  .dioliOS .integrationRow {
+    grid-template-columns: 29px 1fr 75px 12px;
+  }
+  .dioliOS .integrationRow strong {
+    display: none;
+  }
+  .dioliOS .integrationKpis {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Official client-page pattern */
+.dioliOS .workspaceTab > .tabTitle {
+  height: 150px;
+  min-height: 150px;
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(110deg, #071022 0%, #0b1d31 58%, #103344 100%);
+  color: #fff;
+  padding: 23px 27px;
+  margin-bottom: 0;
+  position: relative;
+  overflow: hidden;
+}
+.dioliOS .workspaceTab > .tabTitle:after {
+  content: "";
+  position: absolute;
+  width: 210px;
+  height: 210px;
+  border: 1px solid #2fcbd322;
+  border-radius: 50%;
+  right: 190px;
+  top: -105px;
+  box-shadow: 0 0 0 36px #2fcbd30b;
+}
+.dioliOS .workspaceTab > .tabTitle > div {
+  position: relative;
+  z-index: 1;
+}
+.dioliOS .workspaceTab > .tabTitle h2 {
+  font: 650 24px var(--sora);
+  margin: 11px 0 5px;
+}
+.dioliOS .workspaceTab > .tabTitle p {
+  color: #a7b5c2;
+  max-width: 650px;
+  line-height: 1.5;
+}
+.dioliOS .workspaceTab > .tabTitle > div:last-child {
+  align-items: center;
+}
+.dioliOS .workspaceTab > .tabTitle button {
+  border-color: #ffffff32;
+  background: #ffffff0d;
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+.dioliOS .workspaceTab > .tabTitle button.primary {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: var(--navy);
+  font-weight: 800;
+}
+.dioliOS .workspaceTab > .tabTitle + .kpis,.dioliOS .workspaceTab > .tabTitle + .accessBanner,.dioliOS .workspaceTab > .tabTitle + .deptNav {
+  border-radius: 0 0 8px 8px;
+}
+.dioliOS .workspaceTab > .tabTitle + .kpis,.dioliOS .workspaceTab > .tabTitle + .accessBanner {
+  margin-top: 0;
+}
+.dioliOS .workspaceTab > .tabTitle + .deptNav {
+  border-top: 0;
+}
+.dioliOS .workspaceTab > .tabTitle + .accessBanner {
+  border-top: 0;
+}
+.dioliOS .workspaceTab > .tabTitle + .accessBanner + .kpis {
+  margin-top: 10px;
+}
+
+/* Scroll-free navigation */
+.dioliOS .clientNavShell {
+  height: 45px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.dioliOS .clientNavShell .clientTabs {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.dioliOS .clientNavShell .clientTabs::-webkit-scrollbar,.dioliOS .brandTools nav::-webkit-scrollbar,.dioliOS .socialNav::-webkit-scrollbar,.dioliOS .deptNav::-webkit-scrollbar {
+  display: none;
+}
+.dioliOS .brandTools nav,.dioliOS .socialNav,.dioliOS .deptNav {
+  scrollbar-width: none;
+}
+.dioliOS .navArrow {
+  border: 0;
+  background: #fff;
+  color: #50616a;
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  z-index: 2;
+}
+.dioliOS .navArrow:hover {
+  background: #eafafa;
+  color: #0d848a;
+}
+.dioliOS .navArrow.prev {
+  border-right: 1px solid #edf0f0;
+}
+.dioliOS .navArrow.next {
+  border-left: 1px solid #edf0f0;
+}
+.dioliOS .clientHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dioliOS .clientHeadActions > button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 6px;
+}
+.dioliOS .clientHeadActions .pmChatButton {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.dioliOS .pmChatButton em {
+  font-style: normal;
+  background: var(--cyan);
+  color: var(--navy);
+  border-radius: 8px;
+  padding: 2px 5px;
+  margin-left: 4px;
+}
+
+/* Client technical sheet */
+.dioliOS .clientSheet {
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  background: #f5f7f7;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px #0005;
+  overflow: auto;
+}
+.dioliOS .clientSheet > header {
+  height: 82px;
+  background: var(--navy);
+  color: #fff;
+  padding: 0 23px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.dioliOS .clientSheet > header > div:nth-child(2) {
+  flex: 1;
+}
+.dioliOS .clientSheet > header small {
+  font-size: 5px;
+  color: #7f91a3;
+  letter-spacing: 1px;
+}
+.dioliOS .clientSheet > header h2 {
+  font: 700 15px var(--sora);
+  margin: 4px 0 0;
+}
+.dioliOS .clientSheet > header > button,.dioliOS .pmChat > header > button {
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 20px;
+}
+.dioliOS .sheetMeta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.dioliOS .sheetMeta > span {
+  min-height: 74px;
+  padding: 14px 16px;
+  border-right: 1px solid #e8ecec;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .sheetMeta small {
+  font-size: 5px;
+  color: #839095;
+  font-weight: 800;
+}
+.dioliOS .sheetMeta b {
+  font-size: 7px;
+  margin: 6px 0 3px;
+}
+.dioliOS .sheetMeta em {
+  font-style: normal;
+  font-size: 5px;
+  color: #63757c;
+}
+.dioliOS .sheetGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+.dioliOS .sheetGrid > article {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+.dioliOS .sheetGrid dl {
+  margin: 10px 0 0;
+}
+.dioliOS .sheetGrid dl > div {
+  height: 34px;
+  border-top: 1px solid #edf0f0;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+}
+.dioliOS .sheetGrid dt {
+  font-size: 5px;
+  color: #819096;
+}
+.dioliOS .sheetGrid dd {
+  font-size: 6px;
+  font-weight: 700;
+  margin: 0;
+}
+.dioliOS .briefingCard p {
+  font-size: 7px;
+  line-height: 1.55;
+  color: #596a72;
+}
+.dioliOS .briefingCard > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin: 11px 0;
+}
+.dioliOS .briefingCard > div span {
+  background: #f1f8f7;
+  border-radius: 6px;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .briefingCard span small {
+  font-size: 5px;
+  color: #168a90;
+}
+.dioliOS .briefingCard span b {
+  font-size: 6px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+.dioliOS .briefingCard > button {
+  border: 0;
+  background: none;
+  color: #11828a;
+  padding: 0;
+  font-size: 6px;
+  font-weight: 800;
+}
+.dioliOS .clientSheet > footer {
+  height: 63px;
+  background: #fff;
+  border-top: 1px solid var(--line);
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dioliOS .clientSheet > footer span {
+  flex: 1;
+  font-size: 5px;
+  color: #7c8b91;
+}
+.dioliOS .clientSheet > footer button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 5px;
+  padding: 8px 11px;
+  font-size: 6px;
+}
+.dioliOS .clientSheet > footer .primary {
+  background: var(--navy);
+  color: #fff;
+}
+
+/* Project Manager client channel */
+.dioliOS .pmBackdrop {
+  justify-items: end;
+  padding: 0;
+}
+.dioliOS .pmChat {
+  width: min(880px, 96vw);
+  height: 100vh;
+  background: #fff;
+  box-shadow: -24px 0 80px #0005;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .pmChat > header {
+  height: 91px;
+  background: var(--navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 22px;
+}
+.dioliOS .pmChat > header > div:nth-child(2) {
+  flex: 1;
+}
+.dioliOS .pmChat > header small {
+  font-size: 5px;
+  color: #7e90a3;
+  letter-spacing: 1px;
+}
+.dioliOS .pmChat > header h2 {
+  font: 700 15px var(--sora);
+  margin: 4px 0;
+}
+.dioliOS .pmChat > header p {
+  font-size: 5px;
+  color: #9aa9b6;
+  margin: 0;
+}
+.dioliOS .pmFlow {
+  height: 76px;
+  background: #eefafa;
+  border-bottom: 1px solid #cce8e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 0 20px;
+}
+.dioliOS .pmFlow > span {
+  display: grid;
+  grid-template-columns: 27px 1fr;
+  column-gap: 7px;
+}
+.dioliOS .pmFlow span > i {
+  grid-row: span 2;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--cyan);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 6px;
+}
+.dioliOS .pmFlow span b {
+  font-size: 6px;
+}
+.dioliOS .pmFlow span small {
+  font-size: 5px;
+  color: #718187;
+  margin-top: 3px;
+}
+.dioliOS .pmFlow > em {
+  font-style: normal;
+  color: #78a7aa;
+}
+.dioliOS .chatBody {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.dioliOS .chatBody > aside {
+  background: #f4f7f6;
+  border-right: 1px solid var(--line);
+  padding: 19px;
+  display: flex;
+  flex-direction: column;
+}
+.dioliOS .chatBody > aside > small {
+  font-size: 5px;
+  color: #188b91;
+}
+.dioliOS .chatBody > aside h3 {
+  font: 700 14px var(--sora);
+  margin: 7px 0 4px;
+}
+.dioliOS .chatBody > aside p {
+  font-size: 5px;
+  color: #708087;
+  line-height: 1.5;
+}
+.dioliOS .chatBody > aside > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0 18px;
+}
+.dioliOS .chatBody > aside > div span {
+  font-size: 5px;
+  background: #fff;
+  border-radius: 5px;
+  padding: 6px;
+}
+.dioliOS .chatBody > aside > b {
+  font-size: 6px;
+  margin-bottom: 6px;
+}
+.dioliOS .chatAgent {
+  font-size: 5px;
+  color: #17898f;
+  border-top: 1px solid #e3e9e8;
+  padding: 7px 0;
+}
+.dioliOS .chatBody > main {
+  padding: 24px;
+  background: #fbfcfc;
+  overflow: auto;
+}
+.dioliOS .message {
+  max-width: 82%;
+  border-radius: 9px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.dioliOS .message small {
+  font-size: 5px;
+  font-weight: 800;
+}
+.dioliOS .message p {
+  font-size: 7px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+.dioliOS .clientMessage {
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.dioliOS .pmMessage {
+  background: #e5fafa;
+  margin-left: auto;
+}
+.dioliOS .cascadeNote {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px;
+  margin-top: 20px;
+}
+.dioliOS .cascadeNote > i {
+  width: 29px;
+  height: 29px;
+  border-radius: 7px;
+  background: var(--cyan);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.dioliOS .cascadeNote > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .cascadeNote b {
+  font-size: 6px;
+}
+.dioliOS .cascadeNote small {
+  font-size: 5px;
+  color: #91a1b0;
+  margin-top: 4px;
+}
+.dioliOS .cascadeNote button {
+  border: 0;
+  background: none;
+  color: var(--cyan);
+  font-size: 6px;
+}
+.dioliOS .pmChat > footer {
+  height: 76px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+}
+.dioliOS .pmChat > footer button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  height: 38px;
+  padding: 0 12px;
+}
+.dioliOS .pmChat > footer textarea {
+  flex: 1;
+  height: 42px;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 6px;
+}
+.dioliOS .pmChat > footer .send {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+
+@media (max-width: 900px) {
+  .dioliOS .workspaceTab > .tabTitle:after {
+    right: 80px;
+  }
+  .dioliOS .sheetMeta {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .clientHeadActions > button:first-child {
+    display: none;
+  }
+  .dioliOS .pmFlow {
+    gap: 7px;
+  }
+  .dioliOS .pmFlow > em {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .dioliOS .workspaceTab > .tabTitle {
+    height: auto;
+    min-height: 175px;
+    align-items: flex-start;
+    padding: 20px;
+    flex-direction: column;
+  }
+  .dioliOS .workspaceTab > .tabTitle > div:last-child {
+    margin-top: 13px;
+  }
+  .dioliOS .workspaceTab > .tabTitle:after {
+    display: none;
+  }
+  .dioliOS .clientHeadActions .pmChatButton {
+    display: block;
+  }
+  .dioliOS .clientHeadActions > button:not(.pmChatButton) {
+    display: none;
+  }
+  .dioliOS .sheetGrid {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .sheetMeta {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dioliOS .briefingCard > div {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .chatBody {
+    grid-template-columns: 1fr;
+  }
+  .dioliOS .chatBody > aside {
+    display: none;
+  }
+  .dioliOS .pmFlow span small {
+    display: none;
+  }
+  .dioliOS .pmFlow {
+    height: 62px;
+  }
+  .dioliOS .clientSheet > footer span {
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACRÉSCIMO DO PORTE — os três estados obrigatórios da casa.
+
+   A referência aprovada não tinha estado de carregando, vazio nem erro: ela
+   era uma tela cheia de números fixos. No Foocci a maioria dessas fontes ainda
+   não existe, e guardrail 1 diz que ausência de informação não é informação —
+   então o número inventado não pode entrar.
+
+   Estas regras NÃO alteram nenhum valor da referência. Elas reaproveitam a
+   mesma escala tipográfica (5/6/7px), o mesmo raio (6px) e as mesmas cores
+   (--line, --muted, --amber, --red) para que o estado vazio pareça parte da
+   mesma tela, e não um remendo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* O número que não existe. Mesmo slot, mesma classe, sem mentir. */
+.dioliOS b.noData {
+  color: #a9b3b8;
+  font-weight: 600;
+}
+
+.dioliOS .emptyBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 22px 14px;
+  margin-top: 10px;
+  border: 1px dashed #d8e0e3;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+.dioliOS .emptyBlock i {
+  font-style: normal;
+  font-size: 11px;
+  color: #b6c1c6;
+}
+.dioliOS .emptyBlock b {
+  font-size: 7px;
+  color: #4d5a61;
+}
+.dioliOS .emptyBlock small {
+  font-size: 5px;
+  color: var(--muted);
+  max-width: 240px;
+  line-height: 1.6;
+}
+.dioliOS .emptyBlock button {
+  margin-top: 6px;
+  border: 0;
+  background: none;
+  font-size: 6px;
+  font-weight: 700;
+  color: #11878c;
+}
+
+.dioliOS .errorBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px;
+  margin-top: 10px;
+  border-radius: 6px;
+  background: #fdecec;
+  border: 1px solid #f6d3d6;
+}
+.dioliOS .errorBlock i {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: #fff;
+  font-style: normal;
+  font-size: 7px;
+  font-weight: 800;
+}
+.dioliOS .errorBlock > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.dioliOS .errorBlock b {
+  font-size: 7px;
+  color: #93222c;
+}
+.dioliOS .errorBlock small {
+  font-size: 5px;
+  color: #a4545c;
+  line-height: 1.6;
+}
+.dioliOS .errorBlock button {
+  border: 0;
+  background: none;
+  font-size: 6px;
+  font-weight: 700;
+  color: #93222c;
+}
+
+.dioliOS .loadingBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+.dioliOS .loadingBlock i {
+  display: block;
+  height: 14px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #eef2f3 25%, #e3e9eb 37%, #eef2f3 63%);
+  background-size: 400% 100%;
+  animation: dioliShimmer 1.3s ease-in-out infinite;
+}
+.dioliOS .loadingBlock i:nth-child(3) {
+  width: 68%;
+}
+@keyframes dioliShimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dioliOS .loadingBlock i { animation: none; }
+}
+
+.dioliOS .srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A trilha de abas rola por SETA, nunca por barra — critério de aceite 3 do
+   handoff. A referência já escondia a barra no WebKit; aqui a regra fica
+   explícita também para Firefox e para o contêiner do Foocci, que tem
+   `overflow-x-hidden` no body e não pode ganhar barra horizontal em nenhum
+   dos três tamanhos. */
+.dioliOS .clientTabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+.dioliOS .clientTabs::-webkit-scrollbar {
+  display: none;
+}
+.dioliOS .socialNav,
+.dioliOS .deptNav {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dioliOS .socialNav::-webkit-scrollbar,
+.dioliOS .deptNav::-webkit-scrollbar {
+  display: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACRÉSCIMO DO PORTE — responsividade das áreas que a referência não cobriu.
+
+   O menor ponto de quebra da folha aprovada é 600px, e ela só colapsa três
+   grades: `.overviewGrid`, `.requestGrid` e `.socialGrid`. As grades que
+   vieram no `complete.css` (Design, Tráfego, Inteligência, Integrações,
+   Portfólio, Ficha do cliente, Chat do PM) ficaram de fora — a 375px elas
+   empurravam a página para 455px de largura e nasciam com barra de rolagem
+   horizontal, que é justamente o critério de aceite 3 do handoff.
+
+   Este bloco NÃO muda nenhuma grade no desktop. Ele só continua, para essas
+   áreas, a mesma regra que a referência já aplicava às outras três. A causa
+   raiz do estouro é a mesma em todas: item de grade nasce com
+   `min-width:auto` e não encolhe abaixo do próprio conteúdo — daí o
+   `min-width:0` logo abaixo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .dioliOS .designFullGrid,
+  .dioliOS .trafficGrid,
+  .dioliOS .intelGrid,
+  .dioliOS .integrationGrid,
+  .dioliOS .controlGrid,
+  .dioliOS .detailGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dioliOS .projectPortfolio,
+  .dioliOS .designKpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dioliOS .departmentModule > section,
+  .dioliOS .socialDetail > section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  /* Nenhum item de grade pode ditar a largura da página. */
+  .dioliOS [class*="Grid"] > *,
+  .dioliOS .projectPortfolio > *,
+  .dioliOS .kpis > *,
+  .dioliOS .signals > * {
+    min-width: 0;
+  }
+
+  .dioliOS .projectPortfolio,
+  .dioliOS .designKpis,
+  .dioliOS .departmentModule > section,
+  .dioliOS .socialDetail > section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A faixa de canais e o pipeline viram duas colunas em vez de quatro/seis. */
+  .dioliOS .channelStrip,
+  .dioliOS .pipeline > div:nth-of-type(2),
+  .dioliOS .platforms,
+  .dioliOS .forecastValues,
+  .dioliOS .listening > div:first-of-type {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dioliOS .channelStrip {
+    display: grid;
+  }
+
+  /* O planner semanal e o board de design são trilhas roláveis por dedo, não
+     grades de 7 colunas de 40px. A barra continua escondida. */
+  .dioliOS .week,
+  .dioliOS .designBoard > div:last-child,
+  .dioliOS .flow {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .dioliOS .week::-webkit-scrollbar,
+  .dioliOS .designBoard > div:last-child::-webkit-scrollbar,
+  .dioliOS .flow::-webkit-scrollbar {
+    display: none;
+  }
+  .dioliOS .week > div,
+  .dioliOS .designBoard > div:last-child > span,
+  .dioliOS .flow > div {
+    flex: 0 0 auto;
+    min-width: 62px;
+  }
+
+  /* Ficha do cliente e Chat do PM em uma coluna. */
+  .dioliOS .sheetGrid,
+  .dioliOS .sheetMeta,
+  .dioliOS .chatBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dioliOS .chatBody > aside,
+  .dioliOS .pmFlow {
+    display: none;
+  }
+  .dioliOS .clientSheet {
+    width: 100%;
+  }
+  .dioliOS .pmChat {
+    width: 100%;
+  }
+  .dioliOS .modalBackdrop {
+    padding: 10px;
+  }
+
+  /* O cabeçalho do cliente empilha em vez de espremer. */
+  .dioliOS .projectHead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .dioliOS .clientHeadActions {
+    flex-wrap: wrap;
+  }
+  .dioliOS .signals {
+    height: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dioliOS .signals > div {
+    min-height: 60px;
+  }
+}
+
+/* A nota de rodapé que explica por que a tela está vazia. Mesma escala da
+   referência; existe só nos estados sem dado. */
+.dioliOS .tabFootnote {
+  margin-top: 12px;
+  font-size: 5px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+.dioliOS .moduleLead {
+  font-size: 6px;
+  color: #778389;
+  margin: 7px 0 4px;
+}
+
+/* ── Correção de drift no 375px: a "Ficha do cliente" é um dos doze módulos
+      nomeados no handoff, e a regra da referência a apagava no celular
+      (`.clientHeadActions > button:not(.pmChatButton){display:none}`). Restam
+      dois botões, que cabem. O que continua escondido é "Editar Cliente" —
+      esse é secundário e a referência tinha razão em tirá-lo.
+      Também: o `h1` do cliente ficou em 24px no celular porque `.clientHead h1`
+      tem especificidade maior que a regra de 16px do bloco de 600 da folha
+      original; aqui ela é reposta no mesmo valor que a referência pedia. ── */
+@media (max-width: 900px) {
+  .dioliOS .clientHeadActions > button:first-child {
+    display: block;
+  }
+  .dioliOS .clientHeadActions > button:last-child {
+    display: none;
+  }
+
+  /* "Somente leitura" é a REGRA DE PERMISSÃO desta linha, não um enfeite de
+     desktop: é ela que diz que a agência não pode mexer na credencial. A folha
+     original a escondia de 900px para baixo junto com a coluna de horário, e
+     no celular a linha ficava sem dizer quem manda. O horário continua
+     escondido; a permissão volta, embaixo do nome da integração. */
+  .dioliOS .integrationRow em {
+    display: block;
+    grid-column: 2 / 3;
+    grid-row: 2;
+    margin-top: -6px;
+  }
+  .dioliOS .integrationRow {
+    row-gap: 2px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dioliOS .clientHead h1 {
+    font-size: 16px;
+  }
+  .dioliOS .clientTitle {
+    align-items: flex-start;
+  }
+  .dioliOS .clientTitle > span {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+  .dioliOS .projectHead > div > div {
+    flex-wrap: wrap;
+  }
+}
+
+/* O cabeçalho do card de agente (`.agentTop`) é uma linha flex de três peças:
+   ícone, título e pílula de status. O título não tinha `min-width:0`, então no
+   celular ele empurrava a pílula para cima do parágrafo seguinte. Mesma causa
+   raiz dos estouros de grade acima; mesma correção. */
+.dioliOS .agentTop > span {
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .dioliOS .agentTop {
+    flex-wrap: wrap;
+  }
+  .dioliOS .agentTop > span {
+    flex: 1 1 60%;
+  }
+  .dioliOS .agentTop .pill {
+    flex: 0 0 auto;
+  }
+}
+
+/* ── Duas correções de drift herdadas da própria referência ───────────────── */
+
+/* 1. `Living Moodboards`: o seletor `.mood > div > button` da folha original
+      pega TAMBÉM o botão de ação do cabeçalho (`div.head > button`), e o
+      transforma num bloco degradê de 90px de altura no canto superior direito
+      do card. Todos os outros vinte cards desenham esse mesmo botão como um
+      link de texto. É defeito, não estilo: o cabeçalho volta ao padrão. */
+.dioliOS .mood > .head > button {
+  height: auto;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+  text-align: right;
+  font-size: 6px;
+  font-weight: 700;
+}
+.dioliOS .mood > .head > button:after {
+  content: none;
+}
+
+/* 2. Os blocos de estado precisam vencer as regras de grade dos cards que os
+      hospedam (`.mood > div:last-child`, `.pipeline > div`, …), que têm
+      especificidade maior por causa do combinador filho. Repetir a classe é a
+      forma padrão de subir a especificidade sem `!important`. */
+.dioliOS .emptyBlock.emptyBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  grid-template-columns: none;
+}
+.dioliOS .errorBlock.errorBlock {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  grid-template-columns: none;
+}
+.dioliOS .loadingBlock.loadingBlock {
+  display: flex;
+  flex-direction: column;
+  grid-template-columns: none;
+}
