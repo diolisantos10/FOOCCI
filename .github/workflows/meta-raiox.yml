@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# RAIO-X DO APLICATIVO META — o estado inteiro da chave, numa rodada, sem humano.
+#
+# Responde de uma vez: quais credenciais existem, o que a App Review cobra do app,
+# se os dois webhooks estão assinados, se a credencial de cada restaurante está
+# VIVA (e por quanto tempo), quais permissões a Meta concedeu, e o estado do
+# Instagram. Tudo lido da própria Meta e da própria produção.
+#
+# SOMENTE LEITURA. Nenhuma chamada deste workflow altera estado na Meta.
+#
+# ⚠️ O log deste repositório é PÚBLICO — o script mascara todo segredo lido do
+# Railway e imprime só campos escolhidos a dedo.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Raio-X do aplicativo Meta
+
+on:
+  workflow_dispatch:
+    inputs:
+      slugs:
+        description: "Slugs de restaurante para o bloco do Instagram (separados por vírgula)"
+        required: false
+        default: "sushi-cazza"
+
+jobs:
+  raiox:
+    name: Perguntar à Meta e à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Levantar o estado
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          SLUGS: ${{ github.event.inputs.slugs || 'sushi-cazza' }}
+        run: node scripts/meta-raiox.mjs

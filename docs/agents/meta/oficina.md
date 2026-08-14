@@ -635,3 +635,206 @@ um novo antes de olhar"; **não** autoriza dizer qual é nem quem o administra.
   Toda leitura de DNS aqui vai por DoH e **com consulta de controle**, senão
   ausência de ferramenta lê como ausência de registro — guardrail 1 mordendo pela
   ferramenta, não pelos dados. Proveniência: incidente da própria sessão, 08/08.
+
+---
+
+## 2026-08-14 (madrugada) · Meta é PRIORIDADE ZERO: o que travava, o que destravei, e o que só o CEO faz
+
+**Pedido do Diretor, palavras do CEO:** *"o Foocci está parado… precisa receber os
+clientes no WhatsApp via SDR, precisa da CRM, precisa receber clientes de WhatsApp, e
+toda a Meta está parada."* Ordem: adiantar tudo que não depende dele e deixar só o
+que é dele.
+
+### 0 · O que eu consegui medir e o que NÃO consegui (guardrail 1, primeiro)
+
+| Medi | Resultado |
+|---|---|
+| Produção responde | `GET /api/health` → `commitSha 6c9ff230`, `branch claude/remove-legacy-runner-q8iXa`, `db:"ok"` |
+| Branch de trabalho × padrão | `git rev-list --left-right --count` = **0 0** — a branch atual É o head da padrão. O aviso do `CLAUDE.md` ("39 commits atrás") está **desatualizado** |
+| `instagram-token-refresh.yml` está na branch PADRÃO | ✅ `git ls-tree origin/claude/remove-legacy-runner-q8iXa` confirma. Logo **`on: schedule` dispara** — a pendência "não confirmado se roda" fica respondida no nível do mecanismo |
+| PIN de 2FA está no repositório? | **NÃO.** Grep em `docs/` e `*.md`: só menções ao fato do vazamento (`docs/decisoes.md:465`, `docs/pendencias.md:1105`), nunca o valor. A exposição foi no chat; a rotação continua pendente |
+
+**O que NÃO consegui medir, e por quê — isto muda o que dá para afirmar:**
+
+- **Não alcancei a Graph API nem o Railway.** O `.env` local tem 8 nomes
+  (`DATABASE_URL`, `ENCRYPTION_KEY`, `META_WHATSAPP_ENABLED`, `NEXTAUTH_*`,
+  `NEXT_PUBLIC_APP_URL`, `OPENAI_API_KEY`, `WHATSAPP_BRAIN_ENABLED`) e **nenhuma
+  credencial `META_*`/`INSTAGRAM_*`**. Sem `RAILWAY_TOKEN` e sem `ADMIN_SECRET`.
+- **A API de Actions do GitHub está BLOQUEADA neste ambiente.** `GH_TOKEN` existe, mas
+  o proxy responde `403 {"message":"Access to this GitHub Actions path is not permitted
+  through this proxy."}` para `/actions/secrets` e `/actions/**/runs`. Consequência
+  dura: **não consigo listar segredos, não consigo ler histórico de execução e não
+  consigo disparar workflow.** Todo diagnóstico ao vivo desta sessão teria de passar
+  por lá. Registrando porque é armadilha de repetir — a oficina de 06/08 tentou o
+  mesmo caminho por outra porta.
+- Logo: **nada nesta entrada afirma estado ao vivo da Meta.** O que eu entrego é a
+  máquina que mede, pronta para uma rodada de um clique.
+
+### 1 · O que construí
+
+#### a) Raio-X do aplicativo Meta — `scripts/meta-raiox.mjs` + `.github/workflows/meta-raiox.yml`
+
+Uma rodada, somente leitura, responde tudo que a ficha pedia: presença de credencial
+no Railway (nunca valor), o que a App Review cobra do app (termos, privacidade,
+domínios, restrições), as **assinaturas de webhook do aplicativo** com conferência de
+callback e do campo `messages`, o estado de cada WABA/número/template, a **credencial
+viva ou morta** de cada restaurante, e o Instagram com validade real do token.
+
+Reaproveita o padrão que já funcionava em `scripts/instagram-sos.mjs`: lê as variáveis
+de produção com o `RAILWAY_TOKEN` **que já existe nos segredos do repositório**, mascara
+todo segredo no instante da leitura, e imprime só campo escolhido a dedo (o log deste
+repo é público). **Nenhuma credencial nova precisa ser pedida ao CEO para diagnosticar
+a Meta** — este era o ponto da restrição do despacho, e ele se sustenta.
+
+Três leituras que o script faz e que ninguém fazia:
+- `META_CONFIG_ID == META_APP_ID` → grita. É a armadilha de 02/08 registrada na vitrine.
+- `NEXT_PUBLIC_META_APP_ID` divergindo de `META_APP_ID` → grita. O navegador abriria o
+  Embedded Signup com **outro aplicativo**, e isso falha calado.
+- `META_WHATSAPP_ENABLED != "true"` → grita. Não governa mais o envio, mas continua
+  sendo portão de ONBOARDING/UI: com ela desligada, ninguém **configura** nada novo na
+  Meta pelo painel — e visto de fora isso se lê exatamente como *"a Meta está parada"*.
+
+#### b) O buraco #5 do raio-x de 05/08, fechado: renovação/vigilância do token de WhatsApp
+
+Era o achado mais grave em aberto e estava aberto havia nove dias: **o WhatsApp não
+tinha varredura nenhuma de credencial.** O Instagram ganhou a dele em julho, depois de
+13 dias mudo; o WhatsApp — o canal que atende o restaurante AGORA — só tinha um aviso
+de tela a ≤30 dias (`MetaConfigService.ts:106`) alimentado por um `tokenExpiresAt`
+gravado **uma vez, no onboarding**, e nunca reconferido.
+
+| Arquivo | O quê |
+|---|---|
+| `src/services/whatsapp/metaTokenHealth.ts` | pergunta `debug_token` por config: validade, vencimento, **app emissor** e permissões concedidas |
+| `src/services/whatsapp/metaTokenAlert.ts` | o aviso sai para o WhatsApp pelo canal Master, com `META_ALERT_PHONE` **caindo em** `INSTAGRAM_ALERT_PHONE` |
+| `src/app/api/cron/whatsapp/meta-token-health/route.ts` | `CRON_SECRET` ou `x-admin-secret` |
+| `.github/workflows/meta-token-health.yml` | diário 06:42 UTC, falha com `::error::` carregando a evidência |
+| `src/services/whatsapp/metaTokenHealth.test.ts` | **12 casos** |
+
+Quatro decisões que tomei sozinho, e o porquê:
+
+1. **A varredura NUNCA desconecta ninguém.** Guardrail 5. As únicas escritas são
+   `tokenExpiresAt` e `lastHealthCheckAt` — travado por teste que assere exatamente as
+   duas chaves e a **ausência** de `connectionStatus`/`lastError` no `data`. Um erro de
+   rede não pode derrubar o canal de um restaurante que está atendendo.
+2. **"Não consegui perguntar" é `isValid: null`, nunca `true`, e vira atenção.** É o
+   buraco descrito na oficina de 06/08 §4: num dia saudável o sistema nunca dizia
+   "estou cego", e a cegueira só aparecia de carona num incidente já em curso.
+3. **Uma variável de destino, não mais uma.** O mecanismo do Instagram já exigia TRÊS
+   variáveis para um aviso sair. Somar uma quarta seria repetir o defeito; por isso
+   `META_ALERT_PHONE` cai em `INSTAGRAM_ALERT_PHONE`: o CEO configura **um** número e
+   os dois avisos passam a sair.
+4. **`totalConfigs: 0` é atenção aqui, diferente do Instagram.** Lá, ninguém usar IG é
+   normal. Aqui, zero WhatsApp significa que o canal do restaurante sumiu do banco.
+
+O `debug_token` traz `scopes`, e isso rende uma leitura que nunca tínhamos: **as
+permissões que a Meta de fato concedeu são prova indireta de App Review aprovada** —
+um cliente que não é testador só consegue conceder permissão já aprovada. É o caminho
+mais barato para responder "falta permissão?" sem depender de tela.
+
+#### c) `admin/meta/diag` passa a dizer se a credencial está VIVA
+
+`src/app/api/admin/meta/diag/route.ts` ganhou `tokenHealth` por config. O `diag` lia
+WABA, número, templates e assinatura, e **não perguntava se o token estava vivo** —
+reportava `connectionStatus`, que é o que o banco GUARDOU, não o que a Meta DIZ. É a
+mesma mentira do selo "Ativo" do Instagram, na tela do WhatsApp.
+
+#### d) `136024` deixa de mentir na hora do erro — `src/services/whatsapp/metaProvisionDiagnostics.ts`
+
+O aprendizado estava na vitrine, que ninguém abre com o erro na tela. Agora
+`/api/admin/meta/provision` anexa `diagnostico` na resposta de `add`, `request-code` e
+`verify-code`: código, subcódigo, `is_transient`, **`retryable: false`** e o próximo
+passo concreto (apagar a conta no aparelho; e o método `VOICE`, que nunca foi testado).
+Cobre também 133005 (número em outra conta), 133008/133009 (PIN — avisa que insistir
+**piora**, porque bloqueia por tentativas) e 190. **8 testes**, incluindo a metade que
+reproduz o erro antigo: ler só a mensagem e concluir "temporário".
+
+Guardrail 1 dentro do próprio diagnóstico: erro desconhecido devolve tudo `null`. Um
+diagnóstico inventado é pior que nenhum.
+
+#### e) `verifiedName` tinha um default fixo — **"Sushi Cazza"**
+
+`provision/route.ts:42` (antes da mudança): `body.verifiedName?.trim() || "Sushi Cazza"`.
+O `verified_name` é **o nome que o cliente final vê no WhatsApp**, e trocá-lo depois
+passa por revisão da Meta. Qualquer número novo provisionado sem informar o campo
+nasceria carimbado com o nome de um restaurante — **inclusive um número comercial da
+própria Foocci**, que é exatamente o que o SDR precisa provisionar. Agora é obrigatório
+e a recusa explica por quê.
+
+#### f) A precedência banco→ambiente chega ao Instagram (achado #1 de 05/08, aberto havia 9 dias)
+
+Três consumidores liam `process.env` direto e furavam a regra da casa. O efeito prático
+é **o meu guardrail de papel**: rotacionar o segredo pela tela `/admin/meta` sem
+atualizar o Railway deixava o WhatsApp com a credencial nova e o Instagram com a velha
+— dois valores em vigor ao mesmo tempo, para o mesmo aplicativo, sem erro nenhum.
+
+| Arquivo | O quê |
+|---|---|
+| `webhooks/instagram/route.ts:~50` | os segredos resolvidos entram na lista de candidatos da assinatura, **de forma aditiva** |
+| `instagramLoginOAuth.ts` → `resolveInstagramLoginCreds()` | usada em `startInstagramLogin` e no callback |
+| `metaOAuth.ts` → `resolveMetaAppCreds()` | usada nos dois pontos equivalentes |
+| `metaCredentialPrecedence.test.ts` | **7 casos**, cada um com as duas metades |
+
+**Aditivo de propósito:** o que já funcionava por env continua funcionando, e banco fora
+do ar cai no env em vez de derrubar o OAuth (guardrail 5). A versão síncrona continua
+existindo para a tela de status, que só reporta presença de variável de ambiente.
+
+O webhook era o mais perigoso dos três: `META_APP_SECRET` assina **os dois** webhooks,
+e um 403 ali é o canal inteiro mudo com o painel dizendo "Conectado".
+
+#### g) Uma armadilha de acender o número de vendas, documentada onde ela morde
+
+`src/components/marketing/config.ts:34` dizia que `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER`
+"não exige deploy". `NEXT_PUBLIC_*` é **congelado no build**, e este arquivo é importado
+por `DemoForm.tsx`, que é `"use client"`. Salvar a variável e não refazer o build deixa
+o site idêntico — sem erro, sem log. Quem espera o botão acender conclui que o número
+está quebrado. Comentário corrigido com o aviso e o ponteiro para
+`docs/setup-meta-passo-a-passo.md:111`, que já dizia isso para `NEXT_PUBLIC_META_APP_ID`.
+
+### 2 · O que eu NÃO fiz, de propósito
+
+- **Não rotacionei nada.** Nenhum segredo foi lido, impresso, gravado ou alterado.
+- **Não chamei a Meta.** Nenhuma chamada desta sessão saiu para a Graph API.
+- **Não toquei em `/{app-id}/subscriptions`** — camada comum com o WhatsApp, que está no ar.
+- **Não mexi no número que atende o restaurante hoje.**
+- **Não fiz deploy, não fiz merge, não dei push para a branch padrão.**
+- **Não construí o SDR.** O degrau 0 é decisão do CEO (`docs/cronograma-sdr-e-crm-foocci.md:37`),
+  e código antes disso é trabalho jogado fora.
+
+### 3 · O que fica para o CEO, e por que só ele
+
+1. **Abrir a aba "Ações necessárias"** do painel da Meta. `docs/pendencias.md:1098`
+   registra: *"É onde a Meta lista o que está pendente ou bloqueando. Nunca foi lida
+   nesta casa."* Se "toda a Meta está parada" tem uma explicação única, a chance maior
+   é estar ali — e **App Review, permissão e verificação de negócio não são legíveis
+   por API**; são tela, com a conta pessoal dele.
+2. **Reconectar o Instagram** — login pessoal do dono, sem caminho por API.
+3. **O chip do número novo** — apagar a conta de WhatsApp no aparelho é ato físico.
+4. **Decidir o número de vendas e a resposta sobre preço** — degrau 0 do SDR.
+5. **Rotacionar o PIN de 2FA** depois do registro.
+6. **Definir `META_ALERT_PHONE`** e ligar o canal Master: escolher para onde vai o
+   alerta e ativar um número na WABA é decisão dele, não minha.
+
+### 4 · Verificação
+
+`npx tsc --noEmit` **limpo** · `node --check scripts/meta-raiox.mjs` OK ·
+`npx vitest run src/services/whatsapp/ src/services/instagram/ src/services/meta/
+src/app/api/webhooks/` = **924 verdes, 0 vermelhos**. Os 27 testes novos:
+12 (`metaTokenHealth`) + 8 (`metaProvisionDiagnostics`) + 7 (`metaCredentialPrecedence`).
+
+### 5 · Para a vitrine (proposta — quem promove é o Diretor)
+
+- **A API de Actions do GitHub está bloqueada pelo proxy deste ambiente.** `GH_TOKEN`
+  existe e responde para repositório, mas `403` para `/actions/**`. Não dá para listar
+  segredo, ler execução nem disparar workflow daqui — todo diagnóstico ao vivo depende
+  de alguém apertar "Run workflow". Proveniência: `curl` com `GH_TOKEN` em 14/08,
+  resposta literal do proxy.
+- **`debug_token.scopes` é a prova mais barata de App Review aprovada.** Cliente que
+  não é testador só concede permissão já aprovada pela Meta. Proveniência:
+  `metaTokenHealth.ts` + `INSTAGRAM_LOGIN_SCOPES` em `instagramLoginOAuth.ts:38-41`.
+- **`connectionStatus` é memória, não medição.** No WhatsApp ele é o que o banco
+  guardou no onboarding; a Meta pode discordar há dias. Mesma mentira do selo "Ativo"
+  do Instagram, na outra tela. Proveniência: `MetaConfigService.ts:110` × o
+  `tokenHealth` novo em `diag/route.ts`.
+- **Default de conveniência em campo que a Meta revisa é dívida cara.**
+  `verified_name` nascia "Sushi Cazza" para qualquer número novo. Proveniência:
+  `provision/route.ts:42`, corrigido em 14/08.

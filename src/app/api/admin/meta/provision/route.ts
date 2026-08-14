@@ -20,6 +20,7 @@ import { metaGraphUrl } from "@/services/whatsapp/metaFlag";
 import {
   addPhoneNumberToWaba, requestVerificationCode, verifyPhoneCode, deletePhoneNumberFromWaba,
 } from "@/services/whatsapp/MetaOnboardingService";
+import { diagnoseProvisionError } from "@/services/whatsapp/metaProvisionDiagnostics";
 
 export async function POST(req: NextRequest) {
   if (!checkAdminRequest(req)) return unauthorized();
@@ -39,9 +40,20 @@ export async function POST(req: NextRequest) {
         const cc = (body.cc ?? "").replace(/\D/g, "");
         const phoneNumber = (body.phoneNumber ?? "").replace(/\D/g, "");
         if (!cc || !phoneNumber) return badRequest("Informe cc e phoneNumber (somente dígitos).");
-        const verifiedName = body.verifiedName?.trim() || "Sushi Cazza";
+        // O `verifiedName` é o NOME QUE O CLIENTE FINAL VÊ no WhatsApp, e mudá-lo
+        // depois passa por revisão da Meta. Havia aqui um default fixo — "Sushi Cazza" —
+        // que carimbaria o nome de um restaurante em qualquer número novo provisionado,
+        // inclusive num número comercial da própria Foocci. Um default errado neste
+        // campo é caro e demorado de desfazer: agora ele é obrigatório e explícito.
+        const verifiedName = body.verifiedName?.trim();
+        if (!verifiedName) {
+          return badRequest(
+            "Informe verifiedName — é o nome que aparece para quem receber a mensagem."
+            + " Não existe padrão seguro aqui: trocá-lo depois exige revisão da Meta.",
+          );
+        }
         const r = await addPhoneNumberToWaba(token, cfg.wabaId, cc, phoneNumber, verifiedName);
-        return ok(r);
+        return ok({ ...r, diagnostico: r.ok ? null : diagnoseProvisionError(r.raw) });
       }
       case "delete": {
         if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
@@ -55,12 +67,12 @@ export async function POST(req: NextRequest) {
       case "request-code": {
         if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
         const r = await requestVerificationCode(token, body.phoneNumberId, body.method ?? "SMS");
-        return ok(r);
+        return ok({ ...r, diagnostico: r.ok ? null : diagnoseProvisionError(r.raw) });
       }
       case "verify-code": {
         if (!body.phoneNumberId || !body.code) return badRequest("phoneNumberId e code são obrigatórios.");
         const r = await verifyPhoneCode(token, body.phoneNumberId, body.code.replace(/\D/g, ""));
-        return ok(r);
+        return ok({ ...r, diagnostico: r.ok ? null : diagnoseProvisionError(r.raw) });
       }
       case "status": {
         if (!body.phoneNumberId) return badRequest("phoneNumberId é obrigatório.");
