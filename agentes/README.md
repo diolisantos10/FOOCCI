@@ -19,16 +19,23 @@
 | `canais` | `agentes/canais-v1.0.md` | escrita |
 | `cerebro` | `agentes/cerebro-v1.0.md` | escrita |
 | `crm` | `agentes/crm-v1.0.md` | escrita |
-| `diretor` | `agentes/diretor-v1.0.md` | escrita |
+| `diretor` | `agentes/diretor-v2.0.md` | escrita |
 | `experiencia` | `agentes/experiencia-v1.0.md` | só leitura |
 | `garcom` | `agentes/garcom-v1.0.md` | escrita |
 | `interface` | `agentes/interface-v1.0.md` | escrita |
 | `manual` | `agentes/manual-v1.0.md` | escrita |
 | `meta` | `agentes/meta-v1.0.md` | escrita |
 | `operacao` | `agentes/operacao-v1.0.md` | escrita |
-| `pm` | `agentes/pm-v1.0.md` | só leitura |
+| `pm` | `agentes/pm-v2.0.md` | só leitura |
 | `qualidade` | `agentes/qualidade-v1.0.md` | só leitura |
 | `seguranca` | `agentes/seguranca-v1.0.md` | escrita |
 
 *Fichas v1.0 compiladas dos crachás em vigor — retrato fiel; o dono ajusta
 quando quiser. Detalhe fino de método e travas continua no crachá de cada um.*
+
+## Os dois cargos da hierarquia — fichas v2.0 (15/08/2026)
+
+Diretor e PM ganharam **descrição de cargo escrita** a mando do CEO, no lugar
+do retrato automático do crachá: o que decidem sozinhos, o que sobe ao CEO,
+os portões que não podem dispensar e como o cargo é medido. As v1.0 ficam no
+repositório como histórico — não são mais a referência.
