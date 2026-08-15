@@ -1,13 +1,35 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const reasonAsAgent = vi.hoisted(() => vi.fn());
-const db = vi.hoisted(() => ({ $queryRaw: vi.fn() }));
+const db = vi.hoisted(() => ({
+  $queryRaw: vi.fn(),
+  restaurant: { findUnique: vi.fn() },
+  instagramChannelConfig: { findUnique: vi.fn() },
+}));
 vi.mock("@/services/brain/reasoning/BrainReasoner", () => ({ reasonAsAgent }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 import { reasonSupportIncident } from "./SupportIncidentReasoner";
 
 const NOW = new Date("2026-07-24T23:00:00Z");
+
+/** Restaurante com tudo no lugar, como a sonda o leria. */
+function healthyRestaurant(over: Record<string, unknown> = {}) {
+  return {
+    id: "r1",
+    isOrderingPaused: false,
+    orderingPausedReason: null,
+    metaWhatsAppConfig: {
+      connectionStatus: "CONNECTED",
+      lastError: null,
+      tokenExpiresAt: new Date("2027-01-01T00:00:00Z"),
+      displayPhoneNumber: "+55 11 90000-0000",
+      lastHealthCheckAt: NOW,
+    },
+    printAgent: { token: "tok", lastSeenAt: NOW },
+    ...over,
+  };
+}
 
 function llmOutcome(text: string, over: Record<string, unknown> = {}) {
   return {
@@ -24,6 +46,8 @@ function llmOutcome(text: string, over: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   db.$queryRaw.mockResolvedValue([{ "?column?": 1 }]);
+  db.restaurant.findUnique.mockResolvedValue(healthyRestaurant());
+  db.instagramChannelConfig.findUnique.mockResolvedValue(null);
   process.env.OPENAI_API_KEY = "sk-test";
   process.env.DATABASE_URL = "postgres://x";
   process.env.ENCRYPTION_KEY = "k";
@@ -99,6 +123,77 @@ describe("SupportIncidentReasoner — diagnostica, explica, escala (shadow-safe)
     reasonAsAgent.mockResolvedValue(llmOutcome("ok"));
     await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
     expect(reasonAsAgent).toHaveBeenCalledWith(expect.objectContaining({ agentId: "suporte-tecnico" }));
+  });
+});
+
+/**
+ * A cegueira consertada em 15/08/2026 — as duas metades, no nível do agente.
+ *
+ * O defeito não era a nota baixa: era a sonda não receber o restaurante. O agente
+ * dizia "está tudo saudável" com o WhatsApp do lojista no chão, e o dono desligava
+ * o telefone e ficava esperando.
+ */
+describe("a sonda enxerga O RESTAURANTE de quem está perguntando", () => {
+  it("a sonda é chamada COM o restaurante do relato — nunca 'o sistema' em abstrato", async () => {
+    reasonAsAgent.mockResolvedValue(llmOutcome("ok"));
+    await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
+
+    expect(db.restaurant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "r1" } }),
+    );
+  });
+
+  it("METADE QUE FALTAVA: com o WhatsApp DESTE cliente caído, o contexto do Brain não diz 'saudável'", async () => {
+    db.restaurant.findUnique.mockResolvedValue(
+      healthyRestaurant({
+        metaWhatsAppConfig: {
+          connectionStatus: "ERROR",
+          lastError: "(#131047) Message failed to send",
+          tokenExpiresAt: null,
+          displayPhoneNumber: "+55 11 90000-0000",
+          lastHealthCheckAt: NOW,
+        },
+      }),
+    );
+    reasonAsAgent.mockResolvedValue(llmOutcome("Seu número está com erro de conexão na Meta."));
+
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
+
+    const ctx = String(reasonAsAgent.mock.calls[0]![0].customerMemory);
+    expect(ctx).toMatch(/VEREDITO: DEGRADED/);
+    expect(ctx).toMatch(/131047/);
+    expect(ctx).not.toMatch(/Sem incidente aparente/i);
+    expect(d.classification).toBe("INCIDENT");
+  });
+
+  it("com o cliente saudável, o veredito é HEALTHY e o agente pode dizer isso", async () => {
+    reasonAsAgent.mockResolvedValue(llmOutcome("Não vejo incidente no seu restaurante agora."));
+    await reasonSupportIncident({ restaurantId: "r1", report: "o whatsapp caiu", now: NOW });
+
+    expect(String(reasonAsAgent.mock.calls[0]![0].customerMemory)).toMatch(/VEREDITO: HEALTHY/);
+  });
+
+  it("cego (restaurante ilegível) NÃO vira incidente e NÃO vira saúde: vira 'não consigo verificar'", async () => {
+    db.restaurant.findUnique.mockRejectedValue(new Error("connection reset"));
+    reasonAsAgent.mockResolvedValue(llmOutcome("Não consigo verificar agora o estado do seu sistema."));
+
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "tenho uma dúvida qualquer", now: NOW });
+
+    const ctx = String(reasonAsAgent.mock.calls[0]![0].customerMemory);
+    expect(ctx).toMatch(/VEREDITO: UNKNOWN/);
+    expect(ctx).toMatch(/PROIBIDO dizer "está tudo saudável"/i);
+    // Cegueira não fabrica incidente (guardrail 5) — pede detalhe.
+    expect(d.classification).toBe("NEEDS_MORE_INFO");
+  });
+
+  it("com a IA fora, a explicação determinística também não mente sobre saúde", async () => {
+    db.restaurant.findUnique.mockResolvedValue(null); // restaurante não encontrado
+    reasonAsAgent.mockRejectedValue(new Error("engine down"));
+
+    const d = await reasonSupportIncident({ restaurantId: "r1", report: "não sei o que houve aqui", now: NOW });
+
+    expect(d.explanation).toMatch(/não consigo verificar agora/i);
+    expect(d.explanation).not.toMatch(/tudo saudável|sem incidente/i);
   });
 });
 

@@ -188,16 +188,33 @@ export async function answerHelpQuestion(params: {
   let systemSignals: Record<string, unknown> | undefined;
   if (suspected) {
     try {
-      const snap = await probeSystem();
+      // A sonda recebe O RESTAURANTE. Até 15/08/2026 ela não recebia, olhava só o
+      // processo e devolvia "saudável" — então o dono com o WhatsApp caído ouvia
+      // que estava tudo bem e ficava esperando. Ver SupportSystemProbe.
+      const snap = await probeSystem({ restaurantId });
       systemSignals = {
         lidoEm: snap.takenAt,
         banco: snap.db.ok ? "respondendo" : `INACESSÍVEL (${snap.db.detail})`,
+        veredito: snap.verdict,
+        sinaisDesteRestaurante: snap.tenant.map((t) => `${t.label}: ${t.state.toUpperCase()} — ${t.detail}`),
         leituraGeral: snap.summary,
         nota:
           "Item [opcional] ausente é informativo, NÃO é incidente e não explica um relato sobre outro assunto.",
       };
+      if (snap.verdict === "UNKNOWN") {
+        // Fail-closed dito ao modelo como REGRA, não como contexto.
+        systemSignals.regraDura =
+          'Veredito UNKNOWN: diga ao lojista que você NÃO CONSEGUE VERIFICAR AGORA o estado do sistema dele e ofereça abrir um chamado. É PROIBIDO responder "está tudo saudável" ou equivalente.';
+      }
     } catch (err) {
+      // Guardrail 1: sonda que falhou não vira silêncio, vira "não sei".
       console.error("[helpAssistant] probe error:", err);
+      systemSignals = {
+        veredito: "UNKNOWN",
+        leituraGeral: "Não consegui verificar agora o estado deste restaurante — a sonda falhou.",
+        regraDura:
+          'Veredito UNKNOWN: diga ao lojista que você NÃO CONSEGUE VERIFICAR AGORA o estado do sistema dele e ofereça abrir um chamado. É PROIBIDO responder "está tudo saudável" ou equivalente.',
+      };
     }
   }
 

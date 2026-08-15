@@ -124,3 +124,26 @@ só na tela.
 caminho de S3 deste projeto grava com `ACL: public-read` e a rota de mídia não
 pede sessão — porque serve foto de cardápio. Print de suporte tem dado de cliente
 final e por isso ficou no Postgres.
+
+## Sonda sem inquilino é sonda que mente — e mentir é pior que não saber
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-15 · **Origem:** a
+cegueira do agente de suporte · **Commit:** este bloco
+
+A sonda do agente de suporte olhava o **processo** (banco respondendo, variáveis
+presentes) e devolvia `healthy: true`. O agente repetia isso ao lojista como *"está
+tudo saudável"* — **inclusive com o WhatsApp daquele restaurante no chão**, porque
+ela nunca recebeu `restaurantId`.
+
+**A regra:** todo diagnóstico que fala com UM cliente tem de ser feito SOBRE aquele
+cliente, e o parâmetro que diz de quem se fala é **obrigatório no tipo** — não
+opcional que alguém esquece. Guardrail 4: prompt é aviso, código é trava.
+
+**A regra irmã, e é a que mais se esquece:** um sinal de saúde não pode ser
+`boolean`. Com dois estados, tudo que não deu para verificar cai num deles — e o
+que caía em `true` era a mentira. Três estados: **saudável / caído / não sei**, e o
+"não sei" se diz em voz alta ao usuário, com estas palavras: *"não consigo
+verificar agora"*.
+
+**Cegueira parcial é cegueira.** Ler três canais e falhar no quarto **não** é "tudo
+bem nos três": é dúvida no conjunto. Foi o teste dessa metade que faltava.

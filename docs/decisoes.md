@@ -804,6 +804,36 @@ caminho de envio da **Meta**. Quem varrer o repositório por "evolution" e apaga
 sem ler derruba a validação de telefone de **todo** envio. Renomear é passo
 separado, depois da extração, exatamente para não virar incidente.
 
+### ✅ Conferência de fechamento — 15/08/2026, pelo Diretor
+
+Pedido do Diretor Geral: as seis capacidades, uma a uma, com o estado real. **As
+seis estão no caminho oficial**, conferidas abrindo o arquivo. A tabela item a
+item, com o arquivo de cada uma, está em `docs/pendencias.md`.
+
+Duas correções ao que este mesmo verbete dizia:
+
+1. **O BuildOS FOI portado**, apesar de a decisão de 02/08 registrar *"não será
+   portado"*. Ele ganhou número Master dedicado na Meta (`BuildOsMetaChannel`,
+   identidade por `phone_number_id` em vez de instância pareada por QR) e a
+   supressão dura em número de restaurante continua valendo. **Onde decisão e
+   código divergem, quem vence é o código** — a decisão fica corrigida aqui, e
+   não o contrário.
+2. **A etapa 0b (pedido por texto) não estava em aberto** desde 04/08, embora as
+   pendências dissessem que sim até 15/08. O que faltava não era o código: era a
+   **prova de caminho**. Cada peça tinha teste de unidade e nenhuma ligava as
+   peças — e é exatamente esse formato de lacuna que deixa passar o defeito
+   histórico deste arquivo (o comentário que dizia "alimenta o mesmo pipeline"
+   sem alimentar). Fechada com
+   `src/app/api/webhooks/meta/whatsapp/pedidoPorTexto.e2e.test.ts`.
+
+**Se a Evolution cair hoje, não acontece nada** — não há webhook, provedor,
+credencial, variável nem coluna. A migração `20260804220000_remove_evolution`
+está no commit em produção (`7c481ce`, conferido em `/api/health`). O que restou
+com o nome é rótulo histórico de erro do CRM e comentário — nada executa.
+
+⚠️ **O que o repositório não responde:** se o *servidor* da Evolution ainda existe
+e ainda é pago em algum lugar. Isso é conta, não código — pergunta para o CEO.
+
 ## Cards do Garçom: categoria mostra tudo; fim de funil mostra 100% da categoria
 
 **Data:** 2026-08-03 · **Decidido por:** CEO (em teste real no sushi-cazza) ·

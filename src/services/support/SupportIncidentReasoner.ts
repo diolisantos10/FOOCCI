@@ -87,15 +87,19 @@ export async function reasonSupportIncident(input: SupportReasonInput): Promise<
   }
 
   // 1) Sinais + classificação determinística (o agente nunca inventa a ação).
-  const snap = await probeSystem(input.now);
+  const snap = await probeSystem({ restaurantId: input.restaurantId, now: input.now });
   const modes = matchFailureModes(report);
   const top = modes[0] ?? null;
 
-  // INCIDENTE só quando um modo de falha casou com o RELATO, ou quando a infra
-  // CRÍTICA está caída (snap.healthy já ignora integração opcional ausente). Sem
-  // isso, pedimos detalhe — nunca fabricamos incidente a partir de sinal de fundo.
+  // INCIDENTE só quando um modo de falha casou com o RELATO, ou quando há FALHA
+  // CONFIRMADA (infra crítica caída ou um canal DESTE restaurante em erro).
+  //
+  // `UNKNOWN` NÃO vira incidente: cegueira não é queda, e fabricar um incidente
+  // a partir dela seria a proteção mais destrutiva que o problema (guardrail 5).
+  // Ela também não vira saúde — quem diz isso é o `summary`, que fala com todas
+  // as letras "não consigo verificar agora".
   const classification: IncidentClassification =
-    top || !snap.healthy ? "INCIDENT" : "NEEDS_MORE_INFO";
+    top || snap.verdict === "DEGRADED" ? "INCIDENT" : "NEEDS_MORE_INFO";
 
   const action = findAction(top?.remediationAction);
   const plan = planRemediation(top?.remediationAction, currentMode());
