@@ -57,58 +57,73 @@ Clique em **Salvar alterações**.
     slug: "guia-conectar-whatsapp",
     title: "Como conectar o WhatsApp",
     area: "WHATSAPP",
-    description: "Conectar o número do restaurante por QR Code ou código de pareamento, e como saber se conectou de verdade.",
+    description: "Conectar o WhatsApp do restaurante pelo login da Meta — com ou sem manter o número no celular — e como saber se conectou de verdade.",
     content: `# Como conectar o WhatsApp
 
-Vá no menu lateral em **Plataforma → Integrações** e abra o cartão do **WhatsApp**. No topo do formulário fica o painel verde **Conectar WhatsApp**.
+Vá no menu lateral em **Plataforma → Integrações** e clique no cartão **WhatsApp** (ou no link **Configurar →** dentro dele). Abre a tela **WhatsApp**, com o cartão **Conexão de WhatsApp**.
 
-## Passo a passo
-1. Clique em **Gerar QR Code**. A tela mostra **Gerando QR Code…**.
-2. Espere alguns segundos. **Não feche a página** — a tela fica se atualizando sozinha a cada 30 segundos para o código não vencer.
-3. A partir daí, o WhatsApp pode te devolver **uma de duas coisas** — siga a que aparecer na tela.
+Hoje existe **um caminho só**: a conta oficial da Meta. Não há QR Code para colar no Foocci nem senha para digitar — a etiqueta no alto do cartão mostra **"Em uso: WhatsApp oficial da Meta"**, e embaixo do título **WhatsApp oficial da Meta** a tela avisa: *"Faça login com a Meta e escolha sua empresa e número. Sem códigos para digitar."*
 
-### Caminho A — apareceu o QR Code
-Com o celular do restaurante:
-1. Abra o **WhatsApp**.
-2. Toque em **Configurações → Aparelhos conectados**.
-3. Toque em **Conectar aparelho** e aponte a câmera para o QR da tela.
+## Antes de clicar: são dois botões, para duas situações
+- **Conectar WhatsApp oficial da Meta** — o caminho padrão. Você faz login na Meta e escolhe o número que ela vai atender.
+- **Conectar número que está no celular** — a **Coexistência**. Use quando o restaurante quer **continuar respondendo pelo WhatsApp no aparelho** e, ao mesmo tempo, deixar o robô/CRM atender no mesmo número.
 
-Se o código vencer antes de você escanear, clique em **Atualizar QR**.
+Se o número que você vai ligar é o mesmo que a equipe usa no celular do balcão, **o botão certo é o segundo**.
 
-### Caminho B — apareceu um código de números
-Às vezes a tela diz **"O WhatsApp mandou um código de pareamento em vez do QR"** e mostra um código grande. Nesse caso não tem o que escanear — você **digita** o código:
-1. No celular, abra o **WhatsApp**.
-2. Vá em **Configurações → Aparelhos conectados → Conectar aparelho**.
-3. Toque em **Conectar com número de telefone** e digite o código que está na tela.
+## 1. Caminho padrão — Conectar WhatsApp oficial da Meta
+1. Clique em **Conectar WhatsApp oficial da Meta** (o botão vira **Conectando…**).
+2. Faça o login na **Meta** na janela que abrir.
+3. Escolha a empresa e o **número** do restaurante.
+4. Espere a tela mostrar **✓ Conectado** com o seu número.
 
-Precisa de outro código? Clique em **Gerar outro código**.
+Se aparecer **"Conexão cancelada."**, a janela da Meta foi fechada antes do fim — é só clicar de novo.
 
-## O que cada mensagem da tela quer dizer
-- **"O WhatsApp ainda está preparando o código. Aguarde…"** — normal, é só esperar; a tela se vira sozinha.
-- **"WhatsApp já está conectado!"** (com a bolinha verde) — pronto, esse é o único aviso que significa conectado de verdade.
-- **"Não deu para confirmar o estado da conexão."** — atenção: isso **não** quer dizer que conectou. Clique em **Tentar de novo**. Se insistir, confira as credenciais em **Integrações → WhatsApp**.
-- **"Integração não configurada. Salve as credenciais primeiro."** — preencha e salve os campos do formulário (**Nome da instância**, **URL do servidor Evolution** e a chave) antes de tentar conectar.
+## 2. Coexistência — manter o número no celular
+No quadro **Manter o número no celular (Coexistência)**. O **histórico dos últimos 6 meses é sincronizado**. A própria tela lista o que precisa estar pronto antes:
+- o número já ativo no **WhatsApp Business** (app verde) há **pelo menos 7 dias**;
+- app atualizado (**v2.24.17+**) e câmera para ler o QR Code;
+- ao clicar, escolher **"conectar sua conta do WhatsApp Business"** e ler o QR **no aparelho**.
 
-## Conferir ou encerrar depois
-No rodapé do cartão, **Testar conexão** confere se está tudo de pé (o botão vira **Testando…**). Para encerrar, o dono tem o botão **Desconectar** — ele pede confirmação e desativa as credenciais.
+Então clique em **Conectar número que está no celular** (o botão vira **Abrindo Meta…**) e leia o QR com o celular. Deu certo quando a tela diz **"Número conectado em modo Coexistência — segue no celular e no bot ao mesmo tempo."** e aparece a etiqueta verde **Coexistência · número segue no celular**.
 
-> Enquanto a tela não disser **"WhatsApp já está conectado!"**, considere que **não conectou** — não feche achando que terminou. Já aconteceu de lojista sair da tela achando que estava pronto e o WhatsApp nunca funcionar.
+### Se esse botão estiver apagado, é de propósito
+Quando embaixo do botão aparece o aviso laranja **"Ainda não liberado nesta conta: a coexistência exige uma configuração própria da Meta. Sem ela, conectar por aqui tiraria o número do celular. Fale com o suporte Foocci."**, o botão fica **desligado**. Não é defeito da tela: sem essa liberação, clicar levaria ao cadastro comum da Meta — e o cadastro comum **tira o número do aparelho**, justo o contrário do que o botão promete. **Fale com o suporte Foocci** para liberar. Enquanto isso, o caminho padrão continua disponível.
 
-> O WhatsApp conectado é o que o atendimento e os agentes usam para falar com seus clientes. Para o WhatsApp **oficial da Meta** (mais estável, com modelos aprovados), veja o guia **"Como conectar o WhatsApp oficial da Meta"**.`,
+## 3. Conferir que conectou de verdade
+Conectado, o cartão mostra **✓ Conectado** com o número. A partir daí:
+- **Testar conexão** — dispara uma mensagem de teste para um número interno da Foocci; a tela confirma com *"Mensagem de teste enviada (número interno)."*
+- **Reparar recebimento** — use quando as mensagens chegam no WhatsApp mas a IA não responde. O botão vira **Reparando…** e termina com *"Recebimento reativado. Mande uma mensagem no WhatsApp do restaurante — a IA deve responder."*
+
+> Enquanto a tela não mostrar **✓ Conectado**, considere que **não conectou** — não feche achando que terminou.
+
+## 4. Número errado, trocar ou desconectar
+Conectou o número de teste (os que começam com **+1**) ou o número errado? A tela avisa e dá as duas saídas:
+- **Reconfigurar / trocar número** — refaz o login na Meta para escolher outro número (o botão vira **Abrindo Meta…**).
+- **Desconectar** — pede confirmação: **Confirmar desconexão** ou **Cancelar**.
+
+## Outros avisos que podem aparecer
+- **"Em breve — disponível quando ativado pela Foocci."** — a integração ainda não foi ligada para a sua conta.
+- **"Precisa de autorização da Foocci para ativar. Fale com o suporte Foocci."** — falta liberação da plataforma; nada que você resolva na tela.
+- **"Não foi possível carregar o serviço da Meta. Verifique sua conexão e tente novamente."** — problema de internet ou bloqueio no navegador.
+- **"⚠ Autorização expira em breve"** (com a data) — reconecte o WhatsApp **antes dessa data** para não parar de enviar mensagens.
+
+> O botão **Avançado · configuração da plataforma**, no rodapé do cartão, é da equipe Foocci — você não precisa dele para nada.
+
+> Depois de conectado, o toggle **Campanhas CRM via Meta** decide se as campanhas saem por essa conexão. Para escolher o número certo e entender o número de teste, veja o guia **"Como conectar o WhatsApp oficial da Meta"**.`,
   },
   {
     slug: "guia-whatsapp-oficial-meta",
     title: "Como conectar o WhatsApp oficial da Meta",
     area: "WHATSAPP",
-    description: "Conectar o WhatsApp oficial (API da Meta) e escolher o número certo.",
+    description: "Conectar o WhatsApp oficial (API da Meta), escolher o número certo e decidir se ele sai ou fica no celular.",
     content: `# Como conectar o WhatsApp oficial da Meta
 
 O **WhatsApp oficial da Meta** é a conexão pela API oficial (WhatsApp Cloud API). É mais estável, sem risco de bloqueio, e permite campanhas com **modelos aprovados**.
 
-Vá em **Integrações → WhatsApp**, no cartão **"Conexão de WhatsApp"**, lado **"WhatsApp oficial da Meta"**.
+Vá em **Plataforma → Integrações → WhatsApp**, no cartão **"Conexão de WhatsApp"**, no bloco **"WhatsApp oficial da Meta"**.
 
 ## Passo a passo
-1. Clique em **Conectar WhatsApp oficial da Meta**.
+1. Clique em **Conectar WhatsApp oficial da Meta** (o botão vira **Conectando…**).
 2. Faça login na **Meta** (Facebook) na janela que abrir.
 3. Escolha o **Portfólio empresarial** e a **Conta do WhatsApp Business** do seu restaurante.
 4. Escolha o **número** — use o **número real do restaurante**, não o de teste.
@@ -117,12 +132,25 @@ Vá em **Integrações → WhatsApp**, no cartão **"Conexão de WhatsApp"**, la
 ## O número de teste (+1)
 Todo aplicativo novo da Meta vem com um **número de teste** que começa com **+1** (ex.: +1 555...). Ele é criado automaticamente e serve só para testes — **não use ele** para atender clientes de verdade. Selecione sempre o **número real** (+55...).
 
+## O número vai sair do celular?
+Esta é a pergunta que decide qual botão você aperta:
+- **Conectar WhatsApp oficial da Meta** — o caminho padrão, para um número que **não** precisa continuar sendo usado no aparelho.
+- **Conectar número que está no celular**, no quadro **Manter o número no celular (Coexistência)** — o número **segue funcionando no aparelho** e o robô/CRM atende junto. Conectado assim, o cartão exibe a etiqueta verde **Coexistência · número segue no celular**.
+
+Se esse segundo botão estiver **apagado**, com o aviso laranja **"Ainda não liberado nesta conta"**, a coexistência ainda não foi habilitada para a sua conta — ela depende de uma configuração própria da Meta. **Fale com o suporte Foocci**; não tente pelo caminho padrão achando que dá no mesmo, porque nele o número **sai do celular**.
+
+## Depois de conectado
+- **Testar conexão** — envia uma mensagem de teste para um número interno da Foocci.
+- **Reparar recebimento** — quando as mensagens chegam mas a IA não responde.
+- **Campanhas CRM via Meta** — o toggle (**Ativar** / **Ativado**) que manda as campanhas de CRM saírem por esta conexão.
+- **⚠ Autorização expira em breve** — quando aparecer, com a data, reconecte o WhatsApp antes dela para não parar de enviar.
+
 ## Trocar o número ou reconfigurar
 Se conectou o número errado (ex.: o +1 de teste):
 - No cartão da Meta, clique em **Reconfigurar / trocar número** para refazer o login e escolher outro número.
-- Ou clique em **Desconectar** para remover e começar do zero.
+- Ou clique em **Desconectar** (e confirme em **Confirmar desconexão**) para remover e começar do zero.
 
-> Um número só pode estar em **uma** conexão por vez. Se o número já é usado na conexão atual, veja o guia **"Como migrar seu número para a Meta oficial"**.`,
+> Um número só pode estar em **uma** conexão por vez — a não ser na **Coexistência**, que é justamente o modo em que ele fica no celular e na Meta ao mesmo tempo.`,
   },
   {
     slug: "guia-migrar-numero-meta",

@@ -5,6 +5,49 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-15
+- **Arquivos que dispararam** (janela de 26h, telas do lojista — commit `75581697`):
+  - `src/app/(dashboard)/integracoes/whatsapp/MetaProviderCard.tsx` — o botão **"Conectar número
+    que está no celular"** (Coexistência) deixou de cair num **fallback silencioso** para a
+    configuração comum da Meta. Sem a configuração dedicada, ele agora fica **desligado**
+    (`disabled` + `cursor-not-allowed`) e a tela diz por quê, em texto âmbar: *"Ainda não liberado
+    nesta conta: a coexistência exige uma configuração própria da Meta. Sem ela, conectar por aqui
+    **tiraria o número do celular**. Fale com o suporte Foocci."* A recusa por clique também ganhou
+    o motivo por extenso. O fallback antigo abria o cadastro padrão, que **migra o número e o tira
+    do aparelho** — o oposto do que o rótulo do botão promete.
+- **Guias atualizados:**
+  - `guia-conectar-whatsapp` — **reescrito por inteiro.** O guia ainda ensinava **Gerar QR Code**,
+    **Atualizar QR**, **Gerar outro código**, *"WhatsApp já está conectado!"* e os campos **Nome da
+    instância** / **URL do servidor Evolution** — tela que **não existe mais** desde 04/08/2026
+    (`page.tsx` diz: o painel de QR/pareamento foi apagado junto com a Evolution). Nenhum desses
+    rótulos está no JSX de hoje. O guia agora descreve a tela real: caminho **Plataforma →
+    Integrações → cartão WhatsApp / Configurar →**, a etiqueta **"Em uso: WhatsApp oficial da
+    Meta"**, os **dois botões e as duas situações** (padrão × Coexistência), os três pré-requisitos
+    da Coexistência (WhatsApp Business há 7 dias, app v2.24.17+, QR no aparelho), o **botão
+    desligado com o aviso âmbar** e o que fazer, **Testar conexão**, **Reparar recebimento**,
+    **Reconfigurar / trocar número**, **Desconectar → Confirmar desconexão / Cancelar** e as quatro
+    mensagens de estado da tela. Mantida a advertência de que, sem **✓ Conectado**, não conectou.
+  - `guia-whatsapp-oficial-meta` — nova seção **"O número vai sair do celular?"**, que é a pergunta
+    que decide qual dos dois botões o lojista aperta, com a etiqueta **Coexistência · número segue
+    no celular** e a instrução explícita de **não** tentar pelo caminho padrão quando o botão da
+    Coexistência estiver bloqueado. Entraram também **Testar conexão**, **Reparar recebimento**,
+    o toggle **Campanhas CRM via Meta** e o aviso **⚠ Autorização expira em breve**. Corrigido o
+    caminho (era "lado", com dois cards lado a lado; hoje é uma coluna só) e a última linha, que
+    afirmava que um número só pode estar em uma conexão por vez — a Coexistência é exatamente a
+    exceção.
+- **Mapa do playbook:** a linha de `guia-conectar-whatsapp` apontava para o painel
+  **`WhatsAppQRPanel`**, que não existe mais; passou a apontar para `MetaProviderCard.tsx`.
+  Adicionadas as linhas de `guia-whatsapp-oficial-meta` e `guia-modelos-mensagem-whatsapp`, que
+  descrevem essa mesma tela e não estavam mapeadas — sem elas o robô não os alcançaria.
+- **Fica em aberto (não é sync noturno, é decisão de produto):** `guia-migrar-numero-meta` e
+  `guia-whatsapp-evolution-vs-meta` descrevem um mundo de **dois canais** que acabou em 04/08/2026.
+  Eles mandam clicar em **"Desconectar e liberar número"** e **"Usar como principal"**, no cartão
+  **"WhatsApp atual"** — nada disso existe no JSX. Não foram tocados aqui: não foi este commit que
+  os quebrou, e decidir se a migração Evolution→Meta ainda é um assunto (ou se a Coexistência a
+  substitui) não se resolve lendo componente. **Guias não se apagam** — precisam de dono humano.
+
+---
+
 ## 2026-08-08
 - **Arquivos que dispararam** (janela de 26h, telas do lojista — commits `a74c3ef8` e `844dc71a`):
   - `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` + `src/components/atendimento/ChannelHealthBanner.tsx`
