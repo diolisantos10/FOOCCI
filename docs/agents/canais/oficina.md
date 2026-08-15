@@ -513,3 +513,84 @@ Lição para a casa, e ela não é minha de resolver: **agentes em paralelo no m
 `working tree` compartilham o índice do git.** `git add -A` de qualquer um
 sequestra o trabalho de todos. Ou cada sessão paralela usa `git commit -- <paths>`
 com caminho explícito, ou usa árvore separada. Vale escalar ao Diretor.
+
+---
+
+## 2026-08-15 — Drive/portal da agência (repo `diolidigital`): três medições e dois consertos
+
+Clone isolado `scratchpad/agency-drive`, branch `claude/pm-drive-svg-classificacao`,
+a partir de `origin/claude/dioli-agency-os-architecture-kk7kp`. Commits `8f6322b`,
+`bef411a`, `afc9b7f`. `tsc` limpo; 232 arquivos / 3792 testes verdes.
+
+### 1. O SVG NÃO era recusado — o recado é que era fóssil
+
+A frase do print (*"Não aceitamos arquivo SVG enviado de fora"*) **não existe em
+nenhuma linha viva**. `git log --all -S` acha só o commit que a criou (`692b437`,
+02/08) e o que a apagou. `MIMES_SO_INTERNOS`, que a produzia, não existe mais.
+`limparSvg` (`lib/agency/media/armazenamento.ts:139`) higieniza na entrada e o
+caminho do Drive **usa** (`material-do-drive.ts:142`, `kind: "inbound"`).
+`/api/health` de produção devolveu `5849727` = HEAD da branch, que já tem tudo.
+
+**Nenhuma das três hipóteses do despacho.** Era uma quarta: `DriveMaterial.erro`
+gravado numa tentativa antiga e renderizado desde então
+(`DriveDoCliente.tsx:387`) como se fosse o estado de hoje.
+
+> **A lição, e ela é do meu domínio:** *erro persistido é fóssil.* Ele sobrevive
+> ao conserto do código e continua falando com o cliente em nome de uma versão do
+> sistema que já morreu. Todo campo de erro que a tela mostra precisa de **data
+> da última tentativa** — sem isso não dá para distinguir "está quebrado" de
+> "esteve quebrado".
+
+### 2. Retentativa que dependia de o cliente clicar não é retentativa
+
+`importarPendentesDoCliente` tinha **um** chamador no repositório inteiro: o
+`PATCH /api/portal/drive` (route.ts:269). Quem já tinha declarado tudo não tinha
+mais gesto capaz de destravar. E o comentário da função **prometia** "e de novo
+pelo despertador" — não havia chamador no cron. Comentário que promete chamador
+inexistente é pior que comentário nenhum: alguém lê, acredita e para de procurar.
+
+Conserto: `reimportarFalhados` com **prazo** (1h entre tentativas do mesmo
+arquivo) e **teto** (20/rodada), chamada pelo despertador.
+
+### 3. A tela dizia "pronto" para arquivo que a peça não recebia
+
+`retratoDaEscolha` concluía "N material(is) prontos para a equipe usar" só da
+trava — e a trava **não olha se os bytes chegaram** (nem deve: `baixarMaterial` a
+chama antes de importar). Já `materiaisDeMarca` exige `mediaAssetId`. Autorizado
+≠ disponível. Fiz `importado` **obrigatório** no tipo do retrato: o `tsc` cobrou
+de todos os chamadores. Campo opcional é campo que o próximo esquece.
+
+### 4. Medições que NÃO viraram código (escopo cortado pelo CEO no meio)
+
+- **Pasta como classificação:** `CAMPOS = "id,name,mimeType,size"`
+  (`drive.ts:194`) — `parents` **não é pedido**. E o Picker tem
+  `setSelectFolderEnabled(false)` (`DriveDoCliente.tsx:198`), então a pasta não é
+  concedida ao app. O parecer da casa
+  (`docs/plataformas/google/pareceres/2026-08-07-drive-do-cliente.md` §2) já
+  registra funcionário do Google dizendo que `drive.file` não alcança conteúdo de
+  pasta escolhida. **Não sei se `files.get(parentId)` devolve o nome, e é assim
+  que se descobre:** acrescentar `parents` a `CAMPOS`, e no diagnóstico read-only
+  (`verificacao-do-drive.ts`) chamar `files.get(parentId)?fields=id,name` na
+  conexão do CityJobs — 200 com nome ⇒ existe; 404 ⇒ não existe sem escopo maior.
+- **Brand book extrai imagem?** Não. `BrandExtraction`
+  (`lib/types/brand-extraction.ts`) é 11 campos de **texto/hex**. Nenhum byte de
+  imagem embutida no PDF é extraído ou guardado.
+
+### 5. O achado que vale mais que os consertos: a entrevista rica não escreve nada
+
+Existem **duas** entrevistas, e só uma fecha o laço:
+
+- `EntrevistaDeMarca` (portal) → `POST /api/portal/marca` → grava **exatamente**
+  as colunas que `lerFichaDeMarca` lê. **Laço fechado, funciona.**
+- `IntakeEngine` (painel, 9 seções) pergunta `brand_tone`, `restrictions`,
+  `what_works`, `what_fails` — que são voz, proibições e referências
+  aprovadas **e** reprovadas. E `IntakePrefill` (linhas 47-56) **não carrega
+  nenhum deles**; `handleIntakeComplete(_summary, prefill)`
+  (`orchestrator/page.tsx:547`) tem o `_summary` deliberadamente ignorado.
+
+**Não é "campo escrito sem leitor" — é pergunta feita sem escritor**, que é pior:
+gasta a paciência do cliente e joga a resposta fora.
+
+> **Regra que proponho à casa:** toda pergunta feita a um cliente tem de ter
+> **destino nomeado em coluna** antes de ir para a tela. Formulário sem destino é
+> o jeito mais caro de não coletar nada.
