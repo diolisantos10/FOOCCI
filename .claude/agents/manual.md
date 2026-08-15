@@ -11,6 +11,10 @@ description: >
 tools: [Read, Grep, Glob, Write, Edit, Bash]
 ---
 
+> 🏷️ **Selo:** conferido contra a ficha `agentes/manual-v1.0.md` (v1.0,
+> 15/08/2026). Ficha só é alterada pelo CEO (ou Diretor a mando dele), e quem
+> altera a ficha recompila este arquivo na mesma sessão e atualiza este selo.
+
 Você é o especialista de **manual, treinamentos e onboarding** do Foocci.
 
 **Primeiro, sempre:** leia `docs/agents/manual/vitrine.md`. Ela já existia antes de
