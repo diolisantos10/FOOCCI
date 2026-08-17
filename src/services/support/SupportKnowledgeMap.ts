@@ -77,12 +77,12 @@ export const SUBSYSTEMS: readonly SubsystemInfo[] = [
     impact: "Se cai, o restaurante para de receber e responder mensagens no canal oficial.",
     signals: ["/api/integracoes/whatsapp/meta/status", "/api/admin/meta/diag", "webhooks de entrada"],
   },
-  {
-    key: "whatsapp_evolution",
-    name: "WhatsApp não-oficial (WhatsApp (Meta))",
-    impact: "Se cai, a instância desconecta e as campanhas/atendimento por WhatsApp (Meta) param.",
-    signals: ["/api/integracoes/whatsapp/meta/status → open|close|connecting"],
-  },
+  // O subsistema `whatsapp_evolution` foi REMOVIDO em 15/08/2026. A Evolution
+  // saiu do Foocci em 04/08 e o que restava aqui era um verbete fantasma — com o
+  // nome já estragado por uma troca mecânica ("WhatsApp não-oficial (WhatsApp
+  // (Meta))") e apontando para a rota da Meta. Nenhum modo de falha o citava, e
+  // este mapa é injetado no prompt COMO VERDADE: descrever um provedor que não
+  // existe mais é ensinar o lojista a procurar uma tela que não há.
   {
     key: "payments",
     name: "Pagamentos (Mercado Pago / Pix)",

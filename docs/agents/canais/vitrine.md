@@ -181,3 +181,27 @@ conectar. Se você encontrar `WhatsAppQRPanel({ isActive })` num branch antigo, 
 restaure: a remoção foi a correção.
 
 — promovido em 2026-08-01 pelo Diretor · origem: mesmo handoff (commit `edf8b86`)
+
+## Prova por peça não é prova de caminho
+
+**Promovido por:** Diretor do Foocci · **Data:** 2026-08-15 · **Origem:** a
+conferência de fechamento da saída da Evolution · **Commit:** este bloco
+
+A paridade Evolution → Meta foi feita em quatro módulos, cada um com suíte própria
+e verde. Faltava a prova que ninguém tinha pedido: **um teste que atravessa o
+caminho inteiro**, do POST assinado da Meta até a resposta saindo no WhatsApp do
+cliente.
+
+Por que isso importa aqui, e não é preciosismo: **o defeito histórico deste canal
+foi exatamente um caminho que não se ligava.** O webhook da Meta tinha, escrito no
+comentário, *"feed the same agent pipeline Evolution uses"* — e não alimentava.
+Opt-out, atribuição de CRM, resgate de carrinho e a política de IA ficavam de fora.
+Todos os testes de unidade das peças passavam. **Nenhum deles podia pegar isso.**
+
+**A regra:** quando a migração é "o caminho A passa a ser o caminho B", o
+entregável não é a peça portada — é o teste que percorre B de ponta a ponta. E ele
+tem as duas metades: o caso que roteia **e** os que não roteiam sem deixar o
+cliente mudo (fora da allowlist, modo em sombra, conversa com humano, kill switch).
+
+**Corolário para o relatório:** enquanto esse teste não existe, o estado honesto da
+migração é *"portado, não provado"* — nunca *"pronto"*.

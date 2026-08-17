@@ -1,6 +1,45 @@
 # Pendências — o que está aberto
 
-> Última atualização: 07/08/2026, noite.
+> Última atualização: 15/08/2026.
+
+## 🩺 15/08 — O agente de suporte parou de mentir sobre a saúde do cliente
+
+**O defeito:** a sonda do agente de suporte não recebia o restaurante. Ela olhava
+o processo (banco respondendo, variáveis de ambiente presentes) e devolvia
+`healthy: true` — que o agente repetia ao lojista como *"está tudo saudável"*.
+**Com o WhatsApp daquele restaurante no chão, a resposta era a mesma.** O dono
+desligava o telefone e ficava esperando, perdendo pedido.
+
+**O conserto, em `SupportSystemProbe.ts`:**
+
+| Antes | Agora |
+|---|---|
+| `probeSystem()` sem argumento | `probeSystem({ restaurantId })` — **obrigatório**, o compilador cobra (guardrail 4) |
+| Olhava só o processo | Lê **daquele restaurante**: WhatsApp oficial (conexão, erro, validade da credencial), Instagram, Carteiro da impressão, loja pausada |
+| `healthy: boolean` | Veredito **tri-estado**: `HEALTHY` / `DEGRADED` / `UNKNOWN` |
+| Dúvida virava `true` | Dúvida vira `UNKNOWN`, e UNKNOWN se diz: *"não consigo verificar agora"*. O bloco que vai para o prompt **proíbe por escrito** a frase "está tudo saudável" |
+
+**Fail-closed em todo caminho:** restaurante inexistente, id vazio, exceção na
+leitura, status de conexão desconhecido, **e cegueira parcial** (um canal ilegível
+entre quatro) — todos param em UNKNOWN. Nenhum devolve saúde.
+
+**As duas metades, travadas por teste** (20 em `SupportSystemProbe.test.ts` + 5
+em `SupportIncidentReasoner.test.ts`): cliente saudável responde saudável; cliente
+com WhatsApp em erro, número desconectado, credencial vencida, Instagram com erro
+ou Carteiro offline **não** responde saudável.
+
+**E o âmbar continua âmbar** (guardrail 5): silêncio longo, credencial vencendo e
+loja pausada pelo próprio dono **não** viram incidente — mas aparecem no resumo,
+porque "por que não chega pedido?" costuma ter "a loja está pausada" como
+resposta.
+
+De carona, uma mentira menor: o subsistema `whatsapp_evolution` seguia no mapa de
+falhas que é injetado no prompt **como verdade**, com o nome estragado por uma
+troca mecânica ("WhatsApp não-oficial (WhatsApp (Meta))") e apontando para a rota
+da Meta. Removido.
+
+**Proposta de limites de ação (o que ele pode fazer sozinho):**
+`docs/suporte-limites-de-acao.md`. **Nada implementado** — aguarda aceite.
 
 ## 🏛️ 07/08 — A Sala dos Agentes, e o custo de IA que era chute
 
@@ -1116,7 +1155,86 @@ Conferido pelo diagnóstico do admin: **0 avisos de App Review**.
 
 ---
 
-## 🔌 Sair da Evolution e ficar só na Meta — DECIDIDO, é migração
+## ✅ 🔌 Sair da Evolution — FECHADO. Conferido linha a linha em 15/08/2026
+
+> **Este bloco estava desatualizado e virou armadilha.** Ele dizia que faltava a
+> etapa 0b (pedido por texto) e que a Evolution seguia atendendo todos os
+> restaurantes. **As duas coisas deixaram de ser verdade em 04/08** e o texto
+> abaixo, escrito em 02/08, continuou de pé por onze dias sendo lido como estado
+> atual. Fica o histórico; a correção é esta seção.
+
+### As seis, uma a uma, com o estado real (medido no código em 15/08)
+
+| # | Capacidade | Estado | Onde, no caminho oficial |
+|---|---|---|---|
+| 1 | Opt-out de entrada ("PARAR") | ✅ **no caminho oficial** | `InboundGuardsService.apply` → `ContactSafetyService.applyInboundOptOut` |
+| 2 | Atribuição de receita do CRM | ✅ **no caminho oficial** | `InboundGuardsService` → `markCrmReplyIfApplicable` |
+| 3 | Passar para humano (resgate de carrinho) | ✅ **no caminho oficial** | `InboundGuardsService` → `markConversationNeedsHuman` |
+| 4 | Política de quando a IA responde (trava Staff/Fornecedor) | ✅ **no caminho oficial** | `InboundGuardsService` → `shouldAiRespond` |
+| 5 | **Pedido por texto** | ✅ **no caminho oficial** — era a que faltava | `InboundAgentDispatch` → `getMessageAwareRoutingDecision` → `handleInboundForOrdering`, chamado pelo webhook da Meta |
+| 6 | Comandos do Build OS | ✅ **portado, ao contrário do que a decisão de 02/08 previa** | Número Master dedicado (`BuildOsMetaChannel`, `phone_number_id` próprio) + supressão dura em número de restaurante (`interceptBuildOsCommand`) |
+
+**Nenhuma gambiarra e nenhum "não sei" nesta lista.** As seis foram conferidas
+abrindo o arquivo, não pelo resumo.
+
+> A nº 6 merece nota: a decisão de 02/08 foi *"não será portado"*, porque o CEO
+> respondeu *"não sei o que que é isso"*. Foi portada assim mesmo, em 04/08, com
+> um desenho melhor que o antigo — número dedicado em vez de instância de
+> restaurante. A decisão registrada e o código divergiam; quem vence é o código,
+> e a decisão fica corrigida aqui.
+
+### O que acontece hoje se a Evolution cair
+
+**Nada.** Não existe Evolution para cair — e isso é fato medido, não impressão:
+
+- **não há webhook**: `src/app/api/webhooks/` tem só `meta/` e `instagram/`;
+- **não há provedor**: `activeProvider.ts` devolve a Meta, sempre, sem alternativa
+  nem em erro (por desenho: caminho não homologado é risco de banimento);
+- **não há credencial nem variável**: zero `EVOLUTION_*` no código;
+- **não há coluna**: a migração `20260804220000_remove_evolution` derrubou
+  `whatsappProvider`, `fallbackProvider` e `allowWhatsAppProviderFallback` de
+  `restaurants` e apagou as tabelas `evolution_configs` e
+  `evolution_webhook_event_logs`. **Ela está no commit que está no ar**
+  (`7c481ce`, conferido em `/api/health`).
+
+O que restou com o nome "Evolution" são **102 arquivos de rótulo histórico** —
+categorias de erro do CRM que classificam registros antigos
+(`EVOLUTION_INSTANCE_DISCONNECTED`), comentários de história e documentação. Nada
+disso executa.
+
+> ⚠️ **O que este repositório NÃO consegue responder:** se o *servidor* da
+> Evolution ainda existe e ainda está sendo pago em algum lugar. Isso é conta e
+> infraestrutura, não código — e é pergunta para o CEO. Do lado do produto, ele
+> já não é usado por nada.
+
+### A prova do pedido por texto, que faltava
+
+Existiam testes de cada peça e **nenhum que ligasse as peças** — o despacho era
+provado com o motor mockado e o webhook só tinha prova do handshake. Prova por
+peça não é prova de caminho: o defeito clássico desta migração (o comentário que
+dizia "alimenta o mesmo pipeline" sem alimentar) passaria em todos eles.
+
+Fechado em 15/08 com `src/app/api/webhooks/meta/whatsapp/pedidoPorTexto.e2e.test.ts`
+— 9 testes. Entra um POST assinado da Meta, sai a resposta do motor de pedido no
+WhatsApp do cliente, com a sessão criada e o host silenciado. As metades
+negativas também: telefone fora da lista, `DRY_RUN_ONLY`, conversa com humano,
+mensagem repetida, assinatura errada e kill switch — em todas, o cliente **não
+fica mudo** (o host assume) e o motor **não roda**.
+
+⚠️ **Honestidade sobre o que a prova cobre:** o miolo do motor
+(`processCustomerMessage`) e o envio à Meta estão dublados, e o banco é em
+memória — não há Postgres no CI. Ela prova **o caminho**, não a qualidade da
+resposta nem um pedido em loja de verdade. Essa segunda prova continua devendo.
+
+### Isto NÃO era etapa pendente — e a leitura de prioridade muda
+
+Se a Evolution ainda fosse o caminho de todos os restaurantes, a etapa 0b em
+aberto seria ponto único de falha em produção. Não é o caso: o ponto único de
+falha hoje é **a Meta**, por decisão consciente do CEO, e é o desenho desejado.
+
+---
+
+## 🔌 (histórico, 02/08) Sair da Evolution e ficar só na Meta — como foi decidido
 
 
 
@@ -1153,8 +1271,8 @@ Levantado em 02/08 comparando `webhooks/evolution/route.ts` +
 | ✅ **Atribuição de receita do CRM** | `markCrmReplyIfApplicable` | ~~Campanha vira venda e o sistema não sabe~~ — **portado em 02/08** |
 | ✅ **Passar para humano** | `markConversationNeedsHuman` | ~~Conversa de resgate presa com a IA~~ — **portado em 02/08** |
 | ✅ **Política de quando a IA responde** | `shouldAiRespond` | ~~Trava de Staff/Fornecedor ignorada~~ — **portado em 02/08** |
-| 🔨 **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | Cliente pede por mensagem e ninguém atende. **Etapa 0b — em aberto** |
-| ⛔ **Comandos do BuildOS** | `handleBuildCommand` | **Não será portado.** Ver decisão abaixo |
+| ✅ **Pedido por texto** | `handleInboundForOrdering` + `WhatsAppTextOrderingConfigService` | ~~Cliente pede por mensagem e ninguém atende~~ — **portado em 04/08, provado ponta a ponta em 15/08** |
+| ✅ **Comandos do BuildOS** | `handleBuildCommand` | Dizia "não será portado" — **foi**, em 04/08, com número Master dedicado. Ver a seção de fechamento acima |
 
 O webhook da Meta importa hoje **só** o Cérebro e o suporte. O comentário no código
 dele diz *"feed the same agent pipeline"* — **e não alimenta.** É a frase mais
@@ -1173,13 +1291,15 @@ nega** — nunca libera a IA por omissão.
 > Staff/Fornecedor (P0-A) **nunca valeu na Meta**. Quem já estava na Meta tinha a
 > IA respondendo em conversa marcada como não-cliente. Agora vale.
 
-### 🔨 Etapa 0b — pedido por texto (em aberto)
+### ✅ Etapa 0b — pedido por texto — FECHADA (era "em aberto" até 15/08)
 
-É a única das seis que falta, e é a maior: muda **qual agente** responde, não só
-se ele pode. Precisa da árvore de roteamento (`getMessageAwareRoutingDecision` →
-`handleInboundForOrdering`) com o mesmo contrato de fallback do caminho antigo.
+Era a única das seis que faltava, e é a maior: muda **qual agente** responde, não
+só se ele pode. Foi feita em 04/08 em `InboundAgentDispatch`
+(`getMessageAwareRoutingDecision` → `handleInboundForOrdering`), com o contrato de
+fallback preservado — `handled=true` sem resposta enviada **não** bloqueia o
+agente antigo. Provada ponta a ponta em 15/08.
 
-### ⛔ BuildOS não será portado — decisão de 02/08
+### ⛔ (superado) BuildOS não será portado — decisão de 02/08, revertida na prática em 04/08
 
 Perguntado ao CEO, a resposta foi *"não sei o que que é isso"*. São comandos
 internos por WhatsApp; se o dono não sabe que existem, ninguém os usa.
@@ -1607,5 +1727,7 @@ conseguia pausar a loja. Corrigido.
   acabamos de consertar no suporte — mas ali o interlocutor é o cliente final.
   Não mexido de propósito: exige corpus de calibração por restaurante.
 - Auditoria de cobertura do agente de suporte: ensinar 75% · diagnosticar ~30% ·
-  agir 0%. O probe não recebe `restaurantId` — se o WhatsApp de UM restaurante
-  cair, ele responde "tudo saudável". É a obra que leva o suporte de 75% a 85%.
+  agir 0%. ~~O probe não recebe `restaurantId` — se o WhatsApp de UM restaurante
+  cair, ele responde "tudo saudável".~~ **A cegueira foi CONSERTADA em 15/08** —
+  ver a seção abaixo. O que continua aberto é a nota de diagnóstico (~30%), que é
+  outra obra, e agora tem sinal de verdade para se apoiar.

@@ -63,10 +63,12 @@ beforeEach(() => {
   retrieveMock.mockResolvedValue([chapter]);
   probeMock.mockResolvedValue({
     takenAt: "2026-08-04T12:00:00.000Z",
+    restaurantId: "r1",
     db: { ok: true, detail: "respondendo" },
     config: [],
+    tenant: [{ key: "whatsapp", label: "WhatsApp oficial (Meta)", state: "ok", detail: "conectado" }],
     summary: "tudo ok",
-    healthy: true,
+    verdict: "HEALTHY",
   });
   reasonMock.mockResolvedValue(outcome());
 });
