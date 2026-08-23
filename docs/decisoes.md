@@ -11,6 +11,52 @@
 
 ---
 
+## 2026-08-23 — Resposta não é abordagem: a recuperação de carrinho não tem horário de silêncio
+
+**Correção do CEO, no mesmo dia, sobre erro meu.** Palavras dele:
+
+> *"O carrinho abandonado tem que ser executado dois minutos depois que o cliente
+> fecha. Por que você está preocupado com a madrugada?"*
+
+Horas antes, eu havia trazido a recuperação de carrinho para o portão do CRM com
+**as regras de abordagem ligadas** — janela de silêncio 21h–8h, intervalo de 24 h,
+teto semanal. O opt-out estava certo; o resto era régua errada no lugar errado.
+
+**A distinção que faltava, e que agora é doutrina desta casa:**
+
+| | Campanha | Recuperação de carrinho |
+|---|---|---|
+| O que é | **Abordagem** — a casa decide falar | **Resposta** a um ato do cliente |
+| Quando | Quando a casa quiser | 2 min depois de ELE mexer no carrinho |
+| Validade | Volta amanhã | 30 min, e morre — não há fila |
+| Trava de horário certa | Janela de silêncio (21h–8h) | **Loja aberta no instante do abandono** |
+
+Silenciar das 21h às 8h **mata a função na hora em que ela serve**: casa de sushi
+vende à noite, carrinho é abandonado à noite, e quem abandonou há dois minutos não
+está dormindo — estava no site agora.
+
+**O que saiu:** janela de silêncio, intervalo de 24 h e teto semanal.
+**O que ficou, e não se discute:** **opt-out** e não-contactável — quem pediu para
+não receber mais nada não recebe, nem campanha nem recuperação. Esse era o defeito
+real. Ficaram também telefone válido, canal de pé e o teto de contatos (é gasto).
+
+**O intervalo de 24 h era, na parte que protegia, duplicata.** A regra 5 do próprio
+fluxo — *uma recuperação por cliente a cada 24 h*, lida do `lastRecoveryAt` do
+rascunho e global entre restaurantes — já limitava repetição, e com mais precisão. O
+que o intervalo do CRM acrescentava era só deixar **uma campanha da manhã matar a
+recuperação da noite**: perda de venda sem proteger ninguém.
+
+**Regra geral que fica:** antes de aplicar uma trava de frequência ou de horário,
+pergunte **quem começou a conversa**. Se foi o cliente, a régua de abordagem não se
+aplica — e a trava certa é a que responde *"a loja pode atender isso agora?"*.
+
+**Como isso não volta:** o `ContactSafetyService` ganhou `enforceFrequency`, um
+interruptor explícito e obrigatório, e a regra 11 da recuperação carrega um bilhete
+longo dizendo **por que** o silêncio não vale ali. Sem o bilhete, alguém "unifica" de
+novo em três meses achando que corrige uma inconsistência.
+
+---
+
 ## 2026-08-23 — "Pode tudo, teto 3000" — e os dois cadeados se separam
 
 **Decisão do CEO**, nas palavras dele: *"pode tudo, teto 3000"*.

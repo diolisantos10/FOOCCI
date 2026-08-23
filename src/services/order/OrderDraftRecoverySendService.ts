@@ -50,9 +50,10 @@
  *       — avaliado naquele instante, nunca em "agora"
  *   10. o abandono aconteceu há menos de `deliveryWindowMinutes` — passou disso,
  *       a mensagem chegaria tarde demais e não sai nunca mais
- *   11. o portão unificado do CRM (`ContactSafetyService`) libera este
- *       destinatário — opt-out, janela de silêncio, intervalo de 24 h e teto
- *       semanal por cliente. Ver "AS TRAVAS DO CRM" no laço abaixo.
+ *   11. o portão do CRM libera este destinatário — opt-out/contactabilidade,
+ *       telefone, canal e teto de contatos. **A janela de silêncio e o intervalo
+ *       de 24 h NÃO valem aqui**: isto é resposta a um ato do cliente, não
+ *       abordagem. Ver o bilhete longo na regra 11, no laço abaixo.
  *
  * Idempotent: recoveryAttempts + lastRecoveryAt are written atomically after
  * a successful send; re-running within the same window sends nothing extra.
@@ -744,38 +745,62 @@ export class OrderDraftRecoverySendService {
         continue;
       }
 
-      // ── REGRA 11 — AS TRAVAS DO CRM, AGORA TAMBÉM AQUI ───────────────────
+      // ── REGRA 11 — O PORTÃO DO CRM, NA MEDIDA CERTA PARA UMA RESPOSTA ────
       //
-      // Até 23/08/2026 este caminho tinha SÓ as guardas próprias dele (uma
-      // recuperação por rascunho, uma por cliente por dia, carimbo atômico, loja
-      // aberta no abandono) e passava POR FORA do portão unificado do CRM. O
-      // rodapé da tela de Regras de Segurança prometia quatro "proteções sempre
-      // ativas"; aqui três delas não valiam:
+      // ⛔ NÃO "UNIFIQUE" ISTO COM AS CAMPANHAS. Leia antes de mexer.
       //
-      //   • quem pediu para sair (opt-out) RECEBIA por este caminho — LGPD;
-      //   • a janela de silêncio 21h–8h era ignorada: loja aberta às 23h,
-      //     mensagem às 23h;
-      //   • o intervalo de 24 h entre mensagens de CRM não era consultado: dava
-      //     para receber campanha de manhã e recuperação de carrinho à tarde.
+      // Recuperação de carrinho **não é abordagem**. É RESPOSTA a um ato do
+      // próprio cliente, dois minutos depois de ele mesmo ter mexido no
+      // carrinho, com trinta minutos de validade e sem fila: barrado agora não
+      // vira mensagem depois, morre. Campanha é o oposto — a casa decidindo
+      // falar com alguém que não pediu nada naquele momento.
       //
-      // As guardas próprias CONTINUAM valendo — isto soma, não troca. Vem depois
-      // delas de propósito: são checagens locais e baratas, e quem já foi
-      // recusado por elas não precisa de consulta ao banco para ser recusado de
-      // novo.
+      // Em 23/08/2026 este caminho foi trazido para o portão unificado com as
+      // regras de ABORDAGEM ligadas, e foi erro — corrigido no mesmo dia pelo
+      // CEO, com a pergunta que resolve tudo:
       //
-      // `enforceDailyCap: false` é deliberado e NÃO é um furo: a recuperação de
-      // carrinho é isenta do teto diário por decisão registrada
-      // (`BUDGET_EXEMPT_TEMPLATE_IDS` em `crm-safety.ts` — "medir não pode custar
-      // envio"). O que ela deixa de ser isenta é do resto.
+      //   "O carrinho abandonado tem que ser executado dois minutos depois que
+      //    o cliente fecha. Por que você está preocupado com a madrugada?"
       //
-      // `enforceRestaurantOpen: false` porque a regra 9 acima já responde a
-      // mesma pergunta, e melhor: ela pergunta pelo INSTANTE DO ABANDONO, não
-      // por "agora".
+      // ── O que NÃO vale aqui, e por quê ──────────────────────────────────
       //
-      // `campaignId: null` de propósito: passar o id da campanha de carrinho
-      // ligaria o dedup de "já recebeu ESTA campanha", que é VITALÍCIO, e
-      // transformaria "uma recuperação por cliente por dia" em "uma por cliente
-      // para sempre". A trava pedida é o intervalo de 24 h, não o fim do recurso.
+      // `enforceTimeWindows: false` — A JANELA DE SILÊNCIO (21h–8h) NÃO VALE.
+      //   Ela existe para não mandar marketing de madrugada para quem está
+      //   dormindo. Quem abandonou carrinho há dois minutos NÃO está dormindo:
+      //   estava no site agora. E casa de sushi vende à noite — silenciar das
+      //   21h às 8h mata a função exatamente na hora em que ela serve.
+      //   A trava certa já existia e é a REGRA 9 logo acima: **loja aberta no
+      //   instante do abandono**. Se a loja está vendendo às 23h, a recuperação
+      //   sai às 23h. Onde as duas se sobrepõem, quem manda é a loja aberta.
+      //
+      // `enforceFrequency: false` — O INTERVALO DE 24 H E O TETO SEMANAL NÃO
+      //   VALEM. Eles medem abordagem repetida. Dois carrinhos abandonados são
+      //   dois atos distintos do cliente, não a casa insistindo. E a parte que
+      //   de fato protegia contra repetição JÁ EXISTIA, mais precisa: a regra 5
+      //   ("uma recuperação por cliente a cada 24 h, contada pelo próprio
+      //   `lastRecoveryAt` do rascunho, global entre restaurantes"). O intervalo
+      //   do CRM só acrescentava uma coisa — deixar uma campanha da manhã matar
+      //   a recuperação da noite — e isso é perder venda sem proteger ninguém.
+      //
+      // `enforceDailyCap: false` — decisão registrada e anterior a tudo isto
+      //   (`BUDGET_EXEMPT_TEMPLATE_IDS` em `crm-safety.ts`): medir não pode
+      //   custar envio.
+      //
+      // `enforceRestaurantOpen: false` — a regra 9 já responde, e melhor: ela
+      //   pergunta pelo INSTANTE DO ABANDONO, não por "agora".
+      //
+      // `campaignId: null` — passar o id da campanha do carrinho ligaria o dedup
+      //   VITALÍCIO "já recebeu ESTA campanha" e transformaria "uma por cliente
+      //   por dia" em "uma por cliente para sempre".
+      //
+      // ── O que VALE aqui, e não se discute ───────────────────────────────
+      //
+      //   • OPT-OUT e não-contactável. Quem pediu para não receber mais nada não
+      //     recebe — nem campanha, nem recuperação. Este era o defeito real:
+      //     até 23/08 quem tinha pedido para sair RECEBIA por este caminho.
+      //   • telefone válido e canal de pé;
+      //   • o teto de contatos: abordar alguém NOVO custa dinheiro, e o teto é
+      //     limite de gasto que o dono definiu.
       const ctxSeguranca = await contextoDeSeguranca(draft.restaurantId);
       const decisaoSeguranca = ctxSeguranca
         ? await ContactSafetyService.assertSendable({
@@ -783,7 +808,8 @@ export class OrderDraftRecoverySendService {
             customerId:            draft.customerId,
             phone:                 customer.phone,
             campaignId:            null,
-            enforceTimeWindows:    true,  // janela de silêncio 21h–8h
+            enforceTimeWindows:    false, // silêncio 21h–8h NÃO vale: ver bilhete acima
+            enforceFrequency:      false, // intervalo/teto semanal NÃO valem: ver bilhete acima
             enforceDailyCap:       false, // isenção registrada do teto diário
             enforceRestaurantOpen: false, // a regra 9 já respondeu, e melhor
             context:               ctxSeguranca,

@@ -88,17 +88,14 @@ function tick({ comLinhaDeCampanha }: { comLinhaDeCampanha: boolean }) {
   db.$transaction.mockResolvedValue([]);
   horario.isRestaurantOpenNow.mockResolvedValue(true);
   meta.getResolved.mockResolvedValue({ restaurantId: REST, phoneNumberId: "123", accessToken: "tok" });
-  // ── Portão unificado do CRM: tudo liberado neste cenário-base ──────────────
+  // ── Portão do CRM: tudo liberado neste cenário-base ───────────────────────
   // Cliente sem opt-out, sem histórico de mensagem recente, nada enviado hoje.
   //
-  // `manualOverride: true` + `quietHoursEnabled: false` NÃO é para afrouxar
-  // nada: é para o relógio do CI não decidir o resultado. Com a configuração
-  // padrão a janela de silêncio é 21h–8h de São Paulo, e este arquivo — que é
-  // sobre MEDIÇÃO — passaria de dia e falharia de madrugada. A janela de
-  // silêncio tem teste próprio, com hora fixa, em CartRecoveryTravasDoCrm.
-  db.restaurantCRMProfile.findUnique.mockResolvedValue({
-    whatsAppSafetyConfig: { manualOverride: true, quietHoursEnabled: false },
-  });
+  // `null` = configuração PADRÃO do restaurante, com a janela de silêncio 21h–8h
+  // ligada. Estes testes rodam a qualquer hora do dia e continuam verdes — o que
+  // é, por si só, a prova de que o silêncio não governa a recuperação de
+  // carrinho. Ver o bilhete da regra 11 em OrderDraftRecoverySendService.
+  db.restaurantCRMProfile.findUnique.mockResolvedValue(null);
   db.campaignExecution.findMany.mockResolvedValue([]);
   db.campaignExecution.count.mockResolvedValue(0);
   db.customer.findUnique.mockResolvedValue({ hasOptedOut: false, crmContactable: true });

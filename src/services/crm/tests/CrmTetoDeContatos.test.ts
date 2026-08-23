@@ -61,6 +61,7 @@ function entrada(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafety
     contactHistoryKnown: true,
     contactBudgetUsed: JA_ABORDADAS,
     isNewContact: true,
+    enforceFrequency: true, // cenário-base: é abordagem, a frequência vale
     safety: { ...DEFAULT_SAFETY_CONFIG, contactBudgetTotal: TETO },
     whatsappAvailable: true,
     globalSentToday: 0,
