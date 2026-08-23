@@ -20,7 +20,15 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { destinoCanonicoSemWww, hostSemPorta } from "./canonicalHost";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  destinoCanonicoSemWww,
+  hostSemPorta,
+  raizVaiParaVitrine,
+  origemPublica,
+  DESTINO_DA_RAIZ,
+} from "./canonicalHost";
 
 /** O jeito antigo, preservado aqui só para provar que ele produz o defeito. */
 function jeitoAntigo(host: string, url: string): string {
@@ -83,5 +91,60 @@ describe("hostSemPorta", () => {
 
   it("um host sem www passa intacto — a regra é do protocolo, não da marca", () => {
     expect(destinoCanonicoSemWww("foocci.com.br:8080", "/site")).toBe("https://foocci.com.br/site");
+  });
+});
+
+/**
+ * A raiz do domínio precisa de um `Location` DE VERDADE.
+ *
+ * O defeito (produção, 23/08/2026): com o desvio morando na página, o Next
+ * pré-renderizava a rota e servia `307` com corpo `__next_error__` e **nenhum**
+ * cabeçalho `Location`. Medido de fora com `curl -L`: zero saltos, código final
+ * 307, ninguém chegava a `/site`. Navegador se virava pelo JavaScript; robô de
+ * busca, prévia de link do WhatsApp e monitor, não.
+ */
+describe("a raiz vai para a vitrine", () => {
+  it("desvia a raiz exata", () => {
+    expect(raizVaiParaVitrine("/")).toBe(true);
+  });
+
+  it.each(["/site", "/site/precos", "/login", "/r/ABC123", "/api/health", "/pedido/sushi-cazza"])(
+    "não desvia %s — só a raiz é vitrine",
+    (pathname) => {
+      expect(raizVaiParaVitrine(pathname)).toBe(false);
+    },
+  );
+
+  it("o caminho de destino é relativo — quem monta a origem é origemPublica", () => {
+    expect(DESTINO_DA_RAIZ.startsWith("/")).toBe(true);
+    expect(DESTINO_DA_RAIZ).not.toMatch(/:\/\/|:\d+/);
+  });
+
+  it("em produção (https atrás do proxy) a porta interna some do destino", () => {
+    const origem = origemPublica("foocci.com.br:8080", "https");
+    expect(origem).toBe("https://foocci.com.br");
+    expect(new URL(DESTINO_DA_RAIZ, origem).toString()).toBe("https://foocci.com.br/site");
+  });
+
+  it("em desenvolvimento a porta é PRESERVADA — senão localhost:3000 vira localhost", () => {
+    const origem = origemPublica("localhost:3000", "http");
+    expect(origem).toBe("http://localhost:3000");
+    expect(new URL(DESTINO_DA_RAIZ, origem).toString()).toBe("http://localhost:3000/site");
+  });
+
+  it("aceita o protocolo com dois-pontos, como vem de nextUrl.protocol", () => {
+    expect(origemPublica("foocci.com.br:8080", "https:")).toBe("https://foocci.com.br");
+  });
+});
+
+describe("o espelho não pode envelhecer sozinho", () => {
+  it("o desvio da raiz continua no middleware, e não na página", () => {
+    const src = readFileSync(join(process.cwd(), "src/middleware.ts"), "utf8");
+    expect(
+      src.includes("raizVaiParaVitrine"),
+      "O desvio da raiz saiu do middleware. Na página ele vira artefato estático e " +
+        "responde 307 SEM `Location`: robô de busca, prévia de link e monitor param " +
+        "de chegar em /site. Medido em produção em 23/08/2026.",
+    ).toBe(true);
   });
 });
