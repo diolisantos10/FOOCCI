@@ -2,6 +2,63 @@
 
 > Última atualização: 23/08/2026.
 
+## ✅ 23/08 (4ª rodada) — o `META_133010` foi curado na raiz: o número está REGISTRADO na Cloud API
+
+A rodada anterior nomeou o defeito; esta fechou. O número oficial do Sushi Cazza
+estava na WABA e o painel dizia "conectado", mas ele **nunca tinha sido registrado
+no runtime da Cloud API**. A Meta respondeu ao CEO com todas as letras: *"A conta
+não existe na API de Nuvem. Use /register API para criar uma conta primeiro."*
+
+**A prova, lida da própria Meta, antes e depois** (`GET /api/admin/meta/diag`,
+restaurante `cmp30upkp000198i4r8wpxdl1`, número `••••0131`):
+
+| campo | antes | depois |
+|---|---|---|
+| `platform_type` | `NOT_APPLICABLE` | **`CLOUD_API`** |
+| `status` | `PENDING` | **`CONNECTED`** |
+
+O `POST /api/admin/meta/register` devolveu `registered: true` e `resubscribed: true`
+(nosso app reassinado na WABA na mesma chamada).
+
+**Não havia risco para o aparelho do restaurante.** O diagnóstico de antes trouxe
+`coexistence: false` e `is_on_biz_app: false` — o número **não** estava vivo num
+celular. Ainda assim, `force: true` **não foi enviado** e o caminho não expõe opção
+para enviá-lo: a rota recusa registrar número em coexistência de propósito
+(`src/app/api/admin/meta/register/route.ts:86-91`), porque o `/register` arrancaria
+o número do aparelho. Ordem do CEO: *"não posso prejudicar o sushi"*.
+
+### A ferramenta, para a próxima vez
+
+- `scripts/registrar-numero-cloud-api.mjs` + `.github/workflows/registrar-numero-cloud-api.yml`
+  (branch `claude/registrar-numero-cloud-api`, commit `8b601d1`).
+- Lê o `ADMIN_SECRET` do Railway **dentro do runner** — mesma mecânica de
+  `meta-raiox.mjs` e `acompanhar-assistente.mjs` — e nunca o imprime.
+- **O PIN de 6 dígitos é derivado**, não digitado: `sha256(ADMIN_SECRET + ":foocci-waba-pin-v1")`,
+  primeiros 6 dígitos decimais. Não é input do workflow e não é impresso — o log do
+  Actions deste repositório é **público**. Reproduz-se rodando a mesma derivação, se
+  a Meta pedir o PIN depois.
+  > ⚠️ Rotacionar o `ADMIN_SECRET` **muda o PIN derivado, mas não muda o PIN gravado
+  > na Meta**. Depois de uma troca, o PIN antigo só se recupera derivando do segredo
+  > ANTIGO. Está escrito no cabeçalho do script.
+- Lê o `diag` **antes e depois**: sem a segunda leitura não há prova. `registered: true`
+  é o que a rota disse; `platform_type` é o que a Meta mostra.
+
+### ⛔ O que ficou aberto nesta rodada, e é grande
+
+**O GitHub Actions deste repositório está caído — TODOS os workflows, não só o novo.**
+Toda execução desde pelo menos 12:54 de 23/08 termina em `failure` em ~3 segundos,
+**sem runner alocado** (`runner_id: 0`), sem passos e sem log para baixar. Caem igual
+`CI`, `CRM Cron`, `Agent Library Deep Extraction Processor` e o workflow novo. A
+assinatura — nenhum runner, falha imediata, log inexistente — é de **bloqueio de
+conta/cobrança do Actions**, não de defeito de workflow. **Preciso confirmar** na
+tela de billing do GitHub; não dá para ler isso pela API.
+
+Por isso o registro desta rodada foi feito **por chamada direta à produção**, não
+pelo workflow. O workflow fica publicado e correto para quando o Actions voltar.
+
+**Consequência que passa despercebida:** com o Actions parado, todo cron deste
+repositório está parado junto.
+
 ## 🟢 23/08 (3ª rodada) — "por que o Foocci cita a Evolution?" É texto velho. Mas achei o que estava por baixo.
 
 O CEO mandou o print de **Gerenciar campanha → Diagnóstico** ("Bem-vindo / 2ª compra"):
