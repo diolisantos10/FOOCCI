@@ -71,6 +71,18 @@ não do nosso banco: o disparo morreu com **`META_132001`**, e não com
    seria errado. **Conferi que eles reprovam contra o código antigo** (5 de 8
    falham) — teste que passa nos dois lados não prova nada.
 
+### Resto pequeno, anotado para não virar mentira nova
+
+- **`DISABLED` ainda cai no selo cinza "Meta: na fila".** É a mesma classe de
+  defeito (o selo afirma algo que não conferiu): `DISABLED` quer dizer que a Meta
+  **pausou** o modelo por qualidade, não que ele está na fila. Não consertei junto
+  porque `metaBadge` é um fechamento dentro do componente e **não tem como ser
+  testado sem refatorar** — e regra da casa é "sem portão = reprovado". Conserto
+  de verdade = extrair a função e travar com teste.
+- **O selo não diz QUANDO foi conferido.** Mesmo correto, ele é uma foto do último
+  sync, que só roda quando alguém abre a tela de modelos. Um `checkedAt` ao lado
+  do selo resolveria — não está feito.
+
 ### ⛔ ANTES DE MERGEAR: este conserto MUDA o comportamento do disparo
 
 Hoje o disparo tenta modelo e morre em `META_132001` — **nada sai**. Com o selo
