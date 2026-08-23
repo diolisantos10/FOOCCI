@@ -1050,3 +1050,28 @@ entrada de todos os restaurantes e não há como validá-lo ponta a ponta sem
 disparar mensagem no número oficial do Sushi Cazza, ao vivo. O que "Recepcionista"
 promete é decisão de dono do produto. Subiu ao CEO com duas saídas e recomendação
 (`docs/pendencias.md`, bloco de 23/08).
+
+---
+
+## 23/08/2026 — A tela de configurar o menu passa a dizer quando o menu não é enviado
+
+**Decisão.** A seção "Menu inicial" (`/agente-ia` → WhatsApp Host) exibe uma faixa
+de aviso, com botão de troca de modo, sempre que `agentMode !== "MENU_ONLY"`. E as
+descrições dos três modos passam a dizer, com todas as letras, qual deles envia o
+menu — só o `MENU_ONLY`.
+
+**Por quê.** O CEO relatou que o modo "Menu fixo (sem IA)" *"não aparece"*. A
+leitura do código mostrou que ele **aparece** — é o primeiro dos três cartões em
+"Status do agente", no commit que roda em produção. O defeito não era ausência de
+controle: era **ausência de placa**. A tela aceitava, calada, a configuração de um
+menu que naquele modo nunca sai — e ainda descrevia o modo "Recepcionista" como
+quem *"exibe opções"*, coisa que ele deixou de fazer em 05/08/2026 (`16cf3b5`).
+Tela que aceita configuração inerte sem avisar é a versão de interface do defeito
+que esta casa persegue: a caixa certa sem a seta.
+
+**O que não se decidiu aqui.** A Saída 2 (fazer a saudação cair no recepcionista e
+o Cérebro assumir do 2º turno) segue aberta — mexe na porta de entrada de todos os
+restaurantes e não há caminho de teste que não use o número vivo do sushi.
+
+**Exceção de régua declarada:** `SEM_AGENTE` + `URGENCIA`. O Diretor editou `src/`
+sem poder acionar o especialista `interface` nesta execução.

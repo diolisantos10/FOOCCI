@@ -147,10 +147,18 @@ const STYLE_OPTIONS = [
   { value: "sales_driven", label: "Vendas",     desc: "Sugere, engaja, converte"    },
 ];
 
+// ⚠️ Descrições conferidas contra o roteador real
+// (`src/services/whatsapp/inbound/InboundAgentDispatch.ts:224`): **só** o modo
+// MENU_ONLY chama o recepcionista, que é o ÚNICO lugar que renderiza a
+// "Mensagem de boas-vindas" + as "Opções do menu" desta tela
+// (`src/services/ai/WhatsAppReceptionistService.ts:1448-1470`). Nos outros dois
+// modos o texto vai para o Cérebro, que não lê nenhum dos dois campos. Até
+// 23/08/2026 esta tabela dizia que "Recepcionista" exibia as opções — não exibe
+// desde 05/08/2026, e a tela mentia para quem configurava o menu.
 const AGENT_MODE_OPTIONS: Array<{ value: AgentMode; label: string; desc: string }> = [
-  { value: "MENU_ONLY",         label: "Menu fixo (sem IA)", desc: "Só o menu numerado. Sem IA. Pedido → falar com a equipe" },
-  { value: "RECEPTIONIST_ONLY", label: "Recepcionista",      desc: "Responde, exibe opções e direciona o cliente"  },
-  { value: "HUMAN_ASSISTED",    label: "Com suporte humano", desc: "IA e equipe atuam juntos na mesma conversa"    },
+  { value: "MENU_ONLY",         label: "Menu fixo (sem IA)", desc: "ÚNICO modo que envia o menu abaixo. Menu numerado, sem IA. Pedido → falar com a equipe" },
+  { value: "RECEPTIONIST_ONLY", label: "Recepcionista (IA)", desc: "A IA responde em texto livre. NÃO envia o menu configurado abaixo"  },
+  { value: "HUMAN_ASSISTED",    label: "Com suporte humano", desc: "IA e equipe na mesma conversa. Também NÃO envia o menu abaixo"    },
 ];
 
 const FLOW_CONFIG: Record<FlowType, { label: string; desc: string; icon: string }> = {
@@ -1006,6 +1014,33 @@ export function AgentePage() {
 
           {/* 2 — Menu inicial */}
           <Section title="Menu inicial" subtitle="Primeira mensagem enviada ao cliente e as opções do menu.">
+            {/* O aviso que faltava: configurar o menu aqui não faz o menu existir.
+                Quem o envia é o recepcionista, e ele só é chamado no modo
+                MENU_ONLY. Sem esta faixa, a tela aceitava a configuração calada e
+                o cliente nunca via nada. */}
+            {agentForm.agentMode !== "MENU_ONLY" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-semibold">Este menu não está sendo enviado hoje.</p>
+                <p className="mt-1 text-xs">
+                  No modo <strong>{AGENT_MODE_OPTIONS.find((o) => o.value === agentForm.agentMode)?.label ?? agentForm.agentMode}</strong>{" "}
+                  quem atende é a IA, em texto livre — ela não usa a mensagem de boas-vindas
+                  nem as opções configuradas abaixo. O menu numerado só é enviado no modo{" "}
+                  <strong>Menu fixo (sem IA)</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAgentForm((prev) => ({ ...prev, agentMode: "MENU_ONLY" }))}
+                  className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                >
+                  Usar “Menu fixo (sem IA)” neste número
+                </button>
+                <p className="mt-2 text-[11px] text-amber-800">
+                  O que se perde: a IA deixa de responder neste número — o cliente passa a
+                  ver só o menu numerado. Reversível a qualquer momento em “Status do agente”.
+                  Lembre de <strong>Salvar</strong> no fim da página.
+                </p>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium text-ink2">Mensagem de boas-vindas</label>
               <textarea

@@ -2,6 +2,80 @@
 
 > Última atualização: 23/08/2026.
 
+## 🟢 23/08 (2ª rodada) — o modo APARECIA; o que faltava era a placa. Consertado.
+
+O CEO disse *"esse menu no agente não aparece pra mim"*. **Fui ao código antes de
+responder, e o achado contraria a hipótese:** o modo **existe e está exposto** no
+commit que roda em produção (`/api/health` → `536d0cd`, o mesmo da árvore).
+
+- `AgentePage.tsx:150-160` — `AGENT_MODE_OPTIONS` traz três cartões, e
+  **"Menu fixo (sem IA)" é o primeiro deles**.
+- Renderizado em `AgentePage.tsx:~995` sem flag, sem permissão, sem cargo: dentro
+  de `/agente-ia` → cartão **WhatsApp Host** → seção **"Status do agente"** →
+  **"Modo de operação"**. Fica **logo acima** da seção "Menu inicial" do print dele.
+- Não há segunda tela com esse controle. `/aprendizado-whatsapp:800-805` mostra o
+  modo **só para leitura** — se ele esteve ali, viu o modo e nenhum botão. É o
+  candidato mais provável do "não aparece".
+
+**O defeito real, esse sim confirmado, é outro e é pior:** a seção "Menu inicial"
+aceitava a configuração **calada** em um modo que nunca envia esse menu. Caixa
+certa, seta faltando — só que a seta faltava na hora de configurar, não na de
+escolher o modo.
+
+**Consertado nesta sessão** (`src/app/(dashboard)/agente-ia/AgentePage.tsx`):
+
+1. **A tela parou de mentir.** "Recepcionista" descrevia-se como *"Responde, exibe
+   opções e direciona o cliente"* — não exibe opção nenhuma desde 05/08. Agora é
+   **"Recepcionista (IA)"**, *"A IA responde em texto livre. NÃO envia o menu
+   configurado abaixo"*. O mesmo aviso entrou em "Com suporte humano".
+2. **"Menu fixo (sem IA)"** ganhou o rótulo honesto do que ele é: *"ÚNICO modo que
+   envia o menu abaixo"*.
+3. **Faixa de aviso dentro de "Menu inicial"**, visível sempre que o modo não for
+   `MENU_ONLY`: diz que o menu **não está sendo enviado hoje**, diz o modo atual,
+   e traz um botão **"Usar 'Menu fixo (sem IA)' neste número"** que troca o modo
+   ali mesmo — com o custo escrito ao lado (*a IA deixa de responder neste número*)
+   e o lembrete de salvar.
+
+Portão: `npx tsc --noEmit` **limpo** e `npx vitest run` **6378/6380** (2 skipped),
+com `node_modules` reinstalado do zero (a árvore chegou sem dependências — sem
+`npm ci` o `tsc` cospe 38.403 erros falsos, e isso já enganou leitura antes).
+O GitHub Actions segue vermelho desde 15/08 por faturamento; a validação acima é
+local e não dependeu dele.
+
+**Exceção declarada:** `SEM_AGENTE` + `URGENCIA` — o Diretor editou `src/` por não
+ter, nesta execução, ferramenta para acionar o `interface`. Conta contra a régua.
+
+---
+
+## 🔴 23/08 — o número: por que a tela da Meta e o log do Railway não se contradizem
+
+O CEO mandou o print do painel: **+55 11 97244-0131 ("Sushi cazza", WABA
+`1045616451725086`), Classificação de qualidade = Pendente**. O log segue com
+`META_133010`. **Não é contradição — são duas camadas.**
+
+O painel mostra o número **ligado à WABA** (camada de conta); o `META_133010` diz
+que ele **não foi registrado no runtime da Cloud API** (camada de execução) — é
+exatamente o `platform_type: NOT_APPLICABLE` que o próprio código descreve em
+`MetaOnboardingService.ts:111-116`. "Qualidade: Pendente" é a confirmação disso: a
+nota de qualidade só existe depois que o número **passa a trafegar** mensagem, e
+ele não trafega nenhuma.
+
+### O comando do ato 1, com a trava de coexistência já resolvida
+
+O CEO confirmou que **o chip não está em celular nenhum** → o risco que segurava
+este passo (o `/register` expulsar o número do aparelho) **caiu**.
+
+⚠️ Detalhe operacional que muda a execução: o `route.ts:88-91` não olha o celular,
+olha a **flag `coexistence` gravada no banco**. Se a flag estiver ligada de um
+cadastro antigo, o registro é **pulado** com a mensagem `skipped: "coexistence…"`.
+Nesse caso — e **só** nesse caso — repetir com `"force": true` é seguro **hoje**,
+porque a premissa da trava (número vivo num aparelho) não vale mais.
+
+Eu **não disparei**: não tenho o `ADMIN_SECRET` nem o PIN, e os dois são posse do
+CEO. O comando pronto está em `docs/pedidos/registrar-numero-cloud-api.md`.
+
+---
+
 ## 🔴 23/08 — "Menu inicial" parou: são DUAS quebras empilhadas, não uma
 
 O CEO mandou o print da tela **Menu inicial** (`/agente-ia`) e disse *"preciso disso
