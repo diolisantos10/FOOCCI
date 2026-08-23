@@ -14,7 +14,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { TENANT_HEADER, USER_HEADER, ROLE_HEADER } from "@/lib/tenant";
-import { destinoCanonicoSemWww } from "@/lib/canonicalHost";
+import {
+  destinoCanonicoSemWww,
+  raizVaiParaVitrine,
+  origemPublica,
+  DESTINO_DA_RAIZ,
+} from "@/lib/canonicalHost";
 
 // Routes that do NOT require authentication
 /**
@@ -112,6 +117,22 @@ export async function middleware(req: NextRequest) {
       destinoCanonicoSemWww(host, pathname, req.nextUrl.search),
       308,
     );
+  }
+
+  // A raiz é a vitrine — para visitante anônimo E para quem está logado. Fica no
+  // middleware, e não na página, porque a página vira artefato estático e perde o
+  // `Location`; o porquê inteiro está em `lib/canonicalHost.ts`.
+  //
+  // O destino é ABSOLUTO porque o Next recusa `Location` relativo (`new URL()`
+  // no cabeçalho → `ERR_INVALID_URL`, 500) — e é montado por `origemPublica`,
+  // que descarta a porta interna do contêiner sem quebrar o `localhost` do
+  // desenvolvimento. Foi assim que o `:8080` entrou na primeira vez.
+  if (raizVaiParaVitrine(pathname)) {
+    const origem = origemPublica(
+      req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host,
+      req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol,
+    );
+    return NextResponse.redirect(new URL(`${DESTINO_DA_RAIZ}${req.nextUrl.search}`, origem), 307);
   }
 
   // Always allow Next.js internals and static assets

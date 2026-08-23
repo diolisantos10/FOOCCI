@@ -55,3 +55,56 @@ export function destinoCanonicoSemWww(hostHeader: string, pathname: string, sear
   const apex = host.startsWith("www.") ? host.slice(4) : host;
   return `${ESQUEMA}://${apex}${pathname}${search}`;
 }
+
+/**
+ * A raiz do domínio é a VITRINE, e o desvio precisa ser um redirecionamento de
+ * verdade — com cabeçalho `Location` — para todo mundo, não só para navegador.
+ *
+ * ⚠️ POR QUE ISTO SAIU DA PÁGINA E VEIO PARA O MIDDLEWARE (23/08/2026):
+ * `src/app/page.tsx` só chama `redirect("/site")`. Sem nada dinâmico, o Next
+ * PRÉ-RENDERIZA essa rota — ela sai marcada como estática no build, mesmo com
+ * `force-dynamic` — e o que chega ao visitante é `307` com corpo
+ * `__next_error__`, `x-nextjs-cache: HIT` e **nenhum `Location`**. Medido em
+ * produção. Navegador com JavaScript ainda se vira; `curl`, robô de busca,
+ * prévia de link do WhatsApp e monitor de saúde não: para eles a raiz do domínio
+ * deixou de redirecionar.
+ *
+ * Antes a rota era dinâmica por acidente — ler a sessão toca em cookie, e cookie
+ * obriga renderização por requisição. Ao tirar a sessão dali, o efeito colateral
+ * que segurava tudo de pé foi junto.
+ *
+ * No middleware não há pré-renderização possível: a resposta é montada a cada
+ * requisição, sempre com `Location`.
+ *
+ * ⚠️ E O `Location` É RELATIVO (`/site`), de propósito. Montar URL absoluta aqui
+ * é reabrir a armadilha do `:8080` — atrás do proxy do Railway a porta interna
+ * vaza para qualquer destino herdado da conexão. Caminho relativo não tem host
+ * nem porta para errar, e funciona igual em produção e no `localhost:3000`.
+ */
+export const DESTINO_DA_RAIZ = "/site";
+
+/**
+ * Origem pública para montar o destino da raiz.
+ *
+ * ⚠️ `Location` RELATIVO NÃO SERVE, por mais que o HTTP permita: o Next valida o
+ * cabeçalho com `new URL(location)` e derruba a requisição com
+ * `ERR_INVALID_URL` — 500 na cara do visitante. Isto foi medido rodando o build
+ * localmente antes de subir, e é a razão de existir esta função em vez de um
+ * simples `"/site"`.
+ *
+ * E a URL absoluta tem que ser montada com cuidado, senão volta o `:8080`:
+ * `req.nextUrl.origin`, atrás do proxy do Railway, carrega a porta interna do
+ * contêiner. Por isso a porta é descartada quando o esquema público é `https`
+ * (produção, sempre em 443) e MANTIDA quando não é — senão o `localhost:3000` do
+ * desenvolvimento passaria a redirecionar para `localhost`, que não responde.
+ */
+export function origemPublica(hostHeader: string, proto: string): string {
+  const esquema = proto.replace(/:$/, "");
+  const host = esquema === ESQUEMA ? hostSemPorta(hostHeader) : hostHeader;
+  return `${esquema}://${host}`;
+}
+
+/** `true` só para a raiz exata — `/site`, `/login`, `/r/...` seguem seu caminho. */
+export function raizVaiParaVitrine(pathname: string): boolean {
+  return pathname === "/";
+}
