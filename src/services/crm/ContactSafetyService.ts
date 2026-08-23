@@ -8,7 +8,8 @@
  * place that enforces:
  *
  *   • opt-out (LGPD)               • daily global cap
- *   • contactability / phone       • per-customer cooldown
+ *   • teto pré-pago de contatos    • per-customer cooldown
+ *   • contactability / phone
  *   • canal WhatsApp conectado     • per-customer weekly cap
  *   • quiet hours / weekend        • cross-campaign 24h dedup
  *   • sending window               • duplicate-in-campaign dedup
@@ -34,6 +35,7 @@ import {
   type CRMWhatsAppSafetyConfig,
   getSafetyConfig,
   getTodayGlobalSendCount,
+  getContactedCustomerIds,
   checkQuietHours,
   checkWeekendBlock,
 } from "@/lib/crm-safety";
@@ -53,6 +55,11 @@ export type ContactBlockReason =
   | "WEEKEND_BLOCKED"
   | "OUTSIDE_SENDING_WINDOW"
   | "DAILY_GLOBAL_CAP_REACHED"
+  /**
+   * O teto pré-pago de contatos acabou E esta pessoa nunca foi abordada — ela
+   * consumiria uma vaga que não existe. Quem já está na conta continua passando.
+   */
+  | "CONTACT_BUDGET_EXHAUSTED"
   | "CUSTOMER_COOLDOWN_ACTIVE"
   | "CUSTOMER_WEEKLY_CAP_REACHED"
   | "RECENT_CRM_MESSAGE_24H"
@@ -139,6 +146,19 @@ export interface ContactSafetyEvalInput {
   whatsappAvailable: boolean;
   globalSentToday: number;
   restaurantOpen: boolean;
+  /**
+   * Quantas PESSOAS DIFERENTES o CRM já abordou na vida toda (o que o teto
+   * pré-pago `safety.contactBudgetTotal` consome).
+   */
+  contactBudgetUsed: number;
+  /**
+   * Esta pessoa NUNCA recebeu mensagem do CRM? Só quem é novo consome uma vaga
+   * do teto — quem já está na conta não consome nada e continua recebendo.
+   *
+   * Obrigatório de propósito, como `contactHistoryKnown`: com um default
+   * otimista (`false`) o teto voltaria a ser enfeite sem ninguém perceber.
+   */
+  isNewContact: boolean;
 
   // ── flags ──
   /** Birthday sends are exempt from frequency rules (cooldown/weekly/24h/dup). */
@@ -274,6 +294,33 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
     );
   }
 
+  // 10.6. Teto pré-pago de contatos — trava de CUSTO, não de anti-ban.
+  //
+  // O teto conta PESSOAS DIFERENTES abordadas na vida toda. Por isso ele só
+  // barra QUEM É NOVO: quem já está na conta não consome vaga nenhuma e segue
+  // recebendo normalmente. Uma tranca geral aqui calaria também o cliente
+  // antigo — proteção mais destrutiva que o problema que ela evita, e foi
+  // exatamente por isso que a versão anterior desta trava foi DESLIGADA, em vez
+  // de corrigida. A tela e o guia do lojista continuaram prometendo que ela
+  // existia ("o CRM para de abordar gente nova até você aumentar o Máximo de
+  // pessoas") enquanto o código não olhava o número: teto de 200 e 2115 pessoas
+  // já abordadas na mesma tela. Confiança falsa é pior que limite nenhum.
+  //
+  // Vale inclusive para aniversário: aniversário é isento de FREQUÊNCIA, não de
+  // custo. Na prática quase nunca morde — aniversariante que já foi abordado
+  // uma vez não é contato novo.
+  if (
+    input.safety.contactBudgetTotal > 0 &&
+    input.isNewContact &&
+    input.contactBudgetUsed >= input.safety.contactBudgetTotal
+  ) {
+    return block(
+      "CONTACT_BUDGET_EXHAUSTED",
+      `Limite de contatos atingido (${input.contactBudgetUsed}/${input.safety.contactBudgetTotal}) — ` +
+      "esta pessoa ainda não tinha sido abordada e não há vaga no teto",
+    );
+  }
+
   // 11. Frequency gates — birthday sends are exempt.
   if (!input.isBirthday) {
     // Duplicate within the same campaign.
@@ -377,6 +424,15 @@ export interface ContactSafetyGlobalContext {
   whatsappAvailable: boolean;
   globalSentToday: number;
   restaurantOpen: boolean;
+  /**
+   * Quem o CRM já abordou na vida toda. Uma consulta por LOTE (não por
+   * destinatário) — é dela que saem as duas respostas que o teto pré-pago
+   * precisa: o total já gasto e se ESTE destinatário é gente nova.
+   *
+   * Vem vazio quando o teto está desligado (`contactBudgetTotal = 0`): sem teto
+   * não há o que perguntar, e a consulta não roda.
+   */
+  contactedCustomerIds: Set<string>;
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────────
@@ -442,7 +498,14 @@ export class ContactSafetyService {
         ? Promise.resolve(supplied)
         : isWhatsAppChannelConnected(restaurantId),
     ]);
-    return { safety, globalSentToday, restaurantOpen, whatsappAvailable };
+    // Só pergunta quem já foi abordado quando existe teto para gastar. Se a
+    // consulta falhar, o erro SOBE: `assertSendable` transforma isso em bloqueio
+    // (UNKNOWN_ERROR). Não saber quanto do teto já foi gasto não pode virar
+    // permissão de gastar mais.
+    const contactedCustomerIds = safety.contactBudgetTotal > 0
+      ? await getContactedCustomerIds(restaurantId)
+      : new Set<string>();
+    return { safety, globalSentToday, restaurantOpen, whatsappAvailable, contactedCustomerIds };
   }
 
   /**
@@ -525,6 +588,11 @@ export class ContactSafetyService {
         whatsappAvailable: ctx.whatsappAvailable,
         globalSentToday: ctx.globalSentToday,
         restaurantOpen: ctx.restaurantOpen,
+        contactBudgetUsed: ctx.contactedCustomerIds.size,
+        // Sem `customerId` não dá para saber se é gente nova — assume que é, o
+        // lado caro da dúvida. Na prática o portão de `contactHistoryKnown` já
+        // reprovou esse caso antes de chegar aqui.
+        isNewContact: input.customerId ? !ctx.contactedCustomerIds.has(input.customerId) : true,
         isBirthday: input.isBirthday ?? false,
         allowWeeklyCapOverride: input.allowWeeklyCapOverride ?? false,
         enforceTimeWindows: input.enforceTimeWindows ?? true,

@@ -106,8 +106,16 @@ interface ConvSummary {
    *  app-wide/cross-device until a fresh escalation clears it. */
   handoffAlarmAckAt?:  string | null;
   hasCustomerReplied?: boolean;
-  /** True when the conversation received any CRM outbound (contextType OR send log). */
+  /** True when this customer has a REAL CRM send log (não é `contextType`). */
   crmSent?:            boolean;
+  /** Quando o CRM abordou este cliente pela última vez. null = nunca. */
+  lastCrmSentAt?:      string | null;
+  /**
+   * Data da resposta do cliente à abordagem do CRM — apurada no servidor
+   * (`crmReplyBadge.crmReplyAt`). null = não é resposta de CRM. É a ÚNICA fonte
+   * da etiqueta "Resposta CRM".
+   */
+  crmRepliedAt?:       string | null;
   customer:            { name: string; phone: string } | null;
   messages:            { content: string; direction: string; senderType: string | null; type: string }[];
 }
@@ -275,11 +283,17 @@ const CRM_CONTEXT_BADGE: Record<string, string> = {
 function getCrmBadge(c: ConvSummary): { label: string; cls: string } | null {
   const ct = c.contextType ?? "";
   const specific = CRM_CONTEXT_BADGE[ct];
-  // Show a badge for any CRM-sent conversation: a specific one when the context is
-  // known, else a generic "CRM enviado" for log-backed sends (post-order, review,
-  // coupon, manual, …) that did not set a CRM contextType.
-  if (!specific && !c.crmSent) return null;
-  if (convHasCustomerReply(c)) {
+  // Sem log de envio real do CRM não existe etiqueta de CRM — nem a específica.
+  // Nem `contextType` nem `crmSent` valem como prova aqui: o primeiro é gravado
+  // no envio e não expira nunca (só some quando o cliente compra), e o segundo é
+  // verdadeiro por construção dentro da aba "CRM enviado". Quem prova é
+  // `lastCrmSentAt`, que vem do log de envio.
+  if (!c.lastCrmSentAt) return null;
+  // "Resposta CRM" só quando o servidor provou que o cliente escreveu DEPOIS de
+  // ser abordado, dentro da janela de resposta. Antes bastava existir QUALQUER
+  // mensagem de entrada na conversa, em qualquer data — inclusive anterior ao
+  // envio — e por isso a etiqueta caía em quase toda conversa.
+  if (c.crmRepliedAt) {
     return { label: "Resposta CRM", cls: "bg-amber-50 text-amber-700" };
   }
   return {

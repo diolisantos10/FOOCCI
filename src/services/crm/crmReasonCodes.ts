@@ -10,6 +10,7 @@ export const CRM_REASON_CODES = [
   "BLOCKED_WEEKLY_LIMIT",
   "BLOCKED_DAILY_GLOBAL_CAP",
   "BLOCKED_WEEKLY_GLOBAL_CAP",
+  "BLOCKED_CONTACT_BUDGET",
   "BLOCKED_CAMPAIGN_DAILY_LIMIT",
   "BLOCKED_OPT_OUT",
   "BLOCKED_INVALID_PHONE",
@@ -36,6 +37,7 @@ export const REASON_META: Record<CrmReasonCode, { kind: CrmReasonKind; label: st
   BLOCKED_WEEKLY_LIMIT:                { kind: "BLOCKED",  label: "Bloqueado (limite semanal/cliente)" },
   BLOCKED_DAILY_GLOBAL_CAP:            { kind: "BLOCKED",  label: "Bloqueado (cap diário global)" },
   BLOCKED_WEEKLY_GLOBAL_CAP:           { kind: "BLOCKED",  label: "Bloqueado (cap semanal do restaurante)" },
+  BLOCKED_CONTACT_BUDGET:              { kind: "BLOCKED",  label: "Bloqueado (limite de contatos atingido)" },
   BLOCKED_CAMPAIGN_DAILY_LIMIT:        { kind: "BLOCKED",  label: "Bloqueado (limite da campanha)" },
   BLOCKED_OPT_OUT:                     { kind: "BLOCKED",  label: "Opt-out" },
   BLOCKED_INVALID_PHONE:               { kind: "FAILED",   label: "Telefone inválido" },
@@ -58,6 +60,7 @@ export function reasonCodeFromContactBlock(reason: string | null | undefined): C
     case "CUSTOMER_COOLDOWN_ACTIVE":
     case "RECENT_CRM_MESSAGE_24H": return "BLOCKED_COOLDOWN";
     case "DAILY_GLOBAL_CAP_REACHED": return "BLOCKED_DAILY_GLOBAL_CAP";
+    case "CONTACT_BUDGET_EXHAUSTED": return "BLOCKED_CONTACT_BUDGET";
     case "CUSTOMER_OPTED_OUT": return "BLOCKED_OPT_OUT";
     case "MISSING_PHONE":
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";

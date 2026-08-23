@@ -2,6 +2,84 @@
 
 > Última atualização: 23/08/2026.
 
+## 🔴 23/08 (4ª rodada) — o teto de contatos era enfeite, e a etiqueta "Resposta CRM" mentia
+
+Dois prints do CEO, dois defeitos, **raízes diferentes** (a hipótese de que fossem
+um só foi verificada e **descartada** — as duas contas não usam a mesma definição).
+
+### (1) "As informações divergem": teto de 200, 2115 pessoas já abordadas
+
+**Não era rótulo errado — era trava ausente, e ela estava desligada de propósito.**
+Os dois números medem a MESMA coisa: pessoas diferentes com envio de CRM
+bem-sucedido em `campaign_executions` (SENT/DELIVERED/READ), na vida toda. Nenhuma
+rota de importação escreve nessa tabela, então base importada **não** infla a conta.
+
+O que faltava: `contactBudgetTotal` era lido pela tela, pela API de configurações e
+pelo previsor de capacidade — **e por mais ninguém**. `getContactBudgetStatus()` em
+`src/lib/crm-safety.ts` não tinha **um único chamador**. E o runner carregava a
+confissão escrita (`ScheduledCampaignRunnerService`, antes do `slice(0, batchCap)`):
+*"Contact limit — INFORMATIONAL ONLY (not enforced in the runner)"*. O portão antigo
+existiu, derrubava a **campanha inteira** (calava também quem já era da casa), foi
+desligado por isso — e o desligamento virou permanente enquanto a tela **e o guia do
+lojista** seguiam prometendo *"o CRM para de abordar gente nova"*.
+
+**Consertado:** a trava voltou no lugar certo — `ContactSafetyService`, **por
+destinatário**, motivo `CONTACT_BUDGET_EXHAUSTED`. Ela barra **só quem é contato
+novo** (quem consome vaga); quem já está na conta continua recebendo. Vale para
+aniversário também: aniversário é isento de frequência, não de custo. Teste:
+`src/services/crm/tests/CrmTetoDeContatos.test.ts`.
+
+**⚠️ Efeito imediato em produção:** com o teto em 200 e 2115 já abordados, o CRM do
+Sushi Cazza **para de abordar pessoas novas** assim que isto subir. É o alarme
+funcionando, não um defeito novo — mas **quanto vale o teto é decisão do CEO** e não
+foi mexido (não subi para 2115 nem zerei).
+
+### (2) "Resposta CRM" em 10 de 10 conversas
+
+**Duas metades erradas, nenhuma delas compartilhada com o contador acima:**
+- *"foi abordada?"* respondia `Conversation.contextType` — campo **único**, gravado
+  no envio, que **nunca expira** (só some quando o cliente compra). Abordado em
+  julho = etiquetado para sempre. Na aba "CRM enviado" era pior: `crmSent` saía
+  `Boolean(crm)`, verdadeiro **por construção** para toda linha da aba;
+- *"respondeu?"* respondia "existe QUALQUER mensagem de entrada" — sem olhar data,
+  então até mensagem **anterior** ao envio contava.
+- de quebra, `getCrmSentCustomerIds` contava linhas `REVIEW_REQUEST_FAILED` e
+  `REVIEW_REQUEST_SKIPPED` como "CRM enviado" — registros de que **nada saiu**.
+
+**Consertado:** regra pura em `src/services/conversation/crmReplyBadge.ts` — a
+etiqueta exige log de envio REAL **e** que a **última** mensagem do cliente tenha
+vindo depois dele, dentro de **7 dias** (a mesma janela que `markCrmReplyIfApplicable`
+já usa; não inventei régua nova). Apurado no servidor (`crmRepliedAt`,
+`lastCrmSentAt`), consumido pela tela. Teste com o caso Larissia:
+`src/services/conversation/crmReplyBadge.test.ts`.
+
+### Aberto — depende do CEO
+
+- **Quanto vale o teto de contatos do Sushi Cazza.** Enquanto não decidir, o CRM não
+  aborda gente nova. Não mexi no número de propósito.
+- **O campo do teto fica travado no "modo seguro"?** A tela exige ligar *"Assumir
+  controle manual"* para editá-lo — o que obriga o lojista a **destravar também as
+  regras anti-banimento** só para mexer num limite de **custo**. O próprio código diz
+  o contrário (`crm-safety.ts`: *"Only the prepaid contact budget stays owner-set
+  either way — it is a cost limit, not an anti-ban rule"*), e `applyEffectiveSafety`
+  de fato nunca toca nesse campo. Divergência tela × código: **não resolvi sozinho**
+  porque muda quem pode mexer no teto.
+- **Recontagem/limpeza de histórico:** não fiz e não proponho fazer sem ordem — dado
+  de cliente é irreversível. O diagnóstico
+  `GET /api/admin/diagnostics/crm-etiqueta-resposta` (somente leitura) devolve os
+  números reais: etiquetas pela regra antiga × nova, e teto × pessoas abordadas.
+
+### Ainda aberto, não consertado nesta rodada
+
+- **`OrderDraftRecoverySendService` (recuperação de carrinho) não passa pelo portão
+  unificado.** Não checa opt-out do CRM, nem janela de silêncio, nem intervalo de
+  24 h — tem só as regras próprias dele (1 recuperação por rascunho, 1 por cliente
+  por dia, loja aberta no abandono). Ou seja: **"proteções sempre ativas" não é
+  verdade nesse caminho.** Mexer nele é tocar envio de cliente real e merece bloco
+  próprio.
+
+---
+
 ## 🟢 23/08 (3ª rodada) — "por que o Foocci cita a Evolution?" É texto velho. Mas achei o que estava por baixo.
 
 O CEO mandou o print de **Gerenciar campanha → Diagnóstico** ("Bem-vindo / 2ª compra"):

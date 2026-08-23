@@ -11,6 +11,44 @@
 
 ---
 
+## 2026-08-23 — Limite que a tela anuncia é limite que o código trava
+
+**Decisão do Diretor** (guardrail 4 aplicado, não escolha de negócio).
+
+A tela de Regras de Segurança dizia *"Limite de contatos atingido"* e *"Travado no
+modo seguro"* enquanto o código de envio **não olhava o número**: teto de 200, 2115
+pessoas abordadas. A trava tinha existido, derrubava a campanha inteira, foi
+desligada — e o desligamento virou permanente, com a tela e o guia do lojista
+seguindo prometendo o que não acontecia.
+
+**O que fica decidido, e vale para todo limite do produto:**
+
+1. **Número que a tela anuncia como limite é travado no servidor, no caminho de
+   envio.** Se não dá para travar, a tela não anuncia como limite — anuncia como
+   indicador, com outras palavras. Confiança falsa é pior que limite nenhum.
+2. **A trava mora no portão por destinatário, não no portão de lote.** Portão de
+   lote não distingue quem custa vaga de quem não custa, e por isso a versão
+   anterior era mais destrutiva que o problema que evitava (guardrail 5). O teto de
+   contatos barra **só contato novo**; quem já está na conta continua recebendo.
+3. **Etiqueta é afirmação, e afirmação precisa de prova com data.** "Resposta CRM"
+   passou a exigir log de envio real **mais** a última mensagem do cliente dentro da
+   janela de resposta. Campo de estado que nunca expira (`Conversation.contextType`)
+   não serve de prova para nada que o lojista lê como fato do dia.
+4. **Régua repetida se aponta, não se copia.** A janela de resposta da etiqueta é a
+   MESMA de `markCrmReplyIfApplicable` (7 dias). Duas réguas para a mesma pergunta é
+   a mesma família do "duas fontes para o mesmo número".
+
+**O que NÃO foi decidido aqui e continua com o CEO:** quanto vale o teto de contatos
+de cada restaurante, e se esse campo — que é limite de **custo**, não regra
+anti-banimento — deve continuar travado atrás do "Assumir controle manual".
+
+**Proposta ao Diretor Geral (dioli-brain-kit):** os itens 1 e 3 não são do Foocci,
+são doutrina de agente — *"limite anunciado é limite travado"* e *"etiqueta carrega a
+data que a prova"*. Fica registrado como proposta, não escrito no kit
+(guardrail 3).
+
+---
+
 ## 2026-08-08 — O SDR passa o valor dos planos na hora
 
 **Decisão do CEO:** *"Ele passa o valor dos planos."*

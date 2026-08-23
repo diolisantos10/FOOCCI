@@ -69,6 +69,11 @@ export interface CRMWhatsAppSafetyConfig {
    * PREPAID total allowance of UNIQUE contacts the CRM may ever message.
    * Counts distinct customers that have received at least one CRM send (lifetime).
    * 0 = off / unlimited. "Recharge" = raise this number in Settings. Does not reset.
+   *
+   * TRAVA DE VERDADE desde 23/08/2026 — `ContactSafetyService` reprova o envio a
+   * quem AINDA NÃO foi abordado quando o saldo acabou. Antes disso este número
+   * era só enfeite de tela: a tela dizia "Limite de contatos atingido" e o CRM
+   * seguia abordando gente nova. Ver `CONTACT_BUDGET_EXHAUSTED`.
    */
   contactBudgetTotal: number;
   /** Minimum hours between any two CRM messages to the same customer. Default 24. */
@@ -301,12 +306,29 @@ export async function getRawSafetyConfig(restaurantId: string): Promise<CRMWhats
  * campaigns + automations. This is what the prepaid contact budget consumes.
  */
 export async function getConsumedContactCount(restaurantId: string): Promise<number> {
+  return (await getContactedCustomerIds(restaurantId)).size;
+}
+
+/**
+ * WHO the CRM has already messaged (lifetime) — a ready-made set of customerIds.
+ *
+ * Mesma população que `getConsumedContactCount` conta, numa consulta só, porque o
+ * portão precisa das DUAS respostas ao mesmo tempo: "quantas pessoas já foram
+ * abordadas?" e "ESTA pessoa é nova?". Sem a segunda, o teto viraria uma tranca
+ * geral que cala até quem já é da casa — proteção mais destrutiva que o problema
+ * que ela evita.
+ *
+ * Só entram linhas de envio REAL do CRM (`campaign_executions` com SENT/DELIVERED/
+ * READ). Nenhuma rota de importação de base escreve nessa tabela, então cliente
+ * importado que nunca recebeu mensagem NÃO conta aqui.
+ */
+export async function getContactedCustomerIds(restaurantId: string): Promise<Set<string>> {
   const rows = await prisma.campaignExecution.findMany({
     where:    { restaurantId, status: { in: ["SENT", "DELIVERED", "READ"] } },
     select:   { customerId: true },
     distinct: ["customerId"],
   });
-  return rows.length;
+  return new Set(rows.map((r) => r.customerId));
 }
 
 export interface ContactBudgetStatus {

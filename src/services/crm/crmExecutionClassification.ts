@@ -26,6 +26,7 @@ export type ExecutionCategory =
   | "BLOCKED_COOLDOWN"
   | "BLOCKED_WEEKLY_LIMIT"
   | "BLOCKED_DAILY_GLOBAL_CAP"
+  | "BLOCKED_CONTACT_BUDGET"
   | "BLOCKED_CAMPAIGN_DAILY_LIMIT"
   | "BLOCKED_OPT_OUT"
   | "BLOCKED_INVALID_PHONE"
@@ -103,6 +104,10 @@ const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   BLOCKED_COOLDOWN:                { kind: "BLOCKED", badge: "Bloqueado (cooldown)",          retryable: false, retryability: "RETRYABLE_LATER" },
   BLOCKED_WEEKLY_LIMIT:            { kind: "BLOCKED", badge: "Bloqueado (limite semanal)",    retryable: false, retryability: "RETRYABLE_LATER" },
   BLOCKED_DAILY_GLOBAL_CAP:        { kind: "BLOCKED", badge: "Bloqueado (cap global)",        retryable: false, retryability: "RETRYABLE_LATER" },
+  // Teto de contatos estourado. RETRYABLE_AFTER_FIX, e não RETRYABLE_LATER, porque
+  // esperar não resolve: o saldo de contatos NÃO se renova sozinho — alguém precisa
+  // aumentar o "Máximo de pessoas" (ou zerar o teto) na tela de Regras de Segurança.
+  BLOCKED_CONTACT_BUDGET:          { kind: "BLOCKED", badge: "Limite de contatos atingido",  retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   BLOCKED_CAMPAIGN_DAILY_LIMIT:    { kind: "BLOCKED", badge: "Bloqueado (limite da campanha)", retryable: false, retryability: "RETRYABLE_LATER" },
   BLOCKED_OPT_OUT:                 { kind: "BLOCKED", badge: "Opt-out",                       retryable: false, retryability: "NEVER_RETRY" },
   SKIPPED_NOT_ELIGIBLE:            { kind: "SKIPPED", badge: "Ignorado",                      retryable: false, retryability: "PERMANENT" },
@@ -115,6 +120,7 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "CUSTOMER_COOLDOWN_ACTIVE":
     case "RECENT_CRM_MESSAGE_24H": return "BLOCKED_COOLDOWN";
     case "DAILY_GLOBAL_CAP_REACHED": return "BLOCKED_DAILY_GLOBAL_CAP";
+    case "CONTACT_BUDGET_EXHAUSTED": return "BLOCKED_CONTACT_BUDGET";
     case "CUSTOMER_OPTED_OUT": return "BLOCKED_OPT_OUT";
     case "MISSING_PHONE": return "SKIPPED_NO_PHONE";
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";
@@ -370,6 +376,7 @@ const EMPTY_BY_CATEGORY = (): Record<ExecutionCategory, number> => ({
   BLOCKED_COOLDOWN: 0,
   BLOCKED_WEEKLY_LIMIT: 0,
   BLOCKED_DAILY_GLOBAL_CAP: 0,
+  BLOCKED_CONTACT_BUDGET: 0,
   BLOCKED_CAMPAIGN_DAILY_LIMIT: 0,
   BLOCKED_OPT_OUT: 0,
   BLOCKED_INVALID_PHONE: 0,

@@ -5662,7 +5662,8 @@ function CrmConfiguracoes() {
           <p className="mt-0.5 text-xs text-muted">
             Teto de pessoas <strong>diferentes</strong> que o CRM pode abordar na <strong>vida toda</strong>. Não confunda com o
             limite diário acima: aquele é <strong>por dia</strong> e reseta todo dia; este <strong>acumula e nunca zera sozinho</strong>.
-            Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. <strong>0 = sem limite.</strong>
+            Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. Quando o teto acaba, o CRM <strong>para de abordar
+            pessoas novas</strong> — quem já está na conta continua recebendo normalmente. <strong>0 = sem limite.</strong>
           </p>
           {(() => {
             const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
@@ -5671,6 +5672,11 @@ function CrmConfiguracoes() {
             const remaining = on ? Math.max(0, total - used) : 0;
             const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
             const exhausted = on && remaining <= 0;
+            // Quantas pessoas já foram abordadas ALÉM do teto. Enquanto a trava
+            // não existia (até 23/08/2026) o CRM passou por cima do número sem
+            // avisar, e a tela mostrava "0 de 200" ao lado de "2115 já
+            // abordadas" sem explicar como as duas coisas cabem juntas.
+            const excedente = on ? Math.max(0, used - total) : 0;
             const low   = on && !exhausted && remaining <= Math.max(1, Math.round(total * 0.1));
             return (
               <div className="mt-3 grid gap-5 sm:grid-cols-2">
@@ -5702,10 +5708,23 @@ function CrmConfiguracoes() {
                         <div className={`h-full rounded-full ${exhausted || low ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                       </div>
                       {exhausted ? (
-                        <p className="mt-2 text-xs text-amber-800">
-                          Limite de contatos atingido — <strong>{used}</strong> pessoas já abordadas. Para falar com novos
-                          clientes, ligue o controle manual acima e aumente o teto (ou coloque <strong>0 = sem limite</strong>).
-                        </p>
+                        <div className="mt-2 space-y-1.5 text-xs text-amber-800">
+                          <p>
+                            <strong>O CRM está parado para gente nova.</strong> O teto é de <strong>{total}</strong> pessoas
+                            e o CRM já abordou <strong>{used}</strong>
+                            {excedente > 0 ? <> — <strong>{excedente} a mais do que o teto</strong>, de quando ele ainda não travava nada</> : null}.
+                          </p>
+                          <p>
+                            Quem <strong>já está nessa conta continua recebendo</strong> normalmente — campanha, aniversário,
+                            tudo. O que está bloqueado é abordar <strong>pessoa nova</strong>, porque cada uma consome uma vaga
+                            do teto e não há vaga sobrando.
+                          </p>
+                          <p>
+                            Para voltar a falar com clientes novos: ligue <strong>“Assumir controle manual”</strong> lá em cima
+                            e aumente o <strong>Máximo de pessoas</strong> (ou coloque <strong>0 = sem limite</strong>). O saldo
+                            não se renova sozinho — esperar não destrava.
+                          </p>
+                        </div>
                       ) : (
                         <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
                       )}

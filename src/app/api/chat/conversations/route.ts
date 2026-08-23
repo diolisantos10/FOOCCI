@@ -18,7 +18,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { ConversationStatus, Prisma } from "@prisma/client";
 import { buildConversationWhere, CRM_CONTEXT_TYPES } from "@/services/conversation/conversationListFilter";
-import { getCrmSentCustomerIds } from "@/services/conversation/crmSentRecipients";
+import { getCrmSentCustomerIds, getLastCrmSentAtByCustomer } from "@/services/conversation/crmSentRecipients";
+import { crmReplyAt } from "@/services/conversation/crmReplyBadge";
 
 const CRM_CONTEXT_SET = new Set<string>(CRM_CONTEXT_TYPES);
 
@@ -166,14 +167,57 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    // Map to response shape: compute hasCustomerReplied + crmSent, strip _count.
-    // crmSent drives the generic "CRM enviado" badge. On the CRM tab every row
-    // matched the filter, so it is true; elsewhere it reflects a CRM contextType.
-    const paged = deduped.slice(skip, skip + limit).map(({ _count, ...rest }) => ({
-      ...rest,
-      hasCustomerReplied: _count.messages > 0,
-      crmSent: Boolean(crm) || (rest.contextType != null && CRM_CONTEXT_SET.has(rest.contextType)),
-    }));
+    const pageRows = deduped.slice(skip, skip + limit);
+
+    // ── As duas provas da etiqueta de CRM, apuradas no SERVIDOR ───────────────
+    //
+    // `crmSent` continua sendo o que sempre foi — o que a ABA "CRM enviado"
+    // agrupa — e segue mandando em quem entra e sai da lista. Ele NÃO serve de
+    // prova para a etiqueta: na aba de CRM ele é verdadeiro por construção
+    // (`Boolean(crm)`), e fora dela vem do `contextType`, um campo único que é
+    // gravado no envio e nunca expira (só some quando o cliente compra).
+    //
+    // Quem prova a etiqueta são os dois campos abaixo, e só eles:
+    //   `lastCrmSentAt` — existe LOG DE ENVIO REAL do CRM para este cliente, e
+    //                     quando foi;
+    //   `crmRepliedAt`  — a última mensagem do cliente veio DEPOIS desse envio e
+    //                     dentro da janela de resposta. É a regra do dono do
+    //                     produto: "Resposta CRM é só quando ela responde após
+    //                     ser abordada".
+    const pageCustomerIds = [...new Set(
+      pageRows.map((r) => r.customer?.id).filter((v): v is string => Boolean(v)),
+    )];
+    const [lastCrmSentByCustomer, lastInboundRows] = await Promise.all([
+      getLastCrmSentAtByCustomer(ctx.restaurantId, pageCustomerIds),
+      pageRows.length > 0
+        ? prisma.message.groupBy({
+            by:    ["conversationId"],
+            where: { conversationId: { in: pageRows.map((r) => r.id) }, direction: "INBOUND" },
+            _max:  { sentAt: true },
+          })
+        : Promise.resolve([] as { conversationId: string; _max: { sentAt: Date | null } }[]),
+    ]);
+    const lastInboundByConv = new Map(
+      lastInboundRows.map((r) => [r.conversationId, r._max.sentAt ?? null]),
+    );
+
+    // Map to response shape: compute hasCustomerReplied + crmSent + crmRepliedAt.
+    const paged = pageRows.map(({ _count, ...rest }) => {
+      const lastCrmSentAt = rest.customer?.id
+        ? lastCrmSentByCustomer.get(rest.customer.id) ?? null
+        : null;
+      const repliedAt = crmReplyAt({
+        lastCrmSentAt,
+        lastInboundAt: lastInboundByConv.get(rest.id) ?? null,
+      });
+      return {
+        ...rest,
+        hasCustomerReplied: _count.messages > 0,
+        crmSent: Boolean(crm) || (rest.contextType != null && CRM_CONTEXT_SET.has(rest.contextType)),
+        lastCrmSentAt,
+        crmRepliedAt: repliedAt,
+      };
+    });
 
     const total = deduped.length;
 

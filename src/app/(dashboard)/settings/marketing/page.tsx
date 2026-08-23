@@ -325,7 +325,8 @@ export default function MarketingSettingsPage() {
         <SectionHeading title="Limite de Contatos" />
         <p className="mt-1 text-sm text-muted">
           Máximo de <strong>contatos únicos</strong> que o CRM pode abordar. Cada pessoa conta 1 vez,
-          mesmo recebendo várias campanhas. Use 0 para sem limite. <span className="text-muted/80">(Aqui é
+          mesmo recebendo várias campanhas. Use 0 para sem limite. Quando o teto acaba, o CRM <strong>para de
+          abordar pessoas novas</strong> — quem já está na conta continua recebendo. <span className="text-muted/80">(Aqui é
           o limite de PESSOAS; o custo por conversa é cobrado pela Meta, fora desta tela.)</span>
         </p>
 
@@ -370,7 +371,16 @@ export default function MarketingSettingsPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                    {remaining !== null && remaining <= 0 ? (
+                      <p className="mt-2 text-xs text-amber-800">
+                        <strong>O CRM está parado para gente nova.</strong> Já foram abordadas <strong>{used}</strong> pessoas
+                        {used > total ? <> — <strong>{used - total} a mais que o teto</strong>, de quando ele ainda não travava nada</> : null}.
+                        Quem já está nessa conta continua recebendo; para falar com clientes novos, aumente o limite ao lado
+                        (ou use <strong>0 = sem limite</strong>).
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-muted">
