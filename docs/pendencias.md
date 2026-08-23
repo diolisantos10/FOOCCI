@@ -27,6 +27,40 @@ para enviá-lo: a rota recusa registrar número em coexistência de propósito
 (`src/app/api/admin/meta/register/route.ts:86-91`), porque o `/register` arrancaria
 o número do aparelho. Ordem do CEO: *"não posso prejudicar o sushi"*.
 
+### A prova de que a cura pegou no CRM — o erro MUDOU
+
+O `CampaignRunner` roda de ~10 em ~10 minutos e vinha morrendo sempre igual:
+
+- **16:38:43** — `channel collapse … lastError: 'META_133010'`
+- **16:48:43** — `channel collapse … lastError: 'META_133010'`
+- *(registro do número, ~16:50)*
+- **16:58:46** — `channel collapse … lastError: **'META_132001'**`
+
+`META_133010` **não aparece mais**. O canal agora **chega na Meta** e leva um erro
+diferente. Isso é progresso real: era "a conta não existe na API de Nuvem", agora é
+outra coisa.
+
+### ⚠️ A parede seguinte, já identificada: a WABA não tem NENHUM template
+
+`META_132001` é "template não existe / não aprovado". E o diagnóstico confirma o
+porquê, sem palpite:
+
+```
+platform_type: CLOUD_API | status: CONNECTED | quality: GREEN
+messaging_limit_tier: TIER_250 | account_mode: LIVE
+templates por status: {}   ← vazio
+aprovados: 0
+```
+
+**Zero templates — nem aprovado, nem pendente, nem reprovado.** Nunca foi submetido
+template nesta WABA. Campanha de CRM que fala com quem está fora da janela de 24h é
+mensagem iniciada pelo negócio, e a Meta **exige** template aprovado. Sem template,
+nenhuma campanha sai — por mais registrado que o número esteja.
+
+**Isso é bloco novo, não resíduo deste.** Criar e submeter template é ato que passa
+pela revisão da Meta (dias, não minutos) e o TEXTO que vai ao cliente é decisão do
+CEO, não do Diretor.
+
 ### A ferramenta, para a próxima vez
 
 - `scripts/registrar-numero-cloud-api.mjs` + `.github/workflows/registrar-numero-cloud-api.yml`
