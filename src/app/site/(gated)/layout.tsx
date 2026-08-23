@@ -12,6 +12,7 @@
  * not open a gated site — the helper fails closed and would lock everyone out.
  */
 
+import { PainelAtalho } from "@/components/marketing/PainelAtalho";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { StickyMobileCta } from "@/components/marketing/StickyMobileCta";
@@ -24,6 +25,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           mandar junto. NÃO é tag de analytics — nenhum terceiro, nenhuma
           requisição; a medição do site continua em SiteAnalytics. */}
       <LeadOriginTracker />
+      {/* Atalho explícito para quem tem sessão ativa — a raiz não teleporta mais
+          ninguém para o painel (ver src/app/page.tsx). */}
+      <PainelAtalho />
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

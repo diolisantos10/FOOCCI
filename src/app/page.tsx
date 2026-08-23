@@ -1,33 +1,30 @@
 /**
  * Root route.
  *
- * Since the commercial launch (2026-08-03) an anonymous visitor typing the bare
- * domain must land on the marketing site, not on a login form. A logged-in owner
- * still goes straight to the panel.
+ * `foocci.com.br` é o SITE COMERCIAL — para todo mundo, sempre. Inclusive para
+ * quem está com sessão de administrador/lojista aberta no navegador.
  *
- * Why a redirect and not a render: the marketing pages need the /site chrome
- * (header, footer, sticky mobile CTA) that lives in `site/(gated)/layout.tsx`.
- * Rendering them from here would either duplicate that shell or restructure the
- * route tree on launch weekend — risk with no user-visible payoff. `/site` is the
- * canonical marketing URL and is the one that is indexed.
+ * ⚠️ NÃO volte a redirecionar sessão logada para `/dashboard` (defeito corrigido
+ * em 23/08/2026, ordem do CEO). O que acontecia antes: quem trabalha no produto
+ * fica permanentemente logado, então **ninguém da casa conseguia mais ver a
+ * própria vitrine** — bastava digitar o domínio para cair no painel. Dois danos:
+ * um defeito na página comercial deixava de ser notado por quem poderia notar, e
+ * abrir o domínio numa reunião com a tela compartilhada expunha o painel interno
+ * no lugar do site.
  *
- * `redirect()` throws by design in the App Router, so it must stay OUTSIDE the
- * try/catch — otherwise the catch swallows the control-flow signal and the page
- * falls through to the wrong destination.
+ * O lojista NÃO perde o caminho: continua logado e a barra do topo do site mostra
+ * "Ir para o painel" quando há sessão ativa (`PainelAtalho`, no layout de /site).
+ * Um clique é conveniência; sequestrar a raiz é defeito.
+ *
+ * Por que redirect e não render: as páginas comerciais precisam do invólucro de
+ * /site (header, footer, CTA fixo no celular) que vive em `site/(gated)/layout.tsx`.
+ * `/site` é a URL canônica do marketing e é a que está indexada.
+ *
+ * `redirect()` lança por construção no App Router — mantenha-o fora de try/catch.
  */
 
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 
-export default async function RootPage() {
-  let authed = false;
-  try {
-    authed = (await getServerSession(authOptions)) !== null;
-  } catch {
-    // getServerSession throws when NEXTAUTH_SECRET is missing or misconfigured.
-    // Treat as anonymous: the marketing site is never a blank error page.
-  }
-
-  redirect(authed ? "/dashboard" : "/site");
+export default function RootPage() {
+  redirect("/site");
 }
