@@ -13,7 +13,7 @@
  * Só existe GET. Nenhum verbo de escrita, nem de limpeza: um diário que pode ser
  * apagado pela mesma porta por onde é lido não serve de prova de nada.
  *
- * Uso:  GET /api/sdr/diario?limite=50   com  x-sdr-diario-secret: <segredo>
+ * Uso:  GET /api/sdr/diario?limite=50&dias=14   com  x-sdr-diario-secret: <segredo>
  */
 
 import { NextRequest } from "next/server";
@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
   try {
     const cru = Number(req.nextUrl.searchParams.get("limite"));
     const limite = Number.isFinite(cru) && cru > 0 ? Math.min(cru, 300) : 50;
-    return ok(lerDiario(limite));
+    const janelaCrua = Number(req.nextUrl.searchParams.get("dias"));
+    const dias = Number.isFinite(janelaCrua) && janelaCrua > 0 ? janelaCrua : undefined;
+    return ok(await lerDiario(limite, dias));
   } catch (err) {
     console.error("[GET /api/sdr/diario]", err);
     return serverError();

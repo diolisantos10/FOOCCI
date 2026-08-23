@@ -64,6 +64,14 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/media(\/.*)?$/,             // Public media (product images stored in DB)
   /^\/api\/health$/,                   // Health check (post-deploy validation)
   /^\/api\/cron(\/.*)?$/,              // CRM cron endpoints — auth handled per-route via CRON_SECRET bearer token
+  // Diário do SDR — SOMENTE LEITURA, e a guarda é da própria rota: sem
+  // `SDR_DIARIO_SECRET` configurado ela devolve 401 a TODO mundo (fail-closed),
+  // e o segredo do admin não abre. Público aqui só quer dizer "não exige sessão
+  // de lojista": é um instrumento de auditoria, e auditoria que só funciona de
+  // dentro de um login de restaurante não é auditoria. Mesmo molde do /api/cron.
+  // Só o caminho exato: /api/sdr/entrevista e /api/sdr/plano continuam exigindo
+  // tenant ou admin, como sempre exigiram.
+  /^\/api\/sdr\/diario$/,             // Diário do SDR (GET) — fail-closed via SDR_DIARIO_SECRET
   // Global admin area — auth handled by admin cookie + layout, NOT by NextAuth
   /^\/admin(\/.*)?$/,                  // Admin UI pages
   /^\/api\/admin(\/.*)?$/,             // Admin API routes (each verifies x-admin-secret or admin cookie)

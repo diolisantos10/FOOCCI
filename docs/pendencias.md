@@ -21,14 +21,20 @@ IA (`FalhaDeMotor.ts`, incluindo `finish_reason: "length"`); origem `motor` × `
 em cada campo entendido; e o lead do site virando entrevista (`LeadParaSondagem.ts`).
 
 **Aberto:**
-- `/api/sdr/diario` só é legível de dentro de uma sessão — falta entrar na lista de
-  caminhos públicos do `middleware.ts`, que **não toquei** (outro Diretor, PR #137).
+- ~~`/api/sdr/diario` fechado pelo middleware~~ — resolvido: entrou na lista de
+  caminhos públicos (só o caminho exato) agora que #137/#138 subiram.
+- ~~Diário zerava a cada deploy~~ — resolvido: foi para o banco
+  (`sdr_diario_turnos`), retenção de 90 dias.
+- **WhatsApp de vendas:** WABA do Sushi Cazza é do cliente (confirmado) — está
+  descartada. Passo a passo para o CEO em `docs/whatsapp-vendas-passo-a-passo.md`;
+  texto da primeira mensagem em `docs/sdr-primeira-mensagem.md`, **não submetido**.
 - Leads antigos não foram semeados — precisa de um script de uma passada.
 - Ninguém chama `/api/sdr/entrevista`: o motor segue desligado do mundo.
 - Sete perguntas comerciais para o CEO (preço, alçada de fechamento, desconto,
   fidelidade, prazo de implantação, formas de pagamento, prova citável).
-- WhatsApp de vendas: número, `FOOCCI_SALES_*` e a confirmação de de quem é a WABA
-  do Sushi Cazza.
+- Falta o CEO executar o cadastro do número **+55 11 94372-3316** e me devolver
+  `FOOCCI_SALES_PHONE_NUMBER_ID`, `FOOCCI_SALES_ACCESS_TOKEN`, o número para
+  `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` (⚠️ congela no build) e `SDR_DIARIO_SECRET`.
 
 ## 🟢 23/08 (8ª rodada) — (A) SUBIU. E duas lições que custaram deploy.
 

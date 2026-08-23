@@ -25,13 +25,23 @@ contagens antes das listas · `cegueiras` declaradas no próprio corpo da respos
 valor de campo. A identidade da conversa vai como impressão digital (hash), porque
 o `clienteId` pode ser um telefone. Há teste provando que nada disso vaza.
 
-### Para ele ser lido de fora, falta uma coisa que não é minha
-A rota está fechada por **duas** portas: o segredo próprio (que só o CEO pode
-criar no Railway) e o `middleware.ts`, que exige sessão para tudo que não é
-caminho público. Enquanto `/api/sdr/diario` não estiver na lista de caminhos
-públicos do middleware, ele só é legível de dentro de uma sessão autenticada.
-**Não encostei em `src/middleware.ts`** — outro Diretor está nele nesta mesma
-janela (PR #137). Isso é uma linha, para a rodada seguinte.
+### Ele agora é legível de fora — e sobrevive ao deploy
+- **Middleware:** com o PR #137 e o #138 já na branch de deploy, `/api/sdr/diario`
+  entrou na lista de caminhos públicos — **só o caminho exato**. `/api/sdr/entrevista`
+  e `/api/sdr/plano` continuam exigindo tenant ou admin. "Público" aqui só quer
+  dizer "não exige login de lojista": a guarda continua sendo a da própria rota,
+  que devolve 401 a todo mundo sem `SDR_DIARIO_SECRET`. Auditoria que só funciona
+  de dentro de um login de restaurante não é auditoria.
+- **Persistência:** o diário saiu da memória do processo e foi para o banco
+  (`sdr_diario_turnos`, migração `20260823120000`). **Custou uma tabela e uma
+  migração** — a migração roda sozinha no deploy. Era barato, então foi feito: um
+  instrumento que zera a cada subida responde "o que aconteceu no último minuto?",
+  e a pergunta que decide se o SDR pode falar com gente de verdade é "o que
+  aconteceu na semana?". Retenção de 90 dias, contagens em janela de 14 dias
+  (`?dias=`), poda amostrada na escrita — sem tarefa agendada nova para alguém
+  esquecer de ligar. Gravar não derruba a entrevista; **ler propaga a falha**, e a
+  resposta declara em letra maiúscula quando veio vazia por erro, para calmaria
+  nunca ser confundida com silêncio.
 
 ## 2. As cegueiras que a auditoria achou — fechadas
 
@@ -129,10 +139,11 @@ Para o canal funcionar faltam, exatamente:
 - **Fato:** o desvio de vendas no webhook já existe e vem **antes** do fluxo de
   restaurante; ele não cria `Customer`, `Conversation` nem `Message`. Prospecto
   não entra na Central de Conversas de lojista nenhum.
-- **Preciso confirmar com o CEO:** de **quem** é a WABA em que o número do Sushi
-  Cazza está hoje (do cliente ou da Foocci). Uma WABA comporta mais de um número —
-  mas se ela for do cliente, pendurar o número de vendas ali é inaceitável pelo
-  mesmo motivo pelo qual o número dele está proibido.
+- **CONFIRMADO (23/08), e a resposta é a pior das duas:** a WABA do Sushi Cazza
+  (`1045616451725086`) é **do negócio do cliente**. Pendurar a venda da Foocci ali
+  está **descartado**. O caminho é uma conta de WhatsApp da Foocci, dentro do
+  MESMO aplicativo Meta — passo a passo em `docs/whatsapp-vendas-passo-a-passo.md`.
+  Número decidido pelo CEO: **+55 11 94372-3316**.
 - **Um número de WABA própria não conversa com o número do cliente**, e é assim
   que tem de ser.
 
@@ -148,8 +159,8 @@ variáveis. A IA só entra a partir da resposta.
   passe pelo `SdrService`.
 - **`FoocciSalesInbound` continua sem redigir e sem enviar** — por decisão, não por
   falta.
-- **O diário vive na memória do processo**: deploy ou segunda instância zeram.
-  Turno que não está lá **não significa** turno que não aconteceu.
+- **O diário só enxerga o que foi gravado**: turno cuja escrita falhou vai para o
+  log, não para a tabela. E as contagens cobrem no máximo 5.000 turnos da janela.
 - **Os leads antigos não foram semeados** (item 3).
 - **O diário não julga qualidade**: campo preenchido pela IA aparece como
   preenchido mesmo que tenha sido mal interpretado.

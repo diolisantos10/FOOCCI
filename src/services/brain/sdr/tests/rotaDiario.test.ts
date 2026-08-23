@@ -8,6 +8,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { GET } from "@/app/api/sdr/diario/route";
 import { registrarTurno, limparDiario } from "../DiarioDoSdr";
 
@@ -72,5 +74,27 @@ describe("com o segredo certo", () => {
   it("a rota é somente leitura — não existe verbo de escrita", async () => {
     const modulo = await import("@/app/api/sdr/diario/route");
     expect(Object.keys(modulo).sort()).toEqual(["GET", "dynamic"]);
+  });
+});
+
+/**
+ * A outra metade da porta: o middleware.
+ *
+ * Reprova contra o código anterior — `/api/sdr/diario` não estava na lista de
+ * caminhos públicos, e o NextAuth devolvia 401 antes de a guarda da rota sequer
+ * rodar. Um instrumento de auditoria que só funciona de dentro de um login de
+ * lojista não é auditoria.
+ */
+describe("middleware — a porta de fora", () => {
+  const src = readFileSync(join(process.cwd(), "src/middleware.ts"), "utf8");
+  const bloco = src.slice(src.indexOf("PUBLIC_PATHS"), src.indexOf("function isPublicPath"));
+
+  it("deixa /api/sdr/diario passar sem sessão — a guarda é a da própria rota", () => {
+    expect(bloco).toContain("/^\\/api\\/sdr\\/diario$/");
+  });
+
+  it("e NÃO abre o resto do /api/sdr — entrevista e plano seguem exigindo tenant ou admin", () => {
+    expect(bloco).not.toContain("/^\\/api\\/sdr(\\/.*)?$/");
+    expect(bloco).not.toContain("/^\\/api\\/sdr\\/entrevista$/");
   });
 });

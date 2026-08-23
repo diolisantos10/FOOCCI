@@ -77,7 +77,7 @@ export async function conduzirTurno(pedido: PedidoDeTurno): Promise<RespostaDoTu
   /* O diário é anotado DEPOIS da gravação e nunca antes: um turno anotado que
    * não persistiu contaria uma entrevista que não existe. E o `registrarTurno`
    * não lança — observar não pode derrubar o observado. */
-  registrarTurno({
+  await registrarTurno({
     chave,
     iaRespondeu: !turno.semIA,
     motivoSemIA: turno.motivoSemIA,

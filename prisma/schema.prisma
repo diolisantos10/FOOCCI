@@ -2903,7 +2903,7 @@ model HelpMessage {
 /// envio. Anexo solto é rascunho e pode ser removido por quem subiu.
 ///
 model HelpAttachment {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   restaurantId String
   threadId     String
   messageId    String?
@@ -4702,6 +4702,55 @@ model SdrEntrevista {
 
   @@index([updatedAt])
   @@map("sdr_entrevistas")
+}
+
+/// Um turno da entrevista do SDR, do jeito que o diário conta.
+///
+/// ⚠️ NÃO GUARDA CONTEÚDO DE MENSAGEM DE CLIENTE — nem pergunta, nem resposta,
+/// nem valor de campo. Só a FORMA e o DESFECHO do turno. A conversa entra como
+/// impressão digital (hash) e não como `agencia::cliente`, porque o `clienteId`
+/// pode ser um telefone. Quem precisa do conteúdo lê a entrevista; o diário
+/// existe para responder "andou ou não andou, e por quê".
+///
+/// Existe em banco (e não só em memória) por um motivo medido: um diário que
+/// zera a cada deploy serve para o minuto seguinte, não para a semana — e é na
+/// semana que se decide se o SDR pode falar com gente de verdade.
+model SdrDiarioTurno {
+  id String @id @default(cuid())
+
+  quando DateTime @default(now())
+
+  /// sha256 curto de `agencia::cliente`. Agrupa sem identificar.
+  conversa String
+
+  /// A IA devolveu leitura utilizável neste turno?
+  iaRespondeu Boolean
+
+  /// Por que não devolveu: sem_chave | timeout | erro_de_rede | json_invalido |
+  /// cortado_por_limite | sem_conteudo | desconhecido. null = respondeu.
+  motivoSemIA String?
+
+  /// Quantos campos a IA preencheu / quantos o motor de regras preencheu por ela.
+  camposPelaIA    Int @default(0)
+  camposPeloMotor Int @default(0)
+
+  /// QUAIS campos o motor preencheu. Só o nome da chave — nunca o valor.
+  chavesPeloMotor String[] @default([])
+
+  /// Perguntas que estavam no ar e quantas seguiram sem resposta depois do turno.
+  perguntasNoAr     Int @default(0)
+  seguemSemResposta Int @default(0)
+
+  /// Havia pergunta no ar e nada foi entendido — a conversa não andou.
+  travou Boolean @default(false)
+
+  cobertura  Float   @default(0)
+  podePropor Boolean @default(false)
+
+  @@index([quando])
+  @@index([conversa, quando])
+  @@index([motivoSemIA, quando])
+  @@map("sdr_diario_turnos")
 }
 
 // ═══════════════════════════════════════════

@@ -33,7 +33,7 @@ it("a falha da IA vira uma linha do diário, com o motivo", async () => {
     resposta: "quero encher a casa na terça",
   });
 
-  const d = lerDiario();
+  const d = await lerDiario();
   expect(d.contagens.turnos).toBe(1);
   expect(d.contagens.porMotivo.timeout).toBe(1);
   expect(d.contagens.camposPeloMotor).toBe(1);
@@ -47,7 +47,7 @@ it("o turno com IA aparece como turno com IA", async () => {
   await conduzirTurno({
     agenciaId: "foocci-vendas", clienteId: "lead-b2", perguntadasAgora: ["publico"], resposta: "familia do bairro",
   });
-  const d = lerDiario();
+  const d = await lerDiario();
   expect(d.contagens.turnosComIA).toBe(1);
   expect(d.contagens.camposPelaIA).toBe(1);
 });
@@ -64,5 +64,5 @@ it("se a gravação da entrevista falhar, o turno NÃO entra no diário", async 
   await expect(
     conduzirTurno({ agenciaId: "a", clienteId: "c", perguntadasAgora: ["publico"], resposta: "oi" }),
   ).rejects.toThrow();
-  expect(lerDiario().contagens.turnos).toBe(0);
+  expect((await lerDiario()).contagens.turnos).toBe(0);
 });
