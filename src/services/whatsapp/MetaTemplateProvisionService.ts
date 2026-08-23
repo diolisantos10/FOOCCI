@@ -117,6 +117,59 @@ async function nomesQueExistemNaMeta(restaurantId: string): Promise<Set<string>>
 }
 
 /**
+ * De quanto em quanto tempo o espelho de modelos precisa ser reconferido com a
+ * Meta, mesmo quando nada mudou do nosso lado.
+ *
+ * Não é enfeite: `APPROVED` no nosso banco é uma AFIRMAÇÃO SOBRE A META, e toda
+ * afirmação dessas vence. Sem prazo de validade, um modelo que sumiu da conta
+ * fica verde para sempre — foi exatamente o que aconteceu com o Sushi Cazza.
+ * Doze horas mantém o custo baixo (duas leituras por loja por dia) e ainda assim
+ * conserta sozinho dentro de meio dia.
+ */
+const HORAS_ATE_RELER = 12;
+
+/** Nomes que o banco marca como inexistentes na Meta (`MISSING`). */
+async function nomesAusentesNaMeta(restaurantId: string): Promise<Set<string>> {
+  try {
+    const linhas = await prisma.metaMessageTemplate.findMany({
+      where:  { restaurantId, status: "MISSING" },
+      select: { templateName: true },
+    });
+    return new Set(linhas.map((t) => t.templateName));
+  } catch {
+    // Tabela ausente / mock de teste: seguir sem esta informação é seguro — o
+    // pior caso volta a ser o comportamento antigo, nunca uma resubmissão errada.
+    return new Set<string>();
+  }
+}
+
+/**
+ * Vale a pena reler os modelos na Meta agora?
+ *
+ * Sim quando (a) existe modelo PENDING — a resposta da revisão pode ter saído —,
+ * ou (b) a leitura mais recente já passou de `HORAS_ATE_RELER`. `updatedAt` serve
+ * de "quando li pela última vez" porque todo caminho do sync toca a linha: o
+ * upsert sempre grava categoria e número de variáveis, e a reconciliação grava
+ * `MISSING`. Loja sem nenhum modelo não tem o que reler.
+ */
+async function precisaReler(restaurantId: string): Promise<boolean> {
+  try {
+    const pendentes = await prisma.metaMessageTemplate.count({ where: { restaurantId, status: "PENDING" } });
+    if (pendentes > 0) return true;
+
+    const maisRecente = await prisma.metaMessageTemplate.findFirst({
+      where:   { restaurantId },
+      orderBy: { updatedAt: "desc" },
+      select:  { updatedAt: true },
+    });
+    if (!maisRecente?.updatedAt) return false;
+    return Date.now() - new Date(maisRecente.updatedAt).getTime() > HORAS_ATE_RELER * 60 * 60 * 1000;
+  } catch {
+    return false; // tabela ausente / mock → não tentar falar com a Meta
+  }
+}
+
+/**
  * Creates Meta templates for every ACTIVE campaign of the restaurant and wires each
  * campaign to its template. Safe to re-run.
  */
@@ -244,9 +297,22 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     select: { id: true, templateId: true, message: true, scheduleConfig: true, audienceConfig: true },
   });
 
+  // Quais modelos desta loja o banco diz que NÃO existem mais na Meta.
+  // Sem isto, o mapa `audienceConfig.metaTemplates` — que só prova "um dia eu
+  // submeti este texto" — bastava para a campanha ser considerada pronta, e o
+  // modelo apagado/perdido nunca era resubmetido. Ver o comentário do work list.
+  const ausentes = await nomesAusentesNaMeta(restaurantId);
+
   // Work list: campaigns with a mappable config AND at least one candidate phrase
   // whose mapping is missing OR stale (text changed — e.g. the coupon prize line
-  // was toggled). Everything else skips without any Graph call.
+  // was toggled) OR whose template no longer exists on Meta.
+  //
+  // ⚠️ O TERCEIRO CASO É NOVO, e era o mais caro — 23/08/2026. `metaTemplates` é
+  // memória do que JÁ FOI submetido, não prova de que o modelo existe hoje na
+  // conta que envia. Com o número tendo trocado de conta, o mapa continuava
+  // completo, esta função devolvia "nada a fazer" antes de qualquer chamada à
+  // Meta, e a resubmissão automática — que roda a cada 10 minutos — nunca
+  // acontecia. Mapa cheio virava prova de vida.
   const work = campaigns.flatMap((campaign) => {
     const config = campaign.templateId ? TEMPLATE_CONFIG[campaign.templateId] : undefined;
     if (!config) return [];
@@ -254,20 +320,25 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     const phrases = listPoolCandidates(campaign.templateId, parseMessagePool(campaign.scheduleConfig), { hasCoupon });
     if (phrases.length === 0) return [];
     const mapped = readPhraseMetaTemplates(campaign.audienceConfig);
-    if (phrases.every((p) => mapped[p.key]?.submittedMessage === p.text)) return [];
+    const pronta = phrases.every((p) => {
+      const m = mapped[p.key];
+      if (m?.submittedMessage !== p.text) return false;   // nunca submetida, ou texto mudou
+      return !(m.name && ausentes.has(m.name));           // submetida, mas sumiu da Meta
+    });
+    if (pronta) return [];
     return [{ campaign, config, phrases }];
   });
   if (work.length === 0) {
-    // Nothing new to submit — but a template submitted earlier may have been
-    // APPROVED (or REJECTED) on Meta since the last run. Without a re-sync it would
-    // stay PENDING locally forever, kept out of the rotation → the phrase falls to a
-    // freeform send Meta rejects. So when any local template is still PENDING, pull
-    // fresh statuses. Cheap-guarded: no PENDING rows → no Graph call.
-    let pendingCount = 0;
-    try {
-      pendingCount = await prisma.metaMessageTemplate.count({ where: { restaurantId, status: "PENDING" } });
-    } catch { pendingCount = 0; } // absent table/mock → skip the re-sync
-    if (pendingCount > 0) {
+    // Nothing new to submit — but o que o banco guarda sobre a Meta ENVELHECE, e
+    // em duas direções. Um modelo PENDING pode ter sido aprovado (ou reprovado)
+    // desde a última leitura; e um modelo APPROVED pode ter deixado de existir na
+    // conta que envia hoje. Sem reler, os dois viram mentira permanente.
+    //
+    // ⚠️ Este galho só olhava PENDING — 23/08/2026. Com tudo marcado APPROVED, ele
+    // devolvia "nada a fazer" e NUNCA falava com a Meta: o espelho ficava
+    // congelado para sempre, sem nenhum gatilho capaz de descongelá-lo. Era a
+    // terceira camada do mesmo erro: tratar estado local como prova do estado da Meta.
+    if (await precisaReler(restaurantId)) {
       await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
     }
     return { ok: true, created: 0, existed: 0, failed: 0, items: [] };

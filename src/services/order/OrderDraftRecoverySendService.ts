@@ -78,7 +78,6 @@ import { parseReadyMadeConfig } from "@/services/crm/ReadyMadeCampaignService";
 import { parseMessagePool, resolveActivePhrases, pickPhrase, readPhraseMetaTemplates } from "@/services/crm/crmMessagePool";
 import { isAgentActive } from "@/services/crm/CrmAgentActivation";
 import { sendMetaCrmMessage } from "@/services/crm/metaCrmSend";
-import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWhatsAppCloudProvider";
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { parseSafetyConfig } from "@/lib/crm-safety";
@@ -792,7 +791,19 @@ export class OrderDraftRecoverySendService {
           const metaAudienceCfg = phraseTpl && phraseTpl.submittedMessage === drawn?.text
             ? { metaTemplate: phraseTpl }
             : cartRow.audienceConfig;
-          const { result: metaResult, usedTemplate } = await sendMetaCrmMessage(new MetaWhatsAppCloudProvider(), {
+          // ⚠️ AQUI IA O PROVEDOR CRU — e era um buraco de verdade (23/08/2026).
+          // `new MetaWhatsAppCloudProvider()` fala com a Meta SEM checar a janela
+          // de 24h. Quando nenhum modelo aprovado resolvia, o texto livre saía
+          // direto: para quem está fora da janela isso é mensagem iniciada pela
+          // empresa sem modelo — a Meta recusa, e o pouco que passa é violação de
+          // política. O comentário logo acima já PROMETIA "fora dela ele volta
+          // BLOCKED e isso é contado" — mas quem cumpria essa promessa era só o
+          // galho `else`. Promessa em comentário não é trava (guardrail 4).
+          //
+          // `WhatsAppMessagingService` tem a MESMA forma estrutural e aplica
+          // `decideMetaSend` no texto livre; no caminho de MODELO ele delega direto,
+          // sem janela — que é o certo, porque é para isso que o modelo existe.
+          const { result: metaResult, usedTemplate } = await sendMetaCrmMessage(WhatsAppMessagingService, {
             restaurantId: draft.restaurantId,
             phone:        toPhone,
             freeformText: message,
@@ -800,6 +811,29 @@ export class OrderDraftRecoverySendService {
             campaign:     { objective: "CART_ABANDONED", audienceConfig: metaAudienceCfg },
             renderToken:  (token) => renderCrmMessage(token, { name: customer.name ?? "" }, renderCtx),
           });
+          // Recusa de POLÍTICA não é falha de entrega: não pode virar exceção
+          // genérica (que o chamador contaria como erro de rede e tentaria de novo).
+          // Mesmo tratamento do galho `else` — contado, logado e registrado.
+          if (!metaResult.ok && metaResult.status === "BLOCKED") {
+            skippedTemplateRequired++;
+            console.warn(`[OrderDraftRecoverySendService] recuperação NÃO enviada: a Meta exige modelo aprovado fora da janela de 24h`, {
+              draftId:      draft.id,
+              restaurantId: draft.restaurantId,
+              phoneMasked:  maskPhone(customer.phone),
+              blockReason:  metaResult.blockReason ?? null,
+              detalhe:      metaResult.error ?? null,
+              acao:         "cadastrar e aprovar um modelo de carrinho abandonado na Meta",
+            });
+            await registrarExecucao({
+              campaignId: cartRow.id, restaurantId: draft.restaurantId,
+              customerId: draft.customerId, customerName: customer.name,
+              customerPhone: customer.phone, messageText: "", variantKey: fraseUsada,
+              status: "BLOCKED",
+              failedReason: "A Meta exige modelo aprovado fora da janela de 24h",
+              errorMessage: metaResult.blockReason ?? "META_TEMPLATE_REQUIRED",
+            });
+            continue; // não carimba o rascunho: ele vence sozinho pelo prazo
+          }
           if (!metaResult.ok) {
             throw new Error(metaResult.errorCode ?? metaResult.error ?? (usedTemplate ? "META_TEMPLATE_SEND_FAILED" : "META_SEND_FAILED"));
           }

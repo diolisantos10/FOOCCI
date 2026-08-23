@@ -16,12 +16,22 @@
 import type { SendResult } from "@/services/whatsapp/providers/types";
 import { MetaTemplateService } from "@/services/whatsapp/MetaTemplateService";
 
-/** Minimal structural provider shape — satisfied by MetaWhatsAppCloudProvider. */
+/** Minimal structural provider shape — satisfied by MetaTemplateProvider implementors. */
 interface MetaTemplateProvider {
   sendText(input: { restaurantId: string; to: string; text: string }): Promise<SendResult>;
   sendTemplate(input: {
     restaurantId: string; to: string; templateName: string; language: string; bodyParams?: string[];
   }): Promise<SendResult>;
+  /**
+   * `true` só para quem aplica a janela de 24h da Meta dentro do próprio
+   * `sendText` (hoje: `WhatsAppMessagingService`). O provedor CRU não aplica.
+   *
+   * Existe porque a segurança NÃO pode depender de cada chamador lembrar de
+   * passar o provedor certo — foi assim que a recuperação de carrinho passou a
+   * mandar texto livre sem checar janela nenhuma, com um comentário logo acima
+   * jurando o contrário. Agora a recusa mora no ponto de estrangulamento.
+   */
+  enforcesCustomerWindow?: boolean;
 }
 
 export interface MetaCrmCampaignRef {
@@ -134,6 +144,26 @@ export async function sendMetaCrmMessage(
       templateName: tpl.name, language: tpl.language, bodyParams: tpl.params,
     });
     return { result, usedTemplate: true };
+  }
+  // ── Texto livre: só por provedor que aplique a janela de 24h ────────────────
+  // Sem modelo aprovado, texto livre é legítimo APENAS dentro da janela. Um
+  // provedor que não sabe checar isso não pode ser usado aqui: mandar assim é
+  // mensagem iniciada pela empresa fora da janela — a Meta recusa, e o que passa
+  // conta como violação de política contra o número do cliente.
+  //
+  // Guardrail 1: sem saber se estamos dentro da janela, o certo é NÃO enviar.
+  // Recusa deliberada é BLOCKED (política), nunca FAILED (falha de entrega) — os
+  // chamadores já distinguem os dois e só o segundo alimenta disjuntor e retentativa.
+  if (provider.enforcesCustomerWindow !== true) {
+    return {
+      result: {
+        ok: false, provider: "META_CLOUD_API", status: "BLOCKED", providerMessageId: null,
+        blockReason: "META_TEMPLATE_REQUIRED",
+        error: "Sem modelo aprovado, e este caminho de envio não verifica a janela de 24h da Meta —"
+             + " envio recusado em vez de arriscar mensagem fora da janela.",
+      },
+      usedTemplate: false,
+    };
   }
   const result = await provider.sendText({ restaurantId: input.restaurantId, to: input.phone, text: input.freeformText });
   return { result, usedTemplate: false };

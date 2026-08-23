@@ -23,6 +23,10 @@ const ledger = vi.hoisted(() => ({
 // Nada sai de verdade: os dois são espiões.
 const channel = vi.hoisted(() => ({
   getConnectionStatus: vi.fn(),
+  // O WhatsAppMessagingService real aplica a janela de 24h dentro do sendText e
+  // declara isso; `metaCrmSend` recusa texto livre por quem não declara. O dublê
+  // precisa dizer a mesma verdade, senão testa um objeto que não existe.
+  enforcesCustomerWindow: true as const,
   sendText:            vi.fn(),
   sendTemplate:        vi.fn(),
 }));

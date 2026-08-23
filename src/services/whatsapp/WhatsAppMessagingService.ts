@@ -72,6 +72,14 @@ export interface ConversationReplyInput {
 
 export const WhatsAppMessagingService = {
   /**
+   * Declara, para quem recebe este objeto como provedor, que o `sendText` daqui
+   * APLICA a janela de 24h da Meta. `metaCrmSend` recusa mandar texto livre por
+   * um provedor que não declare isso — a garantia deixou de depender de cada
+   * chamador lembrar de passar o objeto certo (ver metaCrmSend.ts).
+   */
+  enforcesCustomerWindow: true as const,
+
+  /**
    * Texto livre. Aplica a janela de 24h da Meta e entrega ao provedor único.
    * Em bloqueio ou falha, devolve o resultado — **nunca** tenta outro caminho.
    */

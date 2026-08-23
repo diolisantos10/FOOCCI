@@ -2,6 +2,101 @@
 
 > Última atualização: 23/08/2026.
 
+## 🟠 23/08 (6ª rodada) — a resubmissão automática estava CONGELADA em três camadas. E não dá para submeter daqui.
+
+### O catálogo, medido na fonte canônica
+
+`READY_MADE_CAMPAIGNS` + `READY_MADE_MESSAGE_VARIANTS` (`src/services/crm/readyMadeCampaigns.ts`):
+
+| | |
+|---|---|
+| campanhas predefinidas | **16** |
+| frases por campanha | **5** (todas as 16) |
+| **total de frases no catálogo** | **80** |
+| campanhas com modelo configurado (`TEMPLATE_CONFIG`) | **16 de 16** |
+
+Nenhuma órfã nos dois sentidos: não há chave de `TEMPLATE_CONFIG` sem campanha, nem
+variante sem campanha. A linha do cupom **não dobra** a conta — `listPoolCandidates`
+devolve uma versão por frase, com ou sem cupom conforme a campanha.
+
+### ⛔ NÃO CONSEGUI SUBMETER. Três bloqueios independentes, todos verificados
+
+1. **Nenhuma rota de admin cria modelo na Meta.** Varri `src/app/api/admin/` inteiro:
+   nada chama `createOnMeta`, `provisionPoolTemplates`, `provisionDefaultTemplates`
+   nem `syncFromMeta`. O `ADMIN_SECRET` não abre este caminho porque ele não existe.
+2. **As rotas que submetem não são alcançáveis daqui.** `crm/campaigns/[id]` e
+   `integracoes/whatsapp/meta/templates` são de inquilino — exigem os cabeçalhos que
+   o middleware injeta a partir do JWT do NextAuth, que não dá para forjar.
+   `cron/run-scheduled-campaigns` e `cron/crm/create-custom-campaign` exigem
+   `CRON_SECRET`, e o Railway devolve **valores redigidos** para esta conexão.
+3. **O GitHub Actions — o jeito da casa de ler segredo do Railway dentro do runner —
+   continua caído.** Última execução de `CI`: 16:24, `failure`. Todas falham em ~3s
+   sem runner desde ~09:32.
+
+**Honestidade sobre capacidade (guardrail 2): nenhuma frase foi submetida nesta
+rodada. Nem as 5, nem as 80.** Não há duplicata a evitar porque não houve envio
+nenhum.
+
+### O que DESTRAVEI — a máquina que faz isso sozinha existia e estava congelada
+
+`provisionPoolTemplates` roda **a cada passada do cron** e submete as frases de toda
+campanha ativa. Mesmo assim nada era submetido há tempos, por **três camadas do mesmo
+erro** — tratar estado local como prova do estado da Meta:
+
+1. **`work` vazio.** O mapa `audienceConfig.metaTemplates` estava completo, e mapa
+   completo era tratado como prova de que os modelos existem. Mapa só prova que um
+   dia foram submetidos. → agora frase cujo modelo está `MISSING` volta para a fila.
+2. **Releitura só com `PENDING`.** Com tudo (falsamente) `APPROVED`, o galho devolvia
+   "nada a fazer" e **nunca falava com a Meta** — não havia gatilho capaz de
+   descongelar o espelho. → agora relê também quando a última leitura passou de
+   **12 horas** (`updatedAt` como "quando li pela última vez"; custo: 2 leituras por
+   loja por dia).
+3. **`existingNames` da tabela local** contava linha `MISSING` como "já existe" e
+   pulava justamente o modelo a recriar (corrigido na 5ª rodada).
+
+**6 testes novos** cobrem as três camadas, incluindo os dois casos em que NÃO se deve
+gerar tráfego. Conferido: **3 reprovam contra o código antigo**.
+
+### O que a máquina vai submeter quando subir — e o que fica de fora
+
+Lido da produção agora (`admin/diagnostics/crm-campaigns`, 51 campanhas):
+
+- **11 ACTIVE**, das quais **10 são campanhas predefinidas** → **50 frases** seriam
+  submetidas na primeira passada do cron depois do merge.
+- **Ficam de fora 6 campanhas (30 frases)**, porque a varredura só olha `status:
+  ACTIVE`: `clientes-vip` (PAUSED), `carrinho-abandonado` (COMPLETED),
+  `pedido-avaliacao`, `subiu-de-nivel`, `quase-no-proximo-nivel`,
+  `mimo-mensal-nivel` (sem campanha criada).
+
+**Não estendi a varredura para o catálogo inteiro** — é decisão de quota, não de
+código: 80 submissões de uma vez contra limites da Meta que **não consigo verificar
+daqui** (não tenho token do Graph, e o repositório não documenta os tetos).
+**Preciso confirmar** os limites antes de disparar tudo.
+
+### Trava da janela de 24h — escrita, testada, NÃO mergeada
+
+⚠️ **E aqui eu preciso corrigir o que reportei na 5ª rodada.** Eu disse que o disparo
+de CRM não consultava a janela de 24h. **Estava errado, e a correção importa:**
+`ScheduledCampaignRunnerService` e `CrmCampaignService` passam o
+`WhatsAppMessagingService`, que **aplica** a janela dentro do próprio `sendText`.
+
+O buraco era **outro, e mais estreito**: a **recuperação de carrinho**
+(`OrderDraftRecoverySendService:795`) passava o provedor **CRU**
+(`new MetaWhatsAppCloudProvider()`). Sem modelo aprovado, o texto livre saía direto
+para a Meta **sem checar janela nenhuma** — e o comentário logo acima jurava que
+"fora dela ele volta BLOCKED e isso é contado", promessa que só valia para o outro
+galho. Guardrail 4 na veia.
+
+Consertado em dois níveis:
+- o chamador passa o provedor que checa a janela, e trata `BLOCKED` como política
+  (contado e registrado), não como exceção genérica que viraria retentativa;
+- **a trava mora no ponto de estrangulamento**: `metaCrmSend` agora **recusa** texto
+  livre por provedor que não declare `enforcesCustomerWindow`. A segurança deixou de
+  depender de cada chamador lembrar de passar o objeto certo — que foi exatamente o
+  jeito como esse buraco nasceu. Nenhum 4º chamador consegue repetir o erro.
+
+3 testes novos; **1 reprova contra o código antigo**.
+
 ## 🔴 23/08 (5ª rodada) — o selo "✓ META APROVADA" estava MENTINDO. Achei o mecanismo exato.
 
 O CEO mostrou a tela de campanha com **cinco frases, todas com selo verde

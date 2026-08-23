@@ -13,7 +13,21 @@ const findApproved = MetaTemplateService.findApproved as unknown as ReturnType<t
 
 const okResult: SendResult = { ok: true, provider: "META_CLOUD_API", status: "SENT", providerMessageId: "wamid.1" };
 
+/**
+ * Provedor que APLICA a janela de 24h no próprio `sendText` — é o papel do
+ * `WhatsAppMessagingService` em produção. Texto livre só é permitido por um
+ * provedor assim; ver `providerCru()` abaixo.
+ */
 function makeProvider() {
+  return {
+    enforcesCustomerWindow: true as const,
+    sendText:     vi.fn(async (): Promise<SendResult> => okResult),
+    sendTemplate: vi.fn(async (): Promise<SendResult> => okResult),
+  };
+}
+
+/** Provedor CRU: fala com a Meta sem checar janela nenhuma. */
+function providerCru() {
   return {
     sendText:     vi.fn(async (): Promise<SendResult> => okResult),
     sendTemplate: vi.fn(async (): Promise<SendResult> => okResult),
@@ -133,5 +147,68 @@ describe("sendMetaCrmMessage", () => {
     expect(usedTemplate).toBe(false);
     expect(provider.sendText).toHaveBeenCalledWith({ restaurantId: "r1", to: "5511999990000", text: "Oi João!" });
     expect(provider.sendTemplate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A TRAVA DA JANELA DE 24h — 23/08/2026.
+ *
+ * A recuperação de carrinho passava o provedor CRU (`new MetaWhatsAppCloudProvider()`).
+ * Sem modelo aprovado, o texto livre saía direto para a Meta, SEM checar a janela:
+ * mensagem iniciada pela empresa fora da janela, que a Meta recusa e que, quando
+ * passa, conta como violação de política contra o número do cliente. O comentário
+ * do código logo acima jurava que "fora dela ele volta BLOCKED e isso é contado" —
+ * e isso só valia para o outro galho. Promessa em comentário não é trava.
+ *
+ * A recusa agora mora no ponto de estrangulamento: quem não declara que checa a
+ * janela não manda texto livre, e nenhum chamador futuro consegue repetir o erro.
+ */
+describe("texto livre exige provedor que aplique a janela de 24h", () => {
+  it("RECUSA o texto livre quando o provedor não checa a janela", async () => {
+    findApproved.mockResolvedValue(null); // nenhum modelo aprovado
+    const provider = providerCru();
+
+    const { result, usedTemplate } = await sendMetaCrmMessage(provider, {
+      restaurantId: "r1", phone: "5511999990000", freeformText: "Oi João, volta!",
+      campaign: { objective: "CART_ABANDONED", audienceConfig: null }, firstName: "João",
+    });
+
+    expect(provider.sendText).not.toHaveBeenCalled();
+    expect(usedTemplate).toBe(false);
+    expect(result.ok).toBe(false);
+    // BLOCKED = política, não falha de entrega. Os chamadores distinguem os dois:
+    // só FAILED alimenta disjuntor e retentativa.
+    expect(result.status).toBe("BLOCKED");
+    expect(result.blockReason).toBe("META_TEMPLATE_REQUIRED");
+  });
+
+  it("PERMITE o texto livre quando o provedor aplica a janela", async () => {
+    findApproved.mockResolvedValue(null);
+    const provider = makeProvider();
+
+    const { result } = await sendMetaCrmMessage(provider, {
+      restaurantId: "r1", phone: "5511999990000", freeformText: "Oi João, volta!",
+      campaign: { objective: "CART_ABANDONED", audienceConfig: null }, firstName: "João",
+    });
+
+    expect(provider.sendText).toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+
+  it("MODELO aprovado passa mesmo pelo provedor cru — é para isso que o modelo existe", async () => {
+    findApproved.mockResolvedValue({
+      id: "t1", templateName: "carrinho_abandonado", languageCode: "pt_BR",
+      category: "MARKETING", status: "APPROVED", bodyVariables: 1, mappedCampaignType: "CART_ABANDONED",
+    });
+    const provider = providerCru();
+
+    const { result, usedTemplate } = await sendMetaCrmMessage(provider, {
+      restaurantId: "r1", phone: "5511999990000", freeformText: "Oi João, volta!",
+      campaign: { objective: "CART_ABANDONED", audienceConfig: null }, firstName: "João",
+    });
+
+    expect(usedTemplate).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(provider.sendTemplate).toHaveBeenCalled();
   });
 });
