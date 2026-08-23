@@ -32,6 +32,11 @@ import { ProgramaTab } from "./ProgramaTab";
 import { ReviewRequestModal } from "./ReviewRequestModal";
 import { NewCustomerButton } from "@/app/(dashboard)/customers/NewCustomerButton";
 import { isGuestIdentifier } from "@/lib/guest";
+// Os limites do teto de contatos vêm do MESMO módulo que a rota do
+// administrador usa para validar (`@/lib/crm-contact-budget`, puro, sem banco).
+// Antes eram números soltos aqui e nada garantia que os dois caminhos de
+// escrita concordassem — regra repetida é regra que um dia diverge.
+import { CONTACT_BUDGET_MIN, CONTACT_BUDGET_MAX } from "@/lib/crm-contact-budget";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -5704,7 +5709,7 @@ function CrmConfiguracoes() {
                   hint="Você mexe neste número quando quiser — é limite de gasto, não regra de proteção do número. Aumente para o CRM abordar mais pessoas; 0 = sem limite."
                 >
                   <input
-                    type="number" min={0} max={1000000}
+                    type="number" min={CONTACT_BUDGET_MIN} max={CONTACT_BUDGET_MAX}
                     value={cfg.contactBudgetTotal}
                     onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
                     className={CFG_INPUT}

@@ -11,6 +11,54 @@
 
 ---
 
+## 2026-08-23 — A porta do administrador para o teto de contatos
+
+**Decisão do CEO:** *"pode criar a porta"*, com o motivo dito por ele — *"eu não
+faço nada manual"*. Ele não opera o produto por tela.
+
+Existe agora `PATCH /api/admin/crm/contact-budget`, autenticada pelo segredo de
+administrador, que ajusta **um** número: o teto de contatos do CRM
+(`contactBudgetTotal`) de **um** restaurante nomeado.
+
+**Por que uma rota nova e não estender `PATCH /api/admin/restaurants/[id]`** — foi
+a alternativa considerada, e mais estreita à primeira vista, porque não criaria
+superfície nova. Descartada: aquela rota escreve `plan` e `isActive`, ou seja,
+cobrança e o restaurante estar no ar. Enfiar um campo de CRM ali coloca uma
+mudança de configuração no mesmo lugar onde um erro derruba a loja de um cliente
+ou troca o plano dele. Superfície nova e estreita custa menos que risco em cima de
+superfície crítica.
+
+**As quatro travas que definem a porta:**
+
+1. **Lista branca de um campo só.** Campo de fora é **recusado com erro que o
+   nomeia**, nunca ignorado. Ignorar em silêncio devolveria 200 para quem tentou
+   desligar o horário de silêncio — e a pessoa iria embora achando que conseguiu.
+   E a recusa é da requisição INTEIRA: ninguém leva metade do que pediu sem saber
+   qual metade.
+2. **Regras anti-banimento não passam.** Limite diário, intervalo por cliente,
+   horário de silêncio, delay, fim de semana. Elas protegem o número de WhatsApp
+   do lojista e são recalculadas no servidor a cada envio. Mudá-las é decisão do
+   dono, não extensão desta porta.
+3. **Restaurante sempre explícito.** Sem `restaurantId` ou `slug` válido, recusa.
+   Porta administrativa que escolhe sozinha em quem mexer é porta que um dia mexe
+   em todos.
+4. **Escrita cirúrgica.** A gravação é um merge que troca UMA chave do JSON
+   guardado — não normaliza, não preenche padrão, não reescreve o resto. Há teste
+   provando que até uma chave que este código não conhece sobrevive intacta. É a
+   diferença entre *"mexi no teto"* e *"salvei a configuração inteira e por acaso
+   o resto continuou igual"*.
+
+**A régua mora num lugar só.** `@/lib/crm-contact-budget` é módulo puro (sem
+Prisma, de propósito) usado pela rota **e** pela tela do lojista. Antes eram
+números soltos nos dois lados; regra repetida é regra que um dia diverge — foi
+o defeito-raiz desta rodada inteira.
+
+**Trilha obrigatória.** Toda alteração e toda recusa geram `auditLog` com
+restaurante, campo, valor antes e depois. Mudança de dinheiro sem rastro é
+mudança que ninguém consegue explicar depois.
+
+---
+
 ## 2026-08-23 — Resposta não é abordagem: a recuperação de carrinho não tem horário de silêncio
 
 **Correção do CEO, no mesmo dia, sobre erro meu.** Palavras dele:
