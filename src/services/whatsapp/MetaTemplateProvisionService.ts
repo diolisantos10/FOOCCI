@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getReadyMadeCampaign, type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
+import { getReadyMadeCampaign, READY_MADE_CAMPAIGNS, type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
 import {
   parseMessagePool, listPoolCandidates, readPhraseMetaTemplates,
   phraseKey as phraseKeyOf,
@@ -338,7 +338,31 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
     if (pronta) return [];
     return [{ campaign, config, phrases }];
   });
-  if (work.length === 0) {
+  // ── As predefinidas que NÃO têm campanha criada nesta loja ──────────────────
+  // A tela de campanhas lista as 16 predefinidas SEMPRE — `ReadyMadeCampaignService
+  // .getStates` faz `READY_MADE_CAMPAIGNS.map(...)`, e o card aparece com
+  // `campaignId: null` enquanto ninguém ligou. Ordem do CEO (23/08/2026): "todas as
+  // campanhas que estão na tela estão autorizadas, ligadas ou não".
+  //
+  // Elas são submetidas DIRETO DO CATÁLOGO, sem criar campanha. Criar campanha para
+  // destravar a submissão chegou a ser autorizado, mas é desnecessário — e campanha
+  // que não existe é a única que não tem como disparar por engano. Quando o lojista
+  // ligar o card, o modelo já está aprovado e a varredura normal só amarra o
+  // mapeamento: zero espera, que é a promessa escrita no topo deste bloco.
+  const comCampanha = new Set(campaigns.map((c) => c.templateId).filter(Boolean) as string[]);
+  const catalogo = campaignId
+    ? [] // chamada para UMA campanha específica não varre o catálogo
+    : READY_MADE_CAMPAIGNS.flatMap((rm) => {
+        if (comCampanha.has(rm.id)) return [];            // já coberta pelo `work`
+        const config = TEMPLATE_CONFIG[rm.id];
+        if (!config) return [];
+        // Sem campanha não há cupom configurado — o texto base é o que vale. Ligar
+        // cupom depois muda o texto e submete a variante nova, como sempre.
+        const phrases = listPoolCandidates(rm.id, null, { hasCoupon: false });
+        return phrases.length ? [{ readyMadeId: rm.id, config, phrases }] : [];
+      });
+
+  if (work.length === 0 && catalogo.length === 0) {
     // Nothing new to submit — but o que o banco guarda sobre a Meta ENVELHECE, e
     // em duas direções. Um modelo PENDING pode ter sido aprovado (ou reprovado)
     // desde a última leitura; e um modelo APPROVED pode ter deixado de existir na
@@ -436,6 +460,41 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
       where: { id: campaign.id },
       data:  { audienceConfig: { ...prev, metaTemplates } as never },
     }).catch(() => { /* best-effort */ });
+  }
+
+  // ── Catálogo sem campanha: submete o modelo, e SÓ isso ──────────────────────
+  // Nenhuma campanha é criada, nenhum mapeamento é escrito (não há campanha onde
+  // escrever) e portanto nada pode disparar por causa desta varredura.
+  for (const { readyMadeId, config, phrases } of catalogo) {
+    const readyMade = getReadyMadeCampaign(readyMadeId);
+    const { cupom, validade } = couponExamples(readyMade?.defaultCoupon);
+    const examples: Partial<Record<KnownToken, string>> = {
+      nome: "Maria", restaurante: exampleCtx.restaurante, link_cardapio: exampleCtx.link_cardapio,
+      instagram: exampleCtx.instagram, link_avaliacao_google: exampleCtx.link_avaliacao_google, cupom, validade,
+    };
+    for (const phrase of phrases) {
+      const name = poolTemplateName(config.name, phraseKeyOf(phrase.text));
+      if (existingNames.has(name)) { existed++; items.push({ templateId: readyMadeId, templateName: name, status: "existed" }); continue; }
+      const built = buildMetaTemplate({
+        name, message: phrase.text, category: config.category, language: LANGUAGE,
+        footer: config.footer ? OPT_OUT_FOOTER : null, examples,
+      });
+      const res = await MetaTemplateService.createOnMeta(restaurantId, built.payload);
+      if (res.ok || res.alreadyExists) {
+        await MetaTemplateService.upsert({
+          restaurantId, templateName: name, languageCode: LANGUAGE,
+          category: config.category, bodyVariables: built.bodyVariables,
+          ...(res.ok ? { status: "PENDING", rejectedReason: null } : {}),
+          ...(res.id ? { metaTemplateId: res.id } : {}),
+        });
+        existingNames.add(name);
+        if (res.alreadyExists) { existed++; items.push({ templateId: readyMadeId, templateName: name, status: "existed" }); }
+        else                   { created++; items.push({ templateId: readyMadeId, templateName: name, status: "created" }); }
+      } else {
+        failed++;
+        items.push({ templateId: readyMadeId, templateName: name, status: "failed", error: res.error });
+      }
+    }
   }
 
   return { ok: failed === 0, created, existed, failed, items };

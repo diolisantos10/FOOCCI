@@ -279,12 +279,17 @@ describe("a varredura cobre o catálogo, não só o que está ligado", () => {
       { id: "c2", templateId: "recuperar-frios", message: variants[0], scheduleConfig: { mode: "RECURRING" }, audienceConfig: {} },
     ]);
 
-    const res = await provisionPoolTemplates(R);
+    await provisionPoolTemplates(R);
 
-    // Criado uma vez por frase, nunca duas.
-    expect(res.created).toBe(variants.length);
     const nomes = meta.createOnMeta.mock.calls.map((c) => (c[1] as { name: string }).name);
+    // Nenhum nome criado duas vezes — é isto que este teste trava. A CONTAGEM
+    // total não serve de âncora aqui: a mesma varredura também submete o catálogo
+    // das predefinidas sem campanha, e prender o teste a um número absoluto o
+    // tornaria frágil a cada frase nova no catálogo.
     expect(new Set(nomes).size).toBe(nomes.length);
+    // E as 5 desta predefinida saíram uma única vez, apesar das DUAS campanhas.
+    const daPredefinida = nomes.filter((n) => n.startsWith("cliente_frio_v"));
+    expect(daPredefinida).toHaveLength(variants.length);
   });
 });
 
@@ -335,5 +340,62 @@ describe("submissão que falha continua na fila", () => {
 
     expect(res.created).toBeGreaterThan(0);
     expect(meta.createOnMeta).toHaveBeenCalled();
+  });
+});
+
+/**
+ * O CRITÉRIO DO CEO É A TELA, NÃO A TABELA — 23/08/2026.
+ *
+ * *"Todas as campanhas que estão na tela de campanhas do Foocci estão todas
+ * autorizadas. Ligadas ou não."* E a tela lista as 16 predefinidas SEMPRE:
+ * `ReadyMadeCampaignService.getStates` faz `READY_MADE_CAMPAIGNS.map(...)` sem
+ * filtro, e o card aparece com `campaignId: null` enquanto ninguém ligou —
+ * conferido lendo a tela, não deduzido da tabela.
+ *
+ * Por isso o catálogo é submetido mesmo sem campanha criada, e SEM criar campanha:
+ * campanha que não existe é a única que não dispara por engano.
+ */
+describe("catálogo sem campanha criada também é submetido", () => {
+  it("submete as frases de predefinida que NÃO tem campanha nenhuma", async () => {
+    db.campaign.findMany.mockResolvedValue([]); // loja sem campanha alguma
+
+    const res = await provisionPoolTemplates(R);
+
+    expect(res.created).toBe(16 * 5);                    // 16 predefinidas × 5 frases
+    expect(db.campaign.update).not.toHaveBeenCalled();   // nada de mapear
+  });
+
+  it("NÃO cria campanha nenhuma para submeter", async () => {
+    db.campaign.findMany.mockResolvedValue([]);
+
+    await provisionPoolTemplates(R);
+
+    // `create` nem existe no dublê do Prisma: se o código tentasse criar campanha,
+    // isto estouraria em vez de passar silenciosamente.
+    expect((db.campaign as Record<string, unknown>).create).toBeUndefined();
+  });
+
+  it("NÃO duplica: predefinida que já tem campanha sai pelo caminho normal", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING" }, audienceConfig: {},
+    }]);
+
+    await provisionPoolTemplates(R);
+
+    const nomes = meta.createOnMeta.mock.calls.map((c) => (c[1] as { name: string }).name);
+    expect(new Set(nomes).size).toBe(nomes.length);
+    expect(db.campaign.update).toHaveBeenCalledTimes(1); // só a que tem campanha
+  });
+
+  it("chamada para UMA campanha não varre o catálogo inteiro", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING" }, audienceConfig: {},
+    }]);
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.created).toBe(variants.length); // só as 5 dela
   });
 });
