@@ -184,3 +184,25 @@ describe("condução", () => {
     expect(estado.servicos).toEqual([]);
   });
 });
+
+describe("negação lida como sim — o erro que a casa irmã já pagou", () => {
+  it("\"anúncios não\" NÃO vira tráfego pago", () => {
+    expect(lerServicos("anúncios não, só quero reels")).toEqual(["reels"]);
+  });
+
+  it("\"não quero tráfego pago\" NÃO vira tráfego pago", () => {
+    expect(lerServicos("não quero tráfego pago")).not.toContain("trafego");
+  });
+
+  it("\"sem stories\" NÃO vira stories", () => {
+    expect(lerServicos("sem stories por enquanto")).not.toContain("story");
+  });
+
+  it("o pedido de verdade continua sendo lido", () => {
+    expect(lerServicos("quero reels e carrossel")).toEqual(["reels", "carrossel"]);
+  });
+
+  it("negação numa oração não apaga o pedido da outra", () => {
+    expect(lerServicos("não quero anúncio, quero carrossel")).toEqual(["carrossel"]);
+  });
+});

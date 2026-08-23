@@ -128,9 +128,44 @@ export function lerServicos(resposta: string): string[] {
   ];
   const achados: string[] = [];
   for (const [chave, termos] of pistas) {
-    if (termos.some((p) => t.includes(p))) achados.push(chave);
+    if (termos.some((p) => citadoSemNegacao(t, p))) achados.push(chave);
   }
   return achados;
+}
+
+/** Palavras que viram um "não" na frase. Só as inequívocas. */
+const NEGACOES = ["nao", "nem", "sem", "nada de", "tirando", "menos"];
+
+/** Onde uma frase acaba e outra começa — negação não atravessa oração. */
+const CORTES = /[,.;:!?]|\bmas\b|\bporem\b|\bso\b|\bsomente\b|\bapenas\b/;
+
+/**
+ * O termo foi citado, e citado como PEDIDO — não como recusa.
+ *
+ * Por que isto existe: `t.includes("anuncio")` casa em "anúncios não" e em "não
+ * quero anúncio" exatamente como casa em "quero anúncio". Era a leitura de uma
+ * negação como se fosse um sim — o cliente dizia NÃO e o serviço entrava na
+ * sondagem. Um serviço inventado é pior que um serviço faltando: o faltando a
+ * próxima pergunta descobre; o inventado vira linha no plano.
+ *
+ * A regra é deliberadamente conservadora e cala na dúvida: a oração é o pedaço
+ * de frase entre vírgulas (ou entre "mas"/"só"), e uma negação a até 20
+ * caracteres do termo — antes ou depois — derruba a citação. Se a frase mistura
+ * demais e a detecção se perde, o SDR pergunta de novo. Perder uma detecção
+ * custa uma pergunta; inventar um serviço custa uma proposta errada.
+ */
+function citadoSemNegacao(texto: string, termo: string): boolean {
+  for (const oracao of texto.split(CORTES)) {
+    let de = oracao.indexOf(termo);
+    while (de >= 0) {
+      const ate = de + termo.length;
+      const janela = oracao.slice(Math.max(0, de - 20), Math.min(oracao.length, ate + 20));
+      const negado = NEGACOES.some((n) => new RegExp(`(^|\\s)${n}(\\s|$)`).test(janela));
+      if (!negado) return true;
+      de = oracao.indexOf(termo, de + 1);
+    }
+  }
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
