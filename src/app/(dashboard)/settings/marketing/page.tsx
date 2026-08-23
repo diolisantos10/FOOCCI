@@ -339,20 +339,21 @@ export default function MarketingSettingsPage() {
           const low   = on && remaining !== null && remaining <= Math.max(1, Math.round(total * 0.1));
           return (
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              {/* Fora do "Assumir controle manual" desde 23/08/2026 (decisão do
+                  CEO): teto de contatos é limite de GASTO, e não a regra
+                  anti-banimento que aquele cadeado protege. Ver o comentário
+                  longo no mesmo campo em CRMClient.tsx. */}
               <Field
                 label="Limite total de contatos"
-                hint={cfg.manualOverride
-                  ? "Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
-                  : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” para editar."}
+                hint="Você mexe neste número quando quiser — é limite de gasto, não regra de proteção do número. 0 = sem limite."
               >
                 <input
                   type="number"
                   min={0}
                   max={1000000}
                   value={numStr(total)}
-                  disabled={!cfg.manualOverride}
                   onChange={(e) => set("contactBudgetTotal", parseNum(e.target.value, 0))}
-                  className={`${INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
+                  className={INPUT}
                 />
               </Field>
 

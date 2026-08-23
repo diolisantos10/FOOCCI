@@ -53,17 +53,21 @@ já usa; não inventei régua nova). Apurado no servidor (`crmRepliedAt`,
 `lastCrmSentAt`), consumido pela tela. Teste com o caso Larissia:
 `src/services/conversation/crmReplyBadge.test.ts`.
 
-### Aberto — depende do CEO
+### Decidido pelo CEO em 23/08 — *"pode tudo, teto 3000"*
 
-- **Quanto vale o teto de contatos do Sushi Cazza.** Enquanto não decidir, o CRM não
-  aborda gente nova. Não mexi no número de propósito.
-- **O campo do teto fica travado no "modo seguro"?** A tela exige ligar *"Assumir
-  controle manual"* para editá-lo — o que obriga o lojista a **destravar também as
-  regras anti-banimento** só para mexer num limite de **custo**. O próprio código diz
-  o contrário (`crm-safety.ts`: *"Only the prepaid contact budget stays owner-set
-  either way — it is a cost limit, not an anti-ban rule"*), e `applyEffectiveSafety`
-  de fato nunca toca nesse campo. Divergência tela × código: **não resolvi sozinho**
-  porque muda quem pode mexer no teto.
+- **Teto do Sushi Cazza = 3000** (2115 abordadas → **885 vagas**). Não é "sem
+  limite": o alarme continua de pé. ⚠️ **O valor se aplica na tela** (CRM → Regras
+  de Segurança → *Máximo de pessoas* → 3000 → Salvar). **Eu não apliquei**: não
+  tenho acesso ao banco de produção e não vou escrever num JSON de configuração de
+  cliente por fora do produto.
+- **Padrão de produto para restaurante NOVO continua 0 (sem teto)** — não mexido, a
+  decisão foi sobre o Sushi Cazza. Travado em teste para não mudar por descuido.
+  **Recomendação registrada:** o padrão deveria deixar de ser 0. Restaurante novo
+  nasce sem alarme nenhum, e o alarme só serve se estiver ligado antes de o
+  problema acontecer. Decisão de produto — não tomei.
+- **Cadeado separado.** O teto saiu de trás do *"Assumir controle manual"*: é limite
+  de gasto, não regra anti-banimento. As regras anti-banimento **continuam trancadas
+  exatamente como estavam**. O servidor já estava certo; quem mentia era a tela.
 - **Recontagem/limpeza de histórico:** não fiz e não proponho fazer sem ordem — dado
   de cliente é irreversível. O diagnóstico
   `GET /api/admin/diagnostics/crm-etiqueta-resposta` (somente leitura) devolve os

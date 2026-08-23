@@ -11,6 +11,38 @@
 
 ---
 
+## 2026-08-23 — "Pode tudo, teto 3000" — e os dois cadeados se separam
+
+**Decisão do CEO**, nas palavras dele: *"pode tudo, teto 3000"*.
+
+**1. O teto de contatos do Sushi Cazza é 3000.** Não é chute: a base já tem 2115
+pessoas abordadas, então 3000 deixa **885 vagas** para crescer e continua acusando
+se algo começar a disparar sozinho. **Não é "sem limite"** — o alarme continua
+existindo, que é o ponto inteiro desta rodada.
+
+> ⚠️ O **padrão de produto** para restaurante NOVO continua **0 (sem teto)** e
+> **não foi mexido** — a decisão foi sobre o Sushi Cazza. Está travado em teste
+> (`CrmSafetyConfig.test.ts`) para não mudar por descuido.
+
+**2. Os dois cadeados se separam.** O teto de contatos é limite de **gasto**; o
+"Assumir controle manual" existe para as regras **anti-banimento** (limite diário,
+intervalo por cliente, horário de silêncio, delay). Estavam na mesma chave: para
+mexer num risco de dinheiro, o lojista era obrigado a destravar um risco de perder
+o WhatsApp — e saía com os dois soltos.
+
+O teto sai de trás do controle manual. **As regras anti-banimento continuam
+trancadas exatamente como estão** — aquele cadeado é trava de servidor
+(`applyEffectiveSafety` recalcula os valores seguros na hora de enviar,
+independentemente do que estiver gravado) e não se mexe.
+
+**O servidor já estava certo:** `applyEffectiveSafety` nunca tocou no teto de
+contatos e a rota PATCH sempre o aceitou. Quem divergia era a **tela**, que
+desabilitava o campo. Fica a lição, que é a mesma da rodada inteira: **tela que
+diz uma coisa e código que faz outra é defeito dos dois, e o que se corrige é o
+que está mentindo** — aqui, a tela.
+
+---
+
 ## 2026-08-23 — Limite que a tela anuncia é limite que o código trava
 
 **Decisão do Diretor** (guardrail 4 aplicado, não escolha de negócio).

@@ -5680,18 +5680,29 @@ function CrmConfiguracoes() {
             const low   = on && !exhausted && remaining <= Math.max(1, Math.round(total * 0.1));
             return (
               <div className="mt-3 grid gap-5 sm:grid-cols-2">
+                {/* ── ESTE CAMPO NÃO DEPENDE DO CONTROLE MANUAL ──────────────
+                    Decisão do CEO, 23/08/2026. O teto de contatos é limite de
+                    GASTO; o "Assumir controle manual" existe para as regras
+                    ANTI-BANIMENTO (limite diário, intervalo por cliente, horário
+                    de silêncio, delay). Trancar os dois na mesma chave obrigava o
+                    lojista a aceitar risco de perder o WhatsApp só para mexer
+                    num limite de dinheiro — e quem quisesse muito mexer ficava
+                    com as duas coisas destravadas.
+
+                    O código sempre soube disso: `applyEffectiveSafety` nunca
+                    tocou neste campo, e a rota PATCH sempre o aceitou. Quem
+                    divergia era a tela. Não mexa no `disabled` das regras
+                    anti-banimento abaixo — aquele cadeado é trava de verdade no
+                    servidor e continua onde está. */}
                 <CfgField
                   label="Máximo de pessoas"
-                  hint={cfg.manualOverride
-                    ? "Aumente este número para permitir que o CRM aborde mais pessoas."
-                    : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” lá em cima para editar."}
+                  hint="Você mexe neste número quando quiser — é limite de gasto, não regra de proteção do número. Aumente para o CRM abordar mais pessoas; 0 = sem limite."
                 >
                   <input
                     type="number" min={0} max={1000000}
                     value={cfg.contactBudgetTotal}
-                    disabled={!cfg.manualOverride}
                     onChange={(e) => set("contactBudgetTotal", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    className={`${CFG_INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
+                    className={CFG_INPUT}
                   />
                 </CfgField>
 
@@ -5720,9 +5731,9 @@ function CrmConfiguracoes() {
                             do teto e não há vaga sobrando.
                           </p>
                           <p>
-                            Para voltar a falar com clientes novos: ligue <strong>“Assumir controle manual”</strong> lá em cima
-                            e aumente o <strong>Máximo de pessoas</strong> (ou coloque <strong>0 = sem limite</strong>). O saldo
-                            não se renova sozinho — esperar não destrava.
+                            Para voltar a falar com clientes novos, aumente o <strong>Máximo de pessoas</strong> ao lado (ou
+                            coloque <strong>0 = sem limite</strong>) e salve. Esse campo é seu, não precisa destravar mais nada.
+                            O saldo não se renova sozinho — esperar não destrava.
                           </p>
                         </div>
                       ) : (

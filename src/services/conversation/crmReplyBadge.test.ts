@@ -27,6 +27,48 @@ import { crmReplyAt, isCrmReply, CRM_REPLY_WINDOW_DAYS } from "./crmReplyBadge";
 
 const dia = (iso: string) => new Date(iso);
 
+/**
+ * A REGRA ANTIGA, escrita aqui de propósito.
+ *
+ * A etiqueta nasceu dentro da tela, então não existe "código antigo" a que este
+ * arquivo possa ser rodado contra. Sem isto, os casos abaixo passariam nos dois
+ * lados — e teste que passa nos dois lados não prova nada. Então a regra velha
+ * fica reproduzida fielmente, e cada caso mostra ONDE as duas discordam.
+ *
+ * Era exatamente isto: um carimbo de CRM na conversa (que nunca expira) + existir
+ * qualquer mensagem de entrada, em qualquer data.
+ */
+function regraAntiga(conversa: { temCarimboDeCrm: boolean; temAlgumaEntrada: boolean }): boolean {
+  return conversa.temCarimboDeCrm && conversa.temAlgumaEntrada;
+}
+
+describe("a regra antiga × a nova — onde elas discordam", () => {
+  it("O CASO LARISSIA: a antiga dizia SIM, a nova diz NÃO", () => {
+    // Abordada em julho (o carimbo ficou), navegou no cardápio ontem.
+    expect(regraAntiga({ temCarimboDeCrm: true, temAlgumaEntrada: true })).toBe(true);
+    expect(isCrmReply({
+      lastCrmSentAt: dia("2026-07-17T14:00:00Z"),
+      lastInboundAt: dia("2026-08-22T22:41:00Z"),
+    })).toBe(false);
+  });
+
+  it("mensagem ANTERIOR ao envio: a antiga dizia SIM, a nova diz NÃO", () => {
+    expect(regraAntiga({ temCarimboDeCrm: true, temAlgumaEntrada: true })).toBe(true);
+    expect(isCrmReply({
+      lastCrmSentAt: dia("2026-08-22T14:00:00Z"),
+      lastInboundAt: dia("2026-08-22T09:00:00Z"),
+    })).toBe(false);
+  });
+
+  it("resposta de verdade: as duas dizem SIM — o conserto não apagou o caso legítimo", () => {
+    expect(regraAntiga({ temCarimboDeCrm: true, temAlgumaEntrada: true })).toBe(true);
+    expect(isCrmReply({
+      lastCrmSentAt: dia("2026-08-22T14:00:00Z"),
+      lastInboundAt: dia("2026-08-22T16:00:00Z"),
+    })).toBe(true);
+  });
+});
+
 describe("crmReplyAt — a regra do dono", () => {
   it("O CASO LARISSIA: abordada em julho, mexeu no cardápio ontem → NÃO é resposta CRM", () => {
     const r = crmReplyAt({
