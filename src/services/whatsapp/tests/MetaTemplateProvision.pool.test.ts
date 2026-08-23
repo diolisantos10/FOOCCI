@@ -254,3 +254,86 @@ describe("descongelar a resubmissão automática", () => {
     }
   });
 });
+
+describe("a varredura cobre o catálogo, não só o que está ligado", () => {
+  it("NÃO filtra por ACTIVE — campanha pausada/concluída também ganha modelo", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING" }, audienceConfig: {},
+    }]);
+
+    await provisionPoolTemplates(R);
+
+    const where = (db.campaign.findMany.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    // O que importa é o que NÃO está lá: nada de `status: "ACTIVE"`.
+    expect(where.status).not.toBe("ACTIVE");
+    // …e que a morta de verdade continue fora.
+    expect(JSON.stringify(where)).toContain("CANCELLED");
+  });
+
+  it("campanhas que compartilham a mesma predefinida NÃO duplicam o modelo", async () => {
+    // Duas campanhas, mesmo templateId: os nomes derivam do TEXTO, então a segunda
+    // encontra os modelos da primeira já criados e apenas confirma.
+    db.campaign.findMany.mockResolvedValue([
+      { id: "c1", templateId: "recuperar-frios", message: variants[0], scheduleConfig: { mode: "RECURRING" }, audienceConfig: {} },
+      { id: "c2", templateId: "recuperar-frios", message: variants[0], scheduleConfig: { mode: "RECURRING" }, audienceConfig: {} },
+    ]);
+
+    const res = await provisionPoolTemplates(R);
+
+    // Criado uma vez por frase, nunca duas.
+    expect(res.created).toBe(variants.length);
+    const nomes = meta.createOnMeta.mock.calls.map((c) => (c[1] as { name: string }).name);
+    expect(new Set(nomes).size).toBe(nomes.length);
+  });
+});
+
+/**
+ * FRASE QUE FALHOU NÃO PODE VIRAR FRASE PRONTA.
+ *
+ * O mapa `audienceConfig.metaTemplates` é o que o `work` consulta para decidir
+ * "esta campanha já está submetida". Gravar nele uma frase cujo envio à Meta
+ * FALHOU é registrar intenção como realização — e a frase morre em silêncio,
+ * porque nunca mais entra na fila. Vira problema de verdade agora, com o catálogo
+ * inteiro indo de uma vez e o limite de criação da Meta virando rotina.
+ */
+describe("submissão que falha continua na fila", () => {
+  it("NÃO grava no mapa a frase cujo createOnMeta falhou", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING" }, audienceConfig: {},
+    }]);
+    // A primeira passa; todas as outras batem no limite da Meta.
+    let n = 0;
+    meta.createOnMeta.mockImplementation(async () => {
+      n += 1;
+      return n === 1 ? { ok: true, id: "tpl_1" } : { ok: false, error: "rate limit" };
+    });
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.created).toBe(1);
+    expect(res.failed).toBe(variants.length - 1);
+
+    const upd = db.campaign.update.mock.calls[0][0] as {
+      data: { audienceConfig: { metaTemplates: Record<string, unknown> } };
+    };
+    const map = upd.data.audienceConfig.metaTemplates;
+    // Só a que chegou na Meta ficou anotada.
+    expect(Object.keys(map)).toHaveLength(1);
+  });
+
+  it("com o mapa incompleto, a campanha VOLTA para a fila na passada seguinte", async () => {
+    // Estado logo após a rodada acima: só uma frase mapeada.
+    const parcial = { [k0]: { name: `cliente_frio_${k0.replace(/^mf_/, "v")}`, language: "pt_BR", params: [], submittedMessage: variants[0] } };
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING" }, audienceConfig: { metaTemplates: parcial },
+    }]);
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.created).toBeGreaterThan(0);
+    expect(meta.createOnMeta).toHaveBeenCalled();
+  });
+});

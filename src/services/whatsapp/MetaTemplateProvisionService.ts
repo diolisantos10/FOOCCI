@@ -290,10 +290,20 @@ function poolTemplateName(base: string, phraseFingerprint: string): string {
  * already mapped are skipped before any Graph call. Safe to re-run (cron-safe).
  */
 export async function provisionPoolTemplates(restaurantId: string, campaignId?: string): Promise<ProvisionResult> {
+  // ⚠️ A varredura olhava SÓ `status: ACTIVE`, e isso brigava com a própria
+  // promessa do bloco acima ("submeter o catálogo inteiro de antemão para que a
+  // frase ligada depois JÁ esteja aprovada"). Campanha pausada ou concluída ficava
+  // sem modelo nenhum — e no dia em que o lojista reativasse, esperaria dias pela
+  // revisão da Meta com a campanha ligada e nada saindo.
+  //
+  // `CANCELLED` continua de fora: essa é a única morta de verdade. Submeter para
+  // pausada/concluída não envia nada a ninguém — modelo é pedido de revisão — e o
+  // nome do modelo deriva do TEXTO, então campanhas que compartilham a mesma
+  // predefinida colapsam no mesmo modelo em vez de duplicar.
   const campaigns = await prisma.campaign.findMany({
     where: campaignId
       ? { id: campaignId, restaurantId }
-      : { restaurantId, status: "ACTIVE" as never },
+      : { restaurantId, status: { not: "CANCELLED" } as never },
     select: { id: true, templateId: true, message: true, scheduleConfig: true, audienceConfig: true },
   });
 
@@ -372,9 +382,22 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
         name, message: phrase.text, category: config.category, language: LANGUAGE,
         footer: config.footer ? OPT_OUT_FOOTER : null, examples,
       });
-      metaTemplates[phrase.key] = { name, language: LANGUAGE, params: built.paramTokens, submittedMessage: phrase.text };
+      // ⚠️ O MAPA SÓ RECEBE A FRASE DEPOIS QUE ELA DE FATO CHEGOU NA META.
+      // Antes, a linha abaixo ficava AQUI — antes da tentativa — e o mapa inteiro
+      // era gravado no fim, incluindo frase cujo `createOnMeta` FALHOU. Como o
+      // `work` usa justamente esse mapa para decidir "já submeti", a frase falhada
+      // era dada como pronta e NUNCA mais era tentada. Intenção registrada como
+      // realização — o mesmo erro do selo, um andar abaixo.
+      //
+      // Isso passava despercebido enquanto se submetiam 5 frases por vez; com o
+      // catálogo inteiro indo de uma vez, esbarrar no limite de criação da Meta
+      // deixa de ser exceção — e cada falha viraria uma frase morta em silêncio.
+      const anotarNoMapa = () => {
+        metaTemplates[phrase.key] = { name, language: LANGUAGE, params: built.paramTokens, submittedMessage: phrase.text };
+      };
 
       if (existingNames.has(name)) {
+        anotarNoMapa();
         await MetaTemplateService.upsert({
           restaurantId, templateName: name, languageCode: LANGUAGE,
           category: config.category, bodyVariables: built.bodyVariables,
@@ -385,6 +408,7 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
       }
       const res = await MetaTemplateService.createOnMeta(restaurantId, built.payload);
       if (res.ok || res.alreadyExists) {
+        anotarNoMapa();
         await MetaTemplateService.upsert({
           restaurantId, templateName: name, languageCode: LANGUAGE,
           category: config.category, bodyVariables: built.bodyVariables,
@@ -395,11 +419,17 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
         if (res.alreadyExists) { existed++; items.push({ templateId: campaign.templateId as string, templateName: name, status: "existed" }); }
         else                   { created++; items.push({ templateId: campaign.templateId as string, templateName: name, status: "created" }); }
       } else {
+        // Sem `anotarNoMapa()` de propósito: frase que não chegou na Meta continua
+        // fora do mapa e volta na próxima passada do cron.
         failed++;
         items.push({ templateId: campaign.templateId as string, templateName: name, status: "failed", error: res.error });
       }
     }
 
+    // Nota: não se recupera o mapeamento antigo de uma frase que falhou agora. Se
+    // ela chegou até o `createOnMeta`, é porque o nome NÃO estava em
+    // `existingNames` — ou seja, o modelo antigo não existe mais na Meta e o
+    // mapeamento velho já era mentira.
     const prev = (campaign.audienceConfig && typeof campaign.audienceConfig === "object")
       ? (campaign.audienceConfig as Record<string, unknown>) : {};
     await prisma.campaign.update({

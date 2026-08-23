@@ -2,6 +2,58 @@
 
 > Última atualização: 23/08/2026.
 
+## 🟢 23/08 (7ª rodada) — (A) autorizada pelo CEO. Pacote PRONTO e PARADO antes do merge.
+
+**Decisão do CEO: opção (A) — selo + trava da janela de 24h JUNTOS.** Consequência
+aceita por ele: a campanha fria para de sair até haver modelo aprovado pela Meta.
+É o que a regra da Meta já manda.
+
+**⛔ NADA FOI MERGEADO.** Há outro Diretor subindo antes, com o pacote de CRM que
+mexe no MESMO caminho de envio (teto de contatos em 3000, etiqueta "Resposta CRM",
+recuperação de carrinho, cadeado do modo seguro). O combinado é esperar o aviso,
+trazer a branch de deploy para dentro desta, resolver colisão, **rodar a suíte
+inteira de novo** (verde de antes do rebase não vale) e só então subir.
+
+### Cobertura da submissão — ampliada, e o limite honesto dela
+
+A varredura olhava só `status: ACTIVE`, o que brigava com a promessa escrita no
+próprio bloco ("submeter o catálogo de antemão para que a frase ligada depois JÁ
+esteja aprovada"): campanha pausada ou concluída ficava sem modelo, e no dia da
+reativação o lojista esperaria dias com a campanha ligada e nada saindo. Agora
+varre tudo que **não** é `CANCELLED`.
+
+Efeito medido contra a produção (51 campanhas lidas por `admin/diagnostics/crm-campaigns`):
+
+| | frases |
+|---|---|
+| catálogo completo (16 campanhas × 5) | 80 |
+| **serão submetidas** — 12 predefinidas com campanha nesta loja | **60** |
+| não submetíveis — 4 predefinidas **sem campanha criada** | 20 |
+
+As 4 de fora (`pedido-avaliacao`, `subiu-de-nivel`, `quase-no-proximo-nivel`,
+`mimo-mensal-nivel`) **não têm linha de campanha nesta loja** — não há o que varrer.
+Criar campanha no lugar do lojista não é decisão de Diretor. **Fica para o CEO.**
+
+### Bug achado ANTES de disparar 60 de uma vez — e é o mesmo erro de novo
+
+O mapa `audienceConfig.metaTemplates` era preenchido **antes** da tentativa e
+gravado no fim **mesmo para a frase cujo `createOnMeta` FALHOU**. Como é esse mapa
+que o `work` consulta para decidir "já submeti", **a frase falhada era dada como
+pronta e nunca mais tentada** — intenção registrada como realização, o mesmo erro do
+selo um andar abaixo.
+
+Passava despercebido com 5 frases por vez. Com **60 de uma vez**, esbarrar no limite
+de criação da Meta deixa de ser exceção — e cada falha viraria uma frase morta em
+silêncio. Agora só entra no mapa a frase que **de fato chegou** na Meta; a que falhou
+volta na passada seguinte do cron. 2 testes travam isso.
+
+### Limites da Meta: continuam SEM confirmação
+
+Não consigo verificar os tetos de modelo por conta nem o limite de criação por hora:
+não tenho token do Graph aqui e o repositório não documenta nenhum dos dois.
+**Preciso confirmar.** A mitigação é o conserto acima: se bater no limite, a fila
+continua e o cron termina o serviço nas passadas seguintes, em vez de perder frases.
+
 ## 🟠 23/08 (6ª rodada) — a resubmissão automática estava CONGELADA em três camadas. E não dá para submeter daqui.
 
 ### O catálogo, medido na fonte canônica
