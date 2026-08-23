@@ -1,4 +1,13 @@
 # Dependencies
+# ATENÇÃO À FALTA DA BARRA. `node_modules/` (com barra) casa só com DIRETÓRIO.
+# Um SYMLINK chamado node_modules é um ARQUIVO, escapa do padrão com barra e vai
+# parar no commit — foi o que aconteceu em 23/08/2026 e derrubou o deploy: o
+# build morreu com "cannot replace to directory .../app/node_modules with file",
+# porque o repositório trazia um arquivo onde o container precisa de uma pasta.
+# O symlink é prática normal de quem trabalha em `git worktree` (aponta para o
+# node_modules do checkout principal para não reinstalar tudo). A prática é boa;
+# o que faltava era o .gitignore segurá-la. As duas linhas cobrem os dois casos.
+node_modules
 node_modules/
 .pnp
 .pnp.js
