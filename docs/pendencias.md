@@ -16,6 +16,26 @@
 subiram JUNTOS, como ele decidiu. Consequência que ele já conhecia e aceitou: a
 campanha fria para de sair até haver modelo aprovado pela Meta.
 
+### ⚠️ O achado que só apareceu DEPOIS do deploy: a submissão estava sem motor
+
+Lendo o log de boot da produção nova, vi que o `ScheduledCampaignScheduler` — que
+virou o **caminho primário** do CRM — chamava apenas `runDueCampaigns`. A submissão
+automática de modelo à Meta vivia **só** na rota de cron do GitHub Actions, e nesse
+mesmo dia aquele agendamento foi **desligado** porque o Actions está bloqueado por
+cobrança.
+
+**Resultado: a submissão ficou sem NENHUM motor.** As 80 frases nunca seriam
+enviadas para revisão, e sem modelo aprovado a campanha fria fica bloqueada para
+sempre. O buraco era invisível — nada falhava, nada aparecia no log; **só não
+acontecia**. É o parente do defeito do dia: ausência sendo lida como normalidade.
+
+Consertado: o tick agora varre os restaurantes `CONNECTED` e submete, como a rota
+de cron fazia. Falha na submissão **não derruba** o envio das campanhas (guardrail
+5). 4 testes novos, 3 dos quais reprovam contra o código antigo.
+
+**Só encontrei isso porque fui ler o log depois de subir.** A segunda leitura não
+serviu para confirmar o que eu já achava — serviu para achar o que eu não sabia.
+
 ### O critério das campanhas: a TELA, e fui ler a tela
 
 Ordem do CEO: *"todas as campanhas que estão na tela de campanhas do Foocci estão
