@@ -2,6 +2,96 @@
 
 > Última atualização: 23/08/2026.
 
+## 🟢 23/08 (3ª rodada) — "por que o Foocci cita a Evolution?" É texto velho. Mas achei o que estava por baixo.
+
+O CEO mandou o print de **Gerenciar campanha → Diagnóstico** ("Bem-vindo / 2ª compra"):
+*"A maioria são erros temporários da **Evolution**/conexão"* e *"Falhas temporárias
+(**Evolution 5xx**, timeout)"*. **Fui ao código, não deduzi.** Veredito: **(A) texto velho.**
+
+**A Evolution NÃO está viva.** Prova, em três camadas:
+- `src/services/whatsapp/providers/types.ts:22` — `WhatsAppProviderId = "META_CLOUD_API"`,
+  **um valor só**: reintroduzir segundo canal é erro de compilação, não configuração.
+- `src/services/whatsapp/activeProvider.ts:25-27` — devolve `MetaWhatsAppCloudProvider`
+  incondicionalmente. Não há ramo, fallback nem consulta a banco.
+- `src/services/evolution/` **não existe**; não há `EvolutionClient` em `src/`.
+- **Railway** (projeto Foocci, serviço `FOOCCI`, `production`): **zero** variáveis da
+  Evolution entre as 39 configuradas. Confirmado hoje, na fonte.
+
+### O que estava por baixo do texto velho — e vale mais que ele
+
+A **gaveta de erro** era o ponto cego: `crmExecutionClassification.ts` nomeava só
+`META_190`, `META_NOT_CONNECTED` e `META_TEMPLATE_REQUIRED`. Todo o resto caía no
+`default` (`linha 163`, `startsWith("META_")`) → `FAILED_PROVIDER`, cujo rótulo era
+literalmente **"Erro temporário do WhatsApp"**.
+
+**E o erro que está saindo AGORA é o `META_133010`** (mesmo dia, mesmo log do item
+abaixo: `channel collapse … lastError: 'META_133010'`, 15:19 de 23/08). Ele **não é
+temporário**: é o número não registrado no runtime da Cloud API — só o `/register`
+com PIN resolve. Os **78 "erro temporário do WhatsApp"** do print são quase certamente
+ele. A tela dava ao CEO um culpado que não existe (Evolution) e uma natureza errada
+(temporário) para o defeito que está de pé.
+
+**O teste dessa gaveta exercitava SÓ códigos `EVOLUTION_HTTP_*`** — códigos que o
+sistema não produz mais. A classificação dos códigos reais da Meta não tinha **uma
+única trava**.
+
+### Consertado nesta sessão
+
+1. **Rótulos honestos** (`crmExecutionClassification.ts`): "Erro temporário do
+   WhatsApp" → **"Erro do WhatsApp (Meta)"**; "Instância desconectada" → **"Canal do
+   WhatsApp fora do ar"**; "Bad request (400)" → **"Número recusado pela Meta (400)"**;
+   "Rate limit" → **"Limite de envio da Meta"**.
+2. **`META_133010` nomeado** → `EVOLUTION_INSTANCE_DISCONNECTED` (falha de CANAL).
+   ⚠️ **De propósito continua `RETRYABLE_LATER`**: virar "Precisa corrigir" faria
+   `saiDaFilaParaSempre()` **queimar a audiência inteira** de toda campanha que rodou
+   durante a queda — eles nunca mais receberiam depois do registro. Comportamento
+   idêntico ao de antes; o que mudou é o que a tela diz.
+3. **Textos da tela** (`CRMClient.tsx`): as duas frases do print, mais "Modo seguro
+   WhatsApp Web" (vocabulário de sessão Web, que saiu com a Evolution) em
+   `CRMClient.tsx` e `settings/marketing/page.tsx`, e "sem Evolution" no simulador admin.
+4. **Rótulos crus** `META_133010 / META_NOT_CONNECTED / META_190 / META_TEMPLATE_REQUIRED`
+   ganharam texto em português em `FAILURE_REASON_LABELS`.
+5. **4 testes novos** travam: código da Meta cai na gaveta certa, código não nomeado
+   **nunca** vai para a exclusão automática de cliente, e **nenhum rótulo diz "Evolution"**.
+
+### Os números do print NÃO se contradizem — a tela é que não avisava direito
+
+**176 público total** vs **501 telefone inválido** vs **149 já receberam**: são **dois
+universos**.
+- 176 / 149 / 27 vêm de **`debug.audience`** — consulta **ao vivo** do segmento agora.
+- 501 / 78 / 16 / 1 vêm de **`campaign.executions`** — **acumulado de toda a vida da
+  campanha**, sem recorte de data (`api/crm/campaigns/[id]/route.ts:52-67`).
+
+O aviso existia, mas era rodapé de 10px, cinza-claro, **só para campanha recorrente**,
+e não dizia que o "Público total" é de agora. Agora é permanente, em vermelho, e diz
+as duas coisas. *Instrumento que mente é pior que instrumento nenhum.*
+
+### O que NÃO consertei, e por quê
+
+**Um código da Meta ainda não nomeado é retentado para sempre como "temporário"** —
+ex.: `META_131026` (número não recebe). O `default` faz isso **de propósito**
+(`linha 158-162`): mapear código desconhecido para "número morto" jogaria o cliente na
+exclusão automática, que **apaga o cadastro** quando não há pedido
+(`ScheduledCampaignRunnerService.ts:1903,1930-1966`). É irreversível. Nomear código a
+código é conserto de verdade, mas **exige leitura da tabela de erros da Meta contra o
+log de produção** — não palpite. **Fica aberto.**
+
+**A raiz do problema é de desenho:** a classificação tem **um eixo** (o destinatário
+pode ser retentado?) e os erros têm **duas naturezas** (falha do CANAL × falha do
+DESTINATÁRIO). `META_133010` é do canal, precisa de conserto humano, mas o destinatário
+tem de continuar na fila — e o modelo atual **não sabe dizer isso**. Hoje sai certo por
+acaso (`RETRYABLE_LATER` + disjuntor de 5 falhas seguidas). Separar os dois eixos é
+mudança estrutural, não conserto de sessão.
+
+Portão: `npx tsc --noEmit` **limpo**; `npx vitest run` **488/488 arquivos, 6382 testes,
+2 skipped**. GitHub Actions segue vermelho desde 15/08 **por faturamento** — a validação
+acima é local e não dependeu dele.
+
+**Exceção declarada:** `SEM_AGENTE` + `URGENCIA` — o Diretor editou `src/` por não ter,
+nesta execução, ferramenta para acionar o `crm`/`canais`/`interface`. Conta contra a régua.
+
+---
+
 ## 🟢 23/08 (2ª rodada) — o modo APARECIA; o que faltava era a placa. Consertado.
 
 O CEO disse *"esse menu no agente não aparece pra mim"*. **Fui ao código antes de

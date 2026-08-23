@@ -1818,6 +1818,10 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
   // execuções antigas no banco ainda carregam esse motivo — sem a linha, a tela
   // mostraria o código cru para o lojista.
   NO_EVOLUTION_CONFIG:         "WhatsApp desconectado",
+  META_133010:                 "Número não registrado na Cloud API (Meta)",
+  META_NOT_CONNECTED:          "WhatsApp (Meta) não conectado",
+  META_190:                    "Token da Meta expirado",
+  META_TEMPLATE_REQUIRED:      "Fora da janela de 24h (exige modelo aprovado)",
   QUIET_HOURS:                 "Horário silencioso",
   WEEKEND_BLOCKED:             "Bloqueio fim de semana",
   OUTSIDE_SENDING_WINDOW:      "Fora da janela de envio",
@@ -1892,7 +1896,7 @@ function CampaignFailureDiagnosis({ detail, isRecurring }: { detail: CampaignDet
     ? "🔑 Erro de autenticação do WhatsApp (Meta) — o token expirou; reconecte a integração."
     : numberProblems >= infraProblems
     ? "📵 A maioria são números que não existem no WhatsApp (base antiga). Não há o que corrigir — são inalcançáveis e já saem do CRM automaticamente; os válidos recebem normalmente."
-    : "⚠️ A maioria são erros temporários da Evolution/conexão. O robô para o lote quando isso acontece e tenta de novo no próximo ciclo.";
+    : "⚠️ A maioria são falhas do canal WhatsApp (Meta) ou de conexão — não do cliente. O robô para o lote depois de 5 falhas seguidas e tenta de novo no próximo ciclo. Se o motivo abaixo for “Canal do WhatsApp fora do ar”, o número precisa ser (re)registrado na Cloud API: tentar de novo sozinho não resolve.";
   return (
     <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Diagnóstico de falhas</p>
@@ -1905,11 +1909,12 @@ function CampaignFailureDiagnosis({ detail, isRecurring }: { detail: CampaignDet
           </div>
         ))}
       </div>
-      {isRecurring && (
-        <p className="text-[10px] text-red-400 leading-snug">
-          Campanha recorrente: falhas históricas incluem ciclos anteriores. Veja <strong>Performance → Último ciclo</strong> para o ciclo atual.
-        </p>
-      )}
+      <p className="text-[10px] text-red-500 leading-snug">
+        <strong>Atenção ao comparar números:</strong> as contagens acima são o <strong>acumulado de toda a vida da campanha</strong>
+        {isRecurring ? " (somando todos os ciclos já rodados)" : ""} — por isso elas podem ser maiores que o
+        “Público total”, que é o segmento <strong>de agora</strong>. Um mesmo cliente também pode aparecer
+        em mais de um ciclo. Para o ciclo atual, veja <strong>Performance → Último ciclo</strong>.
+      </p>
     </div>
   );
 }
@@ -3358,7 +3363,7 @@ function CampaignManageModal({
                                 <strong>{detail.performance.recoverableLater ?? 0}</strong> falha(s) temporária(s) podem ser reenviadas depois ·
                                 <strong> {detail.performance.skipped ?? 0}</strong> ignorada(s) (telefone inválido / não elegível — não reenviar).
                               </p>
-                              <p className="mt-1 text-brand-500">Modo seguro: até 40 envios por ciclo. Falhas temporárias (Evolution 5xx, timeout) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e 400 não são reenviados automaticamente.</p>
+                              <p className="mt-1 text-brand-500">Modo seguro: até 40 envios por ciclo. Falhas temporárias (WhatsApp/Meta 5xx, timeout, canal fora do ar) voltam a ser tentadas no próximo ciclo do cron; telefone inválido, opt-out e recusa 400 da Meta não são reenviados automaticamente — a recusa 400 ainda tira o cliente da lista de contatos.</p>
                             </div>
                             {detail.performance.reasonGroups.some((g) => g.category === "BLOCKED_WEEKLY_LIMIT") && (
                               <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
@@ -6259,7 +6264,7 @@ function RecoverableReprocessPanel({ campaignId, onDone }: { campaignId: string;
     if (!canSend) return;
     const confirmed = window.confirm(
       `Reenviar agora para até ${n} cliente(s) com falha temporária recuperável?\n\n` +
-      `Modo seguro WhatsApp Web — no máximo ${plan?.cap ?? 5} por vez. Opt-out, telefone inválido e quem já recebeu são ignorados automaticamente.`,
+      `Modo seguro — no máximo ${plan?.cap ?? 5} por vez. Opt-out, telefone inválido e quem já recebeu são ignorados automaticamente.`,
     );
     if (!confirmed) return;
     setSending(true);

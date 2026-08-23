@@ -4,6 +4,8 @@ import {
   summarizeExecutions,
   buildEligibilityMetrics,
   RETRYABILITY_LABEL,
+  podeRetentarSozinho,
+  saiDaFilaParaSempre,
 } from "../crmExecutionClassification";
 
 // P0 Evolution stabilization — failure classification + retry policy.
@@ -171,5 +173,49 @@ describe("HTTP 400 session-error reclassification (Evolution/Baileys wraps a dro
     expect(s.recoverableLater).toBe(1);
     expect(s.byCategory.EVOLUTION_INSTANCE_DISCONNECTED).toBe(1);
     expect(s.byCategory.EVOLUTION_BAD_REQUEST).toBe(1);
+  });
+});
+
+// ── Códigos REAIS da Meta ─────────────────────────────────────────────────────
+// Este arquivo só exercitava códigos `EVOLUTION_HTTP_*` — códigos que o sistema
+// NÃO PRODUZ MAIS desde 04/08/2026. O provedor único (MetaWhatsAppCloudProvider)
+// emite `META_<code>` / `HTTP_<status>` / `INVALID_PHONE` / `NETWORK`
+// (`providers/MetaWhatsAppCloudProvider.ts:82`). Sem estes casos, a gaveta em que
+// um erro da Meta cai não tinha uma única trava.
+describe("códigos da Meta caem na gaveta certa", () => {
+  it("META_133010 (número não registrado na Cloud API) é falha DE CANAL, não do destinatário", () => {
+    const c = classifyExecution({ status: "FAILED", errorMessage: "META_133010" });
+    // Canal fora do ar: o texto não pode chamar isso de "erro temporário".
+    expect(c.category).toBe("EVOLUTION_INSTANCE_DISCONNECTED");
+    expect(c.badge).not.toMatch(/evolution|instância/i);
+    // E o destinatário NÃO pode ser queimado por um defeito de configuração:
+    // quando alguém registrar o número, ele tem de voltar para a fila.
+    expect(c.retryability).toBe("RETRYABLE_LATER");
+    expect(saiDaFilaParaSempre({ status: "FAILED", errorMessage: "META_133010" })).toBe(false);
+  });
+
+  it("META_190 (token morto) exige conserto humano — não adianta o robô tentar de novo", () => {
+    const c = classifyExecution({ status: "FAILED", errorMessage: "META_190" });
+    expect(c.category).toBe("WHATSAPP_AUTH_ERROR");
+    expect(c.retryability).toBe("RETRYABLE_AFTER_FIX");
+    expect(podeRetentarSozinho({ status: "FAILED", errorMessage: "META_190" })).toBe(false);
+  });
+
+  it("código da Meta ainda não nomeado NÃO manda ninguém para a exclusão automática", () => {
+    // A exclusão de cliente (ScheduledCampaignRunnerService:1903) dispara em
+    // EVOLUTION_BAD_REQUEST e BLOCKED_INVALID_PHONE. Um código desconhecido jamais
+    // pode cair nelas — apagar cliente por palpite é irreversível.
+    for (const code of ["META_131026", "META_131047", "META_130429", "META_999999"]) {
+      const c = classifyExecution({ status: "FAILED", errorMessage: code });
+      expect(c.category).not.toBe("EVOLUTION_BAD_REQUEST");
+      expect(c.category).not.toBe("BLOCKED_INVALID_PHONE");
+    }
+  });
+
+  it("nenhum rótulo mostrado ao lojista diz 'Evolution'", () => {
+    const codes = ["META_133010", "META_190", "META_131026", "HTTP_500", "NETWORK", "INVALID_PHONE", "NO_WHATSAPP_CONFIG"];
+    for (const code of codes) {
+      expect(classifyExecution({ status: "FAILED", errorMessage: code }).badge).not.toMatch(/evolution/i);
+    }
   });
 });

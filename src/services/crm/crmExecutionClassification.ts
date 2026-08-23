@@ -84,13 +84,13 @@ interface CategoryMeta {
 
 const CATEGORY_META: Record<ExecutionCategory, CategoryMeta> = {
   SENT:                            { kind: "SENT",    badge: "Enviado",                       retryable: false, retryability: "NEVER_RETRY" },
-  FAILED_PROVIDER:                 { kind: "FAILED",  badge: "Erro temporário do WhatsApp",   retryable: true,  retryability: "RETRYABLE_LATER" },
+  FAILED_PROVIDER:                 { kind: "FAILED",  badge: "Erro do WhatsApp (Meta)",       retryable: true,  retryability: "RETRYABLE_LATER" },
   FAILED_TIMEOUT:                  { kind: "FAILED",  badge: "Tempo esgotado / conexão",      retryable: true,  retryability: "RETRYABLE_LATER" },
   FAILED_UNKNOWN:                  { kind: "FAILED",  badge: "Erro desconhecido",             retryable: true,  retryability: "RETRYABLE_LATER" },
-  EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Bad request (400)",             retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
-  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Instância desconectada",        retryable: true,  retryability: "RETRYABLE_LATER" },
+  EVOLUTION_BAD_REQUEST:           { kind: "FAILED",  badge: "Número recusado pela Meta (400)", retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
+  EVOLUTION_INSTANCE_DISCONNECTED: { kind: "FAILED",  badge: "Canal do WhatsApp fora do ar",  retryable: true,  retryability: "RETRYABLE_LATER" },
   WHATSAPP_AUTH_ERROR:            { kind: "FAILED",  badge: "Erro de autenticação",          retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
-  EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Rate limit",                    retryable: true,  retryability: "RETRYABLE_LATER" },
+  EVOLUTION_RATE_LIMITED:          { kind: "BLOCKED", badge: "Limite de envio da Meta",       retryable: true,  retryability: "RETRYABLE_LATER" },
   EMPTY_MESSAGE:                   { kind: "FAILED",  badge: "Mensagem vazia",                retryable: false, retryability: "RETRYABLE_AFTER_FIX" },
   // Invalid / missing phone / not-contactable are RECIPIENT DATA problems, not
   // provider failures. Skipped BEFORE any channel call, so they never inflate
@@ -128,6 +128,12 @@ function fromMachineReason(reason: string): ExecutionCategory | null {
     case "META_TEMPLATE_REQUIRED": return "BLOCKED_SAFETY";       // política, não falha
     case "META_NOT_CONNECTED":     return "EVOLUTION_INSTANCE_DISCONNECTED";
     case "META_190":               return "WHATSAPP_AUTH_ERROR"; // token expirado/inválido
+    // Número ligado à WABA mas NÃO registrado no runtime da Cloud API
+    // (`platform_type: NOT_APPLICABLE`). É falha DO CANAL, não do destinatário:
+    // nada entra e nada sai nesse número até alguém rodar o `/register` com PIN.
+    // Fica RETRYABLE_LATER de propósito — o destinatário NÃO pode ser queimado por
+    // um defeito de configuração; quando o número for registrado, ele recebe.
+    case "META_133010":            return "EVOLUTION_INSTANCE_DISCONNECTED";
     case "INVALID_PHONE":          return "BLOCKED_INVALID_PHONE";
     case "WINDOW_LOOKUP_FAILED":                                   // banco fora → tentar depois
     case "NETWORK":                return "FAILED_TIMEOUT";

@@ -166,7 +166,7 @@ export default function MarketingSettingsPage() {
 
         <div className="mt-4 space-y-4">
           <Toggle
-            label="Modo seguro WhatsApp Web"
+            label="Modo seguro de envio"
             desc="Distribui um orçamento diário de envios entre as campanhas ativas e respeita o limite por ciclo. Desligue apenas quando estiver no WhatsApp oficial da Meta."
             checked={budget.enabled}
             onChange={(v) => setBudget("enabled", v)}
