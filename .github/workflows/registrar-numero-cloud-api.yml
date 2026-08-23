@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# REGISTRAR O NÚMERO NO RUNTIME DA CLOUD API — a cura do `META_133010`.
+#
+# O número está na WABA e o painel diz "conectado", mas nunca foi registrado no
+# runtime da Cloud API (`platform_type: NOT_APPLICABLE`) — e por isso todo envio
+# do CRM morre com "Account not registered". A própria Meta respondeu ao CEO:
+# *"A conta não existe na API de Nuvem. Use /register API para criar uma conta
+# primeiro."*
+#
+# O ADMIN_SECRET é lido do Railway DENTRO do runner e nunca aparece no log. O PIN
+# de 6 dígitos é DERIVADO dele — não é input, não é digitado, não é impresso.
+#
+# ⛔ Coexistência: o script NUNCA envia `force`. Número vivo no celular é pulado
+# de propósito — registrar arrancaria o número do aparelho onde o restaurante
+# atende cliente. Se aparecer "coexistence", a decisão sobe para o CEO.
+#
+# ⚠️ O log deste repositório é PÚBLICO — o script mascara todo segredo e imprime
+# só campos escolhidos a dedo (telefone sai com 4 dígitos, nunca inteiro).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Registrar número na Cloud API
+
+on:
+  workflow_dispatch:
+  # Disparo automático quando o próprio script muda — é o que permite rodar a
+  # partir de uma branch de trabalho, antes de existir na branch padrão.
+  push:
+    paths:
+      - "scripts/registrar-numero-cloud-api.mjs"
+      - ".github/workflows/registrar-numero-cloud-api.yml"
+
+jobs:
+  registrar:
+    name: "Registrar e provar (antes × depois)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "Registrar o número no runtime da Cloud API"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: node scripts/registrar-numero-cloud-api.mjs
