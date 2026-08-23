@@ -101,4 +101,44 @@ describe("provisionPoolTemplates — one Meta template per catalog/custom phrase
     expect(res.created).toBe(0);
     expect(meta.createOnMeta).not.toHaveBeenCalled();
   });
+
+  /**
+   * O beco sem saída que este teste tranca: `MISSING` quer dizer "a Meta NÃO tem
+   * este modelo". Se o provisionamento contasse essa linha como "já existe", ele
+   * pularia exatamente o modelo que precisa ser recriado, e o restaurante ficaria
+   * preso — selo vermelho para sempre, sem nenhum caminho de volta.
+   */
+  it("RECRIA o modelo marcado MISSING em vez de tratá-lo como já existente", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0] } },
+      audienceConfig: {},
+    }]);
+    // A conta trocou: as linhas existem no banco, mas o sync já as rebaixou.
+    meta.list.mockResolvedValue(
+      allKeys.map((k) => ({ templateName: `cliente_frio_${k.replace(/^mf_/, "v")}`, status: "MISSING" })) as never,
+    );
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.created).toBe(variants.length);
+    expect(res.existed).toBe(0);
+    expect(meta.createOnMeta).toHaveBeenCalled();
+  });
+
+  it("um modelo APROVADO de verdade continua sendo reaproveitado, não recriado", async () => {
+    db.campaign.findMany.mockResolvedValue([{
+      id: "c1", templateId: "recuperar-frios", message: variants[0],
+      scheduleConfig: { mode: "RECURRING", messagePool: { selected: [k0] } },
+      audienceConfig: {},
+    }]);
+    meta.list.mockResolvedValue(
+      allKeys.map((k) => ({ templateName: `cliente_frio_${k.replace(/^mf_/, "v")}`, status: "APPROVED" })) as never,
+    );
+
+    const res = await provisionPoolTemplates(R, "c1");
+
+    expect(res.existed).toBe(variants.length);
+    expect(meta.createOnMeta).not.toHaveBeenCalled();
+  });
 });

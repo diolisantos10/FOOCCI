@@ -103,13 +103,27 @@ function couponExamples(coupon: ReadyMadeCoupon | undefined): { cupom: string; v
 }
 
 /**
+ * Os nomes de modelo que existem DE FATO na conta que envia hoje.
+ *
+ * ⚠️ `MISSING` é o OPOSTO de "já existe na Meta": é a linha que o sync acabou de
+ * marcar como inexistente na conta atual (número que trocou de conta, ou modelo
+ * apagado lá). Contá-la como existente faria o provisionamento PULAR justamente o
+ * modelo que precisa ser recriado — e a linha ficaria presa em `MISSING` para
+ * sempre, sem caminho de volta. Filtrar aqui é o que mantém o conserto possível.
+ */
+async function nomesQueExistemNaMeta(restaurantId: string): Promise<Set<string>> {
+  const linhas = await MetaTemplateService.list(restaurantId);
+  return new Set(linhas.filter((t) => t.status !== "MISSING").map((t) => t.templateName));
+}
+
+/**
  * Creates Meta templates for every ACTIVE campaign of the restaurant and wires each
  * campaign to its template. Safe to re-run.
  */
 export async function provisionDefaultTemplates(restaurantId: string): Promise<ProvisionResult> {
   // Refresh the local mirror first so we know which names already exist on Meta.
   await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
-  const existingNames = new Set((await MetaTemplateService.list(restaurantId)).map((t) => t.templateName));
+  const existingNames = await nomesQueExistemNaMeta(restaurantId);
 
   const campaigns = await prisma.campaign.findMany({
     where:  { restaurantId, status: "ACTIVE" as never },
@@ -260,7 +274,7 @@ export async function provisionPoolTemplates(restaurantId: string, campaignId?: 
   }
 
   await MetaTemplateService.syncFromMeta(restaurantId).catch(() => ({ ok: false, synced: 0 }));
-  const existingNames = new Set((await MetaTemplateService.list(restaurantId)).map((t) => t.templateName));
+  const existingNames = await nomesQueExistemNaMeta(restaurantId);
   const exampleCtx = await buildExampleContext(restaurantId);
 
   const items: ProvisionItemResult[] = [];

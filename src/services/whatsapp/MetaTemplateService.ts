@@ -239,8 +239,31 @@ export const MetaTemplateService = {
    * (GET /{wabaId}/message_templates) and mirrors name/language/category/status/
    * variable-count locally. Preserves existing campaign mappings. Best-effort,
    * paginated. Returns a count and never throws.
+   *
+   * ⚠️ ESPELHO É ESPELHO NOS DOIS SENTIDOS — aprendido em 23/08/2026.
+   * Antes, este sync só fazia UPSERT do que a Meta devolvia. Um modelo que a Meta
+   * PAROU de listar — porque a WABA mudou, ou porque ele foi apagado lá — ficava
+   * no banco com o último status conhecido, `APPROVED`, **para sempre**. E o selo
+   * "✓ Meta aprovada" da tela de campanha lê exatamente esse campo.
+   *
+   * O estrago não era só cosmético: `findApproved()` também lê esse campo, então o
+   * disparo escolhia o modelo fantasma, mandava para a Meta e levava
+   * `META_132001 — template não existe`. Instrumento que dá falso positivo é pior
+   * que instrumento nenhum: o lojista via cinco frases com selo verde enquanto
+   * nenhuma delas existia na conta que estava enviando.
+   *
+   * A reconciliação abaixo fecha isso: o que a Meta não listou nesta varredura
+   * deixa de valer como aprovado. Duas travas de segurança sobre ela:
+   *   1. **Só roda em varredura COMPLETA e bem-sucedida.** Erro no meio da
+   *      paginação devolve cedo, sem reconciliar — meia-leitura não pode virar
+   *      "a Meta não tem". É o guardrail 1: ausência de informação não é informação.
+   *   2. **Só rebaixa linha `APPROVED`.** É o único status que (a) destrava envio
+   *      de verdade e (b) faz o produto AFIRMAR algo ao lojista. `PENDING` e
+   *      `REJECTED` já são honestos por natureza — não prometem nada — e mexer
+   *      neles arriscaria brigar com um modelo recém-submetido que a listagem da
+   *      Meta ainda não pegou.
    */
-  async syncFromMeta(restaurantId: string): Promise<{ ok: boolean; synced: number; error?: string }> {
+  async syncFromMeta(restaurantId: string): Promise<{ ok: boolean; synced: number; missing?: number; error?: string }> {
     const cfg = await MetaConfigService.getResolved(restaurantId);
     if (!cfg) return { ok: false, synced: 0, error: "WhatsApp oficial da Meta não está conectado." };
     try {
@@ -248,6 +271,12 @@ export const MetaTemplateService = {
         metaGraphUrl(`${cfg.wabaId}/message_templates?fields=id,name,language,category,status,components,rejected_reason&limit=100`);
       let synced = 0;
       let pages = 0;
+      // Tudo que a Meta confirmou existir nesta varredura, por nome+idioma.
+      const vistos = new Set<string>();
+      const chave = (name: string, lang: string) => `${name} ${lang}`;
+      // Paginação truncada NÃO é varredura completa — sem isso, uma conta com mais
+      // de 1000 modelos veria o resto virar "não existe na Meta".
+      let completa = true;
       while (url && pages < 10) {
         const res = await fetch(url, { headers: { Authorization: `Bearer ${cfg.accessToken}` } });
         const json: unknown = await res.json().catch(() => ({}));
@@ -262,10 +291,12 @@ export const MetaTemplateService = {
           if (!tpl.name) continue;
           const mapped = mapMetaStatus(tpl.status);
           const reasonRaw = tpl.rejected_reason != null ? String(tpl.rejected_reason) : "";
+          const nome  = String(tpl.name);
+          const idioma = String(tpl.language ?? "pt_BR");
           await this.upsert({
             restaurantId,
-            templateName:  String(tpl.name),
-            languageCode:  String(tpl.language ?? "pt_BR"),
+            templateName:  nome,
+            languageCode:  idioma,
             category:      String(tpl.category ?? "UTILITY").toUpperCase(),
             status:        mapped,
             bodyVariables: countBodyVariables(tpl.components),
@@ -274,15 +305,50 @@ export const MetaTemplateService = {
             metaTemplateId: tpl.id != null ? String(tpl.id) : undefined, // omit → preserved
             // mappedCampaignType omitted → preserved
           });
+          vistos.add(chave(nome, idioma));
           synced++;
         }
         url = (json as { paging?: { next?: string } }).paging?.next ?? null;
         pages++;
+        if (url && pages >= 10) completa = false;
       }
-      return { ok: true, synced };
+
+      const missing = completa ? await this.reconcileMissing(restaurantId, vistos, chave) : 0;
+      return { ok: true, synced, missing };
     } catch (e) {
       return { ok: false, synced: 0, error: maskGraphResponse(e instanceof Error ? e.message : String(e)) };
     }
+  },
+
+  /**
+   * Rebaixa para `MISSING` toda linha `APPROVED` que a varredura completa da Meta
+   * NÃO devolveu — o modelo não existe mais na conta que envia hoje.
+   *
+   * `MISSING` é status próprio de propósito, não `REJECTED`: a Meta não reprovou
+   * nada, ela simplesmente não conhece este modelo aqui. Dizer "rejeitado" seria
+   * trocar uma mentira por outra, e mandaria o lojista consertar um texto que não
+   * tem defeito. `mappedCampaignType` e `metaTemplateId` ficam intactos, para o
+   * caso de a conta antiga voltar a ser lida.
+   *
+   * Como `findApproved()` exige `status: "APPROVED"`, rebaixar aqui é o que impede
+   * o disparo de escolher um modelo fantasma e morrer com `META_132001`.
+   */
+  async reconcileMissing(
+    restaurantId: string,
+    vistos: Set<string>,
+    chave: (name: string, lang: string) => string,
+  ): Promise<number> {
+    const aprovadas = await prisma.metaMessageTemplate.findMany({
+      where:  { restaurantId, status: "APPROVED" },
+      select: { id: true, templateName: true, languageCode: true },
+    });
+    const orfas = aprovadas.filter((t) => !vistos.has(chave(t.templateName, t.languageCode)));
+    if (orfas.length === 0) return 0;
+    await prisma.metaMessageTemplate.updateMany({
+      where: { id: { in: orfas.map((t) => t.id) } },
+      data:  { status: "MISSING" },
+    });
+    return orfas.length;
   },
 
   /**

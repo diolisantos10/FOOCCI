@@ -257,7 +257,18 @@ const main = async () => {
           p(`      permissões concedidas: ${t.scopes?.join(", ") || "(a Meta não listou)"}`);
         }
         p(`      nosso app assinado na WABA: ${c.ourAppSubscribed ? "✅ sim" : "🔴 NÃO — sem isso não chega mensagem"}`);
-        p(`      templates aprovados: ${c.approvedTemplateCount ?? 0} · por status: ${jsonCurto(c.templatesByStatus, 200)}`);
+        // "zero modelos" e "não consegui ler os modelos" são coisas DIFERENTES, e
+        // até 23/08/2026 saíam iguais aqui — as duas como "0". Agora só se afirma
+        // zero quando a leitura de fato aconteceu.
+        if (c.templatesRead === false) {
+          p(`      templates: ⚠️ NÃO DEU PARA LER — ${jsonCurto(c.templatesError, 200)}`);
+          p("         (isto é 'não sei', NÃO é 'não há modelo')");
+        } else if (c.templatesRead === undefined) {
+          p(`      templates aprovados: ${c.approvedTemplateCount ?? 0} · por status: ${jsonCurto(c.templatesByStatus, 200)}`);
+          p("         ⚪ este deploy ainda não distingue 'zero' de 'não consegui ler' — PRECISO CONFIRMAR.");
+        } else {
+          p(`      templates aprovados: ${c.approvedTemplateCount ?? 0} · por status: ${jsonCurto(c.templatesByStatus, 200)}`);
+        }
         const ph = c.phone ?? {};
         p(`      número: verificação=${ph.code_verification_status ?? "?"} · nome=${ph.name_status ?? "?"} · plataforma=${ph.platform_type ?? "?"} · qualidade=${ph.quality_rating ?? "?"}`);
         p(`      estado na Cloud API (\`status\`): ${ph.status ?? "(a Meta não devolveu)"} · modo=${ph.account_mode ?? "?"} · no app do celular (\`is_on_biz_app\`)=${ph.is_on_biz_app ?? "?"}`);

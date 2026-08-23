@@ -1473,7 +1473,10 @@ model MetaMessageTemplate {
   templateName       String // Meta-registered name, e.g. "order_update"
   languageCode       String  @default("pt_BR")
   category           String  @default("UTILITY") // UTILITY | MARKETING | AUTHENTICATION
-  status             String  @default("PENDING") // PENDING | APPROVED | REJECTED | DISABLED
+  // PENDING | APPROVED | REJECTED | DISABLED | MISSING
+  // MISSING = a Meta não lista mais este modelo na conta que envia hoje (conta
+  // trocada, ou modelo apagado lá). NÃO é reprovação — ver MetaTemplateService.
+  status             String  @default("PENDING")
   bodyVariables      Int     @default(0) // number of {{n}} placeholders in the body
   mappedCampaignType String? // optional: CRM campaign type this template fulfils
   rejectedReason     String? // Meta's reason when status = REJECTED (shown to the owner)

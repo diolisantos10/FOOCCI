@@ -66,6 +66,12 @@ export async function GET(req: NextRequest) {
       // Approved templates gate business-initiated (outside-24h) CRM sends. Summarize by status.
       const templatesRaw = await graph(`${cfg.wabaId}/message_templates?fields=name,status,category,language&limit=200`, cfg.accessToken);
       const tData = (templatesRaw as { data?: Array<{ name?: string; status?: string; category?: string }> })?.data ?? [];
+      // ⚠️ GUARDRAIL 1 — "nenhum modelo" e "não consegui ler os modelos" davam a
+      // MESMA resposta aqui: `?? []` engolia o erro da Meta e o relatório dizia
+      // "0 templates" nos dois casos. Isso custou meia investigação em 23/08/2026.
+      // Agora o erro sobe separado, e quem lê sabe distinguir vazio de cego.
+      const templatesError = (templatesRaw as { error?: unknown })?.error ?? null;
+      const templatesRead  = !templatesError && Array.isArray((templatesRaw as { data?: unknown })?.data);
       const templatesByStatus: Record<string, number> = {};
       for (const t of tData) { const s = t.status ?? "UNKNOWN"; templatesByStatus[s] = (templatesByStatus[s] ?? 0) + 1; }
       const approvedTemplates = tData.filter((t) => t.status === "APPROVED").map((t) => ({ name: t.name, category: t.category }));
@@ -99,6 +105,10 @@ export async function GET(req: NextRequest) {
         wabaInfo,
         wabaPhones,
         templatesByStatus,
+        // `approvedTemplateCount: 0` só quer dizer "zero modelos" quando
+        // `templatesRead` é true. Com `templatesRead: false`, o número é "não sei".
+        templatesRead,
+        templatesError,
         approvedTemplateCount: approvedTemplates.length,
         approvedTemplates,
       });

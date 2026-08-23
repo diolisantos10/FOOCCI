@@ -2,6 +2,90 @@
 
 > Última atualização: 23/08/2026.
 
+## 🔴 23/08 (5ª rodada) — o selo "✓ META APROVADA" estava MENTINDO. Achei o mecanismo exato.
+
+O CEO mostrou a tela de campanha com **cinco frases, todas com selo verde
+"✓ Meta aprovada"** — enquanto a Meta recusava todo envio. Dois instrumentos, uma
+mentira. Era o selo.
+
+### O que provei, lendo — não deduzindo
+
+**1. O selo lê UMA fonte só, e ela é local.**
+`CRMClient.tsx:2160` desenha o selo a partir de `phraseMeta.status`, que vem de
+`GET /api/crm/campaigns/[id]/phrase-stats`. Essa rota (linha 60) lê a tabela
+**`metaMessageTemplate` do nosso banco** — não a Meta.
+
+**2. Ninguém escreve `APPROVED` à mão.** Varri todos os escritores: o
+provisionamento (`MetaTemplateProvisionService:193,306,419`) e a criação de
+campanha custom (`cron/crm/create-custom-campaign:53`) gravam **sempre `PENDING`**.
+O único código que escreve `APPROVED` é `MetaTemplateService.syncFromMeta()`, que
+copia a resposta da própria Meta. **Ou seja: o selo não foi forjado — ele foi
+verdadeiro um dia.**
+
+**3. O defeito era o sync só saber SOMAR.** `syncFromMeta` fazia `upsert` de tudo
+que a Meta devolvia e **nada** com o resto. Modelo que a Meta parava de listar
+— conta trocada, ou apagado lá — **ficava `APPROVED` no banco para sempre**.
+Nenhuma rotina reconferia: `syncFromMeta` só roda no provisionamento e quando o
+lojista abre a tela de modelos. **Não existe cron de sincronização.**
+
+**4. A prova de que a linha local ainda dizia `APPROVED` hoje** — vinda da Meta,
+não do nosso banco: o disparo morreu com **`META_132001`**, e não com
+`META_TEMPLATE_REQUIRED`. Isso é decisivo:
+- `META_132001` é a Meta respondendo *"esse modelo não existe"* a um envio de
+  modelo (`MetaWhatsAppCloudProvider:82` monta `META_${code}` da resposta crua).
+- Para chegar lá, `findApproved()` (que exige `status: "APPROVED"`) **encontrou**
+  uma linha aprovada e mandou o modelo.
+- Se a tabela não tivesse linha aprovada, o disparo teria caído em texto livre e
+  o bloqueio seria local, sem nunca falar com a Meta.
+
+> **Veredito: é o (b) — selo local que ninguém reconfere.** O (a) — modelos
+> aprovados terem ficado na WABA antiga — é a causa mais provável da defasagem,
+> e casa com o número ter mudado de conta. Mas **não consegui ler a WABA antiga**
+> (as variáveis do Railway vêm redigidas para esta conexão e não há rota que liste
+> as WABAs do portfólio): **preciso confirmar**.
+
+### Consertado nesta rodada
+
+1. **`syncFromMeta` agora também APAGA** (`MetaTemplateService`): o que a Meta não
+   listou numa varredura completa deixa de valer como aprovado — vira `MISSING`.
+   Duas travas em cima disso:
+   - **só reconcilia em varredura COMPLETA e bem-sucedida** — erro no meio da
+     paginação, ou paginação truncada no teto de 10 páginas, **não rebaixa
+     ninguém** (guardrail 1: meia-leitura não é veredito);
+   - **só rebaixa linha `APPROVED`** — o único status que destrava envio e que faz
+     o produto afirmar algo ao lojista. `PENDING`/`REJECTED` já são honestos.
+2. **`MISSING` não é "rejeitado".** A Meta não reprovou nada; ela não conhece o
+   modelo naquela conta. O selo novo diz **"✗ Não existe na Meta"**, com explicação
+   ao passar o mouse. Chamar de reprovação mandaria o lojista consertar um texto
+   sem defeito.
+3. **Beco sem saída fechado:** `provisionDefaultTemplates` montava a lista de "já
+   existe na Meta" a partir da tabela local. Uma linha `MISSING` seria contada como
+   existente e o modelo **nunca** seria recriado. Agora `MISSING` é filtrado — é
+   exatamente o que precisa voltar a ser submetido.
+4. **O diagnóstico parou de confundir "zero" com "não consegui ler".**
+   `admin/meta/diag` fazia `?? []` em cima da resposta de modelos: erro da Meta
+   virava **"0 templates"**. Isso me custou meia investigação hoje. Agora sobem
+   `templatesRead` e `templatesError` separados, e o `meta-raiox` imprime
+   "NÃO DEU PARA LER" em vez de zero.
+5. **8 testes novos** travam tudo isso, incluindo os quatro casos em que rebaixar
+   seria errado. **Conferi que eles reprovam contra o código antigo** (5 de 8
+   falham) — teste que passa nos dois lados não prova nada.
+
+### ⛔ ANTES DE MERGEAR: este conserto MUDA o comportamento do disparo
+
+Hoje o disparo tenta modelo e morre em `META_132001` — **nada sai**. Com o selo
+corrigido, não haverá modelo aprovado, e `sendMetaCrmMessage`
+(`metaCrmSend.ts:138`) **cai em texto livre** — que a Meta entrega para quem está
+dentro da janela de 24h e recusa para o resto.
+
+**E aqui está o achado que ninguém tinha visto:** o caminho de CRM **não consulta
+a janela de 24h**. `decideMetaSend` — a função que existe justamente para isso —
+é usada **só** em `WhatsAppMessagingService`, **nunca** no disparo de campanha.
+O comentário do código diz "valid only inside the 24h window"; **nada trava**.
+É o guardrail 4 da casa ("prompt é aviso; código é trava") aberto no caminho que
+fala com cliente. **Não consertei por conta própria** — barrar envio que hoje
+funciona é decisão de dono, não de Diretor. Item para o CEO.
+
 ## ✅ 23/08 (4ª rodada) — o `META_133010` foi curado na raiz: o número está REGISTRADO na Cloud API
 
 A rodada anterior nomeou o defeito; esta fechou. O número oficial do Sushi Cazza

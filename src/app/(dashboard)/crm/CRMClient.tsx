@@ -2160,6 +2160,11 @@ function CampaignManageModal({
     if (st === "APPROVED") return <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-700">✓ Meta aprovada</span>;
     if (st === "PENDING")  return <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700">⏳ Meta em análise</span>;
     if (st === "REJECTED") return <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-red-700">✗ Meta rejeitou</span>;
+    // NÃO é reprovação: a Meta simplesmente não conhece este modelo na conta que
+    // envia hoje — o caso clássico é o número ter trocado de conta, deixando as
+    // aprovações antigas na conta velha. Dizer "rejeitou" mandaria o lojista
+    // consertar um texto que não tem defeito nenhum.
+    if (st === "MISSING")  return <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-red-700" title="Este texto não existe na conta de WhatsApp que está enviando hoje — precisa ser enviado de novo para aprovação da Meta.">✗ Não existe na Meta</span>;
     return <span className="rounded-full bg-[#F4F4F2] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-muted">Meta: na fila</span>;
   };
 
