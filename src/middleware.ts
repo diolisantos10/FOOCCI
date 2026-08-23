@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { TENANT_HEADER, USER_HEADER, ROLE_HEADER } from "@/lib/tenant";
+import { destinoCanonicoSemWww } from "@/lib/canonicalHost";
 
 // Routes that do NOT require authentication
 /**
@@ -100,11 +101,17 @@ export async function middleware(req: NextRequest) {
   // Regra geral, para quem for mexer aqui: **redirecionamento de domínio nunca
   // pode engolir `/.well-known/`.** É o caminho reservado para provas de posse e
   // metadados de protocolo — ele pertence ao domínio pedido, não ao canônico.
+  //
+  // ⚠️ E O DESTINO É MONTADO, NUNCA HERDADO DO `nextUrl` (defeito de 23/08/2026).
+  // Clonar `req.nextUrl` e trocar só o `host` mantém a porta interna do contêiner
+  // no destino — `https://foocci.com.br:8080/`, um endereço que não existe lá
+  // fora. O porquê exato está em `lib/canonicalHost.ts`, junto do teste.
   const host = req.headers.get("host") ?? "";
   if (host.startsWith("www.") && !pathname.startsWith(ACME_CHALLENGE_PREFIX)) {
-    const dest = req.nextUrl.clone();
-    dest.host = host.slice(4);
-    return NextResponse.redirect(dest, 308);
+    return NextResponse.redirect(
+      destinoCanonicoSemWww(host, pathname, req.nextUrl.search),
+      308,
+    );
   }
 
   // Always allow Next.js internals and static assets
