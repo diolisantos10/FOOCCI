@@ -1,5 +1,9 @@
 # Dependencies
-node_modules/
+# Sem a barra de propósito: `node_modules/` casa só DIRETÓRIO. Um worktree que
+# aponta node_modules para outro lugar cria um SYMLINK — que é arquivo, escapava
+# deste padrão e foi parar num commit em 23/08/2026. O build do Railway morreu com
+# "cannot replace to directory /app/node_modules with file". Sem a barra, casa os dois.
+node_modules
 .pnp
 .pnp.js
 
