@@ -1,5 +1,101 @@
 # Domínio — o diagnóstico (e é o inverso do que estava na lista)
 
+## 23/08/2026, fim do dia — certificado emitido, e o defeito que apareceu atrás dele
+
+O CEO corrigiu o DNS e o Railway emitiu o certificado do `www`: o aviso vermelho
+do Chrome acabou. **Segundos depois apareceu outro dano, com a mesma cara para o
+visitante** — "Não é possível acessar esse site":
+
+```
+https://www.foocci.com.br/                    → 308 → https://foocci.com.br:8080/          ← quebrado
+https://www.foocci.com.br/r/ABC123?utm=zap    → 308 → https://foocci.com.br:8080/r/...     ← quebrado
+https://foocci.com.br/                        → 307 → /site                                ← certo, intocado
+```
+
+`8080` é a porta em que o app escuta **dentro** do contêiner. A causa é da API de
+URL, não do Railway: o middleware clonava `req.nextUrl` (que atrás do proxy já vem
+com `:8080`) e trocava só o `host` — e o setter `host` do WHATWG **só mexe na
+porta se o valor novo trouxer uma**. `foocci.com.br` não traz, então o `:8080`
+sobrevivia e ia para o `Location`.
+
+Corrigido em `src/lib/canonicalHost.ts`: o destino passa a ser **montado**, nunca
+herdado — `https` fixo, host público do cabeçalho `Host` sem porta, caminho e
+query preservados. Caminho e query, aliás, **já estavam certos** (medido em
+produção acima): o único defeito era a porta.
+
+**Aprendizado que vale além deste domínio:** consertar o certificado e conferir só
+"o cadeado voltou" teria dado o caso por encerrado com o site igualmente
+inacessível. Portão de entrada se mede seguindo o redirecionamento até o fim, não
+no primeiro salto.
+
+---
+
+## Estado atual (23/08/2026) — o `www` continua quebrado, e agora sabemos por quê
+
+Medido **de fora deste ambiente** (SSL Labs, a partir dos servidores deles), porque
+a saída HTTPS desta máquina passa por um proxy que troca o certificado — ler TLS
+daqui dentro mede o proxy, não o Railway. Esse erro já custou um diagnóstico errado.
+
+| Endereço | DNS | Certificado servido | Nota |
+|---|---|---|---|
+| `foocci.com.br` | A → 69.46.46.119 | ✅ `CN=foocci.com.br`, Let's Encrypt, válido até 05/2026+ | **A+** — intacto |
+| `www.foocci.com.br` | CNAME → `9gfe3aaa.up.railway.app` → 69.46.46.53 | ❌ `CN=*.up.railway.app` (curinga do Railway) | **T** — falha de confiança |
+
+O certificado curinga `*.up.railway.app` **não cobre** `www.foocci.com.br`. É
+exatamente isso que o Chrome traduz como `NET::ERR_CERT_COMMON_NAME_INVALID`.
+
+### A causa: o domínio `www` está cadastrado no Railway, mas não está vivo na borda
+
+O CNAME de hoje **já é** o valor que o diagnóstico de 04/08 exigia (`9gfe3aaa`), e
+mesmo assim não funciona. O que prova a causa é o corpo da resposta:
+
+```
+Host: www.foocci.com.br  →  {"status":"error","code":404,"message":"Application not found"}
+   ... na borda 69.46.46.53 (9gfe3aaa, alvo do CNAME)
+   ... e também nas bordas 69.46.46.119 (apex) e 69.46.46.69 (domínio de serviço)
+```
+
+**Nenhuma borda do Railway reconhece o Host `www.foocci.com.br`.** O domínio
+aparece na API do Railway (`customDomains`), mas o roteamento nunca foi ativado —
+e, sem roteamento, a validação de posse nunca completa e o certificado nunca é
+emitido. Não é propagação de DNS, não é o `middleware`, não é o app.
+
+> A exceção do ACME no `middleware` está correta e no ar — e não é a culpada:
+> `http://www.foocci.com.br/.well-known/acme-challenge/<token>` responde **404 do
+> `railway-edge`**, ou seja, a requisição nem chega à aplicação.
+
+### O que ficou fora do alcance desta sessão
+
+Não consegui ler o `certificateStatus` nem recriar o domínio: a cota do agente do
+Railway está esgotada, não há CLI autenticado aqui, o `RAILWAY_TOKEN` só existe
+dentro do GitHub Actions — e o **Actions está bloqueado por cobrança**. O MCP do
+Railway lista domínios, mas não apaga nem recria domínio customizado.
+
+**Portanto:** o motivo exato pelo qual o Railway deixou o `www` inativo (validação
+travada desde 04/08 x registro órfão de uma recriação) é **"preciso confirmar"** —
+o que está provado é o efeito, e ele é definitivo enquanto ninguém recriar o
+domínio no painel.
+
+### O conserto, em duas mãos
+
+1. **No Railway (painel):** projeto Foocci → serviço FOOCCI → *Settings* →
+   *Networking* → apagar `www.foocci.com.br` e adicioná-lo de novo (porta 8080).
+   Ao adicionar, o Railway mostra **o valor de CNAME que ele exige** — e recriar
+   **sorteia um valor novo**, quase certamente diferente de `9gfe3aaa`.
+2. **Na Hostinger:** trocar o CNAME do `www` para exatamente esse valor novo
+   (TTL 300). Só então o certificado é emitido, em minutos.
+
+Nada disso encosta no `foocci.com.br` sem www: são registros diferentes (A/ALIAS
+na apex, CNAME no `www`) e domínios separados no Railway.
+
+### Exposição a cliente: nenhuma medida
+
+Nenhum link gerado pelo produto usa `www` — cardápio, QR, recuperação de carrinho
+e os curtos `/r/` e `/l/` saem todos de `foocci.com.br`. As únicas menções a `www`
+no código são o redirecionamento canônico no `middleware` e os testes dele.
+
+---
+
 > 30/07/2026. Medido de fora, do container e de um resolvedor público.
 > **Atualizado em 04/08/2026** — ver "Estado atual" logo abaixo.
 
