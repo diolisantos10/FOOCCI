@@ -10,6 +10,26 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟠 23/08 — SDR do Foocci: diário, cegueiras e o lead chegando à conversa
+
+Bloco `claude/sdr-foocci-liga`. Detalhe inteiro em `docs/sdr-foocci-liga.md`.
+**Nenhuma mensagem sai:** `FOOCCI_SDR_SEND_ENABLED` continua desligado.
+
+Feito: diário do SDR (`DiarioDoSdr.ts` + `GET /api/sdr/diario`, fail-closed com
+`SDR_DIARIO_SECRET`, sem conteúdo de cliente); motivo nomeado para toda falha de
+IA (`FalhaDeMotor.ts`, incluindo `finish_reason: "length"`); origem `motor` × `ia`
+em cada campo entendido; e o lead do site virando entrevista (`LeadParaSondagem.ts`).
+
+**Aberto:**
+- `/api/sdr/diario` só é legível de dentro de uma sessão — falta entrar na lista de
+  caminhos públicos do `middleware.ts`, que **não toquei** (outro Diretor, PR #137).
+- Leads antigos não foram semeados — precisa de um script de uma passada.
+- Ninguém chama `/api/sdr/entrevista`: o motor segue desligado do mundo.
+- Sete perguntas comerciais para o CEO (preço, alçada de fechamento, desconto,
+  fidelidade, prazo de implantação, formas de pagamento, prova citável).
+- WhatsApp de vendas: número, `FOOCCI_SALES_*` e a confirmação de de quem é a WABA
+  do Sushi Cazza.
+
 ## 🟢 23/08 (8ª rodada) — (A) SUBIU. E duas lições que custaram deploy.
 
 **O CEO autorizou (A) — "pode tudo".** Selo de modelo + trava da janela de 24 h

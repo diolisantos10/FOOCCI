@@ -19,6 +19,7 @@ import {
 } from "../oficina/Sondagem";
 import { ouvir, roteiroDoTurno, type ResultadoDoTurno } from "./Entrevistador";
 import { chaveDaEntrevista, resolverMemoriaDaEntrevista } from "./MemoriaDaEntrevista";
+import { registrarTurno } from "./DiarioDoSdr";
 import { gerarPlano, renderizarPlano, type Plano } from "./PlanoDeMidia";
 
 export interface PedidoDeTurno {
@@ -48,7 +49,11 @@ export interface RespostaDoTurno {
   cobertura: number;
   veredito: string;
   semIA: boolean;
+  /** Por que a IA não respondeu, quando não respondeu. */
+  motivoSemIA?: RespostaDoTurnoMotivo;
 }
+
+type RespostaDoTurnoMotivo = NonNullable<ResultadoDoTurno["motivoSemIA"]>;
 
 /** Um turno da entrevista, com a memória cuidada. */
 export async function conduzirTurno(pedido: PedidoDeTurno): Promise<RespostaDoTurno> {
@@ -69,6 +74,21 @@ export async function conduzirTurno(pedido: PedidoDeTurno): Promise<RespostaDoTu
   const avaliacao = avaliarSondagem(turno.estado);
   const roteiro   = roteiroDoTurno(turno.estado, pedido.quantas ?? 3);
 
+  /* O diário é anotado DEPOIS da gravação e nunca antes: um turno anotado que
+   * não persistiu contaria uma entrevista que não existe. E o `registrarTurno`
+   * não lança — observar não pode derrubar o observado. */
+  registrarTurno({
+    chave,
+    iaRespondeu: !turno.semIA,
+    motivoSemIA: turno.motivoSemIA,
+    entendido: turno.entendido.map((e) => ({ chave: e.chave, origem: e.origem })),
+    perguntasNoAr: (pedido.perguntadasAgora ?? []).length,
+    seguemSemResposta: turno.semResposta.length,
+    travou: turno.travou,
+    cobertura: avaliacao.cobertura,
+    podePropor: avaliacao.podePropor,
+  });
+
   return {
     chave,
     estado: turno.estado,
@@ -81,6 +101,7 @@ export async function conduzirTurno(pedido: PedidoDeTurno): Promise<RespostaDoTu
     cobertura: avaliacao.cobertura,
     veredito: avaliacao.veredito,
     semIA: turno.semIA,
+    ...(turno.motivoSemIA !== undefined ? { motivoSemIA: turno.motivoSemIA } : {}),
   };
 }
 

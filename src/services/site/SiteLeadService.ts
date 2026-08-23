@@ -39,6 +39,7 @@ import type { CreateSiteLeadInput } from "@/validators/site-lead";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { POLITICA_PRIVACIDADE_VERSAO } from "@/lib/site/politicaPrivacidade";
+import { semearEntrevistaDoLead } from "@/services/foocci-sdr/LeadParaSondagem";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
 const FROM = process.env.LEADS_FROM_EMAIL || "Foocci <onboarding@resend.dev>";
@@ -164,6 +165,25 @@ export const SiteLeadService = {
           // O contato já está salvo — a linha do tempo não pode derrubar a captura.
           console.error("[site-lead] falha ao registrar a interação de captura:", e);
         });
+    }
+
+    /* ── O dado da porta chegando à conversa ───────────────────────────────
+     * O que a pessoa acabou de digitar (restaurante, cidade, tipo, desafio) vira
+     * a entrevista inicial do SDR. Sem isto o SDR abriria a conversa perguntando
+     * exatamente o que o sujeito escreveu trinta segundos antes.
+     *
+     * Depois da gravação e best-effort: semear é útil, perder o lead é
+     * inaceitável. Reenvio não sobrescreve entrevista existente. */
+    const semeadura = await semearEntrevistaDoLead({
+      id: leadId,
+      codigo,
+      restaurante: ouNulo(input.restaurante),
+      cidade:      ouNulo(input.cidade),
+      tipo:        ouNulo(input.tipo),
+      desafio:     ouNulo(input.desafio),
+    });
+    if (semeadura === "FALHOU") {
+      console.error("[site-lead] entrevista do SDR NÃO foi semeada para o contato", { leadId });
     }
 
     const error = await notify({ ...input, codigo });
