@@ -36,6 +36,44 @@ de cron fazia. Falha na submissão **não derruba** o envio das campanhas (guard
 **Só encontrei isso porque fui ler o log depois de subir.** A segunda leitura não
 serviu para confirmar o que eu já achava — serviu para achar o que eu não sabia.
 
+### ✅ O RESULTADO, medido na própria Meta
+
+Depois do conserto do motor, as duas primeiras passadas do agendador:
+
+```
+18:53:20  modelos à Meta: 30 submetido(s), 0 falha(s)
+19:05:39  modelos à Meta: 54 submetido(s), 0 falha(s)
+```
+
+**84 modelos, 0 falhas** — e a Meta confirma exatamente 84 (`{"PENDING": 84}`,
+`templatesRead: true`, `templatesError: null`). **Eram ZERO.** Os textos foram
+submetidos como estão, sem uma vírgula mudada.
+
+São 84 e não 80 porque a varredura inclui também as **frases personalizadas** que o
+lojista acrescentou, não só as 5 do catálogo de cada campanha — o que é correto: é
+o texto que ele de fato usa.
+
+**Por que 30 na primeira passada e 54 na segunda, e não 84 de uma vez:** de
+propósito. O sync só rebaixa o modelo fantasma **depois** de ler a Meta por
+inteiro, e a lista de trabalho já foi montada antes disso — então as campanhas
+restantes entram na passada seguinte. É a ordem segura do guardrail 1: nunca
+rebaixar sem ter lido tudo. O sistema se conserta sozinho em dois turnos.
+
+### ✅ E o disparo parou de bater na parede
+
+| erro | antes | depois |
+|---|---|---|
+| `META_133010` | morria todo envio | **sumiu** (registro do número, 4ª rodada) |
+| `META_132001` | morria todo envio | **sumiu** (selo consertado — não escolhe mais modelo fantasma) |
+
+Tick das 18:59–19:00: `CampaignRunner` rodou e **nenhum colapso de canal**. Os
+únicos registros de erro na janela são decisões do Cérebro atendendo **cliente
+real** (18:55 e 18:59 chegaram mensagens de gente de verdade e o robô respondeu).
+
+⚠️ **Isto NÃO é "a campanha voltou a sair".** A Meta ainda precisa APROVAR os 84
+modelos — dias, não minutos. Até lá a campanha fria não sai, e é isso que o CEO
+aceitou ao escolher (A). Recusa de texto volta a ele; não vira reescrita nossa.
+
 ### O critério das campanhas: a TELA, e fui ler a tela
 
 Ordem do CEO: *"todas as campanhas que estão na tela de campanhas do Foocci estão
