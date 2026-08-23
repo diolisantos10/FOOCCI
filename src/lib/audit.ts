@@ -42,7 +42,13 @@ export type AuditAction =
   | "infra_credential.save"
   | "infra_credential.save_rejected"
   | "infra_credential.delete"
-  | "infra_credential.read";
+  | "infra_credential.read"
+  // Teto de contatos do CRM alterado pelo ADMINISTRADOR do sistema (não pelo
+  // lojista, na tela dele). É dinheiro: o teto governa quantas pessoas novas o
+  // CRM pode abordar. Mudança sem trilha aqui é mudança que ninguém consegue
+  // explicar depois — por isso o `meta` carrega o valor ANTES e o DEPOIS.
+  | "crm.contact_budget_update"
+  | "crm.contact_budget_update_rejected";
 
 export interface AuditEntry {
   action: AuditAction;
