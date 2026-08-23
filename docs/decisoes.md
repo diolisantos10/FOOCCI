@@ -1021,3 +1021,32 @@ não era executável. Quem achou foi o `cerebro`, ao construir o Diretor.
 **A fronteira entre os dois, para não se sobreporem:** o Diretor aplica os seis
 campos da ficha ao pedido inteiro, uma vez; o PM aplica os seis a cada tarefa,
 com dono, prazo e dependência em cima. Enquadrar é do Diretor; decompor é do PM.
+
+---
+
+## 23/08/2026 — O menu inicial não é do Cérebro, e ninguém tinha percebido
+
+**Achado.** A tela "Menu inicial" (`welcomeMessage` + `menuOptions`) só existe
+dentro de `WhatsAppReceptionistService`. Desde 05/08 (`16cf3b5`, o porte da
+paridade da Evolution para o webhook da Meta), `InboundAgentDispatch` manda **todo
+texto** para o Cérebro salvo em `MENU_ONLY` — e o Cérebro não lê essa configuração.
+Ou seja: o modo padrão, chamado `RECEPTIONIST_ONLY`, não chama o recepcionista.
+
+**Regra que fica.** Quando um caminho de entrada é substituído, a pergunta de
+aceite não é "o novo caminho responde?" — é **"quais configurações do painel o
+caminho antigo lia e o novo não lê?"**. Aqui a paridade foi medida em serviços
+acionados (opt-out, carrinho, atribuição, Build OS) e nenhuma linha mediu
+*configuração de lojista lida*. Uma tela inteira do produto virou letra morta em
+silêncio, e o rótulo dela na interface continuou prometendo o que ela não fazia.
+
+**Segunda regra.** Toda ferramenta de diagnóstico de roteamento tem que conhecer o
+conjunto **completo** de handlers. `hostRoutingDiagnostic` só conhece
+`TEXT_ORDER | RECEPTIONIST | HUMAN_BLOCKED | IGNORED`; `BRAIN` não existe nela.
+Diagnóstico com vocabulário desatualizado não é neutro — ele responde errado com
+confiança.
+
+**Não corrigido nesta sessão, e por quê.** O conserto de código muda a porta de
+entrada de todos os restaurantes e não há como validá-lo ponta a ponta sem
+disparar mensagem no número oficial do Sushi Cazza, ao vivo. O que "Recepcionista"
+promete é decisão de dono do produto. Subiu ao CEO com duas saídas e recomendação
+(`docs/pendencias.md`, bloco de 23/08).

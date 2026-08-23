@@ -1,6 +1,114 @@
 # Pendências — o que está aberto
 
-> Última atualização: 07/08/2026, noite.
+> Última atualização: 23/08/2026.
+
+## 🔴 23/08 — "Menu inicial" parou: são DUAS quebras empilhadas, não uma
+
+O CEO mandou o print da tela **Menu inicial** (`/agente-ia`) e disse *"preciso disso
+funcionando de novo"*. Leitura do caminho inteiro — não dedução — achou duas causas
+independentes. Consertar só uma **não** faz o menu voltar.
+
+### Causa A — HOJE (23/08): o número não está registrado na Cloud API
+
+Ao religar o número oficial do Sushi Cazza, faltou a etapa `/register`. Evidência
+de produção (Railway, serviço `FOOCCI`, ambiente `production`), 23/08 às 00:04,
+00:12, 00:13 e de 14:07 a 14:57 de 10 em 10 minutos:
+
+```
+[CampaignRunner] channel collapse — aborting batch after 5 consecutive failures
+  { campaignId: 'cmq79xjmu000a3mr3l86yzrxm', lastError: 'META_133010' }
+```
+
+`META_133010` = número **não registrado** na Cloud API. E o próprio código já
+avisa o que isso custa — `src/services/whatsapp/MetaOnboardingService.ts:111-116`:
+um número migrado/verificado fica `platform_type: NOT_APPLICABLE` (ligado à WABA,
+**não** ativado no runtime) *"até isto rodar, e a Meta não entrega webhook de
+entrada"*. Ou seja: hoje **nada entra e nada sai** nesse número. Nenhum menu
+sobreviveria a isso.
+
+Não houve **nenhuma** linha `[webhook/meta/whatsapp]` no log do dia — coerente com
+"não chega webhook", mas a retenção do log tem buraco (00:13 → 14:07), então isto
+é indício, não prova.
+
+### Causa B — desde 05/08: o modo "Recepcionista" nunca mostra o menu
+
+O menu inicial (`welcomeMessage` + `menuOptions`, `prisma/schema.prisma:1684-1704`,
+chaveado por `restaurantId` — **não** por número, então a troca de chip não o
+orfanou) é renderizado por **um único** serviço:
+`src/services/ai/WhatsAppReceptionistService.ts:1448-1470` (saudação + menu numerado).
+
+Quem escolhe o agente é `src/services/whatsapp/inbound/InboundAgentDispatch.ts:224`:
+
+```ts
+} else if (agentMode !== "MENU_ONLY" && isBrainEnabled() && input.isTextMessage && text) {
+  handler = "BRAIN";
+```
+
+Isto é: **todo texto** vai para o Cérebro, exceto no modo `MENU_ONLY`. E o Cérebro
+(`src/services/whatsapp/brain/`) **não lê `welcomeMessage` nem `menuOptions` em
+lugar nenhum** (grep sem um único acerto). Resultado: no modo padrão
+`RECEPTIONIST_ONLY` — o modo cujo nome é "recepcionista" — o recepcionista **não é
+chamado** e o menu da tela é letra morta.
+
+Confirmado que o Cérebro está ligado em produção: `WHATSAPP_BRAIN_ENABLED` **não
+existe** entre as variáveis do serviço no Railway, e o default é ligado
+(`InboundAgentDispatch.ts:67`).
+
+**Quando começou:** commit `16cf3b5` (05/08/2026), o mesmo que criou
+`InboundAgentDispatch` ao portar a paridade da Evolution para o webhook da Meta.
+Antes disso o caminho vivo era o webhook da Evolution, que roteava por `agentMode`
+e caía no recepcionista. Casa com `docs/decisoes.md:763` ("o da Meta chama só o
+Cérebro").
+
+**A tela mente hoje.** `src/app/(dashboard)/agente-ia/AgentePage.tsx:152` descreve
+`RECEPTIONIST_ONLY` como *"Responde, exibe opções e direciona o cliente"*. Ele não
+exibe opção nenhuma.
+
+**Dano colateral:** o diagnóstico de roteamento
+(`src/services/whatsapp/ordering/hostRoutingDiagnostic.ts:28`) só conhece
+`TEXT_ORDER | RECEPTIONIST | HUMAN_BLOCKED | IGNORED` — o `BRAIN` não existe no
+vocabulário dele. Quem usar essa ferramenta para depurar isto recebe resposta errada.
+
+### 👤 O que depende do CEO — dois atos, nesta ordem
+
+1. **Registrar o número na Cloud API.** `POST /api/admin/meta/register` com
+   `{ restaurantId, pin }` (PIN de 6 dígitos da verificação em duas etapas do
+   número) — `src/app/api/admin/meta/register/route.ts:61-99`. O PIN é posse dele;
+   eu não tenho e não devo ter.
+   ⚠️ **Trava de segurança que ele precisa saber antes de apertar:** se o número
+   estiver em **coexistência** (rodando também no app WhatsApp Business do celular
+   — que é justamente o cenário de hoje, CRM e atendimento no mesmo chip), o
+   `/register` **expulsa o número do aparelho**. O código recusa por padrão e só
+   obedece com `force: true` (`route.ts:88-91`). Não passar `force` sem decisão
+   explícita dele.
+   Se o reconnect trocou o número por engano (ex.: pegou o número de teste +1), a
+   mesma rota reaponta o `phoneNumberId` dentro da mesma WABA antes de registrar
+   (`route.ts:64-77`).
+
+2. **Decidir o que "Recepcionista" significa** — é escolha de dono do produto, não
+   minha:
+   - **Saída 1 (zero código, reversível num clique):** trocar o modo do Sushi Cazza
+     para **"Menu fixo (sem IA)"** (`MENU_ONLY`) na própria tela. O menu do print
+     volta exatamente como está configurado. **Custo:** perde a IA nesse número.
+   - **Saída 2 (código):** fazer a primeira mensagem da conversa (saudação) cair no
+     recepcionista com o menu, e o Cérebro assumir do segundo turno em diante.
+     **Custo:** mexe na porta de entrada de **todos** os restaurantes e não há como
+     validar ponta a ponta sem disparar mensagem — e o número é o do sushi ao vivo.
+   - **Recomendo a Saída 1 hoje** e a Saída 2 como obra agendada, depois que o
+     número estiver de pé e com um caminho de teste que não use cliente real.
+
+### O que eu NÃO consegui verificar
+
+- Se o `phoneNumberId` gravado no banco é o do chip religado — não leio dado de
+  produção e não altero.
+- Se o número está ou não em coexistência — isso muda a resposta do ato 1.
+- Fluxo ponta a ponta: não disparei nenhuma mensagem. O número é o oficial do
+  Sushi Cazza e a ordem é não arriscar.
+- O GitHub Actions está 100% vermelho desde 15/08 (faturamento, não código); não
+  precisei dele — nenhuma linha de `src/` foi alterada neste bloco.
+
+---
+
 
 ## 🏛️ 07/08 — A Sala dos Agentes, e o custo de IA que era chute
 
