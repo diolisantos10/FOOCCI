@@ -10,6 +10,79 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟢 23/08 (8ª rodada) — (A) SUBIU. E duas lições que custaram deploy.
+
+**O CEO autorizou (A) — "pode tudo".** Selo de modelo + trava da janela de 24 h
+subiram JUNTOS, como ele decidiu. Consequência que ele já conhecia e aceitou: a
+campanha fria para de sair até haver modelo aprovado pela Meta.
+
+### O critério das campanhas: a TELA, e fui ler a tela
+
+Ordem do CEO: *"todas as campanhas que estão na tela de campanhas do Foocci estão
+todas autorizadas. Ligadas ou não."* Em vez de deduzir da tabela, li:
+
+- `ReadyMadeCampaignService.getStates` faz `READY_MADE_CAMPAIGNS.map(...)`, **sem
+  filtro por campanha existente**;
+- `ReadyMadeCampaignsSection` renderiza `items.map(...)`, **sem `slice` e sem `filter`**.
+
+**A tela lista as 16 predefinidas sempre**, com `campaignId: null` enquanto ninguém
+ligou. As 4 que eu tinha deixado de fora **aparecem** → estão autorizadas →
+**80 frases, não 60.**
+
+**Criar campanha foi autorizado, e eu NÃO criei — não era preciso.** A varredura
+passou a submeter o modelo direto do catálogo para a predefinida sem campanha:
+nenhuma campanha criada, nenhum mapeamento escrito, e portanto **nada que possa
+disparar por engano**. Campanha que não existe é a única que não dispara. Quando o
+lojista ligar o card, o modelo já está aprovado e a varredura normal só amarra o
+mapeamento — zero espera, que é a promessa escrita no topo daquele bloco.
+
+### Os dois "24 horas" no mesmo arquivo — não unificar, nunca
+
+`OrderDraftRecoverySendService.ts` agora tem dois, com significados **opostos**:
+
+| | o quê | onde |
+|---|---|---|
+| do outro Diretor | intervalo de 24 h entre mensagens de CRM ao mesmo cliente — regra de **frequência**, decide **se** a pessoa pode ser abordada | **antes** do envio, regra 11 da elegibilidade |
+| meu | janela de 24 h de atendimento da Meta — decide **como** a mensagem sai (texto livre × modelo aprovado) | **dentro** do envio |
+
+Parecem duplicados e não são. **Unificar mata um dos dois em silêncio** — exatamente
+o defeito que passamos o dia caçando. Conferido linha a linha depois de cada um dos
+três merges; os dois seguem vivos e separados.
+
+### ⚠️ Lição 1 — o diretório de trabalho é COMPARTILHADO entre sessões
+
+No meio do bloco, outra sessão trocou a branch do `/home/user/foocci` debaixo de
+mim: o reflog mostra `checkout: moving from claude/registrar-numero-cloud-api to
+claude/raiz-site-comercial`. Editei por alguns minutos **na branch do outro
+Diretor** sem perceber — o sintoma foi um arquivo de teste que "perdeu" 12 testes.
+
+O que salvou: meu trabalho estava **commitado e empurrado**, então nada se perdeu.
+Devolvi a árvore dele ao estado limpo e passei a trabalhar num **`git worktree`
+separado** (`/home/user/foocci-diretor`), que é o jeito certo de duas sessões
+dividirem um repositório.
+
+**Regra para quem vier depois: confira `git branch --show-current` antes de editar,
+e trabalhe em worktree próprio quando houver outra sessão viva no repositório.**
+
+### ⚠️ Lição 2 — o symlink do worktree derrubou o build (erro meu)
+
+Liguei `node_modules` do worktree ao do checkout principal por symlink. O
+`.gitignore` tinha `node_modules/` **com barra**, que casa apenas **diretório**;
+symlink é **arquivo**, escapou do padrão e o `git add -A` o commitou. O build do
+Railway morreu com:
+
+```
+Build Failed: cannot replace to directory /app/node_modules with file
+```
+
+**Produção não caiu em momento algum** — o deploy falhou no *build*, então o serviço
+seguiu servindo o deploy anterior. O que não subiu foi a minha mudança. Corrigido
+nos dois lados em paralelo (o outro Diretor chegou junto); ficou a versão da branch
+de deploy, que cobre `node_modules` **e** `node_modules/`.
+
+**A lição é do `.gitignore`, não do symlink:** a prática de symlinkar node_modules
+em worktree é boa; o que faltava era o padrão segurá-la.
+
 ## 🟢 23/08 (7ª rodada) — (A) autorizada pelo CEO. Pacote PRONTO e PARADO antes do merge.
 
 **Decisão do CEO: opção (A) — selo + trava da janela de 24h JUNTOS.** Consequência

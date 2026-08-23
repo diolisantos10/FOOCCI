@@ -23,6 +23,8 @@
  */
 
 import { ScheduledCampaignRunnerService } from "@/services/crm/ScheduledCampaignRunnerService";
+import { prisma } from "@/lib/prisma";
+import { provisionPoolTemplates } from "@/services/whatsapp/MetaTemplateProvisionService";
 
 const TICK_INTERVAL_MS = 10 * 60_000; // 10 minutes — conservative
 const BATCH_LIMIT      = 5;           // matches the cron endpoint default
@@ -156,6 +158,39 @@ export class ScheduledCampaignScheduler {
             totalSent: 0, totalFailed: 0, totalSkipped: 0, results: [],
           };
         });
+
+      // ── SUBMETER OS MODELOS À META ────────────────────────────────────────
+      // Isto vivia SÓ na rota de cron do GitHub Actions
+      // (`/api/cron/run-scheduled-campaigns`). Em 23/08/2026 aquele agendamento foi
+      // desligado — o Actions deste repositório está bloqueado por cobrança — e a
+      // submissão automática de modelo ficou SEM NENHUM motor: este agendador em
+      // processo, que virou o caminho primário, chamava apenas `runDueCampaigns`.
+      //
+      // O efeito era silencioso e caro: sem modelo aprovado, campanha para
+      // audiência fria fica bloqueada para sempre, e nada no sistema tentaria
+      // consertar sozinho.
+      //
+      // NÃO envia mensagem nenhuma — submeter modelo é pedido de revisão à Meta.
+      // É barato depois da primeira varredura (a função sai sem tocar no Graph
+      // quando não há nada novo) e é seguro repetir.
+      try {
+        const conectados = await prisma.metaWhatsAppConfig.findMany({
+          where:  { connectionStatus: "CONNECTED" },
+          select: { restaurantId: true },
+        });
+        for (const r of conectados) {
+          const res = await provisionPoolTemplates(r.restaurantId).catch(() => null);
+          if (res && (res.created > 0 || res.failed > 0)) {
+            console.log(
+              `[ScheduledCampaignScheduler] modelos à Meta: ${res.created} submetido(s), ${res.failed} falha(s)`,
+              { restaurantId: r.restaurantId },
+            );
+          }
+        }
+      } catch (err) {
+        errors += 1;
+        console.error("[ScheduledCampaignScheduler] provisionamento de modelos falhou:", err);
+      }
 
       this.lastRun = {
         at:                    new Date().toISOString(),
