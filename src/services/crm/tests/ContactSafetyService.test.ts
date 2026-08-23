@@ -65,6 +65,7 @@ function evalInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafe
     // o teto liga `safety.contactBudgetTotal` e passa `isNewContact: true`.
     contactBudgetUsed: 0,
     isNewContact: false,
+    enforceFrequency: true, // cenário-base: é abordagem, a frequência vale
     safety: { ...DEFAULT_SAFETY_CONFIG },
     whatsappAvailable: true,
     globalSentToday: 0,

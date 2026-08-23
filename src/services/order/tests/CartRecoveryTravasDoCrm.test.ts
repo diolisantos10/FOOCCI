@@ -1,26 +1,37 @@
 /**
- * A RECUPERAÇÃO DE CARRINHO ESTAVA FORA DO PORTÃO DO CRM.
+ * O PORTÃO DO CRM NA RECUPERAÇÃO DE CARRINHO — NA MEDIDA CERTA.
  *
- * O rodapé da tela de Regras de Segurança promete quatro "proteções sempre
- * ativas". Neste caminho, três delas não valiam — ele nunca passava pelo
- * `ContactSafetyService`, só pelas guardas próprias (1 por rascunho, 1 por
- * cliente por dia, loja aberta no abandono):
+ * Duas correções em 23/08/2026, no mesmo dia, e a segunda desfaz metade da
+ * primeira. As duas ficam registradas aqui, porque a segunda só faz sentido
+ * quem souber da primeira.
  *
- *   1. quem pediu para sair (opt-out) RECEBIA por aqui. Isso é LGPD, não é
- *      preferência de tela;
- *   2. a janela de silêncio 21h–8h era ignorada — loja aberta às 23h virava
- *      mensagem às 23h;
- *   3. o intervalo de 24 h entre mensagens de CRM não era consultado — dava
- *      para receber campanha de manhã e recuperação de carrinho à tarde.
+ * ── DE MANHÃ: o defeito real ────────────────────────────────────────────────
+ * A recuperação de carrinho nunca passava pelo `ContactSafetyService`. Quem
+ * tinha pedido para sair (opt-out) RECEBIA por este caminho. Isso é LGPD, não é
+ * preferência de tela. **Consertado, e não se discute.**
  *
- * Cada bloco abaixo prova as DUAS metades: a que manda quando deve, e a que não
- * manda quando não deve. Teste que passa nos dois lados não prova nada — e cada
- * metade "NÃO MANDA" daqui **falha** contra o código antigo, onde a mensagem
- * saía.
+ * ── À TARDE: o excesso, corrigido pelo CEO ──────────────────────────────────
+ * Junto com o opt-out entraram as regras de ABORDAGEM — janela de silêncio
+ * 21h–8h, intervalo de 24 h, teto semanal. Foi erro. A pergunta que derrubou:
  *
- * As guardas próprias da recuperação continuam valendo: isto SOMA travas, não
- * troca. E o rascunho bloqueado NÃO é carimbado — ele não é queimado por um
- * bloqueio que pode passar no próximo tick.
+ *   "O carrinho abandonado tem que ser executado dois minutos depois que o
+ *    cliente fecha. Por que você está preocupado com a madrugada?"
+ *
+ * Recuperação de carrinho **não é abordagem**: é resposta a um ato do próprio
+ * cliente, dois minutos depois de ele mexer no carrinho, com trinta minutos de
+ * validade e sem fila — barrado agora, morre. Quem abandonou há dois minutos
+ * não está dormindo. E casa de sushi vende à noite: silenciar das 21h às 8h
+ * mata a função na hora em que ela serve.
+ *
+ * A trava certa já existia: **loja aberta no instante do abandono** (regra 9).
+ *
+ * ── O QUE ESTE ARQUIVO TRAVA ────────────────────────────────────────────────
+ *   • opt-out barra — nas duas metades;
+ *   • 23h com a loja ABERTA **manda** (este é o caso que reprova contra o
+ *     código que está em produção agora, onde ele é barrado);
+ *   • campanha de manhã **não** mata a recuperação da noite;
+ *   • a guarda que de fato limita repetição — uma por cliente a cada 24 h, do
+ *     próprio fluxo — continua de pé.
  *
  * Nenhum teste toca rede: Meta e WhatsApp são dublês. Nenhuma mensagem sai.
  */
@@ -156,12 +167,40 @@ describe("quem pediu para sair não recebe — nem por este caminho", () => {
     expect(r.skippedSafety).toBe(1);
     expect(wa.sendText).not.toHaveBeenCalled();
   });
+
+  it("o opt-out não tem exceção de horário: às 23h, com a loja aberta, segue barrado", async () => {
+    // O afrouxamento do horário é sobre HORÁRIO. Não pode virar, por descuido,
+    // um afrouxamento do opt-out — que é o único item aqui que é lei, não regra
+    // de produto.
+    vi.setSystemTime(ONZE_DA_NOITE);
+    tick();
+    db.customer.findUnique.mockResolvedValue({ hasOptedOut: true, crmContactable: false });
+
+    const r = await rodar();
+
+    expect(r.sent).toBe(0);
+    expect(r.skippedSafety).toBe(1);
+    expect(wa.sendText).not.toHaveBeenCalled();
+  });
 });
 
 // ─── 2. JANELA DE SILÊNCIO ───────────────────────────────────────────────────
 
-describe("janela de silêncio 21h–8h — de madrugada não se cutuca ninguém", () => {
-  it("MANDA: 15h, dentro do horário permitido", async () => {
+describe("a janela de silêncio 21h–8h NÃO governa a recuperação de carrinho", () => {
+  it("MANDA às 23h com a loja ABERTA — quem abandonou há 2 min não está dormindo", async () => {
+    // ⭐ ESTE É O CASO DO CEO. Contra o código que está em produção agora
+    // (silêncio ligado neste caminho), este teste é VERMELHO.
+    vi.setSystemTime(ONZE_DA_NOITE);
+    tick();
+
+    const r = await rodar();
+
+    expect(r.sent).toBe(1);
+    expect(r.skippedSafety).toBe(0);
+    expect(wa.sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("MANDA às 15h também — o horário simplesmente não é a pergunta aqui", async () => {
     vi.setSystemTime(MEIO_DA_TARDE);
     tick();
 
@@ -171,41 +210,30 @@ describe("janela de silêncio 21h–8h — de madrugada não se cutuca ninguém"
     expect(r.skippedSafety).toBe(0);
   });
 
-  it("NÃO MANDA: 23h, com a loja ABERTA — antes a mensagem saía assim mesmo", async () => {
+  it("quem manda no horário é a LOJA ABERTA: fechada às 23h, não sai", async () => {
+    // A trava certa, que já existia antes de tudo isto (regra 9). Ela pergunta
+    // pelo instante do abandono, não por "agora", e é ela que ocupa o papel que
+    // a janela de silêncio ocuparia mal.
     vi.setSystemTime(ONZE_DA_NOITE);
     tick();
+    horario.isRestaurantOpenNow.mockResolvedValue(false);
 
     const r = await rodar();
 
     expect(r.sent).toBe(0);
-    expect(r.skippedSafety).toBe(1);
-    expect(wa.sendText).not.toHaveBeenCalled();
-  });
-
-  it("o rascunho bloqueado às 23h NÃO é carimbado — não se queima o carrinho", async () => {
-    vi.setSystemTime(ONZE_DA_NOITE);
-    tick();
-
-    await rodar();
-
-    // Sem carimbo, ele continua elegível enquanto a janela de entrega durar.
-    // Bloqueio por horário não pode gastar a única chance daquele carrinho.
-    expect(carimbos()).toHaveLength(0);
+    expect(r.skippedRestaurantClosed).toBe(1);
+    expect(r.skippedSafety).toBe(0); // recusa da guarda própria, não do portão
+    expect(carimbos()).toHaveLength(0); // e não queima o carrinho
   });
 });
 
 // ─── 3. INTERVALO DE 24 H ────────────────────────────────────────────────────
 
-describe("intervalo de 24 h entre mensagens de CRM", () => {
-  it("MANDA: nenhuma mensagem de CRM recente para este cliente", async () => {
-    tick();
-
-    const r = await rodar();
-
-    expect(r.sent).toBe(1);
-  });
-
-  it("NÃO MANDA: recebeu campanha há 1 hora — antes a recuperação saía por cima", async () => {
+describe("o intervalo de 24 h do CRM não vale — mas a guarda própria vale", () => {
+  it("MANDA: recebeu campanha há 1 hora e abandonou carrinho agora", async () => {
+    // ⭐ Também VERMELHO contra o código em produção agora. Uma campanha da
+    // manhã não pode matar a resposta a um ato que o cliente fez à noite: são
+    // dois atos distintos, e o segundo é dele.
     tick();
     db.campaignExecution.findMany.mockResolvedValue([
       { campaignId: "campanha-da-manha", sentAt: new Date(Date.now() - 1 * HORA) },
@@ -213,38 +241,61 @@ describe("intervalo de 24 h entre mensagens de CRM", () => {
 
     const r = await rodar();
 
-    expect(r.sent).toBe(0);
-    expect(r.skippedSafety).toBe(1);
-    expect(wa.sendText).not.toHaveBeenCalled();
+    expect(r.sent).toBe(1);
+    expect(r.skippedSafety).toBe(0);
   });
 
-  it("MANDA de novo: a mensagem anterior tem 30 h — o intervalo já passou", async () => {
-    tick();
-    db.campaignExecution.findMany.mockResolvedValue([
-      { campaignId: "campanha-antiga", sentAt: new Date(Date.now() - 30 * HORA) },
-    ]);
+  it("A GUARDA QUE VALE: uma recuperação por cliente a cada 24 h — a segunda não sai", async () => {
+    // Esta é a regra 5, do próprio fluxo, e é ela que sempre limitou repetição.
+    // Ela vem do `lastRecoveryAt` do rascunho, é global entre restaurantes, e
+    // NÃO depende do portão do CRM. O intervalo do CRM era, nesta parte,
+    // duplicata dela — e na parte que não era, era perda de venda.
+    db.orderDraft.findMany.mockImplementation(async (args: { where?: Record<string, unknown> }) =>
+      args?.where && "lastRecoveryAt" in args.where
+        ? [{ customerId: CLIENTE, restaurantId: REST }] // já recebeu nas últimas 24h
+        : [rascunho(5)],
+    );
+    db.orderDraft.count.mockResolvedValue(0);
+    db.orderDraft.update.mockResolvedValue({});
+    db.restaurantCRMProfile.findMany.mockResolvedValue([]);
+    db.restaurantCRMProfile.findUnique.mockResolvedValue(null);
+    db.campaign.findMany.mockResolvedValue([]);
+    db.campaignExecution.findMany.mockResolvedValue([]);
+    db.campaignExecution.count.mockResolvedValue(0);
+    db.customer.findUnique.mockResolvedValue({ hasOptedOut: false, crmContactable: true });
+    db.metaWhatsAppConfig.findMany.mockResolvedValue([]);
+    db.order.findMany.mockResolvedValue([]);
+    db.order.findFirst.mockResolvedValue(null);
+    db.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
+    db.$transaction.mockResolvedValue([]);
+    meta.getResolved.mockResolvedValue({ restaurantId: REST, phoneNumberId: "123", accessToken: "tok" });
+    wa.sendText.mockResolvedValue(ENVIADO);
+    horario.isRestaurantOpenNow.mockResolvedValue(true);
 
     const r = await rodar();
 
-    expect(r.sent).toBe(1);
-    expect(r.skippedSafety).toBe(0);
+    expect(r.sent).toBe(0);
+    expect(r.skippedDailyLimit).toBe(1);
+    expect(wa.sendText).not.toHaveBeenCalled();
   });
 });
 
 // ─── 4. O que veio junto, e o que NÃO veio ──────────────────────────────────
 
 describe("o que mais entra e o que fica de fora, de propósito", () => {
-  it("teto semanal por cliente (5/semana) também passa a valer aqui", async () => {
+  it("o teto semanal por cliente (5/semana) também NÃO vale aqui", async () => {
+    // Mesmo motivo do intervalo: ele mede abordagem repetida. Cinco campanhas na
+    // semana não tiram do cliente o direito de ser lembrado do carrinho que ELE
+    // acabou de abandonar. Quem limita repetição de recuperação é a regra 5.
     tick();
-    // Cinco mensagens espalhadas na semana, todas fora das últimas 24 h.
     db.campaignExecution.findMany.mockResolvedValue(
       [2, 3, 4, 5, 6].map((d) => ({ campaignId: `c${d}`, sentAt: new Date(Date.now() - d * 24 * HORA) })),
     );
 
     const r = await rodar();
 
-    expect(r.sent).toBe(0);
-    expect(r.skippedSafety).toBe(1);
+    expect(r.sent).toBe(1);
+    expect(r.skippedSafety).toBe(0);
   });
 
   it("o teto DIÁRIO continua isento — decisão registrada, medir não pode custar envio", async () => {

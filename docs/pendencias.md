@@ -96,8 +96,31 @@ tick. Bloqueio não grava linha em `campaign_executions` (o cron roda a cada min
 seriam dezenas de linhas idênticas do mesmo carrinho). Contador próprio no resultado:
 `skippedSafety`.
 
-**Veio junto, e está dito:** o teto semanal por cliente (5/semana) e o teto de
-contatos também passam a valer nesse caminho — são "as mesmas travas das campanhas".
+> ⚠️ **CORRIGIDO NO MESMO DIA — eu tinha exagerado.** Junto com o opt-out entraram
+> as regras de ABORDAGEM (silêncio 21h–8h, intervalo de 24 h, teto semanal) e isso
+> foi erro: recuperação de carrinho é **resposta** a um ato do cliente, não
+> abordagem. Saíram as três; **o opt-out ficou**. Ver a decisão de 23/08 "Resposta
+> não é abordagem" em `docs/decisoes.md`, e o bilhete longo na regra 11 do
+> `OrderDraftRecoverySendService`.
+
+**Os números reais do disparo, lidos no código** (o CEO perguntou; o diagnóstico
+falava só em 30 min e parecia contradizer os "2 minutos" dele — não contradiz):
+
+| O quê | Valor | Onde |
+|---|---|---|
+| Dispara depois de | **2 min** sem atividade no carrinho | `INACTIVITY_MINUTES` / `inactivityMinutes = 2` |
+| Cadência do robô | a cada **1 min** | `TICK_INTERVAL_MS = 60_000` |
+| Janela para sair | **30 min** a contar do abandono | `JANELA_DE_ENTREGA_MINUTOS = 30` |
+| Idade máxima na busca | **6 h** | `MAX_AGE_HOURS = 6` |
+
+Os dois números são verdadeiros e não brigam: **2 min é quando o carrinho fica
+elegível; 30 min é por quanto tempo ele continua elegível.** Passou dos 30, não sai
+nunca mais — não há fila.
+
+**O intervalo de 24 h do CRM era duplicata?** Na parte que protegia, sim: a regra 5
+do próprio fluxo (`lastRecoveryAt`, uma por cliente a cada 24 h, global entre
+restaurantes) já limitava repetição, e melhor. O que ele acrescentava era só deixar
+uma campanha da manhã matar a recuperação da noite.
 
 **Teste:** `src/services/order/tests/CartRecoveryTravasDoCrm.test.ts`, 13 casos, cada
 proteção nas duas metades. **Conferido que reprova contra o código antigo:** com o

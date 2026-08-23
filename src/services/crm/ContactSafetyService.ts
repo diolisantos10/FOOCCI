@@ -171,6 +171,20 @@ export interface ContactSafetyEvalInput {
   allowWeeklyCapOverride?: boolean;
   /** Enforce quiet-hours / weekend / sending-window time gates (autonomous paths). */
   enforceTimeWindows: boolean;
+  /**
+   * Enforce the FREQUENCY family: dedup da mesma campanha, dedup de 24 h entre
+   * campanhas, cooldown por cliente e teto semanal por cliente.
+   *
+   * Existe porque nem todo envio é ABORDAGEM. Estas quatro regras governam a
+   * casa decidir falar com alguém que não pediu nada agora. Uma RESPOSTA a um
+   * ato do próprio cliente — recuperação de carrinho, por exemplo — não é isso,
+   * e é medida pelas guardas do próprio fluxo. Ver o bilhete longo na regra 11
+   * de `OrderDraftRecoverySendService`.
+   *
+   * Desligar isto NÃO desliga opt-out, telefone, canal, teto de contatos nem o
+   * portão de histórico desconhecido. Só a família de frequência.
+   */
+  enforceFrequency: boolean;
   /** Enforce the daily global cap. Autonomous paths enforce; manual human sends may override. */
   enforceDailyCap: boolean;
   /** Enforce restaurant operational status (opt-in; default off to preserve behavior). */
@@ -321,8 +335,9 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
     );
   }
 
-  // 11. Frequency gates — birthday sends are exempt.
-  if (!input.isBirthday) {
+  // 11. Frequency gates — birthday sends are exempt, and so are paths that are a
+  // RESPOSTA a um ato do cliente em vez de uma abordagem (`enforceFrequency`).
+  if (!input.isBirthday && input.enforceFrequency) {
     // Duplicate within the same campaign.
     if (input.sameCampaignSends > 0) {
       return block("DUPLICATE_CAMPAIGN_RECIPIENT", "Cliente já recebeu esta campanha");
@@ -453,6 +468,8 @@ export interface AssertSendableInput {
   allowWeeklyCapOverride?: boolean;
   /** Enforce quiet-hours / weekend / window (autonomous paths). Default true. */
   enforceTimeWindows?: boolean;
+  /** Enforce the frequency family (dedup 24 h, cooldown, teto semanal). Default true. */
+  enforceFrequency?: boolean;
   /** Enforce daily global cap. Default true; manual human sends may pass false. */
   enforceDailyCap?: boolean;
   /** Enforce restaurant-open. Default false (preserves existing behavior). */
@@ -596,6 +613,7 @@ export class ContactSafetyService {
         isBirthday: input.isBirthday ?? false,
         allowWeeklyCapOverride: input.allowWeeklyCapOverride ?? false,
         enforceTimeWindows: input.enforceTimeWindows ?? true,
+        enforceFrequency: input.enforceFrequency ?? true,
         enforceDailyCap: input.enforceDailyCap ?? true,
         enforceRestaurantOpen: input.enforceRestaurantOpen ?? false,
         sendingWindow: input.sendingWindow ?? null,

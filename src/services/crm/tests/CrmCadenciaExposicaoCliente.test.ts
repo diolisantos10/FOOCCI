@@ -42,6 +42,7 @@ function base(over: Partial<ContactSafetyEvalInput> = {}): ContactSafetyEvalInpu
     contactHistoryKnown: true, // os contadores vêm do banco; aqui eles são o cenário
     contactBudgetUsed: 0,
     isNewContact: false, // teto pré-pago desligado no cenário-base
+    enforceFrequency: true, // cenário-base: é abordagem, a frequência vale
     safety: seguranca,
     whatsappAvailable: true,
     globalSentToday: 0,

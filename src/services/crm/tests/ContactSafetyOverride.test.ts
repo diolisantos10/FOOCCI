@@ -23,6 +23,7 @@ function input(over: Record<string, unknown> = {}) {
     contactHistoryKnown: true, // contadores apurados — o override é sobre teto, não sobre ignorância
     contactBudgetUsed: 0,
     isNewContact: false, // teto pré-pago desligado no cenário-base
+    enforceFrequency: true, // cenário-base: é abordagem, a frequência vale
     ...over,
   } as never;
 }
