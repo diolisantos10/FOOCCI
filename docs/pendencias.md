@@ -71,8 +71,14 @@ cadastro antigo, o registro é **pulado** com a mensagem `skipped: "coexistence�
 Nesse caso — e **só** nesse caso — repetir com `"force": true` é seguro **hoje**,
 porque a premissa da trava (número vivo num aparelho) não vale mais.
 
-Eu **não disparei**: não tenho o `ADMIN_SECRET` nem o PIN, e os dois são posse do
-CEO. O comando pronto está em `docs/pedidos/registrar-numero-cloud-api.md`.
+**Confirmado por mim, hoje, na fonte** (Railway, projeto Foocci, deploy
+`ffc533b8`): às **15:19:57 de 23/08** ainda saía
+`[CampaignRunner] channel collapse … lastError: 'META_133010'`. O número segue
+fora do ar neste minuto — não é log velho.
+
+Eu **não disparei** o registro: não tenho o `ADMIN_SECRET` nem o PIN, e os dois
+são posse do CEO. O comando pronto está em
+`docs/pedidos/registrar-numero-cloud-api.md`.
 
 ---
 
