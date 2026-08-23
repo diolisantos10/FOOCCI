@@ -585,13 +585,18 @@ export class ScheduledCampaignRunnerService {
       };
     }
 
-    // ── Contact limit — INFORMATIONAL ONLY (not enforced in the runner) ───────
-    // The "Limite de Contatos" is displayed in the CRM UI, but it must NOT hard-
-    // block sends here. The previous guard counted LIFETIME distinct contacts
-    // (including imported/historical data), so any restaurant with more history
-    // than the configured number had every new-contact campaign silently blocked
-    // — which took the whole CRM offline. Enforcement will be reintroduced with a
-    // proper baseline (or tied to the provider's credit) before being re-enabled.
+    // ── Teto de contatos: quem aplica é o ContactSafetyService, um a um ──────
+    // Este bloco NÃO tem mais o portão de lote que existia aqui. O portão antigo
+    // olhava só o total ("já passei de 200?") e derrubava a CAMPANHA INTEIRA —
+    // calava também o cliente que já era da casa e não custava vaga nenhuma. Foi
+    // desligado por isso, e ficou desligado: o rótulo "informativo" sobreviveu ao
+    // conserto, a tela seguiu prometendo "o CRM para de abordar gente nova" e o
+    // lojista viu 2115 pessoas abordadas debaixo de um teto de 200.
+    //
+    // A trava voltou no lugar certo — `ContactSafetyService`, por destinatário,
+    // motivo CONTACT_BUDGET_EXHAUSTED — onde ela sabe distinguir gente NOVA (que
+    // consome vaga e é barrada) de quem já está na conta (que passa). Não
+    // reintroduza um portão de lote aqui: ele volta a ser destrutivo demais.
     const batch = newEligible.slice(0, batchCap);
 
     if (dryRun) {

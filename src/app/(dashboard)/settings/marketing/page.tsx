@@ -325,7 +325,8 @@ export default function MarketingSettingsPage() {
         <SectionHeading title="Limite de Contatos" />
         <p className="mt-1 text-sm text-muted">
           Máximo de <strong>contatos únicos</strong> que o CRM pode abordar. Cada pessoa conta 1 vez,
-          mesmo recebendo várias campanhas. Use 0 para sem limite. <span className="text-muted/80">(Aqui é
+          mesmo recebendo várias campanhas. Use 0 para sem limite. Quando o teto acaba, o CRM <strong>para de
+          abordar pessoas novas</strong> — quem já está na conta continua recebendo. <span className="text-muted/80">(Aqui é
           o limite de PESSOAS; o custo por conversa é cobrado pela Meta, fora desta tela.)</span>
         </p>
 
@@ -338,20 +339,21 @@ export default function MarketingSettingsPage() {
           const low   = on && remaining !== null && remaining <= Math.max(1, Math.round(total * 0.1));
           return (
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              {/* Fora do "Assumir controle manual" desde 23/08/2026 (decisão do
+                  CEO): teto de contatos é limite de GASTO, e não a regra
+                  anti-banimento que aquele cadeado protege. Ver o comentário
+                  longo no mesmo campo em CRMClient.tsx. */}
               <Field
                 label="Limite total de contatos"
-                hint={cfg.manualOverride
-                  ? "Quantas pessoas diferentes o CRM pode abordar no total. Aumente este número para permitir mais."
-                  : "🔒 Travado no modo seguro. Ligue “Assumir controle manual” para editar."}
+                hint="Você mexe neste número quando quiser — é limite de gasto, não regra de proteção do número. 0 = sem limite."
               >
                 <input
                   type="number"
                   min={0}
                   max={1000000}
                   value={numStr(total)}
-                  disabled={!cfg.manualOverride}
                   onChange={(e) => set("contactBudgetTotal", parseNum(e.target.value, 0))}
-                  className={`${INPUT} ${!cfg.manualOverride ? "cursor-not-allowed opacity-60" : ""}`}
+                  className={INPUT}
                 />
               </Field>
 
@@ -370,7 +372,16 @@ export default function MarketingSettingsPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                    {remaining !== null && remaining <= 0 ? (
+                      <p className="mt-2 text-xs text-amber-800">
+                        <strong>O CRM está parado para gente nova.</strong> Já foram abordadas <strong>{used}</strong> pessoas
+                        {used > total ? <> — <strong>{used - total} a mais que o teto</strong>, de quando ele ainda não travava nada</> : null}.
+                        Quem já está nessa conta continua recebendo; para falar com clientes novos, aumente o limite ao lado
+                        (ou use <strong>0 = sem limite</strong>).
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-muted">

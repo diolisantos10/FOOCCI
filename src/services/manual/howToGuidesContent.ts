@@ -239,10 +239,10 @@ Para o WhatsApp **não bloquear** seu número por envio em massa, o Foocci aplic
 O quadro verde **🟢 Limite oficial da Meta** mostra **"X msgs/dia hoje"** — é o teto **oficial da Meta** para o seu WhatsApp Business. Ele **sobe sozinho** conforme a **qualidade** e o histórico do seu número (quando a Meta informa, a tela diz se a qualidade está **alta**, **média** ou **baixa**), sem risco de bloqueio. Esse limite é **por dia** e **reseta todo dia**.
 
 ## Limite de contatos (no total, para sempre)
-É outro limite, e não se confunde com o de cima: o teto de pessoas **diferentes** que o CRM pode abordar na **vida toda**. Ele **acumula e nunca zera sozinho**. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas — e **0 = sem limite**. O quadro **Contatos restantes** mostra "X de Y"; quando acaba, aparece **"Limite de contatos atingido"** e o CRM para de abordar gente nova até você aumentar o **Máximo de pessoas**.
+É outro limite, e não se confunde com o de cima: o teto de pessoas **diferentes** que o CRM pode abordar na **vida toda**. Ele **acumula e nunca zera sozinho**. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas — e **0 = sem limite**. O quadro **Contatos restantes** mostra "X de Y"; quando acaba, aparece **"Limite de contatos atingido"** e o CRM **para de abordar gente nova** — quem já está na conta continua recebendo — até você aumentar o **Máximo de pessoas**. Esse campo você mexe quando quiser, sem precisar ligar o controle manual.
 
 ## Controle manual
-Por padrão, as **proteções ficam ligadas** (modo seguro): o ritmo de envio fica congelado em **Intervalo por cliente** de 24 h, no máximo **5 por cliente/semana**, **sem envio das 21h às 8h**, **delay de 5–45 s** entre mensagens e fim de semana permitido. Para mexer em qualquer um deles — ou no teto de contatos — ligue **Assumir controle manual (eu me responsabilizo)**; aí a tela avisa **⚠️ Controle manual ativo** e o risco passa a ser seu.
+Por padrão, as **proteções ficam ligadas** (modo seguro): o ritmo de envio fica congelado em **Intervalo por cliente** de 24 h, no máximo **5 por cliente/semana**, **sem envio das 21h às 8h**, **delay de 5–45 s** entre mensagens e fim de semana permitido. Para mexer em qualquer um deles, ligue **Assumir controle manual (eu me responsabilizo)**; aí a tela avisa **⚠️ Controle manual ativo** e o risco passa a ser seu. **O Limite de contatos NÃO entra nessa chave:** ele é limite de gasto, não regra de proteção do número, e você mexe nele quando quiser.
 
 ## Proteções que nunca desligam
 Quem pediu para sair (opt-out) nunca mais recebe; sem telefone válido ninguém recebe; a mesma campanha não chega duas vezes para a mesma pessoa; e quem já recebeu algo hoje espera o intervalo (só o aniversário passa na frente).
@@ -449,7 +449,7 @@ Na aba **Configurações**, o cartão **Regras de Segurança** tem **dois** limi
 
 **b) Limite de contatos (no total, para sempre).** É o teto de pessoas **diferentes** que o CRM pode abordar na **vida toda**. Cuidado para não confundir: o de cima é **por dia** e reseta todo dia; este **acumula e nunca zera sozinho**. Cada pessoa conta 1 vez, mesmo recebendo várias campanhas. **0 = sem limite.** Ao lado, **Contatos restantes** mostra "X de Y" com a barrinha de uso.
 
-Quando o teto acaba, a barra fica amarela e aparece o aviso **"Limite de contatos atingido — N pessoas já abordadas"**: para falar com clientes novos, ligue o **Assumir controle manual (eu me responsabilizo)** ali em cima e aumente o **Máximo de pessoas** (ou coloque **0 = sem limite**). No modo seguro esse campo fica **🔒 travado**.
+Quando o teto acaba, a barra fica amarela e aparece o aviso **"Limite de contatos atingido"**: o CRM **para de abordar pessoas novas** — quem já está na conta continua recebendo normalmente. Para voltar a falar com clientes novos, aumente o **Máximo de pessoas** (ou coloque **0 = sem limite**) e salve. **Esse campo é seu e não depende do controle manual** — ele é limite de gasto, não regra de proteção do número.
 
 No rodapé do cartão, as **Proteções sempre ativas**: quem pediu para sair (opt-out) nunca mais recebe, sem telefone válido ninguém recebe, a mesma campanha não chega duas vezes pra mesma pessoa e quem já recebeu algo hoje espera o intervalo (só o aniversário passa na frente).
 

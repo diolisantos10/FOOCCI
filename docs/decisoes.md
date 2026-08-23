@@ -11,6 +11,88 @@
 
 ---
 
+## 2026-08-23 — "Pode tudo, teto 3000" — e os dois cadeados se separam
+
+**Decisão do CEO**, nas palavras dele: *"pode tudo, teto 3000"*.
+
+**1. O teto de contatos do Sushi Cazza é 3000.** Não é chute: a base já tem 2115
+pessoas abordadas, então 3000 deixa **885 vagas** para crescer e continua acusando
+se algo começar a disparar sozinho. **Não é "sem limite"** — o alarme continua
+existindo, que é o ponto inteiro desta rodada.
+
+> ⚠️ O **padrão de produto** para restaurante NOVO continua **0 (sem teto)** e
+> **não foi mexido** — a decisão foi sobre o Sushi Cazza. Está travado em teste
+> (`CrmSafetyConfig.test.ts`) para não mudar por descuido.
+
+**2. Os dois cadeados se separam.** O teto de contatos é limite de **gasto**; o
+"Assumir controle manual" existe para as regras **anti-banimento** (limite diário,
+intervalo por cliente, horário de silêncio, delay). Estavam na mesma chave: para
+mexer num risco de dinheiro, o lojista era obrigado a destravar um risco de perder
+o WhatsApp — e saía com os dois soltos.
+
+O teto sai de trás do controle manual. **As regras anti-banimento continuam
+trancadas exatamente como estão** — aquele cadeado é trava de servidor
+(`applyEffectiveSafety` recalcula os valores seguros na hora de enviar,
+independentemente do que estiver gravado) e não se mexe.
+
+**O servidor já estava certo:** `applyEffectiveSafety` nunca tocou no teto de
+contatos e a rota PATCH sempre o aceitou. Quem divergia era a **tela**, que
+desabilitava o campo. Fica a lição, que é a mesma da rodada inteira: **tela que
+diz uma coisa e código que faz outra é defeito dos dois, e o que se corrige é o
+que está mentindo** — aqui, a tela.
+
+---
+
+## 2026-08-23 — Limite que a tela anuncia é limite que o código trava
+
+**Decisão do Diretor** (guardrail 4 aplicado, não escolha de negócio).
+
+A tela de Regras de Segurança dizia *"Limite de contatos atingido"* e *"Travado no
+modo seguro"* enquanto o código de envio **não olhava o número**: teto de 200, 2115
+pessoas abordadas. A trava tinha existido, derrubava a campanha inteira, foi
+desligada — e o desligamento virou permanente, com a tela e o guia do lojista
+seguindo prometendo o que não acontecia.
+
+**O que fica decidido, e vale para todo limite do produto:**
+
+1. **Número que a tela anuncia como limite é travado no servidor, no caminho de
+   envio.** Se não dá para travar, a tela não anuncia como limite — anuncia como
+   indicador, com outras palavras. Confiança falsa é pior que limite nenhum.
+2. **A trava mora no portão por destinatário, não no portão de lote.** Portão de
+   lote não distingue quem custa vaga de quem não custa, e por isso a versão
+   anterior era mais destrutiva que o problema que evitava (guardrail 5). O teto de
+   contatos barra **só contato novo**; quem já está na conta continua recebendo.
+3. **Etiqueta é afirmação, e afirmação precisa de prova com data.** "Resposta CRM"
+   passou a exigir log de envio real **mais** a última mensagem do cliente dentro da
+   janela de resposta. Campo de estado que nunca expira (`Conversation.contextType`)
+   não serve de prova para nada que o lojista lê como fato do dia.
+4. **Régua repetida se aponta, não se copia.** A janela de resposta da etiqueta é a
+   MESMA de `markCrmReplyIfApplicable` (7 dias). Duas réguas para a mesma pergunta é
+   a mesma família do "duas fontes para o mesmo número".
+
+**O que NÃO foi decidido aqui e continua com o CEO:** quanto vale o teto de contatos
+de cada restaurante, e se esse campo — que é limite de **custo**, não regra
+anti-banimento — deve continuar travado atrás do "Assumir controle manual".
+
+**Adendo de 23/08, autorizado pelo CEO — a recuperação de carrinho entrou no portão.**
+Ela era o caminho que provava a regra pela exceção: o rodapé da tela prometia quatro
+"proteções sempre ativas" e ali três não valiam. Ficam duas lições nomeadas:
+
+5. **Proteção que vale "sempre" vale em TODO caminho de envio, e isso se prova
+   caminho por caminho.** Um portão unificado só é unificado se todos os caminhos
+   passarem por ele; basta um por fora para a promessa da tela virar mentira.
+6. **Somar trava não é trocar trava.** As guardas próprias da recuperação (uma por
+   rascunho, uma por cliente/dia, loja aberta no abandono) continuam de pé. E a
+   isenção do teto diário continua valendo, porque é decisão registrada — entrar no
+   portão não é motivo para revogar em silêncio o que já tinha sido decidido.
+
+**Proposta ao Diretor Geral (dioli-brain-kit):** os itens 1, 3 e 5 não são do Foocci,
+são doutrina de agente — *"limite anunciado é limite travado"*, *"etiqueta carrega a
+data que a prova"* e *"proteção 'sempre ativa' se prova caminho por caminho"*. Fica
+registrado como proposta, não escrito no kit (guardrail 3).
+
+---
+
 ## 2026-08-08 — O SDR passa o valor dos planos na hora
 
 **Decisão do CEO:** *"Ele passa o valor dos planos."*

@@ -60,6 +60,11 @@ function evalInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafe
     // Os quatro contadores acima foram apurados de verdade neste cenário-base.
     // Quem quiser testar a ignorância passa `contactHistoryKnown: false`.
     contactHistoryKnown: true,
+    // Cenário-base: o teto pré-pago de contatos está DESLIGADO (contactBudgetTotal
+    // = 0 no DEFAULT_SAFETY_CONFIG) e esta pessoa já é da casa. Quem quiser testar
+    // o teto liga `safety.contactBudgetTotal` e passa `isNewContact: true`.
+    contactBudgetUsed: 0,
+    isNewContact: false,
     safety: { ...DEFAULT_SAFETY_CONFIG },
     whatsappAvailable: true,
     globalSentToday: 0,
@@ -309,6 +314,9 @@ describe("ContactSafetyService.assertSendable (mocked prisma)", () => {
     whatsappAvailable: true,
     globalSentToday: 0,
     restaurantOpen: true,
+    // Teto pré-pago de contatos desligado no DEFAULT_SAFETY_CONFIG — o conjunto
+    // fica vazio porque não há teto a gastar. Ver CrmTetoDeContatos.test.ts.
+    contactedCustomerIds: new Set<string>(),
   };
 
   it("allows a clean customer with no prior sends", async () => {
