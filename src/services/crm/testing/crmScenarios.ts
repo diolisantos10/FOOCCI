@@ -129,6 +129,8 @@ function safetyInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSa
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends:           0,
     contactHistoryKnown:         true, // cenário-base: os contadores foram apurados
+    contactBudgetUsed:           0,
+    isNewContact:                false, // teto pré-pago desligado no cenário-base
     safety:                      { ...DEFAULT_SAFETY_CONFIG },
     whatsappAvailable:           true,
     globalSentToday:             0,

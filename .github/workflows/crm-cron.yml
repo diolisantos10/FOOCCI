@@ -21,15 +21,52 @@
 
 name: CRM Cron
 
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║ DOIS DOS TRÊS HORÁRIOS ESTÃO DESLIGADOS — 23/08/2026                      ║
+# ║                                                                           ║
+# ║ POR QUE. O Actions deste repositório está BLOQUEADO POR COBRANÇA. Este    ║
+# ║ repositório é privado (consome minuto pago) e o GitHub responde, com      ║
+# ║ estas palavras, a cada disparo:                                          ║
+# ║                                                                           ║
+# ║   "The job was not started because recent account payments have failed    ║
+# ║    or your spending limit needs to be increased."                         ║
+# ║                                                                           ║
+# ║ O job morre em ~2 segundos, sem máquina alocada e sem log. Ou seja: os    ║
+# ║ dois horários abaixo NÃO CHAMAVAM O ENDPOINT NENHUMA VEZ — só geravam    ║
+# ║ e-mail de falha. Eram 85 falhas por dia vindas deste arquivo.            ║
+# ║                                                                           ║
+# ║ POR QUE É SEGURO. Os dois jobs desligados têm MOTOR PRIMÁRIO DENTRO DO   ║
+# ║ APLICATIVO, ligado no boot por src/instrumentation.ts, e este cron era    ║
+# ║ declaradamente só a reserva morna (está escrito nos cabeçalhos dos jobs): ║
+# ║   • run-campaigns (*/15)      → ScheduledCampaignScheduler, tick de 10min ║
+# ║   • send-cart-recovery (*/5)  → CartRecoveryScheduler,      tick de 1min  ║
+# ║ O CRM NÃO PARA por causa deste desligamento. Ele já rodava por dentro.    ║
+# ║                                                                           ║
+# ║ O QUE CONTINUA LIGADO, E POR QUÊ. "0 11 * * *" (run-automations:          ║
+# ║ REACTIVATION / BIRTHDAY / POST_ORDER + reclassify-tiers) NÃO TEM motor    ║
+# ║ em processo — é o único caminho que existe. Fica de pé de propósito: ele  ║
+# ║ falha 1× por dia e essa falha é VERDADE, não ruído. Enquanto o Actions    ║
+# ║ estiver bloqueado, as automações de CRM NÃO ESTÃO RODANDO.                ║
+# ║                                                                           ║
+# ║ ⏰ QUANDO RELIGAR: assim que o teto de gasto do GitHub for liberado pelo  ║
+# ║ CEO e um run deste repositório voltar a durar mais que alguns segundos.   ║
+# ║ Religar = apagar o "# " das duas linhas `- cron:` comentadas abaixo.      ║
+# ║ Nada mais precisa mudar: os `if:` dos jobs já esperam essas mesmas duas   ║
+# ║ expressões, e o disparo à mão (workflow_dispatch) nunca foi desligado.    ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
 on:
   schedule:
+    # DESLIGADO 23/08/2026 (ver bilhete acima) — reserva do ScheduledCampaignScheduler.
     # Job: run-campaigns  — every 15 minutes, 24 h / 7 d
-    - cron: "*/15 * * * *"
+    # - cron: "*/15 * * * *"
     # Job: run-automations — daily at 11:00 UTC = 08:00 America/Sao_Paulo
+    # ── ESTE CONTINUA LIGADO: não tem motor em processo. ──
     - cron: "0 11 * * *"
+    # DESLIGADO 23/08/2026 (ver bilhete acima) — reserva do CartRecoveryScheduler.
     # Job: send-cart-recovery — every 5 minutes (GitHub Actions minimum; for
     # true 1-min frequency configure a Railway cron job in the dashboard)
-    - cron: "*/5 * * * *"
+    # - cron: "*/5 * * * *"
 
   workflow_dispatch:
     inputs:

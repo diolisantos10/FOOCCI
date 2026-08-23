@@ -2,6 +2,14 @@
 
 > Última atualização: 23/08/2026.
 
+
+> ⚠️ **Duas numerações de rodada convivem abaixo, e não é engano.** Em 23/08/2026
+> dois Diretores trabalharam em paralelo neste repositório e cada um contou as
+> próprias rodadas — por isso existem duas "4ª rodada" com assuntos diferentes
+> (registro do número na Cloud API × teto de contatos e etiqueta do CRM). Nada
+> foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
+> bloco, não o número.
+
 ## 🟢 23/08 (7ª rodada) — (A) autorizada pelo CEO. Pacote PRONTO e PARADO antes do merge.
 
 **Decisão do CEO: opção (A) — selo + trava da janela de 24h JUNTOS.** Consequência
@@ -335,6 +343,113 @@ pelo workflow. O workflow fica publicado e correto para quando o Actions voltar.
 
 **Consequência que passa despercebida:** com o Actions parado, todo cron deste
 repositório está parado junto.
+## 🔴 23/08 (4ª rodada) — o teto de contatos era enfeite, e a etiqueta "Resposta CRM" mentia
+
+Dois prints do CEO, dois defeitos, **raízes diferentes** (a hipótese de que fossem
+um só foi verificada e **descartada** — as duas contas não usam a mesma definição).
+
+### (1) "As informações divergem": teto de 200, 2115 pessoas já abordadas
+
+**Não era rótulo errado — era trava ausente, e ela estava desligada de propósito.**
+Os dois números medem a MESMA coisa: pessoas diferentes com envio de CRM
+bem-sucedido em `campaign_executions` (SENT/DELIVERED/READ), na vida toda. Nenhuma
+rota de importação escreve nessa tabela, então base importada **não** infla a conta.
+
+O que faltava: `contactBudgetTotal` era lido pela tela, pela API de configurações e
+pelo previsor de capacidade — **e por mais ninguém**. `getContactBudgetStatus()` em
+`src/lib/crm-safety.ts` não tinha **um único chamador**. E o runner carregava a
+confissão escrita (`ScheduledCampaignRunnerService`, antes do `slice(0, batchCap)`):
+*"Contact limit — INFORMATIONAL ONLY (not enforced in the runner)"*. O portão antigo
+existiu, derrubava a **campanha inteira** (calava também quem já era da casa), foi
+desligado por isso — e o desligamento virou permanente enquanto a tela **e o guia do
+lojista** seguiam prometendo *"o CRM para de abordar gente nova"*.
+
+**Consertado:** a trava voltou no lugar certo — `ContactSafetyService`, **por
+destinatário**, motivo `CONTACT_BUDGET_EXHAUSTED`. Ela barra **só quem é contato
+novo** (quem consome vaga); quem já está na conta continua recebendo. Vale para
+aniversário também: aniversário é isento de frequência, não de custo. Teste:
+`src/services/crm/tests/CrmTetoDeContatos.test.ts`.
+
+**⚠️ Efeito imediato em produção:** com o teto em 200 e 2115 já abordados, o CRM do
+Sushi Cazza **para de abordar pessoas novas** assim que isto subir. É o alarme
+funcionando, não um defeito novo — mas **quanto vale o teto é decisão do CEO** e não
+foi mexido (não subi para 2115 nem zerei).
+
+### (2) "Resposta CRM" em 10 de 10 conversas
+
+**Duas metades erradas, nenhuma delas compartilhada com o contador acima:**
+- *"foi abordada?"* respondia `Conversation.contextType` — campo **único**, gravado
+  no envio, que **nunca expira** (só some quando o cliente compra). Abordado em
+  julho = etiquetado para sempre. Na aba "CRM enviado" era pior: `crmSent` saía
+  `Boolean(crm)`, verdadeiro **por construção** para toda linha da aba;
+- *"respondeu?"* respondia "existe QUALQUER mensagem de entrada" — sem olhar data,
+  então até mensagem **anterior** ao envio contava.
+- de quebra, `getCrmSentCustomerIds` contava linhas `REVIEW_REQUEST_FAILED` e
+  `REVIEW_REQUEST_SKIPPED` como "CRM enviado" — registros de que **nada saiu**.
+
+**Consertado:** regra pura em `src/services/conversation/crmReplyBadge.ts` — a
+etiqueta exige log de envio REAL **e** que a **última** mensagem do cliente tenha
+vindo depois dele, dentro de **7 dias** (a mesma janela que `markCrmReplyIfApplicable`
+já usa; não inventei régua nova). Apurado no servidor (`crmRepliedAt`,
+`lastCrmSentAt`), consumido pela tela. Teste com o caso Larissia:
+`src/services/conversation/crmReplyBadge.test.ts`.
+
+### Decidido pelo CEO em 23/08 — *"pode tudo, teto 3000"*
+
+- **Teto do Sushi Cazza = 3000** (2115 abordadas → **885 vagas**). Não é "sem
+  limite": o alarme continua de pé. ⚠️ **O valor se aplica na tela** (CRM → Regras
+  de Segurança → *Máximo de pessoas* → 3000 → Salvar). **Eu não apliquei**: não
+  tenho acesso ao banco de produção e não vou escrever num JSON de configuração de
+  cliente por fora do produto.
+- **Padrão de produto para restaurante NOVO continua 0 (sem teto)** — não mexido, a
+  decisão foi sobre o Sushi Cazza. Travado em teste para não mudar por descuido.
+  **Recomendação registrada:** o padrão deveria deixar de ser 0. Restaurante novo
+  nasce sem alarme nenhum, e o alarme só serve se estiver ligado antes de o
+  problema acontecer. Decisão de produto — não tomei.
+- **Cadeado separado.** O teto saiu de trás do *"Assumir controle manual"*: é limite
+  de gasto, não regra anti-banimento. As regras anti-banimento **continuam trancadas
+  exatamente como estavam**. O servidor já estava certo; quem mentia era a tela.
+- **Recontagem/limpeza de histórico:** não fiz e não proponho fazer sem ordem — dado
+  de cliente é irreversível. O diagnóstico
+  `GET /api/admin/diagnostics/crm-etiqueta-resposta` (somente leitura) devolve os
+  números reais: etiquetas pela regra antiga × nova, e teto × pessoas abordadas.
+
+### (3) A recuperação de carrinho estava fora do portão — CONSERTADA (CEO autorizou)
+
+`OrderDraftRecoverySendService` nunca passou pelo `ContactSafetyService`. Tinha só
+as guardas próprias (1 por rascunho, 1 por cliente/dia, carimbo atômico, loja aberta
+no abandono) — e por isso **três das quatro "proteções sempre ativas" não valiam ali**:
+quem pediu para sair **recebia** (LGPD), a janela de silêncio 21h–8h era ignorada
+(loja aberta às 23h = mensagem às 23h) e o intervalo de 24 h entre mensagens de CRM
+não era consultado (campanha de manhã + recuperação à tarde).
+
+**Consertado:** regra 11 no laço por destinatário — o portão unificado passou a ser
+chamado com `enforceTimeWindows: true`, `enforceDailyCap: false` (a isenção do teto
+diário é decisão registrada: *"medir não pode custar envio"*) e
+`enforceRestaurantOpen: false` (a regra 9 já responde melhor, perguntando pelo
+instante do abandono). `campaignId: null` **de propósito**: passar o id da campanha
+do carrinho ligaria o dedup vitalício "já recebeu ESTA campanha" e transformaria
+"uma por cliente por dia" em "uma por cliente para sempre".
+
+As guardas próprias continuam valendo — **somou, não trocou**. Rascunho bloqueado
+**não é carimbado**: ele não é queimado por um bloqueio que pode passar no próximo
+tick. Bloqueio não grava linha em `campaign_executions` (o cron roda a cada minuto;
+seriam dezenas de linhas idênticas do mesmo carrinho). Contador próprio no resultado:
+`skippedSafety`.
+
+**Veio junto, e está dito:** o teto semanal por cliente (5/semana) e o teto de
+contatos também passam a valer nesse caminho — são "as mesmas travas das campanhas".
+
+**Teste:** `src/services/order/tests/CartRecoveryTravasDoCrm.test.ts`, 13 casos, cada
+proteção nas duas metades. **Conferido que reprova contra o código antigo:** com o
+portão desligado, as **7** metades "NÃO MANDA" falham e as 6 metades "MANDA"
+continuam passando.
+
+**Preço do conserto:** `GET /api/admin/diagnostics/carrinho-travas` (somente leitura)
+recalcula o passado e diz quantas recuperações por semana deixam de sair, e por qual
+trava. Sem banco de produção eu **não posso** dar o número — e não vou estimar.
+
+---
 
 ## 🟢 23/08 (3ª rodada) — "por que o Foocci cita a Evolution?" É texto velho. Mas achei o que estava por baixo.
 
