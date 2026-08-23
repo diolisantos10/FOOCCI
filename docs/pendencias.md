@@ -69,14 +69,40 @@ já usa; não inventei régua nova). Apurado no servidor (`crmRepliedAt`,
   `GET /api/admin/diagnostics/crm-etiqueta-resposta` (somente leitura) devolve os
   números reais: etiquetas pela regra antiga × nova, e teto × pessoas abordadas.
 
-### Ainda aberto, não consertado nesta rodada
+### (3) A recuperação de carrinho estava fora do portão — CONSERTADA (CEO autorizou)
 
-- **`OrderDraftRecoverySendService` (recuperação de carrinho) não passa pelo portão
-  unificado.** Não checa opt-out do CRM, nem janela de silêncio, nem intervalo de
-  24 h — tem só as regras próprias dele (1 recuperação por rascunho, 1 por cliente
-  por dia, loja aberta no abandono). Ou seja: **"proteções sempre ativas" não é
-  verdade nesse caminho.** Mexer nele é tocar envio de cliente real e merece bloco
-  próprio.
+`OrderDraftRecoverySendService` nunca passou pelo `ContactSafetyService`. Tinha só
+as guardas próprias (1 por rascunho, 1 por cliente/dia, carimbo atômico, loja aberta
+no abandono) — e por isso **três das quatro "proteções sempre ativas" não valiam ali**:
+quem pediu para sair **recebia** (LGPD), a janela de silêncio 21h–8h era ignorada
+(loja aberta às 23h = mensagem às 23h) e o intervalo de 24 h entre mensagens de CRM
+não era consultado (campanha de manhã + recuperação à tarde).
+
+**Consertado:** regra 11 no laço por destinatário — o portão unificado passou a ser
+chamado com `enforceTimeWindows: true`, `enforceDailyCap: false` (a isenção do teto
+diário é decisão registrada: *"medir não pode custar envio"*) e
+`enforceRestaurantOpen: false` (a regra 9 já responde melhor, perguntando pelo
+instante do abandono). `campaignId: null` **de propósito**: passar o id da campanha
+do carrinho ligaria o dedup vitalício "já recebeu ESTA campanha" e transformaria
+"uma por cliente por dia" em "uma por cliente para sempre".
+
+As guardas próprias continuam valendo — **somou, não trocou**. Rascunho bloqueado
+**não é carimbado**: ele não é queimado por um bloqueio que pode passar no próximo
+tick. Bloqueio não grava linha em `campaign_executions` (o cron roda a cada minuto;
+seriam dezenas de linhas idênticas do mesmo carrinho). Contador próprio no resultado:
+`skippedSafety`.
+
+**Veio junto, e está dito:** o teto semanal por cliente (5/semana) e o teto de
+contatos também passam a valer nesse caminho — são "as mesmas travas das campanhas".
+
+**Teste:** `src/services/order/tests/CartRecoveryTravasDoCrm.test.ts`, 13 casos, cada
+proteção nas duas metades. **Conferido que reprova contra o código antigo:** com o
+portão desligado, as **7** metades "NÃO MANDA" falham e as 6 metades "MANDA"
+continuam passando.
+
+**Preço do conserto:** `GET /api/admin/diagnostics/carrinho-travas` (somente leitura)
+recalcula o passado e diz quantas recuperações por semana deixam de sair, e por qual
+trava. Sem banco de produção eu **não posso** dar o número — e não vou estimar.
 
 ---
 

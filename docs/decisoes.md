@@ -42,10 +42,22 @@ seguindo prometendo o que não acontecia.
 de cada restaurante, e se esse campo — que é limite de **custo**, não regra
 anti-banimento — deve continuar travado atrás do "Assumir controle manual".
 
-**Proposta ao Diretor Geral (dioli-brain-kit):** os itens 1 e 3 não são do Foocci,
-são doutrina de agente — *"limite anunciado é limite travado"* e *"etiqueta carrega a
-data que a prova"*. Fica registrado como proposta, não escrito no kit
-(guardrail 3).
+**Adendo de 23/08, autorizado pelo CEO — a recuperação de carrinho entrou no portão.**
+Ela era o caminho que provava a regra pela exceção: o rodapé da tela prometia quatro
+"proteções sempre ativas" e ali três não valiam. Ficam duas lições nomeadas:
+
+5. **Proteção que vale "sempre" vale em TODO caminho de envio, e isso se prova
+   caminho por caminho.** Um portão unificado só é unificado se todos os caminhos
+   passarem por ele; basta um por fora para a promessa da tela virar mentira.
+6. **Somar trava não é trocar trava.** As guardas próprias da recuperação (uma por
+   rascunho, uma por cliente/dia, loja aberta no abandono) continuam de pé. E a
+   isenção do teto diário continua valendo, porque é decisão registrada — entrar no
+   portão não é motivo para revogar em silêncio o que já tinha sido decidido.
+
+**Proposta ao Diretor Geral (dioli-brain-kit):** os itens 1, 3 e 5 não são do Foocci,
+são doutrina de agente — *"limite anunciado é limite travado"*, *"etiqueta carrega a
+data que a prova"* e *"proteção 'sempre ativa' se prova caminho por caminho"*. Fica
+registrado como proposta, não escrito no kit (guardrail 3).
 
 ---
 

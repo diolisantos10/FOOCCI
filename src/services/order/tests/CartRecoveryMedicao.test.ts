@@ -22,9 +22,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const db = vi.hoisted(() => ({
   orderDraft:           { findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
-  restaurantCRMProfile: { findMany: vi.fn() },
+  // O portão unificado do CRM entrou no caminho da recuperação em 23/08/2026;
+  // estas três leituras são dele (regras do restaurante, quanto já saiu hoje,
+  // histórico do contato + opt-out). Sem elas o portão falha fechado e NADA sai —
+  // o que é a prova, ao contrário, de que ele está mesmo no caminho do envio.
+  restaurantCRMProfile: { findMany: vi.fn(), findUnique: vi.fn() },
   campaign:             { findMany: vi.fn(), update: vi.fn() },
-  campaignExecution:    { create: vi.fn() },
+  campaignExecution:    { create: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+  customer:             { findUnique: vi.fn() },
   metaWhatsAppConfig:   { findMany: vi.fn() },
   order:                { findMany: vi.fn(), findFirst: vi.fn() },
   conversation:         { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -83,6 +88,20 @@ function tick({ comLinhaDeCampanha }: { comLinhaDeCampanha: boolean }) {
   db.$transaction.mockResolvedValue([]);
   horario.isRestaurantOpenNow.mockResolvedValue(true);
   meta.getResolved.mockResolvedValue({ restaurantId: REST, phoneNumberId: "123", accessToken: "tok" });
+  // ── Portão unificado do CRM: tudo liberado neste cenário-base ──────────────
+  // Cliente sem opt-out, sem histórico de mensagem recente, nada enviado hoje.
+  //
+  // `manualOverride: true` + `quietHoursEnabled: false` NÃO é para afrouxar
+  // nada: é para o relógio do CI não decidir o resultado. Com a configuração
+  // padrão a janela de silêncio é 21h–8h de São Paulo, e este arquivo — que é
+  // sobre MEDIÇÃO — passaria de dia e falharia de madrugada. A janela de
+  // silêncio tem teste próprio, com hora fixa, em CartRecoveryTravasDoCrm.
+  db.restaurantCRMProfile.findUnique.mockResolvedValue({
+    whatsAppSafetyConfig: { manualOverride: true, quietHoursEnabled: false },
+  });
+  db.campaignExecution.findMany.mockResolvedValue([]);
+  db.campaignExecution.count.mockResolvedValue(0);
+  db.customer.findUnique.mockResolvedValue({ hasOptedOut: false, crmContactable: true });
 }
 
 function execucaoGravada() {

@@ -50,6 +50,9 @@
  *       — avaliado naquele instante, nunca em "agora"
  *   10. o abandono aconteceu há menos de `deliveryWindowMinutes` — passou disso,
  *       a mensagem chegaria tarde demais e não sai nunca mais
+ *   11. o portão unificado do CRM (`ContactSafetyService`) libera este
+ *       destinatário — opt-out, janela de silêncio, intervalo de 24 h e teto
+ *       semanal por cliente. Ver "AS TRAVAS DO CRM" no laço abaixo.
  *
  * Idempotent: recoveryAttempts + lastRecoveryAt are written atomically after
  * a successful send; re-running within the same window sends nothing extra.
@@ -82,6 +85,10 @@ import { MetaWhatsAppCloudProvider } from "@/services/whatsapp/providers/MetaWha
 import { renderCrmMessage } from "@/services/crm/renderCrmMessage";
 import { CustomerCouponService } from "@/services/crm/CustomerCouponService";
 import { parseSafetyConfig } from "@/lib/crm-safety";
+import {
+  ContactSafetyService,
+  type ContactSafetyGlobalContext,
+} from "@/services/crm/ContactSafetyService";
 import { ConversationStatus } from "@prisma/client";
 
 function maskPhone(phone: string): string {
@@ -141,6 +148,8 @@ export interface RecoverySendResult {
    * "chegou tarde" ficaria invisível.
    */
   skippedTooLate:             number;
+  /** Reprovados pelo portão unificado do CRM (opt-out, silêncio, intervalo de 24 h, teto semanal). */
+  skippedSafety:              number;
   durationMs:                 number;
 }
 
@@ -432,7 +441,7 @@ export class OrderDraftRecoverySendService {
         skippedNoConfig: 0, skippedRestaurantClosed: 0, failed: 0,
         skippedTemplateRequired: 0,
         dryRun, inactivityMinutes, maxAgeHours, skippedTooOld,
-        deliveryWindowMinutes, skippedTooLate: 0,
+        deliveryWindowMinutes, skippedTooLate: 0, skippedSafety: 0,
         durationMs: Date.now() - startMs,
       };
     }
@@ -530,6 +539,7 @@ export class OrderDraftRecoverySendService {
     let failed                      = 0;
     let skippedTemplateRequired     = 0;
     let skippedTooLate              = 0;
+    let skippedSafety               = 0;
 
     /**
      * A loja estava aberta NAQUELE INSTANTE?
@@ -593,6 +603,30 @@ export class OrderDraftRecoverySendService {
       }
       sendableCache.set(restaurantId, ok);
       return ok;
+    };
+
+    // Contexto do portão unificado do CRM, UMA vez por restaurante por tick
+    // (config de segurança, quanto já saiu hoje, teto de contatos). Se a leitura
+    // falhar, devolve `null` e o destinatário é REPROVADO — não saber quais
+    // regras valem não pode virar permissão de enviar.
+    //
+    // O canal já foi perguntado por este serviço, com falha fechada, em
+    // `canSendWhatsApp` — por isso `whatsappAvailable: true` aqui em vez de uma
+    // segunda pergunta, com resposta possivelmente diferente, sobre a mesma
+    // coisa. Mesmo padrão do envio manual em `CrmCampaignService`.
+    const safetyCtxCache = new Map<string, ContactSafetyGlobalContext | null>();
+    const contextoDeSeguranca = async (restaurantId: string): Promise<ContactSafetyGlobalContext | null> => {
+      if (safetyCtxCache.has(restaurantId)) return safetyCtxCache.get(restaurantId)!;
+      let ctx: ContactSafetyGlobalContext | null = null;
+      try {
+        ctx = await ContactSafetyService.buildGlobalContext(restaurantId, { whatsappAvailable: true });
+      } catch (e) {
+        console.error(`[OrderDraftRecoverySendService] leitura das regras de segurança do CRM falhou — falhando fechado (não envia)`, {
+          restaurantId, error: e instanceof Error ? e.message : String(e),
+        });
+      }
+      safetyCtxCache.set(restaurantId, ctx);
+      return ctx;
     };
 
     for (const draft of candidates) {
@@ -708,6 +742,73 @@ export class OrderDraftRecoverySendService {
           draftId: draft.id, restaurantId: draft.restaurantId,
           abandonadoEm: momentoDoAbandono.toISOString(),
         });
+        continue;
+      }
+
+      // ── REGRA 11 — AS TRAVAS DO CRM, AGORA TAMBÉM AQUI ───────────────────
+      //
+      // Até 23/08/2026 este caminho tinha SÓ as guardas próprias dele (uma
+      // recuperação por rascunho, uma por cliente por dia, carimbo atômico, loja
+      // aberta no abandono) e passava POR FORA do portão unificado do CRM. O
+      // rodapé da tela de Regras de Segurança prometia quatro "proteções sempre
+      // ativas"; aqui três delas não valiam:
+      //
+      //   • quem pediu para sair (opt-out) RECEBIA por este caminho — LGPD;
+      //   • a janela de silêncio 21h–8h era ignorada: loja aberta às 23h,
+      //     mensagem às 23h;
+      //   • o intervalo de 24 h entre mensagens de CRM não era consultado: dava
+      //     para receber campanha de manhã e recuperação de carrinho à tarde.
+      //
+      // As guardas próprias CONTINUAM valendo — isto soma, não troca. Vem depois
+      // delas de propósito: são checagens locais e baratas, e quem já foi
+      // recusado por elas não precisa de consulta ao banco para ser recusado de
+      // novo.
+      //
+      // `enforceDailyCap: false` é deliberado e NÃO é um furo: a recuperação de
+      // carrinho é isenta do teto diário por decisão registrada
+      // (`BUDGET_EXEMPT_TEMPLATE_IDS` em `crm-safety.ts` — "medir não pode custar
+      // envio"). O que ela deixa de ser isenta é do resto.
+      //
+      // `enforceRestaurantOpen: false` porque a regra 9 acima já responde a
+      // mesma pergunta, e melhor: ela pergunta pelo INSTANTE DO ABANDONO, não
+      // por "agora".
+      //
+      // `campaignId: null` de propósito: passar o id da campanha de carrinho
+      // ligaria o dedup de "já recebeu ESTA campanha", que é VITALÍCIO, e
+      // transformaria "uma recuperação por cliente por dia" em "uma por cliente
+      // para sempre". A trava pedida é o intervalo de 24 h, não o fim do recurso.
+      const ctxSeguranca = await contextoDeSeguranca(draft.restaurantId);
+      const decisaoSeguranca = ctxSeguranca
+        ? await ContactSafetyService.assertSendable({
+            restaurantId:          draft.restaurantId,
+            customerId:            draft.customerId,
+            phone:                 customer.phone,
+            campaignId:            null,
+            enforceTimeWindows:    true,  // janela de silêncio 21h–8h
+            enforceDailyCap:       false, // isenção registrada do teto diário
+            enforceRestaurantOpen: false, // a regra 9 já respondeu, e melhor
+            context:               ctxSeguranca,
+          })
+        : {
+            sendable: false as const,
+            reason:   "UNKNOWN_ERROR" as const,
+            detail:   "Não foi possível ler as regras de segurança do CRM",
+          };
+      if (!decisaoSeguranca.sendable) {
+        skippedSafety++;
+        // O alerta carrega a própria evidência: sem o motivo, "bloqueado" vira
+        // ruído que ninguém investiga.
+        console.info(`[OrderDraftRecoverySendService] recuperação bloqueada pelo portão do CRM`, {
+          draftId:      draft.id,
+          restaurantId: draft.restaurantId,
+          customerId:   draft.customerId,
+          motivo:       decisaoSeguranca.reason,
+          detalhe:      decisaoSeguranca.detail,
+        });
+        // Nada de linha em `campaign_executions` aqui: o rascunho NÃO é carimbado
+        // (ele segue elegível no próximo tick, até a janela de entrega vencer), e
+        // gravar uma linha por tick encheria a tabela com o mesmo bloqueio
+        // repetido dezenas de vezes para o mesmo carrinho.
         continue;
       }
 
@@ -947,6 +1048,7 @@ export class OrderDraftRecoverySendService {
       skippedTooOld,
       deliveryWindowMinutes,
       skippedTooLate,
+      skippedSafety,
       durationMs: Date.now() - startMs,
     };
   }
