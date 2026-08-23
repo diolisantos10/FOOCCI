@@ -1,5 +1,35 @@
 # Domínio — o diagnóstico (e é o inverso do que estava na lista)
 
+## 23/08/2026, fim do dia — certificado emitido, e o defeito que apareceu atrás dele
+
+O CEO corrigiu o DNS e o Railway emitiu o certificado do `www`: o aviso vermelho
+do Chrome acabou. **Segundos depois apareceu outro dano, com a mesma cara para o
+visitante** — "Não é possível acessar esse site":
+
+```
+https://www.foocci.com.br/                    → 308 → https://foocci.com.br:8080/          ← quebrado
+https://www.foocci.com.br/r/ABC123?utm=zap    → 308 → https://foocci.com.br:8080/r/...     ← quebrado
+https://foocci.com.br/                        → 307 → /site                                ← certo, intocado
+```
+
+`8080` é a porta em que o app escuta **dentro** do contêiner. A causa é da API de
+URL, não do Railway: o middleware clonava `req.nextUrl` (que atrás do proxy já vem
+com `:8080`) e trocava só o `host` — e o setter `host` do WHATWG **só mexe na
+porta se o valor novo trouxer uma**. `foocci.com.br` não traz, então o `:8080`
+sobrevivia e ia para o `Location`.
+
+Corrigido em `src/lib/canonicalHost.ts`: o destino passa a ser **montado**, nunca
+herdado — `https` fixo, host público do cabeçalho `Host` sem porta, caminho e
+query preservados. Caminho e query, aliás, **já estavam certos** (medido em
+produção acima): o único defeito era a porta.
+
+**Aprendizado que vale além deste domínio:** consertar o certificado e conferir só
+"o cadeado voltou" teria dado o caso por encerrado com o site igualmente
+inacessível. Portão de entrada se mede seguindo o redirecionamento até o fim, não
+no primeiro salto.
+
+---
+
 ## Estado atual (23/08/2026) — o `www` continua quebrado, e agora sabemos por quê
 
 Medido **de fora deste ambiente** (SSL Labs, a partir dos servidores deles), porque
