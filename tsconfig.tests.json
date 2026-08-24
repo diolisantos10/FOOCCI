@@ -55,7 +55,8 @@
     "scripts/seed-organizacao.ts",
     "scripts/criar-usuario-interno.ts",
     "scripts/seed-fichas.ts",
-    "scripts/aplicar-travas.ts"
+    "scripts/aplicar-travas.ts",
+    "scripts/conferir-v3.ts"
   ],
   "exclude": ["node_modules"]
 }

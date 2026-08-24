@@ -50,14 +50,28 @@ O gate do documento 01 é o **mínimo de governança**, e ele é o mesmo para os
 
 **A promessa do documento 01, cumprida:** *"a regra vira número, e o número aparece"*. O Diretor não é bloqueado de falar direto com quem executa — numa urgência ele precisa disso, e um sistema que impede é contornado por WhatsApp, fora do registro. O atalho é contado. Um pulo é exceção; um terço das ordens pulando é uma estrutura que não está funcionando.
 
-## Fase 5 — Testes, migração, observabilidade e liberação
+## Fase 5 — Testes, migração, observabilidade e liberação ✅ *(o que não depende do CEO)*
 
-- Migração da v1 para a v3 (`10-PLANO-DE-MIGRACAO.md`)
-- Observabilidade
-- Documentação final
-- Liberação controlada
+- [x] **Migração da v1 para a v3**, executada e verificada contra um banco que já tinha a v1: 4 departamentos, 10 cargos e 27 fichas desativados **com o motivo escrito**, nada apagado
+- [x] **Observabilidade da própria arquitetura**: `npm run db:conferir-v3`
+- [x] **Documentação final** nesta pasta
+- [ ] **Liberação controlada** — depende do CEO: nenhuma migração foi aplicada em produção, e não haverá merge sem aprovação
 
-**Gate:** os 16 critérios do documento 09, todos.
+### O instrumento da liberação
+
+`npm run db:conferir-v3` pergunta uma coisa que os testes **não** perguntam.
+
+Os testes provam que o CÓDIGO está certo. O script pergunta se o BANCO onde a aplicação vai rodar está no estado que a arquitetura descreve. São perguntas diferentes, e a segunda é a que passa batida: o código pode estar impecável e o banco ter ficado sem o seed, sem a migração ou sem a trava de append-only — e nada avisa, porque a aplicação sobe igual.
+
+Doze conferências, e a regra que governa todas: **nenhuma devolve ✓ por ausência de dado.** Banco vazio não é banco correto. Onde a resposta é "não dá para saber", o relatório escreve isso.
+
+Verificado nas duas direções antes de entrar:
+
+- num banco correto, 12 de 12 passam;
+- quebrando três coisas de propósito (um gatilho derrubado, uma ficha ligada, um cargo renomeado para fora do padrão), o script acusa exatamente as três e sai com código 1;
+- num banco sem seed, 7 reprovam e 1 sai como "sem resposta" — nunca como aprovado.
+
+**Gate:** os 16 critérios do documento 09.
 
 ## O que NÃO acontece em nenhuma fase sem decisão do proprietário
 
