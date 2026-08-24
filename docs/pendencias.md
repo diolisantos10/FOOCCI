@@ -10,6 +10,18 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟢 24/08 (3) — A marca oficial no checkout, e o link para comparar planos
+
+Bloco `claude/checkout-marca-e-link`. Detalhe em `docs/marca-no-checkout.md`.
+
+O CEO viu "mudaram a logomarca" no checkout. **Ninguém mudou:** as três telas de
+contratação nasceram com a marca desenhada com texto e CSS (commit `16cf3b5`,
+05/08) e nunca passaram pelo arquivo oficial. Consertado com um componente único
+(`FoocciWordmark`) e teste de texto impedindo a volta do padrão.
+
+E entrou o link "Ainda em dúvida entre os planos? Compare os três aqui" acima da
+escolha do plano — em nova aba, para não apagar o cadastro já digitado.
+
 ## 🟢 24/08 (2) — O topo vira Entrar + Assinar (ordem do CEO)
 
 Bloco `claude/topo-entrar-e-assinar`. Detalhe em `docs/topo-entrar-e-assinar.md`.

@@ -22,6 +22,7 @@ import {
   type CycleCode,
 } from "@/lib/billing/pricing";
 import { CheckoutClient } from "./CheckoutClient";
+import { FoocciWordmarkLink } from "@/components/brand/FoocciWordmark";
 import { chamadaComercial } from "@/lib/site/canalDeVendas";
 
 export const dynamic = "force-dynamic";
@@ -45,9 +46,10 @@ export default function NovoCheckoutPage({
     <main className="min-h-screen bg-canvas px-4 py-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 text-center">
-          <a href="/site/precos" className="inline-block text-2xl font-semibold tracking-tight text-ink">
-            f<span className="text-brand-500">oo</span>cci
-          </a>
+          {/* A MARCA VEM DO ARQUIVO OFICIAL. Aqui havia a marca desenhada com
+              texto e CSS — foi o que o CEO viu e chamou de "mudaram a logo".
+              Ver `FoocciWordmark`. */}
+          <FoocciWordmarkLink href="/site/precos" className="mx-auto h-7 w-auto" />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Contrate e comece a rodar hoje.
           </h1>
