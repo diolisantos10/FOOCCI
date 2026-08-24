@@ -1,33 +1,28 @@
-# 11 — Backlog do Diretor do Foocci
+# Backlog — o que está aberto
 
-> Aberto em 25/08/2026, quando as cinco fases da v3 fecharam.
+> Atualizado em 25/08/2026, depois da Sala de Vendas e do reforço de escopo.
 >
 > **Segue o padrão da companhia** — `docs/kit/11-backlog-do-diretor-geral.md`,
 > espelho de `dioli-brain-kit`. Seções: Em execução · Fila · Depende do CEO ·
-> Fechados. A primeira versão deste arquivo inventou uma estrutura própria; foi
-> corrigida em 25/08 quando o CEO apontou que **existe padrão na empresa**.
+> Fechados.
 >
-> **O que entra aqui:** execução dentro do Foocci.
-> **O que NÃO entra:** doutrina e coerência entre projetos — isso é do Diretor
-> Geral, e se propõe ao kit (guardrail 3).
+> **Escrito em linguagem de negócio, a pedido do CEO.** Onde um termo técnico é
+> inevitável, ele vem com a tradução ao lado. O detalhe técnico vive nos
+> documentos do projeto, não aqui.
 
 ---
 
 ## A regra que governa este arquivo
 
 **O CEO não é fila de aprovação.** Item que não precisa de decisão de dono,
-**executa**. Item que precisa, vai para "Depende do CEO" **com a pergunta pronta**
-— e o resto do trabalho continua andando sem ele.
-
-Aplicado aqui: os quatro itens da Fila não esperam resposta nenhuma. Se eu ficar
-parado esperando o CEO, o erro é meu, não a fila dele que está lenta.
+**executa**. Item que precisa, vai para "Depende do CEO" **com a pergunta
+pronta** — e o resto do trabalho continua andando sem ele.
 
 ---
 
 ## 🔨 Em execução
 
-*Vazio.* A v3 fechou em 25/08 e a Fila abaixo ainda não foi puxada — o CEO está
-decidindo por onde começar.
+*Vazio.* A Sala de Vendas fechou e a Fila abaixo ainda não foi puxada.
 
 ---
 
@@ -35,25 +30,35 @@ decidindo por onde começar.
 
 Em ordem do que mais muda a vida de quem usa. Nenhum depende de decisão do CEO.
 
-### F1 · Colocar os leads antigos na Sala de Vendas
-**Tamanho:** pequeno — script de uma passada.
-A Sala abre **vazia** hoje. Quem entra pela primeira vez vê um sistema que parece
-não ter nada dentro, e é a primeira impressão que o time de vendas vai ter dela.
+### F1 · Trazer os contatos antigos para a Sala
+**Tamanho:** pequeno.
+A Sala abre **vazia** hoje. Todo mundo que já pediu demonstração está na base
+antiga e não aparece na tela nova. Quem entrar pela primeira vez vai achar que o
+sistema não tem nada dentro — e essa é a primeira impressão que o time comercial
+vai ter dele.
 
-### F2 · Ficha do contato dentro da Sala
+### F2 · Deixar arrastar o cartão no quadro do funil
 **Tamanho:** médio.
-O histórico do contato vive no CRM, noutra gaveta. Hoje o vendedor atende sem ver
-com quem está falando — e pergunta de novo o que a pessoa já respondeu no site.
+O quadro já existe e mostra as onze etapas com a contagem de cada uma. O que
+falta é **puxar o cartão de uma coluna para a outra** com o dedo. Hoje a etapa se
+muda por uma lista, que funciona e é mais lenta.
 
-### F3 · Quadro de etapas (Kanban) da Sala
+### F3 · Ligar o motor do vendedor de IA ao mundo
 **Tamanho:** médio.
-A lista existe, funciona e é testada. Quadro é o que time comercial espera ver, e
-é onde a etapa parada fica visível sem ninguém procurar.
+O cérebro do vendedor de IA existe, está testado, **e nada o chama**. É trabalho
+pronto parado — a pior categoria de item de backlog, porque não parece dívida.
 
-### F4 · Ligar `/api/sdr/entrevista` ao mundo
+⚠️ Isto é a **ligação técnica**, não a decisão de soltar a IA para falar com
+cliente. Essa continua sendo sua, e está mais abaixo.
+
+### F4 · Fechar a escrita dentro do banco de dados
 **Tamanho:** médio.
-O motor do SDR existe, é testado, e **ninguém o chama**. É trabalho pronto parado
-— a pior categoria de item de backlog, porque não parece dívida.
+Hoje o banco já impede que alguém **leia** o que não é dele, mesmo entrando por
+fora do sistema. O que ele ainda não impede é **escrever**.
+
+Em português claro: se alguém tivesse a senha do banco, não conseguiria ver os
+contatos — mas conseguiria alterar. Fechar isso exige mexer em como o sistema
+grava, e é por isso que ficou para depois em vez de ser feito pela metade.
 
 ---
 
@@ -61,57 +66,60 @@ O motor do SDR existe, é testado, e **ninguém o chama**. É trabalho pronto pa
 
 | Pergunta | O que acontece enquanto não vier |
 |---|---|
-| **Aprovar o PR #145** e dizer para qual branch ele vai | tudo que foi feito continua em rascunho |
-| **Preço, alçada de desconto, prazo, formas de pagamento, quem fecha** | o SDR trava na primeira pergunta de preço |
-| **Cadastrar o número na Meta** (`docs/whatsapp-vendas-passo-a-passo.md`) | toda mensagem continua sendo respondida à mão |
-| **Destino do chip** — atender à mão hoje **ou** automatizar depois | decidir depois custa o histórico do aparelho |
-| **O e-mail de escalada do suporte está configurado?** | cliente pede ajuda, chamado é salvo, **ninguém é avisado** |
-| **Data para desligar o `ADMIN_SECRET`** | porta sem data de fechamento é porta que ninguém fecha |
-| **Ligar o envio** (`FOOCCI_SDR_SEND_ENABLED`) | nenhuma mensagem sai — e é assim de propósito |
-| **Conta de teste isolada** | não há como exercitar ponta a ponta sem tocar em dado de gente |
-
-**Um item da Fila é meu e parece dele:** criar o primeiro acesso interno. Hoje a
-área responde 401 para todos, inclusive para o CEO. É um comando, não é decisão —
-por isso não está nesta tabela. Entra assim que o PR for aprovado.
+| **Aprovar o PR #150** (é o "pedido de aprovação" do trabalho) | tudo continua em rascunho, fora do ar |
+| **Preço, até quanto pode dar de desconto, prazo de entrega, formas de pagamento, e quem pode fechar** | o vendedor trava na primeira pergunta de preço. **É o que mais bloqueia** |
+| **Quem vai ocupar cada uma das nove funções** | os nove cargos estão vagos. O sistema funciona e não tem ninguém dentro |
+| **Cadastrar o número na Meta** (o dono do WhatsApp) | a mensagem continua caindo no aparelho e sendo respondida à mão |
+| **Decidir o destino do chip** — atender à mão hoje **ou** automatizar depois | os dois não cabem no mesmo número ao mesmo tempo. Decidir depois custa o histórico de conversa daquele aparelho |
+| **O e-mail que recebe pedido de ajuda está configurado?** | o cliente pede ajuda, o chamado é salvo e **ninguém é avisado** |
+| **Data para desligar a senha única do sistema** | senha que dá acesso a tudo e não identifica quem entrou. Sem data, fica para sempre |
+| **Quando soltar o vendedor de IA para falar com cliente** | é a última chave, e só depois de ver resultado |
+| **Uma conta de teste separada** | sem ela não dá para testar do começo ao fim sem mexer em dado de gente de verdade |
 
 ---
 
-## 🧾 Dívida herdada (não é da v3)
+## 🧾 Dívida velha (não é deste trabalho)
 
-Nenhuma quebra nada hoje. A característica comum — e é o que as torna caras — é
-que **nenhuma delas avisa quando dá errado**.
+Nenhuma quebra nada hoje. O que as torna caras é a característica comum:
+**nenhuma delas avisa quando dá errado.**
 
-| # | O que | Por que importa |
+| # | O que é | Por que importa |
 |---|---|---|
-| D1 | A cadeia de migrações não replica do zero | banco novo não se monta pelo histórico. Hoje contornado gerando por diferença de schema |
-| D2 | ~750 erros de tipo em arquivos de teste antigos | ficaram invisíveis porque teste era excluído do `type-check` |
-| D3 | Dois arquivos de teste diferem só na caixa da letra | em Mac ou Windows um sobrescreve o outro no clone |
-| D4 | A submissão de modelo à Meta ficou sem motor (achado de 23/08) | sem modelo aprovado a campanha fria fica bloqueada para sempre, e nada falha no log |
+| D1 | O banco de dados não consegue ser montado do zero pela própria história | se um dia precisarmos criar um ambiente novo do nada, não sai pelo caminho normal. Hoje é contornado |
+| D2 | Cerca de 750 avisos de código em testes antigos | ficaram invisíveis por anos porque essa parte não era conferida. Agora está medida e nomeada |
+| D3 | Dois arquivos de teste com o mesmo nome, mudando só maiúscula | em Mac ou Windows um apaga o outro na cópia, e o time perde um teste sem notar |
+| D4 | O envio de modelos de mensagem para a Meta ficou sem quem execute | sem modelo aprovado, campanha para quem não escreveu primeiro fica bloqueada para sempre. Nada falha, nada aparece — só não acontece |
 
 ---
 
 ## ✅ Fechados
 
-| # | O que | Quando |
-|---|---|---|
-| — | Raio-x do que já existia, antes de escrever qualquer linha | 25/08 |
-| — | Planta de 6 departamentos; v1 marcada SUPERADA, nada apagado | 25/08 |
-| — | 30 fichas de cargo, todas nascidas vagas e desligadas | 25/08 |
-| — | Seis perfis de acesso, com escopo dentro da **consulta**, não só na rota | 25/08 |
-| — | Sala de Vendas: sete filas, assumir e devolver com escrita condicional | 25/08 |
-| — | Governança: delegação medida e não conformidade com evidência | 25/08 |
-| — | `db:conferir-v3` — o instrumento que confere o banco antes de liberar | 25/08 |
-| — | Saída para o WhatsApp acesa, com o número **11 94372-3316** | 25/08 |
-| — | Regra: entrega ao CEO é página publicada, não `.md` (em `CLAUDE.md`) | 25/08 |
-
-**16 de 16 critérios de aceite**, com a ressalva escrita no documento 09: o "oi"
-do WhatsApp chega num aparelho, não na Sala. Recepção automática depende da Meta.
+| O que | Quando |
+|---|---|
+| Raio-x do que já existia, antes de escrever qualquer linha | 25/08 |
+| Estrutura de 6 departamentos; a antiga marcada como superada, nada apagado | 25/08 |
+| 34 fichas de função, todas nascidas vagas e desligadas | 25/08 |
+| Seis perfis de acesso | 25/08 |
+| **Sala de Vendas**: filas, conversa, ficha do cliente e passagem da IA para gente | 25/08 |
+| Funil de 11 etapas, com a demonstração separada em marcada e realizada | 25/08 |
+| Nota do lead **com a conta à vista** — mostra por que é 78 | 25/08 |
+| Painel do gerente | 25/08 |
+| Avaliação de qualidade das conversas, com evidência ligada à mensagem | 25/08 |
+| **Login por e-mail e senha** — não existia; o vendedor não tinha como entrar | 25/08 |
+| O vendedor cai **direto na Sala** ao entrar | 25/08 |
+| **As nove fichas de agente comercial**, com tela de desempenho de cada uma | 25/08 |
+| **Permissão dentro do próprio banco de dados** | 25/08 |
+| Saída para o WhatsApp acesa, com o número 11 94372-3316 | 25/08 |
+| Regra: entrega ao CEO é página com link, não arquivo | 25/08 |
 
 ---
 
 ## Notas
 
 - **Este arquivo é a fonte; a página é a entrega.** O CEO não lê `.md` (ordem de
-  25/08). O que sobe para ele é página publicada, e ela é gerada a partir daqui.
+  25/08). O que sobe para ele é página publicada, gerada a partir daqui.
 - Item fechado **não sai** da lista: vira linha em "Fechados" com a data. Backlog
   que apaga o que entregou perde a única prova de ritmo que existe.
+- **O que NÃO está aqui, de propósito:** marketing dentro do Foocci (é da Dioli),
+  cargo de Gerente Geral (o Diretor ocupa a camada), e reescrever o que já
+  funciona. Se voltarem a ser propostos, são decisão nova — não item esquecido.
