@@ -9,19 +9,20 @@
 
 Transformar o admin atual do Foocci no sistema operacional interno da empresa. A plataforma deve conectar estratégia, execução e controle dos nove departamentos, aproveitando módulos que já existem e construindo somente as lacunas.
 
-A Sala de Vendas faz parte do projeto inteiro e permanece a primeira entrega funcional por gerar receita. O projeto só estará concluído quando a fundação compartilhada e os módulos dos 9 departamentos estiverem implementados e integrados.
+A Sala de Vendas é uma área interna do admin dedicada aos leads interessados em contratar o Foocci. SDR IA e humano atuam sobre a mesma conversa de WhatsApp. O login SDR acessa apenas essa área; o MASTER acessa todo o admin.
 
 ## Ordem obrigatória de leitura
 
 1. `01-DEPARTAMENTOS-E-AGENTES.md`
 2. `09-PLANO-MESTRE-DO-PROJETO-INTEIRO.md`
-3. `02-VENDAS-E-RECEITA-SDR.md`
-4. `03-FUNIL-E-HANDOFFS.md`
-5. `04-SALA-DE-VENDAS-UX.md`
-6. `05-DADOS-APIS-E-PERMISSOES.md`
-7. `06-PLANO-DE-CONSTRUCAO.md`
-8. `07-TESTES-E-ACEITE.md`
-9. `08-COMANDO-PARA-O-ARQUITETO.md`
+3. `10-PLATAFORMA-SDR-E-CONTROLE-DE-ACESSO.md`
+4. `02-VENDAS-E-RECEITA-SDR.md`
+5. `03-FUNIL-E-HANDOFFS.md`
+6. `04-SALA-DE-VENDAS-UX.md`
+7. `05-DADOS-APIS-E-PERMISSOES.md`
+8. `06-PLANO-DE-CONSTRUCAO.md`
+9. `07-TESTES-E-ACEITE.md`
+10. `08-COMANDO-PARA-O-ARQUITETO.md`
 
 ## Princípios que não podem ser quebrados
 
@@ -31,7 +32,9 @@ A Sala de Vendas faz parte do projeto inteiro e permanece a primeira entrega fun
 - A empresa possui 9 departamentos canônicos e hierarquia: CEO → Diretor Foocci → Gerente Geral → gerentes de departamento → agentes.
 - Agente é uma função com modo `AI`, `HUMAN` ou `HYBRID`; a IA não substitui autorização humana em decisões críticas.
 - Todos os departamentos usam a mesma fundação de pessoas, permissões, OS, projetos, tarefas, aprovações, decisões, handoffs, arquivos, comentários, notificações e auditoria.
-- Controle de acesso existe no servidor e por escopo departamental.
+- MASTER acessa todo o admin; SDR acessa somente a plataforma SDR; demais logins obedecem papel, departamento e escopo.
+- Esconder menu não é segurança: toda rota, API, serviço e query valida autorização no servidor.
+- Prospect do Foocci, cliente Foocci e consumidor do restaurante são domínios separados.
 - Mudanças de banco são aditivas e migráveis.
 - PII, tokens e segredos não entram em código, prompt persistido ou log.
 - Envio comercial continua bloqueado enquanto `FOOCCI_SDR_SEND_ENABLED` estiver desligado.
