@@ -9,12 +9,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS, DEMO_CTA_LABEL, DEMO_URL } from "./config";
+import { LOGIN_URL, NAV_LINKS } from "./config";
+import type { ChamadaComercial } from "@/lib/site/canalDeVendas";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
 
-export function MarketingHeader() {
+/**
+ * O botão laranja NÃO decide sozinho para onde vai nem como se chama: recebe a
+ * `chamada` já resolvida pelo layout, que roda no servidor. Este componente é
+ * `"use client"`, e variável sem `NEXT_PUBLIC_` chega vazia aqui — ler o estado
+ * do canal daqui dentro apagaria o botão sem explicação nenhuma.
+ */
+export function MarketingHeader({ chamada }: { chamada: ChamadaComercial }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -74,10 +81,10 @@ export function MarketingHeader() {
             Entrar
           </Link>
           <Link
-            href={DEMO_URL}
+            href={chamada.href}
             className={`inline-flex items-center rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 ${FOCUS}`}
           >
-            {DEMO_CTA_LABEL}
+            {chamada.label}
           </Link>
         </div>
 
@@ -114,11 +121,11 @@ export function MarketingHeader() {
                 Entrar
               </Link>
               <Link
-                href={DEMO_URL}
+                href={chamada.href}
                 onClick={() => setOpen(false)}
                 className={`inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600 ${FOCUS}`}
               >
-                {DEMO_CTA_LABEL}
+                {chamada.label}
               </Link>
             </div>
           </nav>

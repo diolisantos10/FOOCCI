@@ -31,9 +31,10 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { DEMO_URL, DEMO_PAGE_PATH, DEMO_CTA_LABEL } from "./config";
+import { DEMO_PAGE_PATH } from "./config";
+import type { ChamadaComercial } from "@/lib/site/canalDeVendas";
 
-export function StickyMobileCta() {
+export function StickyMobileCta({ chamada }: { chamada: ChamadaComercial }) {
   const [show, setShow] = useState(false);
   /*
     NA PRÓPRIA PÁGINA DO FORMULÁRIO A BARRA NÃO EXISTE. Antes da dobra do
@@ -71,10 +72,10 @@ export function StickyMobileCta() {
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 p-3 backdrop-blur-md lg:hidden">
       <div className="mx-auto max-w-md">
         <a
-          href={DEMO_URL}
+          href={chamada.href}
           className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
         >
-          {DEMO_CTA_LABEL}
+          {chamada.label}
         </a>
       </div>
     </div>

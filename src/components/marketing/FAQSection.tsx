@@ -10,15 +10,15 @@ import { PlusIcon } from "./icons";
 const FAQS = [
   {
     q: "O Foocci já está disponível?",
-    a: "Sim. O Foocci está aberto para restaurantes. Peça uma demonstração e a gente mostra funcionando com o seu cardápio.",
+    a: "Sim. O Foocci está aberto para restaurantes. Tire suas dúvidas com os nossos agentes pelo botão de contato aqui do site.",
   },
   {
     q: "Posso contratar agora?",
-    a: "Pode. A entrada é por conversa: você pede uma demonstração, a gente entende a sua operação e monta a proposta certa para o seu momento.",
+    a: "Pode. A entrada é por conversa: você fala com os nossos agentes, a gente entende a sua operação e monta a proposta certa para o seu momento.",
   },
   {
     q: "Quanto custa?",
-    a: "O valor depende do tamanho da operação e do que você vai usar. Peça uma demonstração que a gente apresenta a proposta sem compromisso.",
+    a: "Os planos e os valores estão na página de preços. Se a sua operação não se encaixar nos três, fale com os nossos agentes e a gente monta a proposta certa.",
   },
   {
     q: "O Foocci é um chatbot?",

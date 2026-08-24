@@ -144,6 +144,39 @@ export const CALCULADORA_URL = "/site#calculadora";
 export const DEMO_CTA_LABEL = "Agende uma demonstração";
 
 /**
+ * ⚑ A PORTA NOVA — o agente no WhatsApp (decisão do CEO, 24/08/2026).
+ *
+ * Palavras dele: *"Esse botão laranja, 'Agende uma demonstração', não existe.
+ * (…) ali ele vai ser direcionado pro WhatsApp [do] Foocci. (…) 'tire as dúvidas
+ * com os nossos agentes'."*
+ *
+ * O endereço é INTERNO de propósito. Se cada botão apontasse direto para o
+ * `wa.me`, o link ficaria assado no HTML de cada página e acender ou apagar o
+ * canal viraria um build novo — a mesma armadilha do `NEXT_PUBLIC_` que já mordeu
+ * esta casa. Apontando para cá, quem decide o destino é o servidor, a cada
+ * clique: WhatsApp quando o canal está no ar, formulário enquanto não está.
+ *
+ * Ver `src/app/site/(gated)/falar-com-agente/route.ts` e `@/lib/site/canalDeVendas`.
+ */
+export const AGENTE_URL = "/site/falar-com-agente";
+
+/** O rótulo do botão laranja quando o canal está no ar. */
+export const AGENTE_CTA_LABEL = "Fale com nosso agente";
+
+/** A chamada do botão flutuante — a fala do CEO, quase literal. */
+export const AGENTE_FLUTUANTE_LABEL = "Tire suas dúvidas";
+
+/**
+ * A microcopy sob o botão quando o canal está no ar.
+ *
+ * Descreve o que acontece depois do clique, no tempo verbal certo — mesma regra
+ * do `CONTATO_NOTE`. Sem prazo e sem promessa de resposta imediata: não existe
+ * compromisso de "respondemos em X minutos", e prometer prazo que não se cumpre é
+ * o contrário do que esta casa faz.
+ */
+export const AGENTE_NOTE = "Você fala com o nosso agente pelo WhatsApp e tira as dúvidas por lá.";
+
+/**
  * ⚑ O RÓTULO DA DEGUSTAÇÃO — a outra porta, e ela NÃO é comercial.
  *
  * Era "Experimentar antes", e o CEO matou a expressão pelo motivo certo: *"dá a

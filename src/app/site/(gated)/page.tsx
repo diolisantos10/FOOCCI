@@ -42,6 +42,7 @@ import { DifferentiatorsSection } from "@/components/marketing/DifferentiatorsSe
 import { HowItWorksSection } from "@/components/marketing/HowItWorksSection";
 import { PricingTeaserSection } from "@/components/marketing/PricingTeaserSection";
 import { FinalCTASection } from "@/components/marketing/FinalCTASection";
+import { chamadaComercial } from "@/lib/site/canalDeVendas";
 
 const TITLE = "Foocci | Calcule quanto sobra no seu bolso todo mês";
 const DESCRIPTION =
@@ -72,7 +73,7 @@ export default function SitePage() {
       {/* 1 · A tese */}
       <HeroSection />
       {/* 2 · A conta que fecha a venda */}
-      <CommissionCalculator />
+      <CommissionCalculator chamada={chamadaComercial()} />
       {/* 3 · Quatro contratos ou um */}
       <FourContractsSection />
       {/* 4 · O que só tem aqui */}

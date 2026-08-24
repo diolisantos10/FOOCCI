@@ -18,8 +18,6 @@ import { Eyebrow } from "@/components/marketing/premium";
 import {
   COMO_FUNCIONA_URL,
   CONTATO_NOTE,
-  DEMO_CTA_LABEL,
-  DEMO_URL,
 } from "@/components/marketing/config";
 import {
   TrendingUpIcon,
@@ -185,11 +183,9 @@ export default function SobrePage() {
         todo CTA comercial do site (ver `config.ts`). Foi assim que nasceram os nove
         textos diferentes para a mesma porta que a gente acabou de unificar.
       */}
-      <CtaBand
-        title="Quer construir uma operação mais inteligente para seu restaurante?"
-        label={DEMO_CTA_LABEL}
-        href={DEMO_URL}
-      />
+      {/* Sem `label` nem `href`: a chamada vem resolvida do servidor pelo próprio
+          CtaBand, e é lá que texto e destino andam juntos. */}
+      <CtaBand title="Quer construir uma operação mais inteligente para seu restaurante?" />
     </>
   );
 }

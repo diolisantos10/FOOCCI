@@ -441,10 +441,22 @@ const DEGUSTACAO = SITE_PLAN_IDS.map((id) => {
  * num site" de "combinei uma conversa". "Uma pessoa do Foocci" e não "nossa
  * equipe": equipe é abstração, pessoa é quem vai chamar.
  */
+/**
+ * ⚠️ A TERCEIRA LINHA PROMETIA O QUE NINGUÉM FAZ (corrigido em 24/08/2026).
+ *
+ * Ela dizia: *"Na conversa, ela mostra o Foocci funcionando com o cardápio do seu
+ * restaurante."* Não existe esse processo — ninguém monta o cardápio do
+ * restaurante de quem preencheu o formulário para mostrar numa reunião. O CEO leu
+ * a frase e não a reconheceu: *"isso não existe ainda, não sei nem quem criou"*.
+ *
+ * O que ficou é o que de fato acontece. Sem prazo, porque não há prazo garantido:
+ * prometer "em até X horas" é criar a primeira quebra de confiança antes mesmo da
+ * primeira conversa.
+ */
 const DEPOIS_DE_ENVIAR = [
   "Seus dados chegam para uma pessoa do Foocci — ninguém mais recebe.",
-  "Ela chama você no WhatsApp que você informou aqui, para entender o seu restaurante e combinar um horário.",
-  "Na conversa, ela mostra o Foocci funcionando com o cardápio do seu restaurante. Sem compromisso e sem custo.",
+  "A gente chama você no WhatsApp que você informou aqui, para entender o seu restaurante.",
+  "Nessa conversa você tira as suas dúvidas com os nossos agentes. Sem compromisso e sem custo.",
 ];
 
 /**
@@ -1198,11 +1210,11 @@ export default function PrecosPage() {
               id="demonstracao-title"
               className="mt-3 text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl"
             >
-              Veja o Foocci rodando com o cardápio do seu restaurante.
+              Tire suas dúvidas com os nossos agentes.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink2">
-              Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do
-              seu restaurante. São dois campos: seu nome e seu WhatsApp.
+              Deixe seu nome e seu WhatsApp: a gente chama você por lá para entender o seu
+              restaurante e responder o que você precisar. São dois campos.
             </p>
           </div>
 
