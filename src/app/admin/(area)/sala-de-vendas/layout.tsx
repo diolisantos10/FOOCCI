@@ -24,6 +24,10 @@ const PARA_TODOS = [
   // onde ele para e onde o Closer começa. Esconder a alçada a transforma em
   // folclore — e folclore se resolve perguntando ao colega mais antigo.
   { href: "/admin/sala-de-vendas/agentes", rotulo: "Agentes" },
+  // Preço é dado PÚBLICO: está estampado no site para qualquer estranho ler.
+  // Esconder do próprio vendedor não protegeria nada — só o obrigaria a caçar o
+  // número na página de marketing no meio da conversa, ou a chutar.
+  { href: "/admin/sala-de-vendas/precos", rotulo: "Preços" },
 ];
 
 const PAPEIS_DO_PAINEL = new Set([
