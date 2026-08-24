@@ -2,6 +2,10 @@
 
 A execução é um programa de construção. Cada fase termina com PR próprio, testes, migração/rollback e aceite antes da seguinte.
 
+## Prioridade 0
+
+A Sala de Vendas premium é a primeira entrega operacional do programa. A Fase 1 deve implementar somente a fundação indispensável para autenticação, RBAC, auditoria, dados e handoff seguros; em seguida, a Fase 2 deve ser executada antes dos módulos dos demais departamentos. Seguir integralmente `11-SALA-DE-VENDAS-PREMIUM-E-QA.md`.
+
 ## Fase 0 — Raio-X e mapa de reaproveitamento
 
 - Auditar schema, rotas, componentes, serviços, autenticação, integrações e documentos.
@@ -22,9 +26,12 @@ A execução é um programa de construção. Cada fase termina com PR próprio, 
 
 ## Fase 2 — Vendas e Receita
 
-- Sala de Vendas completa, CRM, WhatsApp, SDR IA/humano, funil, tarefas, agenda, handoff e métricas.
-- Seguir integralmente documentos 02 a 05.
-- Primeiro em modo humano/sombra; IA ativa somente após gates.
+- Sala de Vendas premium, CRM, WhatsApp, SDR IA/humano, ficha 360°, funil, tarefas, agenda, handoff e métricas.
+- Fila inteligente, roteamento por prioridade/capacidade/habilidade e execução guiada.
+- QA automático sobre 100% das conversas, scorecard versionado, evidências, falhas críticas, revisão humana, calibração, causas raiz e coaching.
+- Seguir integralmente documentos 02 a 05, 10 e 11.
+- Primeiro em modo humano e QA/IA em shadow; IA ativa somente após gates.
+- Nenhum módulo departamental posterior deve antecipar a Fase 2.
 
 ## Fase 3 — Marketing & Growth
 
