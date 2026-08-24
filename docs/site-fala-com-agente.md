@@ -99,7 +99,17 @@ carrega igual nos dois casos e concluindo pelo que quis ver.
 
 ## O que continua na mesa do CEO
 
-1. **Ativar o canal** — a medição acima já autoriza:
+### Quem ligou a chave, e quando
+
+**O canal foi aceso em 24/08/2026, pelo coordenador, depois da medição acima** —
+`FOOCCI_SALES_WHATSAPP_ATIVO=true` no Railway. Está registrado com nome e motivo
+de propósito: variável que aparece ligada sem ninguém assumir vira, na sessão
+seguinte, uma pergunta sem dono — e a resposta preguiçosa ("já estava assim")
+é como uma configuração errada sobrevive por meses.
+
+Nenhum agente cria variável de ambiente. O cofre é do CEO.
+
+1. ~~**Ativar o canal**~~ — FEITO em 24/08. A medição acima autorizou:
    `FOOCCI_SALES_WHATSAPP_ATIVO=true` no Railway. **Sem deploy.** Enquanto essa
    chave não existir, o site segue com o botão levando ao formulário, e dizendo
    isso. Cofre é do CEO; nenhum agente cria variável.
