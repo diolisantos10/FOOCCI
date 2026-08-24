@@ -11,6 +11,7 @@ REPOSITÓRIO
 - Fonte canônica: docs/arquitetura-operacional-foocci-v1/
 - Plano mestre: docs/arquitetura-operacional-foocci-v1/09-PLANO-MESTRE-DO-PROJETO-INTEIRO.md
 - Regra canônica de SDR/acesso: docs/arquitetura-operacional-foocci-v1/10-PLATAFORMA-SDR-E-CONTROLE-DE-ACESSO.md
+- Sala de Vendas premium/QA: docs/arquitetura-operacional-foocci-v1/11-SALA-DE-VENDAS-PREMIUM-E-QA.md
 
 MISSÃO
 Transforme o admin atual do Foocci no sistema operacional interno completo da empresa. O projeto deve contemplar e integrar:
@@ -44,6 +45,15 @@ A plataforma SDR é uma interface interna dentro do admin do Foocci para atender
 - Toda tentativa do SDR de abrir outra rota ou API deve ser negada no servidor com 403 ou redirecionamento seguro.
 - Ocultar menu é apenas UX. Middleware compatível, route handlers, services e queries devem validar sessão, papel, departamento e escopo.
 - Prospect, cliente Foocci e consumidor do restaurante devem permanecer isolados em dados, conversas e permissões.
+
+PRIORIDADE 0 — SALA DE VENDAS
+Depois do mínimo indispensável de identidade, RBAC, auditoria e persistência segura, construa a Sala de Vendas antes de qualquer outro módulo departamental. Ela deve ser um workspace de receita completo, não apenas um chat ou Kanban.
+
+Implemente ficha 360° progressiva com proveniência, caixa compartilhada, fila inteligente, prioridade explicável, roteamento por disponibilidade/capacidade/habilidades, centro de ações, próxima melhor ação, playbooks, agenda, propostas, visão gerencial ao vivo e métricas da origem ao fechamento.
+
+Implemente QA automático preliminar sobre 100% das conversas humanas, IA e híbridas, com scorecard versionado, evidência por mensagem, confiança, falhas críticas, revisão/contestação humana, calibração, causa raiz, coaching e comparação por agente/versão/campanha/etapa. Nota de IA não pode gerar punição automática nem substituir revisão humana.
+
+A execução deve cumprir integralmente 11-SALA-DE-VENDAS-PREMIUM-E-QA.md. A Sala de Vendas é a primeira entrega operacional do programa, mas não encerra o projeto dos 9 departamentos.
 
 ANTES DE CODIFICAR
 1. Leia TODOS os arquivos da fonte canônica na ordem definida em 00-LEIA-PRIMEIRO.md.
@@ -97,7 +107,7 @@ EXECUÇÃO
 - Não faça big-bang: use uma branch e um PR revisável por fase/subfase.
 - A Sala de Vendas é a primeira entrega operacional, mas não encerra o programa.
 - Não entregue departamento como tela vazia: cada módulo precisa de fluxo, dados, permissões, métricas e aceite.
-- Cumpra integralmente 07-TESTES-E-ACEITE.md e os critérios específicos do documento 10.
+- Cumpra integralmente 07-TESTES-E-ACEITE.md e os critérios específicos dos documentos 10 e 11.
 
 IDENTIDADE
 Use o Brand Book oficial. Interface branca, preta e cinza, laranja #F97316 apenas para CTA/destaques, Inter, alta legibilidade, sem tema escuro dominante e sem excesso de cards. Priorize o anagrama F no produto; não combine logo, anagrama e mascote na mesma composição.
