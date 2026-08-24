@@ -19,38 +19,23 @@
 
 name: Agent Library Deep Extraction Processor
 
-# ╔═══════════════════════════════════════════════════════════════════════════╗
-# ║ HORÁRIO DESLIGADO — 23/08/2026                                            ║
-# ║                                                                           ║
-# ║ POR QUE. O Actions deste repositório está BLOQUEADO POR COBRANÇA. O       ║
-# ║ GitHub responde, com estas palavras, a cada disparo:                      ║
-# ║   "The job was not started because recent account payments have failed    ║
-# ║    or your spending limit needs to be increased."                         ║
-# ║ O job morre em ~2 segundos, sem máquina alocada e sem log — ou seja, este ║
-# ║ horário NÃO PROCESSAVA CHUNK NENHUM desde o bloqueio. Ele não estava      ║
-# ║ fazendo trabalho e perdendo: ele já não fazia nada, e só gerava e-mail.   ║
-# ║ Eram 48 falhas por dia vindas deste arquivo.                              ║
-# ║                                                                           ║
-# ║ O QUE SE PERDE ENQUANTO ESTIVER DESLIGADO. A extração profunda da         ║
-# ║ Biblioteca do Agente não avança sozinha: material longo carregado hoje    ║
-# ║ fica com chunks pendentes até alguém disparar à mão. É EXATAMENTE o que   ║
-# ║ já acontecia com o bloqueio de cobrança de pé — desligar não piorou nada, ║
-# ║ só parou de mentir que estava tentando. Não há motor em processo para     ║
-# ║ isto (src/instrumentation.ts sobe apenas os dois schedulers do CRM).      ║
-# ║                                                                           ║
-# ║ ⏰ QUANDO RELIGAR: assim que o teto de gasto do GitHub for liberado pelo  ║
-# ║ CEO e um run deste repositório voltar a durar mais que alguns segundos.   ║
-# ║ Religar = apagar o "# " da linha `- cron:` comentada abaixo. O disparo à  ║
-# ║ mão (workflow_dispatch) nunca foi desligado e continua valendo.           ║
-# ╚═══════════════════════════════════════════════════════════════════════════╝
 
-# NOTA DE SINTAXE: a chave `schedule:` foi REMOVIDA inteira, não deixada vazia.
-# `schedule:` sem nenhum `- cron:` embaixo é YAML nulo e o GitHub recusa o
-# arquivo inteiro — o que derrubaria junto o disparo à mão. Para religar,
-# devolva as duas linhas:
-#     schedule:
-#       - cron: "*/5 * * * *"
+# ── HISTÓRICO: 23/08/2026, desligado de manhã e RELIGADO à noite ────────────
+# Este horário ficou algumas horas desligado porque o Actions deste repositório
+# estava travado por um ORÇAMENTO DE PRODUTO zerado ("Budgets and alerts" →
+# Actions: $0 budget, Stop usage: Yes). Com $0 o job morria em ~2 s, sem máquina
+# alocada e sem log — não processava chunk nenhum, só gerava e-mail de falha
+# (48 por dia). O CEO ajustou para US$ 20 e a volta foi CONFERIDA, não presumida:
+# rodada de 266 s com máquina real e log existente.
+#
+# Cuidado de sintaxe que vale para a próxima vez: se for preciso desligar de
+# novo, remova a chave `schedule:` INTEIRA. `schedule:` sem nenhum `- cron:`
+# embaixo é YAML nulo e o GitHub recusa o arquivo inteiro, derrubando junto o
+# disparo à mão.
+# ────────────────────────────────────────────────────────────────────────────
 on:
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       limit:
