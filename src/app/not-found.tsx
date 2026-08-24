@@ -35,6 +35,7 @@ import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { NAV_LINKS } from "@/components/marketing/config";
+import { chamadaComercial } from "@/lib/site/canalDeVendas";
 
 export const metadata: Metadata = {
   title: "Página não encontrada",
@@ -44,7 +45,9 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <MarketingHeader />
+      {/* Mesma chamada do resto do site: quem chega no 404 é justamente quem se
+          perdeu e precisa de alguém para perguntar. */}
+      <MarketingHeader chamada={chamadaComercial()} />
 
       <main className="flex-1">
         {/* `max-w-6xl px-5 lg:px-8` é a MESMA calha do cabeçalho e do rodapé — com

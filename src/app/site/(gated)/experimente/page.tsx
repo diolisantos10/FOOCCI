@@ -72,7 +72,8 @@ import {
   SparklesIcon,
   CheckIcon,
 } from "@/components/marketing/icons";
-import { DEMO_URL, DEMO_CTA_LABEL, PRECOS_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import { PRECOS_URL, EXPERIMENTE_URL } from "@/components/marketing/config";
+import { chamadaComercial } from "@/lib/site/canalDeVendas";
 import { getTastingState, type ScheduleLine } from "@/lib/site/demoTasting";
 import { DEMO_BAKERY_SLUG } from "@/lib/demo-restaurant";
 import { getPublicQrUrl, getPublicMenuUrl } from "@/lib/public-url";
@@ -327,6 +328,8 @@ function CtaEmPreparo({ block = false, className = "" }: { block?: boolean; clas
 
 export default async function ExperimentePage() {
   const state = await getTastingState();
+  // A porta comercial resolvida no servidor — mesma do resto do site.
+  const chamada = chamadaComercial();
 
   const ok = state.status === "ok";
   /*
@@ -456,8 +459,8 @@ export default async function ExperimentePage() {
                       A padaria de demonstração está sendo preparada.
                     </p>
                     <p className="mt-2 text-[13px] leading-relaxed text-ink2">
-                      Ela volta ao ar em instantes. Enquanto isso, a gente mostra o sistema
-                      rodando com o cardápio do seu restaurante, ao vivo.
+                      Ela volta ao ar em instantes. Enquanto isso, você pode tirar suas
+                      dúvidas com os nossos agentes.
                     </p>
                     {/* EXCEÇÃO à regra de um CTA por página, e ela é do estado VAZIO:
                         este botão só existe quando a padaria de demonstração está
@@ -466,8 +469,8 @@ export default async function ExperimentePage() {
                         na mesma visita útil — quando um aparece, a página inteira
                         está falando de outra coisa. */}
                     <SecondaryCta
-                      label={DEMO_CTA_LABEL}
-                      href={DEMO_URL}
+                      label={chamada.label}
+                      href={chamada.href}
                       block
                       className="mt-4 !py-2.5 !text-sm"
                     />

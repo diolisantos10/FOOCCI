@@ -72,7 +72,7 @@ import {
   type MigrationSavings,
 } from "@/lib/site/savings";
 import { planByIdOrNull } from "@/lib/site/plans";
-import { DEMO_URL, DEMO_CTA_LABEL } from "./config";
+import type { ChamadaComercial } from "@/lib/site/canalDeVendas";
 
 /** Accepts "40.000", "40000", "R$ 40 mil" typing habits — digits are what matter. */
 function parseRevenue(raw: string): number {
@@ -120,7 +120,11 @@ const MAX_PLAUSIBLE_RATE = 90;
  */
 const MAX_PLAUSIBLE_REVENUE = 5_000_000;
 
-export function CommissionCalculator() {
+/**
+ * A chamada comercial vem PRONTA de quem renderiza (a home, no servidor). Este
+ * componente é `"use client"`: ler o estado do canal daqui daria vazio sempre.
+ */
+export function CommissionCalculator({ chamada }: { chamada: ChamadaComercial }) {
   const [revenueText, setRevenueText] = useState("");
   const [rateText, setRateText] = useState(DEFAULT_RATE_PERCENT);
 
@@ -137,7 +141,7 @@ export function CommissionCalculator() {
   const hasValue =
     revenue > 0 && !tooSmall && !tooBig && ratePercent > 0 && !rateOutOfRange;
 
-  const demoHref = DEMO_URL;
+  const demoHref = chamada.href;
 
   // Preço fixo do Foocci: a MESMA fonte que a tabela de ancoragem lê (plano
   // Crescimento). Nunca um número solto aqui — se um dia o plano ficar sem valor,
@@ -473,7 +477,7 @@ export function CommissionCalculator() {
                     data-demo-cta
                     className="mt-6 inline-flex items-center justify-center rounded-xl bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,.55)] transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
                   >
-                    {DEMO_CTA_LABEL}
+                    {chamada.label}
                   </Link>
                 </div>
               </div>
@@ -608,8 +612,11 @@ function ComparisonPair({
           No Foocci você paga
         </p>
         <p className="mt-1.5 text-xl font-semibold text-brand-600 tabular-nums sm:text-[1.75rem]">
+          {/* Era "sob demonstração", e demonstração personalizada é justamente o
+              que a casa NÃO faz. Fora da faixa dos três planos, o preço é conversa
+              com o CEO — não uma promessa de tela. */}
           {foocciFixed === null ? (
-            <span className="text-base">sob demonstração</span>
+            <span className="text-base">sob consulta</span>
           ) : (
             <>
               {formatBRL(foocciFixed)}

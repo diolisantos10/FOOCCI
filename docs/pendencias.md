@@ -10,6 +10,22 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟢 24/08 — O site manda falar com o agente (ordem do CEO)
+
+Bloco `claude/site-fala-com-agente`. Detalhe em `docs/site-fala-com-agente.md`.
+
+Feito: todo botão comercial passa pela porta única `/site/falar-com-agente`, com
+interruptor no servidor (`FOOCCI_SALES_WHATSAPP_ATIVO`) — acender o WhatsApp deixa
+de exigir build novo. Botãozinho flutuante no canto (desktop, só com o canal no ar).
+E a promessa de demonstração personalizada — *"mostra o sistema rodando com o
+cardápio do seu restaurante"*, que aparecia no fim de sete páginas e que ninguém
+executa — saiu de nove lugares, com teste de texto impedindo a volta.
+
+**Aberto:**
+- Ativar quando a Meta verificar o número: `FOOCCI_SALES_WHATSAPP_ATIVO=true`.
+- O painel de WhatsApp do formulário segue dormente (lê a variável antiga).
+- A contradição do preço (tabela publicada × FAQ) segue com o CEO.
+
 ## 🟠 23/08 — SDR do Foocci: diário, cegueiras e o lead chegando à conversa
 
 Bloco `claude/sdr-foocci-liga`. Detalhe inteiro em `docs/sdr-foocci-liga.md`.
