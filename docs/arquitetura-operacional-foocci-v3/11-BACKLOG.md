@@ -22,7 +22,24 @@ pronta** — e o resto do trabalho continua andando sem ele.
 
 ## 🔨 Em execução
 
-*Vazio.* A Sala de Vendas fechou e a Fila abaixo ainda não foi puxada.
+### Duas correções que vieram de você em 25/08
+
+**1. O preço já está no site — e eu tinha dito o contrário.** Você corrigiu, e
+estava certo: os três planos têm valor fechado e publicado desde 04/08
+(Essencial R$ 179, Crescimento R$ 429, Performance R$ 899 por mês), com checkout
+funcionando. Eu tinha montado um relatório em cima de um comentário velho no
+código que dizia "preço ainda não publicado". O comentário foi corrigido em
+três lugares, e o item de preço deste backlog foi reescrito para o que falta de
+verdade — que é desconto, prazo e alçada, não preço.
+
+**2. Quem ocupa as funções são agentes, e a ficha é minha de fazer.** Também
+certo, e o item saiu de "depende de você". O que fiz: conferi **uma a uma** as 32
+fichas e **nenhuma** estava completa. Foram preenchidas, e existe agora um portão
+que reprova a próxima ficha que nascer torta.
+
+⏳ **Falta ligar:** a base de preço da Sala foi construída e testada, e ainda não
+tem tela. Enquanto não tiver, é trabalho pronto parado — a mesma categoria do
+item F3 abaixo.
 
 ---
 
@@ -67,8 +84,7 @@ grava, e é por isso que ficou para depois em vez de ser feito pela metade.
 | Pergunta | O que acontece enquanto não vier |
 |---|---|
 | **Aprovar o PR #150** (é o "pedido de aprovação" do trabalho) | tudo continua em rascunho, fora do ar |
-| **Preço, até quanto pode dar de desconto, prazo de entrega, formas de pagamento, e quem pode fechar** | o vendedor trava na primeira pergunta de preço. **É o que mais bloqueia** |
-| **Quem vai ocupar cada uma das nove funções** | os nove cargos estão vagos. O sistema funciona e não tem ninguém dentro |
+| **Até quanto o vendedor pode dar de desconto além da tabela, prazo de implantação, formas de pagamento aceitas, e quem assina condição fora do padrão** | o vendedor responde preço normalmente, e trava na primeira exceção |
 | **Cadastrar o número na Meta** (o dono do WhatsApp) | a mensagem continua caindo no aparelho e sendo respondida à mão |
 | **Decidir o destino do chip** — atender à mão hoje **ou** automatizar depois | os dois não cabem no mesmo número ao mesmo tempo. Decidir depois custa o histórico de conversa daquele aparelho |
 | **O e-mail que recebe pedido de ajuda está configurado?** | o cliente pede ajuda, o chamado é salvo e **ninguém é avisado** |
@@ -111,6 +127,8 @@ Nenhuma quebra nada hoje. O que as torna caras é a característica comum:
 | **Permissão dentro do próprio banco de dados** | 25/08 |
 | Saída para o WhatsApp acesa, com o número 11 94372-3316 | 25/08 |
 | Regra: entrega ao CEO é página com link, não arquivo | 25/08 |
+| **As 32 fichas conferidas uma a uma e completadas** — nenhuma estava inteira | 25/08 |
+| Portão que reprova ficha de agente sem trava, sem escalonamento ou sem medida | 25/08 |
 
 ---
 

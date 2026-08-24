@@ -1,10 +1,19 @@
 /**
  * Pricing teaser (home). Server component.
  *
- * Values are deliberately absent ("Valor sob consulta"): the three plan prices were
- * not closed by launch day, and guardrail 7 + decision D3 forbid publishing an
- * invented number. Adding them later is a content change here and in
- * `/site/precos` — nothing else depends on it.
+ * O CARD MOSTRA O VALOR. Este cabeçalho dizia "values are deliberately absent
+ * (Valor sob consulta)" e ficou dizendo isso depois de 04/08/2026, quando os três
+ * planos ganharam valor fechado e o card passou a imprimir `formatBRL`. O ramo
+ * "Valor sob consulta" logo abaixo é o FALLBACK de `plan.monthly === null`, que
+ * hoje nunca acontece — e é ele que este comentário estava descrevendo como se
+ * fosse o comportamento normal.
+ *
+ * O fallback continua existindo de propósito: é o caminho de um plano futuro sem
+ * preço público, que é o que a decisão D3 protege. D3 proíbe **inventar** preço,
+ * não publicar o que o CEO fechou.
+ *
+ * Os números vêm de `PLANS` → `@/lib/billing/pricing`, fonte única. Nenhum valor
+ * é digitado aqui, e nenhum deve voltar a ser.
  *
  * ⚠️ These are COMMERCIAL names (Essencial / Crescimento / Performance). The
  * database enum is `Plan { STARTER, GROWTH, PRO }` — same three tiers, different

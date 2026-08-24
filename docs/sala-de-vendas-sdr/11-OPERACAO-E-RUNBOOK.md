@@ -60,7 +60,7 @@ do CEO, separadas**, e nenhuma delas é desta rodada.
 | Mensagem fica PENDENTE para sempre | envio desligado | é o desenho. Passo 6 |
 | O "oi" chega no celular e não na Sala | recepção desligada | passo 5 |
 | Painel diz "sem dados" em tudo | não há histórico ainda | é honesto. Aparece quando houver |
-| Receita diz "valor não cadastrado" | propostas aceitas sem preço | os planos ainda não têm valor fechado |
+| Receita diz "valor não cadastrado" | propostas aceitas **sem o valor digitado** | não é falta de tabela: os três planos têm preço fechado e publicado desde 04/08. Quem fechou a proposta não gravou o valor nela |
 | O SDR vê 3 de 4 leads | **é o escopo funcionando** | o quarto é de outra pessoa |
 | 404 ao abrir uma conversa | o lead não é seu | idem — e é indistinguível de "não existe", de propósito |
 

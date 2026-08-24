@@ -178,10 +178,80 @@ describe("as fichas lidas do catálogo", () => {
     }
   });
 
-  it("toda ficha diz alguma coisa — resumo, pode ou não pode", () => {
+  /**
+   * ── O PORTÃO DA FICHA COMPLETA ────────────────────────────────────────────
+   *
+   * O teste que existia aqui antes pedia que a ficha dissesse **alguma coisa**:
+   * resumo, ou `pode`, ou `naoPode`. Passava com uma frase solta — e passava
+   * mesmo. Em 25/08/2026 as 32 fichas foram medidas uma a uma e **nenhuma** das
+   * 32 tinha os cinco campos do padrão. O teste estava verde o tempo todo.
+   *
+   * Um `naoPode` vazio não é um detalhe de documentação: `paraPerfilNovo` o
+   * transforma em `forbiddenActions`, e `forbiddenActions: []` é um agente **sem
+   * trava nenhuma** no banco. Um `escalaQuando` vazio é um agente que nunca
+   * devolve a decisão para gente. Um `medeSePor` vazio é um agente que ninguém
+   * consegue cobrar, porque não existe em que ele falhe.
+   *
+   * As três fichas de produto (3.2, 3.3, 3.4) são a exceção declarada, e ela é
+   * mais exigente, não menos: elas delegam a constituição ao agente que já opera,
+   * e o portão exige que o ponteiro **resolva** num perfil real com permissões e
+   * travas escritas. Delegar para o vazio reprova igual a ficha em branco.
+   */
+  const OBRIGATORIOS = ["pode", "naoPode", "escalaQuando", "medeSePor"] as const;
+
+  /** O que cada campo vazio PRODUZ. A mensagem do erro tem de dizer isso. */
+  const DANO: Readonly<Record<(typeof OBRIGATORIOS)[number], string>> = {
+    pode: "o perfil nasce sem nenhuma ação permitida",
+    naoPode: "o perfil nasce SEM TRAVA no banco",
+    escalaQuando: "o agente nunca devolve a decisão para gente",
+    medeSePor: "não existe em que este agente possa falhar",
+  };
+
+  it("toda ficha própria tem os cinco campos do padrão preenchidos", () => {
+    const registro = new Map(DEFAULT_AGENT_PROFILES.map((p) => [p.slug, p]));
+
     for (const f of fichas) {
-      const temAlgo = f.resumo || f.pode.length || f.naoPode.length;
-      expect(Boolean(temAlgo), `${f.numero} ${f.nome} veio vazia`).toBe(true);
+      if (f.jaExisteComo) continue; // conferida no teste seguinte, com régua própria
+
+      expect(f.resumo, `${f.numero} ${f.nome}: sem linha de abertura`).toBeTruthy();
+
+      for (const campo of OBRIGATORIOS) {
+        expect(
+          f[campo].length,
+          `${f.numero} ${f.nome}: campo "${campo}" vazio — ${DANO[campo]}`,
+        ).toBeGreaterThan(0);
+      }
+
+      // Nenhuma ficha própria pode se disfarçar de delegada apontando para nada.
+      expect(registro.has(f.slug), `${f.numero}: slug colide com agente de produto`).toBe(false);
+    }
+  });
+
+  it("ficha delegada aponta para constituição que existe, e diz onde ela mora", () => {
+    const registro = new Map(DEFAULT_AGENT_PROFILES.map((p) => [p.slug, p]));
+    const delegadas = fichas.filter((f) => f.jaExisteComo);
+
+    expect(delegadas.length, "nenhuma ficha delegada — a exceção sumiu").toBeGreaterThan(0);
+
+    for (const f of delegadas) {
+      const alvo = registro.get(f.jaExisteComo!);
+      expect(alvo, `${f.numero}: aponta para "${f.jaExisteComo}", que não existe`).toBeDefined();
+
+      // A metade que faz a exceção valer: o agente apontado tem regra de verdade.
+      expect(
+        alvo!.allowedActions?.length ?? 0,
+        `${f.numero}: a constituição de "${f.jaExisteComo}" não tem permissão escrita`,
+      ).toBeGreaterThan(0);
+      expect(
+        alvo!.forbiddenActions?.length ?? 0,
+        `${f.numero}: a constituição de "${f.jaExisteComo}" não tem trava escrita`,
+      ).toBeGreaterThan(0);
+
+      // E o catálogo precisa DIZER que delega — senão o leitor lê ficha curta e
+      // conclui que ela está incompleta, que foi exatamente o que aconteceu.
+      expect(f.resumo, `${f.numero}: delega sem dizer onde mora a constituição`).toContain(
+        "Constituição:",
+      );
     }
   });
 
