@@ -49,9 +49,30 @@ As 37 fichas do catálogo deixam de ser papel e viram linha de banco, com dono e
 
 ---
 
+### Fase 1 · PR 1.3 — O trabalho: OS, projeto, tarefa e handoff
+
+O plano mestre descreve o trabalho da empresa em quatro objetos e uma regra dura: *"o item permanece com o emissor até o aceite do destino"*. Essa frase é o PR inteiro.
+
+- **6 tabelas novas**, aditivas: ordens de serviço, projetos, tarefas, dependências, handoffs e a linha do tempo.
+- **A linha do tempo é imutável de verdade.** `UPDATE` e `DELETE` são recusados por gatilho no Postgres, não por convenção de código. Verificado: `INSERT` passa, os outros dois erram com "não é permitido".
+- **Assumir é atômico, e isso foi provado.** A condição de estado vai dentro da escrita, não num `if` antes dela. Dez pessoas clicando "aceitar" no mesmo handoff, ao mesmo tempo, contra Postgres de verdade: **um dono, um evento na linha do tempo, nove recusas explicadas**. Trocando por leitura-e-escrita, 4 dos 6 testes reprovam — foi conferido nas duas direções.
+- **Toda tarefa nasce com responsável e com prazo.** Sem responsável, é a tarefa que ninguém pega; sem prazo, não existe atraso — e um painel que nunca fica vermelho não é o mesmo que estar tudo em dia.
+- **Abrir OS é tudo ou nada.** Se uma tarefa falha no meio, nem a OS nem o projeto sobram. Verificado contra banco real.
+- **Sem coluna "bloqueado"**, por ordem do plano mestre: impedimento vive dentro do item, não numa lista onde o trabalho se acumula sem dono.
+- **52 testes novos**, 10 deles contra Postgres real.
+
+**Para rodar os testes que precisam de banco** (eles pulam sozinhos, avisando alto, quando a variável não existe):
+
+```bash
+HANDOFF_TEST_DB=postgresql://... npx vitest run trabalho
+INTERNAL_AUTH_TEST_DB=postgresql://... npx vitest run internal-auth.integracao
+```
+
+---
+
 ## Em andamento
 
-Nada. Os PRs 1.1 e 1.2 estão prontos para revisão; o 1.3 começa quando forem aceitos.
+Nada. Os PRs 1.1, 1.2 e 1.3 estão prontos para revisão; o 1.4 começa quando forem aceitos.
 
 ---
 
@@ -59,8 +80,7 @@ Nada. Os PRs 1.1 e 1.2 estão prontos para revisão; o 1.3 começa quando forem 
 
 | Fase | Departamento / entrega | Depende de |
 | --- | --- | --- |
-| 1c | OS, projetos, tarefas e handoffs (PR 1.3) | PR 1.2 |
-| 1d | Aprovações, decisões, eventos e dashboard (PR 1.4) | PR 1.3 |
+| 1d | Aprovações, decisões e dashboard (PR 1.4) — a linha do tempo já existe, veio no 1.3 | PR 1.3 |
 | 1e | Divisão do schema por domínio (PR 1.5, ADR-004) | PR 1.4 |
 | 2 | Vendas e Receita — Sala de Vendas | Fase 1 |
 | 3 | Marketing & Growth | Fase 1 |

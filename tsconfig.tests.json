@@ -42,6 +42,7 @@
     "src/lib/internal-auth.ts",
     "src/lib/internal-auth.*.test.ts",
     "src/services/organizacao/**/*.ts",
+    "src/services/trabalho/**/*.ts",
     "src/services/agents/fichasDaEmpresa.ts",
     "src/services/agents/fichasDaEmpresa.test.ts",
     "src/services/agents/separacaoDePopulacoes.test.ts",

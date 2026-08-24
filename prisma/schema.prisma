@@ -5513,6 +5513,12 @@ model Department {
   memberships DepartmentMembership[]
   fichas      AgentProfile[]
 
+  ordensDeServico   WorkOrder[]
+  projetos          Project[]
+  tarefas           Task[]
+  handoffsEnviados  Handoff[]   @relation("HandoffOrigem")
+  handoffsRecebidos Handoff[]   @relation("HandoffDestino")
+
   @@map("departments")
 }
 
@@ -5554,6 +5560,12 @@ model Position {
   fichasQueDono     AgentProfile[] @relation("DonoDaFicha")
   fichasQueGerencia AgentProfile[] @relation("GestorDaFicha")
 
+  osQuePatrocina      WorkOrder[] @relation("OsSponsor")
+  osQueResponde       WorkOrder[] @relation("OsOwner")
+  projetosQueDono     Project[]   @relation("ProjetoOwner")
+  tarefasDoCargo      Task[]      @relation("TarefaCargo")
+  handoffsQueResponde Handoff[]   @relation("HandoffResponsavel")
+
   @@index([departmentId])
   @@index([reportsToPositionId])
   @@map("positions")
@@ -5583,6 +5595,11 @@ model InternalUser {
 
   position    Position?              @relation(fields: [positionId], references: [id])
   memberships DepartmentMembership[]
+
+  osQueSolicitou     WorkOrder[] @relation("OsSolicitante")
+  tarefasDaPessoa    Task[]      @relation("TarefaPessoa")
+  handoffsQueEnviou  Handoff[]   @relation("HandoffEmissor")
+  handoffsQueAceitou Handoff[]   @relation("HandoffReceptor")
 
   @@index([role])
   @@index([positionId])
@@ -5661,4 +5678,269 @@ model InternalAuditEvent {
   @@index([actorType, ocorridoEm])
   @@index([resultado, ocorridoEm])
   @@map("internal_audit_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// O TRABALHO — ordem de serviço, projeto, tarefa e handoff (Fase 1, PR 1.3)
+//
+// O plano mestre (documento 09, seções 3.2 e 3.4) descreve o trabalho da empresa
+// em quatro objetos e uma regra dura:
+//
+//   "O item permanece com o emissor até o aceite do destino ou regra explícita."
+//
+// Essa frase é o coração deste bloco. Ela NÃO é cumprida por um campo `status`
+// que alguém lembra de atualizar: é cumprida por uma escrita condicional, dentro
+// de transação, que só um dos dois lados consegue vencer. Ver
+// `src/services/trabalho/handoff.ts`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Situação de uma OS, projeto ou tarefa. Exatamente os quatro do documento 09.
+///
+/// Repare que NÃO existe `BLOQUEADO`. É ordem explícita do plano mestre: "não
+/// usar bloqueado como lista principal" — impedimento vive dentro do item, como
+/// dependência ou pendência, e não vira uma coluna onde o trabalho se acumula
+/// sem dono.
+enum WorkStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum WorkPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+/// Estado de um handoff.
+///
+/// `ENVIADO` é o único estado em que o item ainda pertence ao EMISSOR. Sair dele
+/// é a transição que precisa ser atômica.
+enum HandoffStatus {
+  ENVIADO
+  ACEITO
+  RECUSADO
+  DEVOLVIDO
+}
+
+/// Ordem de serviço: nasce de uma solicitação executiva ou departamental.
+model WorkOrder {
+  id     String @id @default(cuid())
+  /// Número humano, sequencial. É como as pessoas se referem à OS.
+  numero Int    @unique @default(autoincrement())
+
+  objetivo          String @db.Text
+  resultadoEsperado String @db.Text
+  criterioDeAceite  String @db.Text
+
+  /// Contexto, riscos e restrições — texto livre, porque é isso que eles são.
+  contexto   String? @db.Text
+  riscos     String? @db.Text
+  restricoes String? @db.Text
+
+  prioridade WorkPriority @default(MEDIA)
+  status     WorkStatus   @default(NOT_STARTED)
+  prazo      DateTime?
+
+  /// Quem pediu. Pessoa, porque pedido tem autor.
+  solicitanteId     String?
+  /// Quem patrocina e quem responde — CARGOS, que existem mesmo vagos.
+  sponsorPositionId String?
+  ownerPositionId   String?
+  departmentId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solicitante InternalUser? @relation("OsSolicitante", fields: [solicitanteId], references: [id])
+  sponsor     Position?     @relation("OsSponsor", fields: [sponsorPositionId], references: [id])
+  owner       Position?     @relation("OsOwner", fields: [ownerPositionId], references: [id])
+  department  Department?   @relation(fields: [departmentId], references: [id])
+
+  projects Project[]
+  tasks    Task[]
+  handoffs Handoff[]
+
+  @@index([status])
+  @@index([departmentId])
+  @@index([ownerPositionId])
+  @@map("work_orders")
+}
+
+model Project {
+  id       String @id @default(cuid())
+  nome     String
+  objetivo String @db.Text
+
+  status     WorkStatus   @default(NOT_STARTED)
+  prioridade WorkPriority @default(MEDIA)
+  prazo      DateTime?
+
+  workOrderId     String?
+  departmentId    String?
+  ownerPositionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workOrder  WorkOrder?  @relation(fields: [workOrderId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  owner      Position?   @relation("ProjetoOwner", fields: [ownerPositionId], references: [id])
+
+  tasks    Task[]
+  handoffs Handoff[]
+
+  @@index([status])
+  @@index([workOrderId])
+  @@index([departmentId])
+  @@map("projects_internos")
+}
+
+model Task {
+  id        String  @id @default(cuid())
+  titulo    String
+  descricao String? @db.Text
+
+  status     WorkStatus   @default(NOT_STARTED)
+  prioridade WorkPriority @default(MEDIA)
+  prazo      DateTime?
+
+  /// Responsável em duas camadas: o CARGO responde sempre; a PESSOA, quando
+  /// houver uma. Tarefa cujo cargo está vago tem responsável — vago — e não
+  /// desaparece do radar por falta de gente.
+  assigneePositionId String?
+  assigneeUserId     String?
+
+  projectId    String?
+  workOrderId  String?
+  departmentId String?
+
+  concluidaEm DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project          Project?      @relation(fields: [projectId], references: [id])
+  workOrder        WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  department       Department?   @relation(fields: [departmentId], references: [id])
+  assigneePosition Position?     @relation("TarefaCargo", fields: [assigneePositionId], references: [id])
+  assigneeUser     InternalUser? @relation("TarefaPessoa", fields: [assigneeUserId], references: [id])
+
+  dependeDe TaskDependency[] @relation("TarefaQueDepende")
+  bloqueia  TaskDependency[] @relation("TarefaDaQualDepende")
+  handoffs  Handoff[]
+
+  @@index([status])
+  @@index([projectId])
+  @@index([assigneePositionId])
+  @@index([assigneeUserId])
+  @@map("tasks_internas")
+}
+
+/// "A depende de B". Duas linhas iguais não podem existir, e uma tarefa não pode
+/// depender de si mesma — a segunda regra vive no serviço, porque o Postgres não
+/// tem CHECK declarativo no Prisma.
+model TaskDependency {
+  id              String @id @default(cuid())
+  taskId          String
+  dependsOnTaskId String
+
+  createdAt DateTime @default(now())
+
+  task      Task @relation("TarefaQueDepende", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TarefaDaQualDepende", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+/// A passagem de bastão entre departamentos.
+///
+/// Campos exigidos pelo documento 09, seção 3.4: origem, destino, responsável,
+/// resumo, evidências, entregáveis, pendências, SLA e confirmação do
+/// recebimento. Nenhum deles é decorativo — um handoff sem entregáveis e sem
+/// pendências é uma conversa, não uma passagem de trabalho.
+model Handoff {
+  id String @id @default(cuid())
+
+  origemDepartmentId    String
+  destinoDepartmentId   String
+  /// Quem responde pelo handoff no destino. Cargo, não pessoa.
+  responsavelPositionId String?
+
+  resumo      String @db.Text
+  evidencias  Json   @default("[]")
+  entregaveis Json   @default("[]")
+  pendencias  Json   @default("[]")
+
+  /// Prazo de aceite. `null` = sem SLA acordado, que é diferente de SLA zero.
+  slaHoras Int?
+
+  status HandoffStatus @default(ENVIADO)
+
+  /// O item que está sendo passado. Exatamente um destes é preenchido — a regra
+  /// vive no serviço, que recusa handoff sem item e handoff com dois.
+  workOrderId String?
+  projectId   String?
+  taskId      String?
+
+  enviadoPorId String?
+  enviadoEm    DateTime  @default(now())
+  /// Confirmação do recebimento. Enquanto for nulo, o item é do emissor.
+  aceitoPorId  String?
+  aceitoEm     DateTime?
+  recusadoEm   DateTime?
+  /// Recusa e devolução exigem motivo. "Não aceito" sem motivo não é informação.
+  motivo       String?   @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  origem      Department    @relation("HandoffOrigem", fields: [origemDepartmentId], references: [id])
+  destino     Department    @relation("HandoffDestino", fields: [destinoDepartmentId], references: [id])
+  responsavel Position?     @relation("HandoffResponsavel", fields: [responsavelPositionId], references: [id])
+  workOrder   WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  project     Project?      @relation(fields: [projectId], references: [id])
+  task        Task?         @relation(fields: [taskId], references: [id])
+  enviadoPor  InternalUser? @relation("HandoffEmissor", fields: [enviadoPorId], references: [id])
+  aceitoPor   InternalUser? @relation("HandoffReceptor", fields: [aceitoPorId], references: [id])
+
+  @@index([status])
+  @@index([destinoDepartmentId, status])
+  @@index([taskId])
+  @@map("handoffs")
+}
+
+/// A linha do tempo imutável do documento 09.
+///
+/// Append-only de verdade: gravar é permitido, alterar e apagar não. A trava é
+/// gatilho no banco, não convenção — ver a migração. Prompt é aviso; código é
+/// trava.
+///
+/// O PR 1.4 estende esta mesma tabela para aprovações e decisões. Duas tabelas
+/// de evento produziriam duas linhas do tempo, e a pergunta "o que aconteceu com
+/// este item?" passaria a ter duas respostas.
+model DomainEvent {
+  id String @id @default(cuid())
+
+  /// Que tipo de coisa aconteceu: "handoff.aceito", "tarefa.concluida".
+  tipo       String
+  /// A que objeto. `entidade` + `entidadeId` em vez de FK porque um evento
+  /// sobrevive ao objeto que o gerou — e uma FK o apagaria junto.
+  entidade   String
+  entidadeId String
+
+  /// Quem causou. Texto, pelo mesmo motivo: o evento não pode sumir com a pessoa.
+  atorTipo   String
+  atorRotulo String?
+
+  dados Json @default("{}")
+
+  ocorridoEm DateTime @default(now())
+
+  @@index([entidade, entidadeId, ocorridoEm])
+  @@index([tipo, ocorridoEm])
+  @@index([ocorridoEm])
+  @@map("domain_events")
 }

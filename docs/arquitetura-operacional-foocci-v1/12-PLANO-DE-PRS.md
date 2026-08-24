@@ -31,12 +31,12 @@ Estende `AgentProfile` com `population`, `departmentId`, `executionMode` (AI/HUM
 **Aceite:** as 4 fichas existentes continuam funcionando sem alteração; toda ficha nova tem dono humano; nenhuma ficha nasce ativa.
 
 ### PR 1.3 — Trabalho: OS, projetos, tarefas e handoffs
-`WorkOrder`, `Project`, `Task`, `TaskDependency`, `Handoff`, `Comment`, `Attachment`, `Notification`. Handoff com dossiê, aceite e SLA — o item fica com o emissor até o destino aceitar.
+`WorkOrder`, `Project`, `Task`, `TaskDependency`, `Handoff` e `DomainEvent` (a linha do tempo imutável, antecipada do PR 1.4 para não existirem duas tabelas de evento). `Comment`, `Attachment` e `Notification` ficaram para o PR 1.4, junto com as telas que os usam — modelo sem tela é tabela morta. Handoff com dossiê, aceite e SLA — o item fica com o emissor até o destino aceitar.
 
 **Aceite:** OS gera projeto e tarefas com responsável e prazo; handoff exige reconhecimento; nada perde histórico.
 
 ### PR 1.4 — Governança: aprovações, decisões, eventos e dashboard
-Fila única de aprovação (as três filas existentes viram origens dela), `Decision` transversal, `DomainEvent` append-only. Dashboard Executivo e "Meu Trabalho". O tipo `Medida` promovido a contrato do programa (ADR-003 do documento 07).
+Fila única de aprovação (as três filas existentes viram origens dela), `Decision` transversal, `Comment`, `Attachment` e `Notification`. O `DomainEvent` append-only já existe desde o PR 1.3. Dashboard Executivo e "Meu Trabalho". O tipo `Medida` promovido a contrato do programa (ADR-003 do documento 07).
 
 **Aceite:** decisão executiva aparece separada do backlog; **nenhum indicador exibe "0" quando o dado é indisponível** — exibe "não medido" com motivo.
 
