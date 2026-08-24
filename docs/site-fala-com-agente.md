@@ -77,10 +77,42 @@ disputando o mesmo canto do celular é ruído — e o dedo acerta o errado.
 - **Nenhum texto novo promete preço, prazo ou desconto.** As sete perguntas
   comerciais continuam sem resposta.
 
+## A prova de que o número atende (24/08/2026) — medida de fora, com controle
+
+O CEO confirmou a verificação na Meta. **Verificado e recebendo mensagem não são a
+mesma coisa**, e conferir pelo Graph exigiria manusear o token de vendas — que não
+é meu. A medição honesta foi outra, sem token nenhum:
+
+```
+curl -sSL "https://wa.me/5511943723316?text=teste"
+→ a página de conversa mostra o nome  Foocci
+```
+
+**O controle, que é o que transforma isso em prova:** um número inexistente
+(`5511900000000`) devolve a mesma página mostrando o **número cru** —
+*"Chat on WhatsApp with +55 11 90000-0000"*. Ou seja: quando aparece **nome**, há
+conta de WhatsApp de verdade do outro lado, e o nome de exibição **Foocci** já foi
+aprovado pela Meta.
+
+Sem o controle, a primeira medição não valeria: eu estaria lendo uma página que
+carrega igual nos dois casos e concluindo pelo que quis ver.
+
 ## O que continua na mesa do CEO
 
-1. **Ativar o canal**, quando a Meta terminar a verificação do número:
-   `FOOCCI_SALES_WHATSAPP_ATIVO=true` no Railway. **Sem deploy.**
+### Quem ligou a chave, e quando
+
+**O canal foi aceso em 24/08/2026, pelo coordenador, depois da medição acima** —
+`FOOCCI_SALES_WHATSAPP_ATIVO=true` no Railway. Está registrado com nome e motivo
+de propósito: variável que aparece ligada sem ninguém assumir vira, na sessão
+seguinte, uma pergunta sem dono — e a resposta preguiçosa ("já estava assim")
+é como uma configuração errada sobrevive por meses.
+
+Nenhum agente cria variável de ambiente. O cofre é do CEO.
+
+1. ~~**Ativar o canal**~~ — FEITO em 24/08. A medição acima autorizou:
+   `FOOCCI_SALES_WHATSAPP_ATIVO=true` no Railway. **Sem deploy.** Enquanto essa
+   chave não existir, o site segue com o botão levando ao formulário, e dizendo
+   isso. Cofre é do CEO; nenhum agente cria variável.
 2. **A contradição do preço**, que este bloco não resolve: `/site/precos` publica
    a tabela e a FAQ dizia "o valor depende". Reescrevi a resposta da FAQ para
    apontar a página de preços, mas **quem decide o que o agente responde sobre
