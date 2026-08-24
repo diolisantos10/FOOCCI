@@ -138,10 +138,19 @@ export function calcularScore(sinais: SinaisDoLead): ResultadoDoScore {
     const usaWhatsApp = temAlgum(sinais.canaisAtuais, ["whatsapp", "zap"]);
 
     if (dependeDeMarketplace) {
+      // 22, e acima do teto de `unidades` (20), de propósito — este é o único
+      // fator que precisa vencer o porte. Um restaurante de uma casa sangrando
+      // comissão sente a dor que o produto resolve mais do que uma rede de cinco
+      // que não depende de ninguém.
+      //
+      // O peso já esteve em 18, abaixo de `unidades`, contradizendo este mesmo
+      // comentário. Quem pegou foi o teste "vale mais que porte" — a asserção é
+      // sobre a RELAÇÃO entre os dois pesos, e não sobre o número, justamente
+      // para a régua não poder se contradizer em silêncio de novo.
       fatores.push({
         fator: "marketplace",
         observado: "depende de marketplace",
-        pontos: 18,
+        pontos: 22,
       });
     }
     if (usaWhatsApp) {

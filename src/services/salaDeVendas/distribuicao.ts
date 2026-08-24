@@ -148,7 +148,13 @@ export function escolherResponsavel(
   // O rodízio é por "quem recebeu há mais tempo", e não por um ponteiro
   // guardado: ponteiro quebra quando alguém entra, sai ou fica offline — e
   // quebra em silêncio, sempre favorecendo a mesma pessoa.
-  const ordenado = [...aptos].sort((a, b) => tempoDesde(b) - tempoDesde(a));
+  //
+  // CRESCENTE pelo carimbo: o menor timestamp é o recebimento mais ANTIGO, e
+  // quem nunca recebeu vale 0 e vem antes de todo mundo. Esta linha já esteve
+  // invertida, e o efeito era o pior possível para um rodízio — entregava o
+  // próximo lead exatamente a quem acabou de receber, concentrando a fila numa
+  // pessoa só enquanto o painel mostrava um time inteiro disponível.
+  const ordenado = [...aptos].sort((a, b) => tempoDesde(a) - tempoDesde(b));
   const alvo = ordenado[0]!;
   return {
     escolhido: true,

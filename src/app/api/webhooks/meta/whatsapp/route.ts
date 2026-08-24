@@ -34,6 +34,7 @@ import { dispatchInboundAgent, interceptBuildOsCommand } from "@/services/whatsa
 import { isBuildOsPhoneNumberId } from "@/services/buildos/BuildOsMetaChannel";
 import { isFoocciSalesPhoneNumberId } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { receberMensagemDeVendas } from "@/services/foocci-sdr/FoocciSalesInbound";
+import { tipoDaMeta, statusDaMeta, aplicarStatus } from "@/services/salaDeVendas/conversa";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -130,6 +131,28 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
         ...(failed && s.errorCode ? { errorMessage: `META_${s.errorCode}` } : {}),
       },
     });
+
+    // ── E a MESMA confirmação para a Sala de Vendas ─────────────────────────
+    //
+    // O `updateMany` acima só alcança `Message`, que é a conversa do restaurante
+    // com o cliente dele. A mensagem que a Sala manda para um prospecto vive em
+    // `LeadMensagem`, e sem esta segunda passagem ela ficaria eternamente
+    // "enviada": o vendedor nunca veria o ✓✓, e não teria como saber que a
+    // entrega falhou.
+    //
+    // As duas tabelas são disjuntas por construção (um `wamid` pertence a uma ou
+    // a outra), então não há risco de escrita cruzada — e `aplicarStatus` só
+    // avança na escada, nunca retrocede.
+    const statusDaSala = statusDaMeta(s.status);
+    if (statusDaSala) {
+      await aplicarStatus(prisma, {
+        waMessageId: s.providerMessageId,
+        status: statusDaSala,
+        erro: failed && s.errorCode ? `META_${s.errorCode}` : null,
+      }).catch((err) =>
+        console.error("[webhook/meta/whatsapp] status da Sala de Vendas falhou", err),
+      );
+    }
   }
 
   // Inbound customer messages → Central de Conversas.
@@ -183,10 +206,28 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
     // ⚠️ NENHUMA RESPOSTA SAI DAQUI. O recepcionista anota; quem redige é o
     // Cérebro, e a escada de liberação ainda não autorizou a primeira mensagem.
     if (isFoocciSalesPhoneNumberId(m.phoneNumberId)) {
+      // Desde 25/08/2026 a mensagem é GRAVADA, e não só anotada: a Sala de
+      // Vendas precisa abrir a conversa, e antes disto a linha do tempo dizia
+      // "escreveu no WhatsApp" sem guardar o que a pessoa escreveu.
+      //
+      // `providerMessageId` é o que impede a reentrega da Meta de duplicar a
+      // conversa — a trava é a unicidade da coluna, no banco.
+      const { tipo, tipoCru } = tipoDaMeta(m.type, m.media?.kind);
+
       void receberMensagemDeVendas({
-        fromPhone:   m.fromPhone,
-        text:        m.text ?? null,
-        profileName: m.profileName ?? null,
+        fromPhone:     m.fromPhone,
+        text:          m.text ?? null,
+        profileName:   m.profileName ?? null,
+        waMessageId:   m.providerMessageId,
+        tipo,
+        tipoCru,
+        legenda:       m.media?.caption ?? null,
+        midiaId:       m.media?.id ?? null,
+        midiaMimeType: m.media?.mimeType ?? null,
+        midiaNome:     m.media?.filename ?? null,
+        // O carimbo do PROVEDOR, não a hora da gravação: numa reentrega os dois
+        // diferem em minutos, e ordenar pela gravação embaralharia a conversa.
+        agora:         m.timestamp,
       })
         .then((r) => console.info(`[webhook/meta/whatsapp] vendas: ${r.status} — ${r.detalhe}`))
         .catch((err) => console.error("[webhook/meta/whatsapp] recepção de vendas falhou", err));

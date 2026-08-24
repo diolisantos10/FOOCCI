@@ -31,6 +31,8 @@ import { extractLeadCode } from "@/lib/site/leadCode";
 import { detectOptOutIntent } from "@/services/crm/ContactSafetyService";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
+import { registrarEntrada } from "@/services/salaDeVendas/conversa";
+import type { TipoDaMensagem } from "@prisma/client";
 
 // ─── A parte pura ───────────────────────────────────────────────────────────────
 
@@ -88,6 +90,28 @@ export interface MensagemDeVendas {
   /** Nome do perfil do WhatsApp, quando a Meta manda. */
   profileName?: string | null;
   agora?: Date;
+
+  // ── A CONVERSA (Sala de Vendas, 25/08/2026) ───────────────────────────────
+  //
+  // Até aqui este módulo registrava que a pessoa escreveu, sem guardar O QUE
+  // ela escreveu: a linha do tempo dizia "Escreveu no WhatsApp de vendas" e a
+  // mensagem morria no log do webhook. Servia para o SDR saber que havia
+  // movimento; não servia para ninguém ATENDER — a tela de atendimento
+  // precisava abrir a conversa, e não havia conversa.
+  //
+  // Os campos abaixo são opcionais para o módulo continuar funcionando para
+  // quem já o chamava. Sem `waMessageId` a mensagem não é gravada, porque sem
+  // ele não há como impedir que a reentrega da Meta duplique a conversa.
+  /** `id` da mensagem na Meta. É a chave da idempotência. */
+  waMessageId?: string | null;
+  tipo?: TipoDaMensagem;
+  /** Tipo cru do provedor quando não sabemos representá-lo. */
+  tipoCru?: string | null;
+  legenda?: string | null;
+  midiaId?: string | null;
+  midiaMimeType?: string | null;
+  midiaNome?: string | null;
+  duracaoSeg?: number | null;
 }
 
 /**
@@ -124,6 +148,10 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
         },
       });
       await registrarInteracao(alvo.id, "NOTA", "Pediu para não receber mais mensagens (WhatsApp).", agora);
+      // A mensagem do pedido de silêncio é gravada como qualquer outra: ela É a
+      // evidência do opt-out. Uma auditoria de LGPD que só encontra a data, sem
+      // o texto que a originou, não consegue demonstrar nada.
+      await gravarNaConversa(alvo.id, msg, agora);
       return {
         status: "PEDIU_SILENCIO",
         leadId: alvo.id,
@@ -141,6 +169,7 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
       if (!novo) {
         return { status: "FALHOU", leadId: null, codigo: null, detalhe: "contato novo NÃO gravado" };
       }
+      await gravarNaConversa(novo.id, msg, agora);
       return {
         status: "CONTATO_NOVO",
         leadId: novo.id,
@@ -155,6 +184,7 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
       data: { lastInteractionAt: agora },
     });
     await registrarInteracao(lead.id, "RESPOSTA_RECEBIDA", "Escreveu no WhatsApp de vendas.", agora);
+    await gravarNaConversa(lead.id, msg, agora);
 
     return {
       status: leitura.codigo && lead.codigo === leitura.codigo ? "RECONHECIDO_POR_CODIGO" : "RECONHECIDO_POR_TELEFONE",
@@ -170,6 +200,52 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
       codigo: null,
       detalhe: e instanceof Error ? e.message.slice(0, 200) : "erro desconhecido",
     };
+  }
+}
+
+/**
+ * Grava a mensagem na conversa do lead.
+ *
+ * ── POR QUE ELA NUNCA DERRUBA A RECEPÇÃO ────────────────────────────────────
+ *
+ * Um `catch` que engole erro costuma ser preguiça. Aqui é decisão: o contato já
+ * foi reconhecido e a linha do tempo já registrou o movimento. Se a gravação da
+ * conversa falhar, perder ISSO é ruim; devolver erro ao webhook e fazer a Meta
+ * reentregar a mesma mensagem — que criaria contato duplicado nos caminhos
+ * acima — é pior.
+ *
+ * A falha vai para o log com o motivo, nunca como silêncio (guardrail 6).
+ *
+ * Sem `waMessageId` não grava: sem ele a reentrega da Meta entraria de novo, e
+ * a conversa mostraria a pessoa perguntando o preço duas vezes.
+ */
+async function gravarNaConversa(
+  leadId: string,
+  msg: MensagemDeVendas,
+  agora: Date,
+): Promise<void> {
+  if (!msg.waMessageId) return;
+
+  try {
+    const r = await registrarEntrada(prisma, {
+      leadId,
+      waMessageId: msg.waMessageId,
+      tipo: msg.tipo ?? "TEXTO",
+      tipoCru: msg.tipoCru ?? null,
+      texto: msg.text ?? null,
+      legenda: msg.legenda ?? null,
+      midiaId: msg.midiaId ?? null,
+      midiaMimeType: msg.midiaMimeType ?? null,
+      midiaNome: msg.midiaNome ?? null,
+      duracaoSeg: msg.duracaoSeg ?? null,
+      ocorreuEm: agora,
+    });
+
+    if (!r.ok) {
+      console.error(`[foocci-sdr] mensagem NÃO gravada na conversa do lead ${leadId}: ${r.causa}`);
+    }
+  } catch (e) {
+    console.error("[foocci-sdr] falha ao gravar mensagem na conversa:", e);
   }
 }
 

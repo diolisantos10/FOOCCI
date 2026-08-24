@@ -117,10 +117,12 @@ describe("o que cada fila pergunta", () => {
     expect(daFila("meusLeads")).toEqual({ atendenteUserId: "u1", atendidoPor: "HUMANO" });
   });
 
-  it("sem resposta ignora funil fechado e perdido", () => {
-    // Cobrar resposta de quem já fechou ou já foi perdido é ruído puro.
+  it("sem resposta ignora as três etapas terminais", () => {
+    // Cobrar resposta de quem já fechou ou já foi perdido é ruído puro. NUTRICAO
+    // entrou na lista quando o funil foi para 11 etapas: cobrar silêncio de quem
+    // a gente mesmo mandou esperar noventa dias encheria a fila de gente em dia.
     const f = daFila("semResposta") as { stage: { notIn: string[] } };
-    expect(f.stage.notIn).toEqual(["FECHADO", "PERDIDO"]);
+    expect(f.stage.notIn).toEqual(["GANHO", "PERDIDO", "NUTRICAO"]);
   });
 
   it("follow-up vencido só conta quem espera há mais de um dia", () => {

@@ -417,6 +417,54 @@ export async function lerConversa(
   }));
 }
 
+// ── Tradução do provedor ─────────────────────────────────────────────────────
+
+/**
+ * O tipo da Meta vira o tipo da casa.
+ *
+ * ── POR QUE O PADRÃO É `NAO_SUPORTADO`, E NÃO `TEXTO` ───────────────────────
+ *
+ * Um `default: "TEXTO"` seria mais simples e mentiria: uma localização, um
+ * contato compartilhado ou uma figurinha entrariam na conversa como mensagem de
+ * texto vazia. O vendedor veria uma linha em branco e concluiria que o sistema
+ * perdeu a mensagem — quando na verdade ele a guardou e a descreveu errado.
+ *
+ * `NAO_SUPORTADO` com o tipo cru ao lado diz a verdade: chegou algo, sabemos o
+ * que era, e ainda não sabemos mostrar.
+ */
+export function tipoDaMeta(
+  tipo: string,
+  kindDaMidia?: string | null,
+): { tipo: TipoDaMensagem; tipoCru: string | null } {
+  const t = (tipo || "").toLowerCase();
+  const k = (kindDaMidia || "").toLowerCase();
+
+  if (t === "text") return { tipo: "TEXTO", tipoCru: null };
+  if (t === "template") return { tipo: "TEMPLATE", tipoCru: null };
+
+  switch (k || t) {
+    case "image": return { tipo: "IMAGEM", tipoCru: null };
+    case "audio": return { tipo: "AUDIO", tipoCru: null };
+    case "video": return { tipo: "VIDEO", tipoCru: null };
+    case "document": return { tipo: "DOCUMENTO", tipoCru: null };
+    default: return { tipo: "NAO_SUPORTADO", tipoCru: tipo || null };
+  }
+}
+
+/** O status da Meta vira o status da casa. Desconhecido não vira sucesso. */
+export function statusDaMeta(status: string): StatusDaMensagem | null {
+  switch ((status || "").toLowerCase()) {
+    case "sent": return "ENVIADA";
+    case "delivered": return "ENTREGUE";
+    case "read": return "LIDA";
+    case "failed": return "FALHOU";
+    // Um status que ninguém previu NÃO é tratado como entrega. Devolver null faz
+    // o chamador ignorar e registrar — que é honesto — em vez de marcar como
+    // entregue uma mensagem sobre a qual não se sabe nada.
+    default: return null;
+  }
+}
+
 // ── A janela de 24 horas ─────────────────────────────────────────────────────
 
 export type JanelaDe24h =
