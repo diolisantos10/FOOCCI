@@ -44,6 +44,15 @@ conserta o ano. Quando corrigir uma imitação, **pergunte o que impede a próxi
 — e se a resposta for "a gente lembra", não impede nada. É o guardrail 4 da casa
 aplicado à identidade: *prompt é aviso, código é trava.*
 
+**A forma da régua** (decidida pelo Diretor Geral em 24/08/2026 — molde no kit,
+implementação em cada produto, porque um varredor único envelheceria tentando
+conhecer cinco repositórios):
+
+  1. varre o repositório inteiro, não a lista de arquivos conhecidos;
+  2. vale para o arquivo que ainda não existe;
+  3. reprova contra o código de hoje — teste que passa dos dois lados não prova
+     nada.
+
 ---
 
 ## 3. Imitação anda em bando — e olhe primeiro onde tem dinheiro
@@ -73,3 +82,12 @@ medição separava uma da outra.**
 **A regra:** quando o relato for sobre algo que *mudou*, **confirme que mudou**
 antes de procurar o culpado. Muita coisa que "mudou" sempre foi assim — e alguém
 só reparou agora.
+
+**Diagnóstico errado com sintoma resolvido é a pior combinação que existe:** some
+a evidência e fica a crença. A tela ficaria certa e a casa acreditaria, para
+sempre, que alguém trocou a marca um dia.
+
+**A irmã deste engano, no mesmo dia:** um `HTTP 400` que *parecia* corpo
+malformado e era **falta de saldo**. Mesmo formato — o sintoma sugerindo uma causa
+plausível que não era a verdadeira. Causa plausível é o disfarce mais comum da
+causa errada.

@@ -294,8 +294,23 @@ kit — proponho.
    parecer outra empresa custa mais caro.
 
 **A pergunta:** isto vira regra do Brain (e portanto portão nos outros produtos),
-ou fica como lição do Foocci? Se virar regra, falta decidir **quem escreve o
-varredor genérico** — cada produto o seu, ou um molde no kit.
+ou fica como lição do Foocci?
+
+> **RESPONDIDO pelo Diretor Geral (24/08/2026):** as quatro sobem ao kit. E sobre
+> quem escreve o varredor: **molde no kit, implementação em cada produto.** Um
+> varredor único teria de conhecer a estrutura de cinco repositórios diferentes e
+> envelheceria em semanas. O que viaja bem é a **forma da régua**, e ela cabe em
+> três exigências:
+>
+>   1. **varre o repositório inteiro** — não a lista de arquivos conhecidos;
+>   2. **vale para o arquivo que ainda não existe** — é isso que obriga a próxima
+>      tela a nascer certa, em vez de confiar que alguém vai lembrar;
+>   3. **reprova contra o código de hoje** — teste que passa dos dois lados não
+>      prova nada.
+>
+> Confirmado também que o caso da Dioli é o item 1 em outra roupa: o caminho fixo
+> com a versão embutida **não quebrou, derivou** quando o Playwright instalou
+> outra versão, e congelou o deploy por seis dias.
 
 > Nota de método, que talvez valha mais que as três: o pedido que chegou foi
 > *"conserte a logo"*. `git log -S` mostrou que **ninguém tinha trocado nada** — a
