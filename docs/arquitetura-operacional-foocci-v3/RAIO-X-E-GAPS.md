@@ -42,15 +42,30 @@ Auditoria do repositório antes de escrever qualquer linha nova: o que existe, o
 | G-04 | Cargos não começam com "Agente" | 2 |
 | G-05 | Catálogo é o de 37 fichas da v1 | 2 |
 | G-06 | Não existe tela de Departamentos e Agentes | 2 |
-| G-07 | Não existe lead comercial da Foocci como entidade de funil | 3 |
+| ~~G-07~~ | ~~Não existe lead comercial da Foocci como entidade de funil~~ **ERRADO — ver correção abaixo** | — |
 | G-08 | Não existe conversa comercial (prospect) | 3 |
-| G-09 | Não existe etapa de funil comercial nem histórico dela | 3 |
-| G-10 | Não existe responsabilidade pelo lead ("quem atende agora") | 3 |
-| G-11 | Não existe Sala de Vendas | 3 |
+| ~~G-09~~ | ~~Não existe etapa de funil comercial nem histórico dela~~ **ERRADO — ver correção abaixo** | — |
+| G-10 | Não existe responsabilidade pelo lead ("quem atende agora") | ✅ fechado na Fase 3 |
+| G-11 | ~~Não existe Sala de Vendas~~ — existia em boa parte; o que faltava era G-10 | ✅ fechado na Fase 3 |
 | G-12 | Não existe registro de delegação (Diretor → Gerente → agente) | 2 |
 | G-13 | Não existe avaliação de qualidade / não conformidade | 4 |
 | G-14 | Não existe devolução de conversão para a Dioli | 3 |
 | G-15 | Nenhuma rota do Admin exige sessão interna ainda, exceto uma | 2 |
+
+## Correção do próprio raio-x (25/08/2026)
+
+Dois gaps desta lista estavam **errados**. Eu os escrevi antes de ler `SiteLead` inteiro, e listei como inexistente o que já existe e funciona.
+
+| Gap | O que eu disse | O que é verdade |
+| --- | --- | --- |
+| G-07 | "não existe lead comercial como entidade de funil" | `SiteLead` **é** a entidade de funil, com origem, campanha, UTM, consentimento e opt-out de LGPD |
+| G-09 | "não existe etapa de funil comercial nem histórico dela" | existe `SiteLeadStage` com 6 etapas, `stageChangedAt`, `stageChangedBy`, e `SiteLeadInteraction` como histórico — com a etapa sendo **cache** do último evento |
+
+Também subestimei o que já existe em volta: o CRM da Foocci tem tela de 971 linhas com funil, base e ficha do contato; e há quatro serviços de SDR prontos — canal de vendas, inbound do WhatsApp, portão de contato (LGPD) e passagem do formulário para a entrevista.
+
+**O gap real da Fase 3 era um só: G-10.** A base sabia em que etapa o lead está; não sabia de quem ele é neste momento. Sem isso não existe fila "sem responsável", não existe "meus leads", e dois atendentes respondem o mesmo lead sem saber um do outro.
+
+Fica registrado em vez de corrigido em silêncio: um raio-x que erra o que existe faz o time construir de novo o que já estava pronto — que é exatamente a restrição "não duplicar funcionalidades existentes".
 
 ## Achados herdados, ainda abertos
 
