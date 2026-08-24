@@ -1,6 +1,6 @@
 # Status da construção — Sistema Operacional Foocci
 
-_Atualizado em 24/08/2026. Este arquivo é o índice de progresso do programa. Uma fase só muda de coluna quando o gate do documento 07 for cumprido — não quando o código existir._
+_Atualizado em 25/08/2026. Este arquivo é o índice de progresso do programa. Uma fase só muda de coluna quando o gate do documento 07 for cumprido — não quando o código existir._
 
 ---
 
@@ -97,7 +97,7 @@ Nada. Os PRs 1.1, 1.2 e 1.3 estão prontos para revisão; o 1.4 começa quando f
 
 ## Decisões do CEO
 
-_A Fase 1 não começa sem as duas primeiras. As demais têm data mais folgada, mas estão aqui para não sumirem._
+_Em 25/08/2026 o CEO respondeu D-02 e D-05. Restam D-01 (confirmação retroativa), D-03 e D-04 — nenhuma trava o PR 1.4._
 
 ### D-01 · Os quatro ADRs da Fase 0 — confirma? ✅ *adotados sob autorização*
 
@@ -110,11 +110,15 @@ Segui os quatro como aprovados durante a ausência do proprietário (ADR-005). A
 | 003 | `ADMIN_SECRET` convive com o login novo por prazo, com rastro | aprovar |
 | 004 | O schema passa a ser dividido por domínio, em PR isolado | aprovar |
 
-### D-02 · Quem ocupa cada cargo? *(não trava mais)*
+### D-02 · Quem ocupa cada cargo? ✅ *respondido em 25/08/2026*
 
-Resolvi o bloqueio sem inventar ninguém: a hierarquia foi construída sobre **cargos**, e os 12 cargos nascem **vagos**. A Fase 1 andou.
+**O CEO é o Dioli.** Palavras dele: *"O CEO sou eu."*
 
-Falta o fato: **quem é o CEO, o Diretor Foocci e o Gerente Geral** — pode ser a mesma pessoa nos três. Um comando preenche:
+Sobre o Diretor Geral, ele disse: *"está na Control One, como diretor geral"* — ou seja, o Diretor Geral da companhia é o agente da Control Room, e ele fica **acima** do Foocci, não dentro do organograma do Foocci.
+
+**Leitura que adotei, sujeita a uma palavra dele:** o cargo `gerente-geral` do Foocci continua vago, porque o papel que ele nomeou não é esse — é o nível acima. O `diretor-foocci` é o Diretor deste produto.
+
+A hierarquia continua construída sobre **cargos**, e cargo vago aparece como vago. Um comando preenche quando houver banco de produção migrado:
 
 ```bash
 npx tsx scripts/criar-usuario-interno.ts --email <email> --nome "<nome>" --papel CEO --cargo ceo
@@ -130,9 +134,22 @@ Não precisa ser agora. Precisa ter data, senão vira a porta que ninguém fecha
 
 Sem teto, o gate humano de orçamento não tem contra o quê comparar.
 
-### D-05 · Qual é a fonte financeira confiável? (Fase 10)
+### D-05 · Qual é a fonte financeira confiável? ✅ *respondida — e eu não devia ter perguntado*
 
-`FECHADO` no funil **não** é receita. Sem uma fonte de verdade financeira, o dashboard executivo mostra "não medido" no lugar de faturamento — o que é honesto, mas provavelmente não é o que o CEO quer ver.
+O CEO disse: *"não sei do que que você está falando"*. Estava certo em não saber: a resposta estava no código, e eu perguntei em vez de olhar.
+
+**O sistema tem dois "dinheiros", e confundi-los seria grave:**
+
+| Fonte | Quem paga a quem | É receita da Foocci? |
+| --- | --- | --- |
+| `PlanInvoice` (assinatura, Mercado Pago) | o restaurante paga a Foocci | **sim** |
+| `Order` (pedido no cardápio) | o cliente final paga o restaurante | **não** — é dinheiro do cliente |
+
+**A fonte confiável é `PlanInvoice`, e ela já existe e funciona.** `PlanSubscriptionService.recordPaidCharge` grava uma fatura quando o Mercado Pago **confirma** a cobrança, com idempotência por `mpPaymentId` (o MP reenvia webhook, e cobrança duplicada viraria nota fiscal duplicada).
+
+Isso é dinheiro cobrado de verdade, não promessa. `FECHADO` no funil continua **não** sendo receita, e `Order` continua sendo faturamento do cliente — somá-lo ao da Foocci inflaria o número da empresa com dinheiro que nunca passou por ela.
+
+O painel executivo (PR 1.4) já tem de onde tirar faturamento. Não trava mais.
 
 ---
 
@@ -152,7 +169,14 @@ _Nenhum bloqueia a Fase 1. A-01 a A-03 são anteriores a este programa; A-04 é 
 
 Ele se descreve como "engenheiro de plantão / assistência técnica 24h" e cabe tanto na ficha 4.2 (Suporte N1) quanto na 7.3 (Incidente e Runbook). **Não amarrei a nenhuma:** escolher no chute faria uma função da empresa herdar, calada, as permissões de um agente de produto em operação.
 
-Pergunta ao proprietário: o `suporte-tecnico` de hoje é a 4.2, a 7.3, ou são coisas diferentes?
+O CEO respondeu que não conhece nenhum dos dois — e com razão: os nomes são meus, do catálogo que escrevi. Em linguagem de negócio:
+
+- **Suporte N1** (ficha 4.2) → quem responde o dono do restaurante quando ele reclama;
+- **Incidente e Runbook** (ficha 7.3) → quem conserta o sistema quando ele quebra.
+
+**Leitura adotada em 25/08/2026:** o `suporte-tecnico` que existe hoje é o **Suporte N1**, porque a constituição dele diz que ele "diagnostica incidentes **a partir do relato do lojista** e explica em linguagem clara" — ele fala com o lojista. A ficha 7.3 é papel interno, que ninguém de fora enxerga.
+
+O vínculo **ainda não foi gravado**: só entra no seed quando o CEO confirmar, porque ligar as duas coisas faz uma função da empresa herdar as permissões de um agente de produto em operação.
 
 ### A-03 · ~750 erros de tipo em ~150 arquivos de teste antigos
 
