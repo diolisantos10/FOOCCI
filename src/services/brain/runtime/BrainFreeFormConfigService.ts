@@ -15,6 +15,8 @@
 import { prisma } from "@/lib/prisma";
 import { isPhoneInList } from "@/lib/wa-text-ordering-flag";
 import { guardStoredStage } from "./LiveStageGuard";
+import { avaliarTopo, JANELA_AMOSTRAS_AO_VIVO, JANELA_DIAS_AO_VIVO, type AvaliacaoDoTopo } from "./LiveStageHealth";
+import { getLiveStageSamples } from "./BrainShadowEvidenceService";
 
 export type FreeFormMode = "SHADOW_ONLY" | "ALLOWLIST" | "RESTAURANT_WIDE";
 
@@ -25,6 +27,8 @@ export interface FreeFormAccess {
   paused: boolean;
   minConfidence: number;
   reason: string;
+  /** Como o TOPO esta se saindo agora (null quando o degrau ja e seguro). */
+  topo?: AvaliacaoDoTopo | null;
 }
 
 export interface FreeFormConfigSnapshot {
@@ -93,6 +97,37 @@ export async function resolveFreeFormAccess(restaurantId: string, phone: string)
       };
     }
 
+    /**
+     * SEGUNDA TRAVA: o topo esta se sustentando AGORA?
+     *
+     * A primeira trava pergunta se o portao de qualidade esta verde — o golden
+     * set hermetico, que mede se o agente SABE se comportar. Esta pergunta
+     * outra coisa: no atendimento real deste restaurante, ele ESTA se
+     * comportando? Sao perguntas diferentes, e a escada precisava das duas: os
+     * gates de subida mediam so a segunda, e so embaixo, onde ela deixa de
+     * existir assim que se sobe.
+     *
+     * SEM_AMOSTRA nunca derruba: restaurante de baixo movimento nao pode ser
+     * punido por ser pequeno. Mas tambem nao vira verde — o estado viaja em
+     * `topo` para a tela dizer, com todas as letras, que nao ha medicao.
+     */
+    const amostras = await getLiveStageSamples(restaurantId, {
+      agentId: "whatsapp",
+      sinceDays: JANELA_DIAS_AO_VIVO,
+      limite: JANELA_AMOSTRAS_AO_VIVO,
+    });
+    const topo = avaliarTopo(amostras);
+    if (topo.derruba) {
+      return {
+        allowed: false,
+        mode: "SHADOW_ONLY",
+        paused: false,
+        minConfidence,
+        reason: `QUEDA AUTOMÁTICA DE DEGRAU ${mode} → SHADOW_ONLY: ${topo.motivo}`,
+        topo,
+      };
+    }
+
     if (mode === "ALLOWLIST") {
       const phones = Array.isArray(row.allowlistedPhones) ? (row.allowlistedPhones as string[]) : [];
       const inList = isPhoneInList(phone, phones);
@@ -102,10 +137,11 @@ export async function resolveFreeFormAccess(restaurantId: string, phone: string)
         paused: false,
         minConfidence,
         reason: inList ? "telefone na allowlist" : "fora da allowlist — shadow",
+        topo,
       };
     }
 
-    return { allowed: true, mode: "RESTAURANT_WIDE", paused: false, minConfidence, reason: "aberto ao restaurante inteiro (decisão governada)" };
+    return { allowed: true, mode: "RESTAURANT_WIDE", paused: false, minConfidence, reason: "aberto ao restaurante inteiro (decisão governada)", topo };
   } catch {
     return { allowed: false, mode: "SHADOW_ONLY", paused: false, minConfidence: DEFAULT_MIN_CONFIDENCE, reason: "erro de config — shadow (default seguro)" };
   }

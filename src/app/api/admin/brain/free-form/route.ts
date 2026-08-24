@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   try {
     const restaurantId = req.nextUrl.searchParams.get("restaurantId");
     if (!restaurantId) return NextResponse.json({ ok: false, error: "restaurantId é obrigatório." }, { status: 400 });
-    const [config, gates, shadowStats, recentSamples] = await Promise.all([
+    const [config, gates, shadowStats, recentSamples, topo] = await Promise.all([
       getFreeFormConfig(restaurantId),
       runFreeFormGates(restaurantId),
       // Escopo do recepcionista, sempre. Sem `agentId` esta leitura somava a
@@ -49,8 +49,29 @@ export async function GET(req: NextRequest) {
       // (`byOrigin`), enquanto os gates contam só o que o degrau aceita.
       getShadowStats(restaurantId, { agentId: "whatsapp" }),
       listRecentShadowSamples(restaurantId),
+      /**
+       * A SAÚDE DO TOPO — a medição que faltava.
+       *
+       * Os gates acima medem se o agente PODE subir, e medem isso com sombra,
+       * que só existe embaixo. Este bloco mede se ele está se sustentando ONDE
+       * ESTÁ. Sem ele, a tela de um restaurante no topo mostra para sempre a
+       * evidência de subida zerada — e ninguém consegue distinguir "não tenho
+       * medição" de "estou mal".
+       */
+      (async () => {
+        const [{ avaliarTopo, JANELA_AMOSTRAS_AO_VIVO, JANELA_DIAS_AO_VIVO }, { getLiveStageSamples }] = await Promise.all([
+          import("@/services/brain/runtime/LiveStageHealth"),
+          import("@/services/brain/runtime/BrainShadowEvidenceService"),
+        ]);
+        const amostras = await getLiveStageSamples(restaurantId, {
+          agentId: "whatsapp",
+          sinceDays: JANELA_DIAS_AO_VIVO,
+          limite: JANELA_AMOSTRAS_AO_VIVO,
+        });
+        return avaliarTopo(amostras);
+      })().catch(() => null),
     ]);
-    return NextResponse.json({ ok: true, config, gates, shadowStats, recentSamples, runtimeTouched: false });
+    return NextResponse.json({ ok: true, config, gates, shadowStats, recentSamples, topo, runtimeTouched: false });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
     return NextResponse.json({ ok: false, error: message }, { status: 200 });
