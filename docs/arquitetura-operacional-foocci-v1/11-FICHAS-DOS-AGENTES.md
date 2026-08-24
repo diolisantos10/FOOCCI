@@ -1,5 +1,7 @@
 # Fichas dos agentes — catálogo dos 9 departamentos
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 **Data:** 24/08/2026 · **Estado:** proposto, aguardando aceite do proprietário
 
 Este é o catálogo canônico. Cada ficha aqui vira uma linha de `AgentProfile` (ADR-002) e aparece em `/admin/sala-dos-agentes`. Nenhuma ficha nasce fora deste arquivo, e nenhuma ficha vive só neste arquivo.

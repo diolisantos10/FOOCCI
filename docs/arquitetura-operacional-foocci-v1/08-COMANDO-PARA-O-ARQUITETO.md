@@ -1,5 +1,7 @@
 # Comando para o Arquiteto — projeto inteiro
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 Copie e envie exatamente o bloco abaixo.
 
 ```text

@@ -1,5 +1,7 @@
 # Fase 0 — Raio-X do repositório e mapa de reaproveitamento
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 **Data:** 24/08/2026 · **Branch:** `claude/fase-0-raio-x-e-fundacao`
 **Base auditada:** `claude/sala-de-vendas-levantamento` (commit `5ce60f8`)
 **Escopo:** schema, rotas, serviços, autenticação, integrações e documentos.

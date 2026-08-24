@@ -1,5 +1,7 @@
 # Status da construção — Sistema Operacional Foocci
 
+> ⛔ **SUPERADA em 25/08/2026.** Descreve o progresso contra a planta de 9 departamentos. O status oficial passa a viver em `docs/arquitetura-operacional-foocci-v3/08-PLANO-DE-CONSTRUCAO.md`. Fica para auditoria — o **código** descrito aqui continua valendo e é reaproveitado pela v3.
+
 _Atualizado em 25/08/2026. Este arquivo é o índice de progresso do programa. Uma fase só muda de coluna quando o gate do documento 07 for cumprido — não quando o código existir._
 
 ---

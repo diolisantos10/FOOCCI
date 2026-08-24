@@ -1,5 +1,7 @@
 # Departamento de Vendas e Receita
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 ## Estrutura
 
 ### 1. Pré-vendas

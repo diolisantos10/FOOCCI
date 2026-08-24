@@ -1,5 +1,7 @@
 # Plano Mestre do Projeto Inteiro do Foocci
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 ## 1. Visão
 
 O Foocci terá um único sistema operacional interno, construído dentro do admin existente. Ele governa a empresa sem duplicar as funções do produto vendido aos restaurantes.

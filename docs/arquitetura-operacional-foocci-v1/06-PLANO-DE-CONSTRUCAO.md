@@ -1,5 +1,7 @@
 # Plano de construção do projeto inteiro
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 A execução é um programa de construção. Cada fase termina com PR próprio, testes, migração/rollback e aceite antes da seguinte.
 
 ## Fase 0 — Raio-X e mapa de reaproveitamento

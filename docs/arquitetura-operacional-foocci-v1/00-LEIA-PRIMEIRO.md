@@ -1,5 +1,7 @@
 # Arquitetura Operacional Foocci v1 — Leia primeiro
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 **Status:** especificação canônica do projeto completo  
 **Escopo:** construir a infraestrutura operacional interna dos 9 departamentos do Foocci, com agentes humanos, IA e híbridos, hierarquia, ordens de serviço, projetos, tarefas, aprovações, decisões, handoffs e indicadores.  
 **Prioridade operacional inicial:** Vendas e Receita/Sala de Vendas, sem encerrar o programa nos limites desse departamento.  

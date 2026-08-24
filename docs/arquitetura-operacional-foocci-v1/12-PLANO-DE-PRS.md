@@ -1,5 +1,7 @@
 # Plano de PRs — do raio-x ao aceite dos 9 departamentos
 
+> ⛔ **SUPERADA em 25/08/2026.** A arquitetura oficial da Foocci é a de 6 departamentos, em `docs/arquitetura-operacional-foocci-v3/`. Este arquivo fica para auditoria — não é fonte para construir nada.
+
 **Regra do programa:** um PR revisável por fase ou subfase. Nada de big-bang. Nenhuma fase avança sem o gate do documento 07.
 
 Cada PR carrega, sem exceção: resumo, mapa de reaproveitamento, ADRs, migração e rollback, variáveis necessárias **sem valores**, screenshots desktop e mobile, testes executados, riscos e checklist de aceite.
