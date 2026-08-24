@@ -32,6 +32,11 @@
 import { selectEngine } from "../engines/AIEngineRouter";
 import { callStructuredJson } from "../engines/OpenAIEngineAdapter";
 import {
+  classificarFalhaDeMotor,
+  explicarMotivo,
+  type MotivoDeFalhaDaIA,
+} from "../engines/FalhaDeMotor";
+import {
   avaliarSondagem,
   CAMPOS_DA_FICHA,
   CATALOGO_DE_SERVICOS,
@@ -61,6 +66,16 @@ export interface CampoEntendido {
   valor: string;
   /** Serviço a que pertence, quando é campo de serviço. */
   servico?: string;
+  /**
+   * Quem preencheu: o motor de regras (leitura determinística ou queda sem IA)
+   * ou a interpretação da IA.
+   *
+   * Existe porque a queda para o motor era INVISÍVEL. Sem IA e com UMA pergunta
+   * no ar, o texto cru do cliente vira o valor do campo — decisão defensável,
+   * mas que ninguém conseguia distinguir de uma leitura interpretada. Um campo
+   * preenchido pelo motor merece outra confiança na hora de auditar.
+   */
+  origem: "motor" | "ia";
 }
 
 export interface ResultadoDoTurno {
@@ -77,6 +92,13 @@ export interface ResultadoDoTurno {
   podePropor: boolean;
   /** true quando a IA não respondeu e o turno caiu no determinístico. */
   semIA: boolean;
+  /** Por que a IA não respondeu. Só existe quando `semIA` é true. */
+  motivoSemIA?: MotivoDeFalhaDaIA;
+  /**
+   * A conversa não andou neste turno: havia pergunta no ar e nada foi entendido.
+   * É o sinal de "travou" que o diário do SDR precisa contar.
+   */
+  travou: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,12 +181,31 @@ interface LeituraDaIA {
   semResposta: string[];
 }
 
-function extrairLeitura(bruto: string): LeituraDaIA | null {
+interface LeituraOuFalha {
+  leitura: LeituraDaIA | null;
+  motivo: MotivoDeFalhaDaIA | null;
+}
+
+/**
+ * Lê o JSON da IA. O `catch` daqui era vazio: devolvia `null` e o turno inteiro
+ * seguia como se a IA simplesmente não tivesse entendido nada. Agora o motivo
+ * sai nomeado e vai para o diário — sem o texto do cliente junto.
+ */
+function extrairLeitura(bruto: string): LeituraOuFalha {
   let dados: Record<string, unknown>;
   try {
     dados = JSON.parse(bruto) as Record<string, unknown>;
-  } catch {
-    return null;
+  } catch (e) {
+    console.warn("[sdr] a IA respondeu fora de JSON", {
+      motivo: "json_invalido",
+      tamanho: bruto.length,
+      erro: e instanceof Error ? e.message.slice(0, 120) : "erro desconhecido",
+    });
+    return { leitura: null, motivo: "json_invalido" };
+  }
+  if (!dados || typeof dados !== "object" || Array.isArray(dados)) {
+    console.warn("[sdr] a IA respondeu JSON que não é objeto", { motivo: "json_invalido" });
+    return { leitura: null, motivo: "json_invalido" };
   }
 
   const respostas: Record<string, string> = {};
@@ -178,7 +219,10 @@ function extrairLeitura(bruto: string): LeituraDaIA | null {
   const lista = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
 
-  return { respostas, servicos: lista(dados.servicos), semResposta: lista(dados.semResposta) };
+  return {
+    leitura: { respostas, servicos: lista(dados.servicos), semResposta: lista(dados.semResposta) },
+    motivo: null,
+  };
 }
 
 /** As chaves que existem — a IA não pode inventar campo fora desta lista. */
@@ -205,13 +249,18 @@ function clonar(estado: EstadoDaSondagem): Required<EstadoDaSondagem> {
   };
 }
 
-function aplicarCampo(estado: Required<EstadoDaSondagem>, chave: string, valor: string): CampoEntendido | null {
+function aplicarCampo(
+  estado: Required<EstadoDaSondagem>,
+  chave: string,
+  valor: string,
+  origem: "motor" | "ia",
+): CampoEntendido | null {
   const ponto = chave.indexOf(".");
 
   if (ponto < 0) {
     if (!CAMPOS_DA_FICHA.some((c) => c.chave === chave)) return null;
     estado.ficha[chave] = valor;
-    return { chave, valor };
+    return { chave, valor, origem };
   }
 
   const servico = chave.slice(0, ponto);
@@ -222,21 +271,21 @@ function aplicarCampo(estado: Required<EstadoDaSondagem>, chave: string, valor: 
   if (campo === "origemDoInsumo") {
     // A origem é enum, não texto solto. Vale o que a frase original disser; se
     // não der para ler, fica indefinida — e continua travando, que é o certo.
-    const origem = lerOrigem(valor);
-    if (!origem) return null;
-    alvo.origemDoInsumo = origem;
-    return { chave, valor: origem, servico };
+    const lida = lerOrigem(valor);
+    if (!lida) return null;
+    alvo.origemDoInsumo = lida;
+    return { chave, valor: lida, servico, origem };
   }
 
   if (campo === "quemExecuta") {
     alvo.quemExecuta = valor;
-    return { chave, valor, servico };
+    return { chave, valor, servico, origem };
   }
 
   const cat = CATALOGO_DE_SERVICOS.find((s) => s.chave === servico);
   if (!cat?.definicoes.some((d) => d.chave === campo)) return null;
   alvo.definicoes = { ...(alvo.definicoes ?? {}), [campo]: valor };
-  return { chave, valor, servico };
+  return { chave, valor, servico, origem };
 }
 
 function adicionarServicos(estado: Required<EstadoDaSondagem>, chaves: string[]): string[] {
@@ -279,33 +328,42 @@ export async function ouvir(turno: TurnoDaEntrevista): Promise<ResultadoDoTurno>
   // Quando o turno inteiro é sobre a origem de UM serviço, a frase resolve.
   const perguntaDeOrigem = perguntadasAgora.find((c) => c.endsWith(".origemDoInsumo"));
   if (perguntaDeOrigem) {
-    const campo = aplicarCampo(estado, perguntaDeOrigem, texto);
+    const campo = aplicarCampo(estado, perguntaDeOrigem, texto, "motor");
     if (campo) entendido.push(campo);
   }
 
   let semIA = false;
+  let motivoSemIA: MotivoDeFalhaDaIA | undefined;
   let semResposta = [...perguntadasAgora];
 
   if (texto.length > 0) {
-    const leitura = await lerComIA(turno, estado);
+    const { leitura, motivo } = await lerComIA(turno, estado);
     if (leitura) {
       const validas = chavesValidas(estado);
       for (const [chave, valor] of Object.entries(leitura.respostas)) {
         if (!validas.has(chave)) continue;                          // TRAVA 2
         if (entendido.some((e) => e.chave === chave)) continue;     // determinístico ganha
-        const campo = aplicarCampo(estado, chave, valor);
+        const campo = aplicarCampo(estado, chave, valor, "ia");
         if (campo) entendido.push(campo);
       }
       servicosDetectados.push(...adicionarServicos(estado, leitura.servicos));
       semResposta = perguntadasAgora.filter((c) => !entendido.some((e) => e.chave === c));
     } else {
       semIA = true;
+      motivoSemIA = motivo ?? "desconhecido";
+      // A queda deixa de ser invisível: fica no log com o motivo, e o SdrService
+      // leva o mesmo motivo para o diário. Nunca o texto do cliente.
+      console.warn("[sdr] turno caiu no motor de regras", {
+        motivo: motivoSemIA,
+        explicacao: explicarMotivo(motivoSemIA),
+        perguntasNoAr: perguntadasAgora.length,
+      });
       // Sem IA, uma pergunta única com resposta em texto vira resposta direta.
       // Mais de uma pergunta no ar não dá para dividir sem chutar — e chutar é
       // pior que ficar em branco, porque some da lista de pendências.
       const unica = perguntadasAgora.length === 1 ? perguntadasAgora[0] : undefined;
       if (unica && !entendido.some((e) => e.chave === unica)) {
-        const campo = aplicarCampo(estado, unica, texto);
+        const campo = aplicarCampo(estado, unica, texto, "motor");
         if (campo) entendido.push(campo);
       }
       semResposta = perguntadasAgora.filter((c) => !entendido.some((e) => e.chave === c));
@@ -322,10 +380,12 @@ export async function ouvir(turno: TurnoDaEntrevista): Promise<ResultadoDoTurno>
     proximas: avaliacao.perguntar,
     podePropor: avaliacao.podePropor,
     semIA,
+    ...(motivoSemIA !== undefined ? { motivoSemIA } : {}),
+    travou: perguntadasAgora.length > 0 && entendido.length === 0,
   };
 }
 
-async function lerComIA(turno: TurnoDaEntrevista, estado: Required<EstadoDaSondagem>): Promise<LeituraDaIA | null> {
+async function lerComIA(turno: TurnoDaEntrevista, estado: Required<EstadoDaSondagem>): Promise<LeituraOuFalha> {
   try {
     const avaliacao = avaliarSondagem(estado);
     const emAberto = avaliacao.perguntar.map((p) => ({ chave: p.chave, pergunta: p.pergunta }));
@@ -344,8 +404,11 @@ async function lerComIA(turno: TurnoDaEntrevista, estado: Required<EstadoDaSonda
       responseFormat: "json",
     });
     return extrairLeitura(bruto);
-  } catch {
-    return null;
+  } catch (e) {
+    // O `catch` era vazio. Agora o erro é classificado — chave ausente, timeout,
+    // rede ou resposta cortada pelo teto de tokens são problemas diferentes, com
+    // donos diferentes, e viravam todos o mesmo silêncio.
+    return { leitura: null, motivo: classificarFalhaDeMotor(e) };
   }
 }
 

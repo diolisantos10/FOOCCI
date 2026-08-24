@@ -12,6 +12,7 @@ import { openai } from "@/lib/openai";
 import type OpenAI from "openai";
 import type { AIEngineSelection } from "./AIEngineTypes";
 import type { StructuredCallInput } from "./EngineAdapter";
+import { FalhaDeMotor } from "./FalhaDeMotor";
 
 export { openai as openaiEngine };
 
@@ -20,6 +21,13 @@ export interface StructuredJsonCallInput extends StructuredCallInput {
 }
 
 async function callOpenAI(input: StructuredCallInput): Promise<string> {
+  // Sem chave o SDK vai com "not-configured" e o provedor devolve 401 depois de
+  // uma ida à rede. Barrar aqui troca um 401 genérico por um motivo nomeado —
+  // e é o motivo que o diário do SDR precisa registrar.
+  const chave = process.env.OPENAI_API_KEY;
+  if (!chave || !chave.trim() || chave.trim() === "not-configured") {
+    throw new FalhaDeMotor("sem_chave", "OPENAI_API_KEY ausente");
+  }
   const wantsJson = (input.responseFormat ?? "json") === "json";
   // Visual input (e.g. nota de compra) rides along as an image part.
   const userContent: string | OpenAI.Chat.Completions.ChatCompletionContentPart[] =
@@ -39,8 +47,21 @@ async function callOpenAI(input: StructuredCallInput): Promise<string> {
       { role: "user", content: userContent },
     ],
   });
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw) throw new Error("Engine sem conteúdo");
+  /* ── Por que `finish_reason` importa mais do que parece ────────────────────
+   * Quando o modelo bate no teto de tokens ele devolve `finish_reason: "length"`
+   * COM texto — um JSON pela metade. Sem olhar aqui, esse pedaço desce até o
+   * `JSON.parse`, quebra, e o consumidor registra "a IA não entendeu" quando o
+   * que houve foi um teto curto demais. Diagnóstico errado leva a conserto
+   * errado: alguém iria mexer no prompt em vez de subir `maxTokens`. */
+  const escolha = completion.choices[0];
+  const raw = escolha?.message?.content;
+  if (escolha?.finish_reason === "length") {
+    throw new FalhaDeMotor(
+      "cortado_por_limite",
+      `resposta truncada em ${input.maxTokens ?? "padrão"} tokens`,
+    );
+  }
+  if (!raw) throw new FalhaDeMotor("sem_conteudo", `finish_reason=${escolha?.finish_reason ?? "ausente"}`);
   return raw;
 }
 

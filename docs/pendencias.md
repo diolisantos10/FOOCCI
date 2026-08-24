@@ -10,6 +10,32 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟠 23/08 — SDR do Foocci: diário, cegueiras e o lead chegando à conversa
+
+Bloco `claude/sdr-foocci-liga`. Detalhe inteiro em `docs/sdr-foocci-liga.md`.
+**Nenhuma mensagem sai:** `FOOCCI_SDR_SEND_ENABLED` continua desligado.
+
+Feito: diário do SDR (`DiarioDoSdr.ts` + `GET /api/sdr/diario`, fail-closed com
+`SDR_DIARIO_SECRET`, sem conteúdo de cliente); motivo nomeado para toda falha de
+IA (`FalhaDeMotor.ts`, incluindo `finish_reason: "length"`); origem `motor` × `ia`
+em cada campo entendido; e o lead do site virando entrevista (`LeadParaSondagem.ts`).
+
+**Aberto:**
+- ~~`/api/sdr/diario` fechado pelo middleware~~ — resolvido: entrou na lista de
+  caminhos públicos (só o caminho exato) agora que #137/#138 subiram.
+- ~~Diário zerava a cada deploy~~ — resolvido: foi para o banco
+  (`sdr_diario_turnos`), retenção de 90 dias.
+- **WhatsApp de vendas:** WABA do Sushi Cazza é do cliente (confirmado) — está
+  descartada. Passo a passo para o CEO em `docs/whatsapp-vendas-passo-a-passo.md`;
+  texto da primeira mensagem em `docs/sdr-primeira-mensagem.md`, **não submetido**.
+- Leads antigos não foram semeados — precisa de um script de uma passada.
+- Ninguém chama `/api/sdr/entrevista`: o motor segue desligado do mundo.
+- Sete perguntas comerciais para o CEO (preço, alçada de fechamento, desconto,
+  fidelidade, prazo de implantação, formas de pagamento, prova citável).
+- Falta o CEO executar o cadastro do número **+55 11 94372-3316** e me devolver
+  `FOOCCI_SALES_PHONE_NUMBER_ID`, `FOOCCI_SALES_ACCESS_TOKEN`, o número para
+  `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` (⚠️ congela no build) e `SDR_DIARIO_SECRET`.
+
 ## 🟢 23/08 (8ª rodada) — (A) SUBIU. E duas lições que custaram deploy.
 
 **O CEO autorizou (A) — "pode tudo".** Selo de modelo + trava da janela de 24 h
