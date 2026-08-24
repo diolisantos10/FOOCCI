@@ -10,13 +10,13 @@
  * ── O QUE ESTE SCRIPT NÃO FAZ, DE PROPÓSITO ──
  *
  * 1. **Não liga nada.** Toda ficha nova nasce `DRAFT` com runtime desligado.
- *    Ligar um agente é decisão do proprietário, uma por uma, com gate — e é a
- *    Fase 7 que trata disso, não este script.
+ *    Ligar um agente é decisão do proprietário, uma por uma, com gate.
  *
- * 2. **Não escreve conteúdo em agente de produto.** As fichas 6.2 a 6.5 apontam
- *    para agentes que já existem e têm constituição própria. Nelas o script toca
- *    em quatro campos e só: departamento, número do catálogo e os dois cargos.
- *    O `allowedActions` do Waiter não é assunto do catálogo da empresa.
+ * 2. **Não escreve conteúdo em agente de produto.** As fichas 3.2 a 3.4 apontam
+ *    para agentes que já existem e operam, com constituição própria. Nelas o
+ *    script toca em quatro campos e só: departamento, número do catálogo e os
+ *    dois cargos. O `allowedActions` do Waiter não é assunto do catálogo da
+ *    empresa.
  *
  * 3. **Não muda decisão de gente.** Se o proprietário ativar uma ficha, rodar o
  *    seed de novo não a desliga: `status` e `isRuntimeEnabled` são preservados
@@ -29,7 +29,8 @@ import path from "node:path";
 import {
   lerCatalogo,
   paraPerfilNovo,
-  cargoDonoDe,
+  cargoResponsavelPor,
+  registrarGerentes,
   type FichaDaEmpresa,
 } from "../src/services/agents/fichasDaEmpresa";
 import { DEPARTAMENTOS } from "../src/services/organizacao/departamentosCanonicos";
@@ -39,7 +40,7 @@ const ENSAIO = process.argv.includes("--ensaio");
 
 const CATALOGO = path.join(
   process.cwd(),
-  "docs/arquitetura-operacional-foocci-v1/11-FICHAS-DOS-AGENTES.md",
+  "docs/arquitetura-operacional-foocci-v3/02-DEPARTAMENTOS-E-AGENTES.md",
 );
 
 function departamentoDe(ficha: FichaDaEmpresa) {
@@ -53,6 +54,9 @@ async function main() {
   if (fichas.length === 0) {
     throw new Error(`Nenhuma ficha lida de ${CATALOGO}. O catálogo mudou de formato?`);
   }
+
+  const slugPorNumero = new Map(DEPARTAMENTOS.map((d) => [d.numero, d.slug]));
+  registrarGerentes(fichas, slugPorNumero);
 
   const deps = new Map((await prisma.department.findMany()).map((d) => [d.slug, d.id]));
   const cargos = new Map((await prisma.position.findMany()).map((p) => [p.slug, p.id]));
@@ -74,13 +78,14 @@ async function main() {
       continue;
     }
 
-    const donoSlug = cargoDonoDe(ficha, dep.slug);
+    const donoSlug = cargoResponsavelPor(ficha, dep.slug);
     const ownerPositionId = cargos.get(donoSlug) ?? null;
     if (!ownerPositionId) {
       avisos.push(`${ficha.numero}: cargo dono "${donoSlug}" não está no banco — ficha fica sem dono.`);
     }
-    // Quem cobra o dono. Para a ficha do próprio gerente, o dono já é o Geral.
-    const managerPositionId = cargos.get("gerente-geral") ?? null;
+    // Quem cobra o dono. Na v3 não existe Gerente Geral: acima do Agente Gerente
+    // está o Diretor da Foocci, direto.
+    const managerPositionId = cargos.get("diretor-foocci") ?? null;
 
     // ── Ficha que já existe como agente de produto: só o vínculo ──
     if (ficha.jaExisteComo) {
@@ -153,6 +158,34 @@ async function main() {
     }
   }
 
+  // ── Fichas da v1 que não existem mais na planta ──
+  //
+  // ARQUIVADAS, não apagadas. Apagar tiraria do sistema a prova de que aquela
+  // função já foi considerada — e daqui a três meses alguém proporia "criar um
+  // Agente de SEO" sem saber que ele existiu e saiu por decisão do CEO.
+  //
+  // O runtime é desligado junto: uma ficha fora da planta não pode continuar
+  // rodando só porque ninguém lembrou de desligá-la.
+  const doCatalogo = fichas.map((f) => f.slug);
+  const foraDaPlanta = await prisma.agentProfile.findMany({
+    where: { population: "EMPRESA", slug: { notIn: doCatalogo }, status: { not: "ARCHIVED" } },
+    select: { slug: true, name: true, catalogNumber: true },
+  });
+
+  if (!ENSAIO) {
+    for (const f of foraDaPlanta) {
+      await prisma.agentProfile.update({
+        where: { slug: f.slug },
+        data: {
+          status: "ARCHIVED",
+          isRuntimeEnabled: false,
+          departmentId: null,
+          description: `[APOSENTADA em 25/08/2026 — fora da planta v3] ${f.name}`,
+        },
+      });
+    }
+  }
+
   // ── Relatório ──
   console.log(ENSAIO ? "\n── ENSAIO: nada foi gravado ──\n" : "\n── Fichas da empresa ──\n");
 
@@ -170,6 +203,13 @@ async function main() {
   console.log(
     `\n${criadas} criada(s) · ${atualizadas} atualizada(s) · ${vinculadas} vinculada(s) a agente de produto.`,
   );
+
+  if (foraDaPlanta.length) {
+    console.log(
+      `\n${foraDaPlanta.length} ficha(s) da v1 arquivada(s), não apagada(s): ` +
+        foraDaPlanta.map((f) => f.slug).join(", "),
+    );
+  }
 
   if (avisos.length) {
     console.log(`\n⚠ ${avisos.length} aviso(s):`);
@@ -191,13 +231,19 @@ async function main() {
         acao: "semear_fichas_da_empresa",
         recurso: "agent_profiles",
         resultado: "PERMITIDO",
-        detalhe: { criadas, atualizadas, vinculadas, avisos: avisos.length },
+        detalhe: {
+          criadas,
+          atualizadas,
+          vinculadas,
+          arquivadas: foraDaPlanta.length,
+          avisos: avisos.length,
+        },
       },
     });
 
     console.log(
       `\nNenhuma ficha foi ligada: ${ativas} ativa(s), ${ligadas} com runtime.\n` +
-        "Ligar cada uma é decisão do proprietário, uma por uma — Fase 7.",
+        "Ligar cada uma é decisão do proprietário, uma por uma, com gate.",
     );
   }
 }

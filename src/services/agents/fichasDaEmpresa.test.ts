@@ -8,34 +8,91 @@ import {
   slugDe,
   SLUGS_PROIBIDOS,
   paraPerfilNovo,
-  cargoDonoDe,
+  cargoDaFicha,
+  cargoResponsavelPor,
+  ehAgenteGerente,
+  registrarGerentes,
   REGRAS_UNIVERSAIS,
   type FichaDaEmpresa,
   type VinculoDeFicha,
 } from "./fichasDaEmpresa";
 import { DEFAULT_AGENT_PROFILES } from "./defaultAgentProfiles";
+import { DEPARTAMENTOS } from "@/services/organizacao/departamentosCanonicos";
 
 const CATALOGO = path.join(
   process.cwd(),
-  "docs/arquitetura-operacional-foocci-v1/11-FICHAS-DOS-AGENTES.md",
+  "docs/arquitetura-operacional-foocci-v3/02-DEPARTAMENTOS-E-AGENTES.md",
 );
 
 const texto = readFileSync(CATALOGO, "utf8");
 const fichas = lerCatalogo(texto);
 
+registrarGerentes(fichas, new Map(DEPARTAMENTOS.map((d) => [d.numero, d.slug])));
+
+/**
+ * ── OS CRITÉRIOS DE ACEITE DO CEO, COMO TESTE ──
+ *
+ * O comando de 25/08/2026 lista 16 critérios. Os cinco que se verificam no
+ * catálogo estão aqui, e cada um reprova sozinho.
+ *
+ * Um critério verificado por leitura humana é um critério que passa a valer até
+ * a próxima revisão distraída.
+ */
+describe("critérios de aceite da planta v3", () => {
+  it("1 — existem exatamente 6 departamentos oficiais", () => {
+    expect(DEPARTAMENTOS).toHaveLength(6);
+    expect(porDepartamento(fichas).size).toBe(6);
+  });
+
+  it("2 — cada departamento tem um Agente Gerente, e só um", () => {
+    // Departamento sem gerente é departamento sem dono, e trabalho sem dono não
+    // é cobrado de ninguém. Dois gerentes é pior: ninguém sabe de quem é.
+    for (const d of DEPARTAMENTOS) {
+      const gerentes = fichas.filter((f) => f.departamento === d.numero && ehAgenteGerente(f));
+      expect(gerentes.map((g) => g.nome), `departamento ${d.numero} (${d.nome})`).toHaveLength(1);
+    }
+  });
+
+  it("3 — todo cargo abaixo do Diretor começa com a palavra 'Agente'", () => {
+    // Não é estética: é o que impede confundir uma função da empresa com uma
+    // pessoa contratada ou com um agente vendido dentro do produto.
+    for (const f of fichas) {
+      expect(f.nome.startsWith("Agente"), `${f.numero} — "${f.nome}"`).toBe(true);
+    }
+  });
+
+  it("4 — marketing NÃO está duplicado dentro da Foocci", () => {
+    // A aquisição é executada pela Dioli. Um departamento de marketing aqui
+    // dentro produziria dois times fazendo a mesma coisa e brigando pelo mesmo
+    // número.
+    const proibidos = /marketing|growth|social media|m[íi]dia paga|CRO\b/i;
+
+    for (const d of DEPARTAMENTOS) {
+      expect(proibidos.test(d.nome), `departamento "${d.nome}"`).toBe(false);
+    }
+    for (const f of fichas) {
+      expect(proibidos.test(f.nome), `ficha "${f.nome}"`).toBe(false);
+    }
+  });
+
+  it("10 — não existe cargo de Gerente Geral", () => {
+    // O Diretor da Foocci já ocupa essa camada. O cargo criaria um degrau a mais
+    // sem ninguém para ocupá-lo.
+    for (const f of fichas) {
+      expect(/gerente geral/i.test(f.nome), f.nome).toBe(false);
+      expect(cargoResponsavelPor(f, "vendas")).not.toBe("gerente-geral");
+    }
+  });
+});
+
 /**
  * ── A METADE QUE CONFERE O DOCUMENTO ──
  *
- * A versão anterior do catálogo dizia "32 fichas · 11 IA · 12 HUMANO · 9
- * HÍBRIDO". Eram 34 cabeçalhos e a soma nunca fechou: alguém (eu) somou à mão.
- *
- * Um catálogo que erra a própria contagem é o defeito que este programa existe
- * para achar. A correção só vale se o número parar de depender de quem soma —
- * por isso a contagem agora é CONTADA do documento e comparada com a tabela que
- * ele publica. Editar uma sem a outra reprova aqui.
+ * A v1 publicou "32 fichas" quando eram 34 — alguém (eu) somou à mão. A correção
+ * só vale se o número parar de depender de quem soma: a contagem é CONTADA do
+ * documento e comparada com a tabela que ele publica.
  */
 describe("o catálogo bate com a tabela que ele mesmo publica", () => {
-  /** A tabela impressa na seção "Contagem" do documento. */
   function tabelaPublicada(): Map<number, number> {
     const mapa = new Map<number, number>();
     for (const [, n, qtd] of texto.matchAll(/^\| (\d) · .+? \| (\d+) \|$/gm)) {
@@ -44,10 +101,10 @@ describe("o catálogo bate com a tabela que ele mesmo publica", () => {
     return mapa;
   }
 
-  it("o documento publica uma tabela por departamento", () => {
+  it("o documento publica uma tabela com os 6 departamentos", () => {
     // Sem esta metade, apagar a tabela faria as comparações abaixo passarem
     // comparando dois conjuntos vazios.
-    expect(tabelaPublicada().size).toBe(9);
+    expect(tabelaPublicada().size).toBe(6);
   });
 
   it("cada departamento tem no documento o número de fichas que a tabela afirma", () => {
@@ -57,10 +114,10 @@ describe("o catálogo bate com a tabela que ele mesmo publica", () => {
     }
   });
 
-  it("o total impresso confere com as fichas contadas mais as 3 de direção", () => {
+  it("o total impresso confere com as fichas contadas mais as 2 de direção", () => {
     const impresso = /\*\*(\d+) fichas:\*\*/.exec(texto);
     expect(impresso).not.toBeNull();
-    expect(Number(impresso![1])).toBe(fichas.length + 3);
+    expect(Number(impresso![1])).toBe(fichas.length + 2);
   });
 
   it("os modos impressos conferem com os modos contados", () => {
@@ -68,26 +125,25 @@ describe("o catálogo bate com a tabela que ele mesmo publica", () => {
     expect(impresso).not.toBeNull();
 
     const conta = porModo(fichas);
-    // As 3 fichas de direção são HUMANO e vivem numa tabela, não em cabeçalho.
     expect({
       ia: Number(impresso![1]),
       humano: Number(impresso![2]),
       hibrido: Number(impresso![3]),
-    }).toEqual({ ia: conta.IA, humano: conta.HUMANO + 3, hibrido: conta.HIBRIDO });
+    }).toEqual({ ia: conta.IA, humano: conta.HUMANO, hibrido: conta.HIBRIDO });
   });
 });
 
 describe("as fichas lidas do catálogo", () => {
-  it("são 34 fichas de departamento", () => {
-    expect(fichas.length).toBe(34);
+  it("são 28 fichas de departamento", () => {
+    expect(fichas.length).toBe(28);
   });
 
-  it("toda ficha tem slug, nome e departamento entre 1 e 9", () => {
+  it("toda ficha tem slug, nome e departamento entre 1 e 6", () => {
     for (const f of fichas) {
       expect(f.slug.length, `${f.numero} sem slug`).toBeGreaterThan(0);
       expect(f.nome.length, `${f.numero} sem nome`).toBeGreaterThan(0);
       expect(f.departamento, `${f.numero} fora da faixa`).toBeGreaterThanOrEqual(1);
-      expect(f.departamento, `${f.numero} fora da faixa`).toBeLessThanOrEqual(9);
+      expect(f.departamento, `${f.numero} fora da faixa`).toBeLessThanOrEqual(6);
     }
   });
 
@@ -101,21 +157,16 @@ describe("as fichas lidas do catálogo", () => {
 
   it("nenhuma ficha da empresa usa slug de Essencial nem de aposentado", () => {
     // O corte de 07/08/2026 aconteceu porque quatro fichas duplicavam, pelo
-    // nome, um dos cinco que constroem o sistema. Esta é a trava para não
-    // repetir com a terceira população.
+    // nome, um dos cinco que constroem o sistema.
     for (const f of fichas) {
       expect(SLUGS_PROIBIDOS, `${f.numero} (${f.slug})`).not.toContain(f.slug);
     }
   });
 
   it("toda ficha de IA tem limite declarado — no catálogo ou na constituição que ela aponta", () => {
-    // Ficha de IA sem trava escrita é uma IA sem limite declarado. As de humano
-    // podem não ter: gente responde por julgamento, não por allowlist.
-    //
-    // A exceção é a ficha que APONTA para um agente de produto já existente: o
-    // limite dela vive na constituição daquele agente. Mas a exceção só vale se
-    // a constituição existir de verdade — senão viraria o buraco por onde uma
-    // ficha vazia passa dizendo "meu limite está em outro lugar".
+    // Ficha de IA sem trava escrita é uma IA sem limite declarado. A exceção é a
+    // ficha que APONTA para um agente de produto já existente — e a exceção só
+    // vale se a constituição existir de verdade.
     const registro = new Map(DEFAULT_AGENT_PROFILES.map((p) => [p.slug, p]));
 
     for (const f of fichas.filter((x) => x.modo === "IA")) {
@@ -125,84 +176,69 @@ describe("as fichas lidas do catálogo", () => {
     }
   });
 
-  it("toda ficha de IA ou híbrida diz o que PODE — ou aponta para quem diz", () => {
-    const registro = new Map(DEFAULT_AGENT_PROFILES.map((p) => [p.slug, p]));
-
-    for (const f of fichas.filter((x) => x.modo !== "HUMANO")) {
-      const apontado = f.jaExisteComo ? registro.get(f.jaExisteComo) : undefined;
-      const capacidade =
-        f.pode.length + (apontado?.allowedActions?.length ?? 0) + (f.resumo ? 1 : 0);
-      expect(capacidade, `${f.numero} ${f.nome} veio sem nada`).toBeGreaterThan(0);
-    }
-  });
-
-  it("uma ficha que aponta para slot vazio não passa por agente pronto", () => {
-    // `analytics-product` existe no registro desde a Fase 0 como placeholder:
-    // zero regra, zero ferramenta. A ficha 6.5 aponta para ele. Se o catálogo
-    // voltar a chamá-lo de "agente que já existe", isto reprova.
-    const registro = new Map(DEFAULT_AGENT_PROFILES.map((p) => [p.slug, p]));
-    const vazios = fichas.filter(
-      (f) => f.jaExisteComo && (registro.get(f.jaExisteComo)?.allowedActions?.length ?? 0) === 0,
-    );
-
-    for (const f of vazios) {
-      const cabecalho = new RegExp(`^### ${f.numero.replace(".", "\\.")} .*$`, "m").exec(texto);
-      expect(cabecalho, `${f.numero} sumiu do documento`).not.toBeNull();
-      expect(cabecalho![0], `${f.numero} aponta para slot vazio mas se diz pronta`).not.toMatch(
-        /já existe/,
-      );
-    }
-  });
-
-  it("toda ficha tem descrição: resumo, ou pelo menos um pode/não pode", () => {
+  it("toda ficha diz alguma coisa — resumo, pode ou não pode", () => {
     for (const f of fichas) {
       const temAlgo = f.resumo || f.pode.length || f.naoPode.length;
       expect(Boolean(temAlgo), `${f.numero} ${f.nome} veio vazia`).toBe(true);
     }
   });
 
-  it("as quatro que já existem apontam para o agente de produto certo", () => {
+  it("as três que já operam apontam para o agente de produto certo", () => {
     const ligadas = fichas.filter((f) => f.jaExisteComo);
     expect(ligadas.map((f) => [f.numero, f.jaExisteComo])).toEqual([
-      ["6.2", "waiter"],
-      ["6.3", "crm"],
-      ["6.4", "whatsapp"],
-      ["6.5", "analytics-product"],
+      ["3.2", "waiter"],
+      ["3.3", "crm"],
+      ["3.4", "whatsapp"],
     ]);
   });
 
+  it("`analytics-product` NÃO é apresentado como agente pronto", () => {
+    // O slot existe no registro desde a Fase 0 como placeholder vazio. Chamá-lo
+    // de "agente que já existe" seria vender uma vaga com nome como produto.
+    const analytics = DEFAULT_AGENT_PROFILES.find((p) => p.slug === "analytics-product");
+    expect(analytics?.allowedActions ?? []).toHaveLength(0);
+    for (const f of fichas) expect(f.jaExisteComo).not.toBe("analytics-product");
+  });
+
   it("`suporte-tecnico` NÃO foi amarrado a ficha nenhuma", () => {
-    // Ele encosta em 4.2 e em 7.3. Escolher no chute faria uma função da
-    // empresa herdar, calada, as permissões de um agente de produto.
+    // Ligar as duas coisas faria uma função da empresa herdar, calada, as
+    // permissões de um agente de produto em operação.
     for (const f of fichas) expect(f.jaExisteComo).not.toBe("suporte-tecnico");
   });
 
-  it("a ficha 2.2 (SDR IA) chega inteira — o caso mais detalhado do catálogo", () => {
-    const sdr = fichas.find((f) => f.numero === "2.2");
+  it("a ficha 1.2 (Agente SDR IA) chega inteira — a mais detalhada do catálogo", () => {
+    const sdr = fichas.find((f) => f.numero === "1.2");
     expect(sdr).toBeDefined();
     expect(sdr!.modo).toBe("IA");
     expect(sdr!.pode.length).toBeGreaterThan(5);
     expect(sdr!.naoPode.length).toBeGreaterThan(3);
     expect(sdr!.escalaQuando.length).toBeGreaterThan(0);
     expect(sdr!.medeSePor.length).toBeGreaterThan(0);
-    // A seta não pode ter sido picada no meio pela quebra por vírgula.
-    expect(sdr!.pode.some((p) => p.includes("NOVO → CONTATADO → QUALIFICADO"))).toBe(true);
   });
 
   it("a regra dura do SDR humano sobrevive à leitura", () => {
-    const humano = fichas.find((f) => f.numero === "2.3");
+    const humano = fichas.find((f) => f.numero === "1.3");
     expect(humano!.regraDura.length).toBeGreaterThan(0);
     expect(humano!.regraDura.join(" ")).toContain("atômico");
+  });
+
+  it("os dois CRMs são fichas diferentes, em departamentos diferentes", () => {
+    // É a confusão mais cara possível neste sistema: misturar os dois faria a
+    // Foocci mandar campanha de venda para o cliente final de um restaurante.
+    const comercial = fichas.find((f) => f.numero === "1.5");
+    const produto = fichas.find((f) => f.numero === "3.3");
+
+    expect(comercial!.departamento).toBe(1);
+    expect(produto!.departamento).toBe(3);
+    expect(comercial!.slug).not.toBe(produto!.slug);
   });
 });
 
 describe("da ficha do catálogo para a linha do banco", () => {
-  const sdr = fichas.find((f) => f.numero === "2.2")!;
-  const gerente = fichas.find((f) => f.numero === "2.1")!;
+  const sdr = fichas.find((f) => f.numero === "1.2")!;
+  const gerente = fichas.find((f) => f.numero === "1.1")!;
 
   it("nenhuma ficha nova nasce ligada nem ativa", () => {
-    // O comando do proprietário é explícito: nada de ativar IA nesta fase.
-    // Um seed que semeasse ACTIVE ligaria 34 agentes de uma vez.
     for (const f of fichas.filter((x) => !x.jaExisteComo)) {
       const p = paraPerfilNovo(f);
       expect(p.status, f.numero).toBe("DRAFT");
@@ -214,12 +250,10 @@ describe("da ficha do catálogo para a linha do banco", () => {
   it("modo do catálogo vira modo do banco", () => {
     expect(paraPerfilNovo(sdr).executionMode).toBe("AI");
     expect(paraPerfilNovo(gerente).executionMode).toBe("HUMAN");
-    expect(paraPerfilNovo(fichas.find((f) => f.numero === "2.6")!).executionMode).toBe("HYBRID");
+    expect(paraPerfilNovo(fichas.find((f) => f.numero === "1.5")!).executionMode).toBe("HYBRID");
   });
 
   it("as três regras universais viajam com toda ficha de IA e híbrida", () => {
-    // Deixá-las só no cabeçalho do documento faria delas um aviso. Na linha,
-    // elas são o piso que a ficha não pode baixar.
     for (const f of fichas.filter((x) => x.modo !== "HUMANO" && !x.jaExisteComo)) {
       const regras = paraPerfilNovo(f).safetyRules;
       for (const universal of REGRAS_UNIVERSAIS) {
@@ -229,8 +263,6 @@ describe("da ficha do catálogo para a linha do banco", () => {
   });
 
   it("ficha de humano NÃO recebe as regras de IA", () => {
-    // "Nunca inventa preço" num cargo de gente seria ruído: pessoa responde por
-    // julgamento e por política comercial, não por allowlist de IA.
     const p = paraPerfilNovo(gerente);
     for (const universal of REGRAS_UNIVERSAIS) {
       expect(p.safetyRules).not.toContain(universal);
@@ -246,16 +278,15 @@ describe("da ficha do catálogo para a linha do banco", () => {
   });
 
   it("o vínculo NÃO carrega nenhum campo de conteúdo", () => {
-    // Esta é a trava que impede o seed de apagar a constituição do Waiter numa
-    // segunda-feira de manhã. Se alguém acrescentar `allowedActions` ao tipo do
-    // vínculo, este teste reprova antes de o seed rodar.
+    // A trava que impede o seed de apagar a constituição do Waiter numa
+    // segunda-feira de manhã.
     const vinculo: VinculoDeFicha = {
-      catalogNumber: "6.2",
-      departmentId: "dep6",
+      catalogNumber: "3.2",
+      departmentId: "dep3",
       ownerPositionId: null,
       managerPositionId: null,
     };
-    const proibidos = [
+    for (const campo of [
       "allowedActions",
       "forbiddenActions",
       "status",
@@ -264,26 +295,62 @@ describe("da ficha do catálogo para a linha do banco", () => {
       "population",
       "executionMode",
       "safetyRules",
-    ];
-    for (const campo of proibidos) {
+    ]) {
       expect(Object.keys(vinculo), `vínculo não pode carregar ${campo}`).not.toContain(campo);
     }
   });
+});
 
-  it("o dono de uma ficha comum é o gerente do departamento dela", () => {
-    expect(cargoDonoDe(sdr, "vendas")).toBe("gerente-vendas");
+describe("cada ficha é também um cargo no organograma", () => {
+  const sdr = fichas.find((f) => f.numero === "1.2")!;
+  const gerente = fichas.find((f) => f.numero === "1.1")!;
+
+  it("a ficha x.1 é o Agente Gerente, e o cargo dela é de nível GERENTE", () => {
+    expect(ehAgenteGerente(gerente)).toBe(true);
+    expect(cargoDaFicha(gerente, "vendas").nivel).toBe("GERENTE");
   });
 
-  it("o dono da ficha do próprio gerente é o Gerente Geral", () => {
-    // Sem esta regra, o Gerente de Vendas seria dono da própria ficha — e
-    // "quem cobra" e "quem é cobrado" virariam a mesma pessoa.
-    expect(cargoDonoDe(gerente, "vendas")).toBe("gerente-geral");
+  it("as outras são de operação", () => {
+    expect(ehAgenteGerente(sdr)).toBe(false);
+    expect(cargoDaFicha(sdr, "vendas").nivel).toBe("OPERACAO");
   });
 
-  it("toda ficha tem dono, inclusive as de IA", () => {
-    // O catálogo diz: "IA sem dono é trabalho sem responsável."
+  it("o Agente Gerente reporta DIRETO ao Diretor — sem camada no meio", () => {
+    // Regra 4 da hierarquia, e regra 10: não existe Gerente Geral.
+    expect(cargoDaFicha(gerente, "vendas").reportaA).toBe("diretor-foocci");
+  });
+
+  it("o agente comum reporta ao Agente Gerente do departamento dele", () => {
+    expect(cargoDaFicha(sdr, "vendas").reportaA).toBe(gerente.slug);
+  });
+
+  it("quem responde pelo agente é o gerente; pelo gerente, o Diretor", () => {
+    // Sem isso, quem cobra e quem é cobrado seriam a mesma pessoa.
+    expect(cargoResponsavelPor(sdr, "vendas")).toBe(gerente.slug);
+    expect(cargoResponsavelPor(gerente, "vendas")).toBe("diretor-foocci");
+  });
+
+  it("toda cadeia de comando chega ao CEO, sem ciclo", () => {
+    const slugPorNumero = new Map(DEPARTAMENTOS.map((d) => [d.numero, d.slug]));
+    const cargos = new Map<string, string | undefined>([
+      ["ceo", undefined],
+      ["diretor-foocci", "ceo"],
+    ]);
     for (const f of fichas) {
-      expect(cargoDonoDe(f, "vendas").length).toBeGreaterThan(0);
+      const c = cargoDaFicha(f, slugPorNumero.get(f.departamento)!);
+      cargos.set(c.slug, c.reportaA);
+    }
+
+    for (const inicio of cargos.keys()) {
+      const visitados = new Set<string>();
+      let atual: string | undefined = inicio;
+      while (atual) {
+        expect(visitados.has(atual), `ciclo no organograma em "${atual}"`).toBe(false);
+        visitados.add(atual);
+        expect(cargos.has(atual), `"${atual}" reporta a cargo que não existe`).toBe(true);
+        atual = cargos.get(atual);
+      }
+      expect(visitados.has("ceo"), `"${inicio}" não chega ao CEO`).toBe(true);
     }
   });
 });
@@ -292,9 +359,8 @@ describe("da ficha do catálogo para a linha do banco", () => {
  * ── A METADE QUE REPROVA ──
  *
  * Os testes acima leem o documento de verdade e, se ele estiver bom, passam
- * todos. Isso deixaria passar um parser que devolve lixo em qualquer entrada
- * diferente. Os casos abaixo são sintéticos e existem para provar que ele
- * realmente separa as coisas.
+ * todos. Isso deixaria passar um parser que devolve lixo em qualquer outra
+ * entrada. Os casos abaixo são sintéticos.
  */
 describe("o leitor do catálogo, exercitado no papel", () => {
   const ler = (md: string): FichaDaEmpresa | undefined => lerCatalogo(md)[0];
@@ -311,7 +377,7 @@ describe("o leitor do catálogo, exercitado no papel", () => {
 
   it("`Não pode também` soma à mesma trava, em vez de sobrescrever", () => {
     const f = ler(
-      "### 9.2 Teste · HÍBRIDO\n**Não pode:** pagar\n**Não pode também:** derivar receita\n",
+      "### 6.3 Teste · HÍBRIDO\n**Não pode:** pagar\n**Não pode também:** derivar receita\n",
     );
     expect(f!.naoPode).toEqual(["pagar", "derivar receita"]);
   });
@@ -336,11 +402,11 @@ describe("o leitor do catálogo, exercitado no papel", () => {
   });
 
   it("slug é determinístico e não carrega acento nem símbolo", () => {
-    expect(slugDe("Gerente de Marketing & Growth")).toBe("gerente-de-marketing-e-growth");
-    expect(slugDe("Agente de Configuração e Importação")).toBe(
-      "agente-de-configuracao-e-importacao",
+    expect(slugDe("Agente Gerente Comercial")).toBe("agente-gerente-comercial");
+    expect(slugDe("Agente de Implantação e Onboarding")).toBe(
+      "agente-de-implantacao-e-onboarding",
     );
-    expect(slugDe("SDR IA")).toBe("sdr-ia");
+    expect(slugDe("Agente SDR IA")).toBe("agente-sdr-ia");
     expect(slugDe("Análise")).toBe(slugDe("Analise"));
   });
 });

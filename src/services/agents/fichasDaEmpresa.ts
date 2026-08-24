@@ -1,13 +1,13 @@
 /**
- * AS FICHAS DA EMPRESA — as pessoas e agentes dos 9 departamentos da Foocci.
+ * AS FICHAS DA EMPRESA — os agentes dos 6 departamentos oficiais da Foocci (v3).
  *
  * ── POR QUE O CATÁLOGO É O MARKDOWN, E NÃO ESTE ARQUIVO ──
  *
- * `docs/arquitetura-operacional-foocci-v1/11-FICHAS-DOS-AGENTES.md` diz, na
+ * `docs/arquitetura-operacional-foocci-v3/02-DEPARTAMENTOS-E-AGENTES.md` diz, na
  * primeira linha: *"Nenhuma ficha nasce fora deste arquivo, e nenhuma ficha vive
  * só neste arquivo."*
  *
- * Copiar as 37 fichas para dentro de um array de TypeScript cumpriria a segunda
+ * Copiar as fichas para dentro de um array de TypeScript cumpriria a segunda
  * metade e quebraria a primeira: passariam a existir duas cópias, o proprietário
  * aprovaria uma e o banco receberia a outra. Em dois meses ninguém saberia qual
  * está certa — e é exatamente assim que um catálogo vira decoração.
@@ -40,7 +40,7 @@ export interface FichaDaEmpresa {
   slug: string;
   /** Numeração do catálogo: "2.2". É como o proprietário se refere à ficha. */
   numero: string;
-  /** Número do departamento (1 a 9). */
+  /** Número do departamento (1 a 6). */
   departamento: number;
   nome: string;
   modo: ModoDeExecucao;
@@ -65,19 +65,25 @@ export interface FichaDaEmpresa {
 }
 
 /**
- * As quatro fichas que já existem como agente de produto semeado.
+ * As três fichas que já existem como agente de produto semeado e em operação.
  *
- * Só entram aqui identidades ÓBVIAS. `suporte-tecnico` ficou de fora de
- * propósito: ele se descreve como "engenheiro de plantão / assistência técnica
- * 24h" e encosta em DUAS fichas do catálogo (4.2 Suporte N1 e 7.3 Incidente e
- * Runbook). Escolher uma no chute faria uma função da empresa herdar, calada, as
- * permissões de um agente de produto. Fica como pergunta ao proprietário.
+ * Só entram aqui identidades ÓBVIAS.
+ *
+ * `analytics-product` saiu da lista na v3: o slot existe no registro desde a
+ * Fase 0 como placeholder vazio — zero regra, zero ferramenta. Apontar a ficha
+ * 3.5 para ele faria o catálogo chamar de "agente que já existe" o que é uma
+ * vaga com nome. A ficha 3.5 nasce como as outras: a construir.
+ *
+ * `suporte-tecnico` também ficou de fora, e agora com motivo resolvido: na v3
+ * ele é o Agente de Suporte N1 (ficha 2.3), como o CEO confirmou. O vínculo NÃO
+ * é feito aqui mesmo assim — ligar as duas coisas faria uma função da empresa
+ * herdar, calada, as permissões de um agente de produto em operação. Entra
+ * quando houver decisão registrada sobre as permissões, não antes.
  */
 const JA_EXISTEM: Readonly<Record<string, string>> = {
-  "6.2": "waiter",
-  "6.3": "crm",
-  "6.4": "whatsapp",
-  "6.5": "analytics-product",
+  "3.2": "waiter",
+  "3.3": "crm",
+  "3.4": "whatsapp",
 };
 
 /**
@@ -231,10 +237,77 @@ export function lerCatalogo(markdown: string): FichaDaEmpresa[] {
 
 // ── DA FICHA PARA A LINHA DO BANCO ────────────────────────────────────────────
 
-/** Slug do cargo dono de uma ficha. Gerente cuida do seu; do gerente cuida o Geral. */
-export function cargoDonoDe(ficha: FichaDaEmpresa, slugDoDepartamento: string): string {
-  const ehGerente = ficha.numero.endsWith(".1");
-  return ehGerente ? "gerente-geral" : `gerente-${slugDoDepartamento}`;
+/** A ficha `x.1` de cada departamento é o Agente Gerente dele. */
+export function ehAgenteGerente(ficha: FichaDaEmpresa): boolean {
+  return ficha.numero.endsWith(".1");
+}
+
+export interface CargoDaFicha {
+  slug: string;
+  titulo: string;
+  nivel: "GERENTE" | "OPERACAO";
+  departamento: string;
+  /** Slug do cargo a quem este se reporta. */
+  reportaA: string;
+}
+
+/**
+ * O cargo que corresponde a uma ficha.
+ *
+ * Na v3 ficha e cargo são a mesma coisa vista de dois ângulos: a ficha diz o que
+ * a função pode e não pode; o cargo diz onde ela fica no organograma. Mantê-los
+ * como duas listas separadas — como era na v1 — produziria duas fontes que podem
+ * discordar sobre quem existe.
+ *
+ * A cadeia é curta, e é a regra 4 da hierarquia: o Agente Gerente se reporta ao
+ * Diretor da Foocci, direto, sem camada intermediária. Não existe Gerente Geral.
+ */
+export function cargoDaFicha(ficha: FichaDaEmpresa, slugDoDepartamento: string): CargoDaFicha {
+  const gerente = ehAgenteGerente(ficha);
+  return {
+    slug: ficha.slug,
+    titulo: ficha.nome,
+    nivel: gerente ? "GERENTE" : "OPERACAO",
+    departamento: slugDoDepartamento,
+    reportaA: gerente ? "diretor-foocci" : slugDoAgenteGerente(slugDoDepartamento),
+  };
+}
+
+/**
+ * Quem RESPONDE por uma ficha.
+ *
+ * Do agente comum responde o Agente Gerente do departamento. Da ficha do próprio
+ * Agente Gerente responde o Diretor — senão quem cobra e quem é cobrado seriam a
+ * mesma pessoa.
+ */
+export function cargoResponsavelPor(ficha: FichaDaEmpresa, slugDoDepartamento: string): string {
+  return ehAgenteGerente(ficha) ? "diretor-foocci" : slugDoAgenteGerente(slugDoDepartamento);
+}
+
+/**
+ * O slug do Agente Gerente de um departamento.
+ *
+ * Derivado do catálogo, não escrito à mão: quem é o gerente é sempre a ficha
+ * `x.1`, e o slug dela vem do nome. Uma constante escrita à mão aqui poderia
+ * discordar do catálogo no dia em que um gerente fosse renomeado.
+ */
+let gerentesPorDepartamento: Map<string, string> | null = null;
+
+export function registrarGerentes(fichas: FichaDaEmpresa[], slugPorNumero: Map<number, string>) {
+  gerentesPorDepartamento = new Map();
+  for (const f of fichas) {
+    if (!ehAgenteGerente(f)) continue;
+    const dep = slugPorNumero.get(f.departamento);
+    if (dep) gerentesPorDepartamento.set(dep, f.slug);
+  }
+}
+
+export function slugDoAgenteGerente(slugDoDepartamento: string): string {
+  const achado = gerentesPorDepartamento?.get(slugDoDepartamento);
+  if (achado) return achado;
+  // Sem o catálogo registrado, o nome derivado do padrão. Não é chute: é o
+  // mesmo formato que `slugDe` produziria para "Agente Gerente <algo>".
+  return `agente-gerente-${slugDoDepartamento}`;
 }
 
 const MODO_NO_BANCO: Readonly<Record<ModoDeExecucao, "AI" | "HUMAN" | "HYBRID">> = {
