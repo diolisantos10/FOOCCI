@@ -15,6 +15,29 @@
  * A escolha do painel visível é estado da tela, não rota: trocar de conversa não
  * pode custar um recarregamento no meio do atendimento.
  *
+ * ── O ORÇAMENTO DE LARGURA, QUE É REAL E NÃO CABE SOZINHO ───────────────────
+ *
+ * A barra do Admin come 208px antes de esta tela começar. Sobram 1072px num
+ * monitor de 1280, e é dentro deles que quatro colunas precisam caber:
+ *
+ *     filas 160 + lista 240 + ficha 256 = 656   →   conversa 416 ✓
+ *
+ * A 1024px sobrariam 816, e a conversa cairia para 160px. Por isso **a ficha só
+ * aparece a partir de 1280** (`xl`); abaixo disso ela é uma aba, e a barra de
+ * abas continua visível até lá.
+ *
+ * ── E POR QUE ISTO PRECISOU DE DUAS TENTATIVAS ─────────────────────────────
+ *
+ * A primeira versão dava 224+320+320 às laterais, e a conversa ficava com 208px:
+ * as bolhas quebravam em uma palavra por linha. A segunda apertou as laterais e
+ * pôs piso na conversa — e aí a soma passou de 1280 e a **ficha saiu da tela
+ * pela direita, recortada**.
+ *
+ * Nenhuma das duas foi pega por teste. A primeira apareceu na captura; a segunda
+ * escapou até do meu próprio verificador de transbordo, porque o conteúdo era
+ * RECORTADO e não rolável — `scrollWidth` não cresce quando alguém corta. Largura
+ * de layout não se verifica por regra: se verifica somando, e olhando.
+ *
  * ── O QUE ESTA TELA SE RECUSA A FINGIR ──────────────────────────────────────
  *
  * O botão de enviar existe e funciona: ele GRAVA a mensagem na conversa. O que
@@ -98,7 +121,7 @@ export function AtendimentoClient() {
       )}
 
       {/* No celular, uma barra de navegação entre os quatro painéis. */}
-      <nav className="flex shrink-0 gap-1 border-b border-line bg-paper px-2 py-1.5 lg:hidden">
+      <nav className="flex shrink-0 gap-1 border-b border-line bg-paper px-2 py-1.5 xl:hidden">
         {(["filas", "lista", "conversa", "ficha"] as const).map((p) => (
           <button
             key={p}
@@ -119,7 +142,7 @@ export function AtendimentoClient() {
         {/* ── 1. FILAS ─────────────────────────────────────────────────── */}
         <aside
           className={cx(
-            "w-full shrink-0 overflow-y-auto border-r border-line bg-paper lg:block lg:w-56",
+            "w-full shrink-0 overflow-y-auto border-r border-line bg-paper lg:block lg:w-40",
             painel === "filas" ? "block" : "hidden",
           )}
         >
@@ -136,7 +159,7 @@ export function AtendimentoClient() {
         {/* ── 2. LISTA DE CONVERSAS ────────────────────────────────────── */}
         <section
           className={cx(
-            "w-full shrink-0 overflow-y-auto border-r border-line bg-paper lg:block lg:w-80",
+            "w-full shrink-0 overflow-y-auto border-r border-line bg-paper lg:block lg:w-60",
             painel === "lista" ? "block" : "hidden",
           )}
         >
@@ -173,7 +196,7 @@ export function AtendimentoClient() {
         {/* ── 4. FICHA 360º ────────────────────────────────────────────── */}
         <aside
           className={cx(
-            "w-full shrink-0 overflow-y-auto border-l border-line bg-paper lg:block lg:w-80",
+            "w-full shrink-0 overflow-y-auto border-l border-line bg-paper xl:block xl:w-64",
             painel === "ficha" ? "block" : "hidden",
           )}
         >
