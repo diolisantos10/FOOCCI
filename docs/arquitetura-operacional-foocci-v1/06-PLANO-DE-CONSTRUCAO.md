@@ -1,70 +1,100 @@
-# Plano de construção
+# Plano de construção do projeto inteiro
 
-A execução deve ser incremental. Cada fase termina com testes e evidência antes da próxima.
+A execução é um programa de construção. Cada fase termina com PR próprio, testes, migração/rollback e aceite antes da seguinte.
 
-## Fase 0 — Proteção e baseline
+## Fase 0 — Raio-X e mapa de reaproveitamento
 
-- Ler este pacote, `docs/sala-de-vendas-levantamento.md`, schema e serviços existentes.
-- Mapear dependências reais e escrever um ADR curto para decisões que divergirem dos nomes sugeridos.
-- Rodar testes/type-check/build atuais e registrar baseline.
-- Não alterar comportamento de produção.
+- Auditar schema, rotas, componentes, serviços, autenticação, integrações e documentos.
+- Para cada capacidade do plano mestre, classificar: `EXISTE`, `PARCIAL`, `A CONSTRUIR` ou `NÃO SE APLICA`.
+- Produzir mapa “capacidade → arquivo/tabela/rota atual → lacuna → ação”.
+- Registrar ADRs para decisões estruturais.
+- Rodar baseline de testes, type-check e build.
+- Não mudar produção.
 
-## Fase 1 — Identidade, RBAC e dados comerciais
+## Fase 1 — Núcleo operacional compartilhado
 
-- Implementar identidade interna e papéis.
-- Adicionar modelos de conversa, mensagem, handoff, tarefa e auditoria.
-- Criar migração aditiva e seed seguro apenas de desenvolvimento.
-- Criar serviços de domínio transacionais.
-- Proteger APIs atuais do CRM com RBAC compatível.
+- Identidade interna, sessão e RBAC por hierarquia/departamento.
+- Cadastro de departamentos, posições, agentes e modo AI/HUMAN/HYBRID.
+- Ordens de serviço, projetos, tarefas, dependências, comentários e anexos.
+- Aprovações, decisões executivas, handoffs, notificações e auditoria.
+- Dashboard executivo e “Meu Trabalho”.
+- Eventos e contratos para integrar módulos sem acoplamento direto.
 
-**Saída:** consultas e mutações testadas, ainda sem envio real.
+## Fase 2 — Vendas e Receita
 
-## Fase 2 — Sala de Vendas humana
+- Sala de Vendas completa, CRM, WhatsApp, SDR IA/humano, funil, tarefas, agenda, handoff e métricas.
+- Seguir integralmente documentos 02 a 05.
+- Primeiro em modo humano/sombra; IA ativa somente após gates.
 
-- Construir layout/navegação, fila, conversa, dossiê, funil e tarefas.
-- Ligar inbound existente à persistência de mensagens comerciais.
-- Implementar assumir, reatribuir, timeline e composer.
-- Com envio desligado, mostrar o estado corretamente; usar mocks/testes, não produção.
+## Fase 3 — Marketing & Growth
 
-**Saída:** operação humana navegável e auditável.
+- Campanhas, canais, orçamento, calendário, ativos, UTMs, leads, atribuição e performance.
+- Handoff rastreável Marketing → SDR.
+- Integrações existentes são adaptadas; não duplicar analytics.
+- Aprovação humana para orçamento, publicação e mudanças de campanha.
 
-## Fase 3 — Canal oficial e confiabilidade
+## Fase 4 — Implantação e Onboarding
 
-- Integrar envio pelo `FoocciSalesChannel`.
-- Status de mensagem, webhook verificado, idempotência, retry e reconciliação.
-- Templates/janela do WhatsApp e opt-out.
-- Observabilidade e painel de saúde.
+- Fila de clientes ganhos, checklist por plano, kickoff, coleta/configuração, importação, treinamento, go-live e pendências.
+- Dossiê recebido de Vendas sem redescoberta.
+- Gate de ativação e termo de aceite interno.
+- Handoff para Sucesso do Cliente.
 
-**Saída:** tecnicamente pronto para ambiente controlado, ainda sem ativação automática.
+## Fase 5 — Sucesso do Cliente e Suporte
 
-## Fase 4 — SDR IA em modo sombra
+- Carteira, saúde, onboarding concluído, tickets/escalonamentos, riscos, QBR/check-ins, renovação e expansão.
+- Reaproveitar a Central de Conversas/atendimento existente.
+- Separar suporte de cliente ativo da conversa comercial de prospect.
+- Feedback estruturado para Produto e Qualidade.
 
-- Conectar entrevista/sondagem/diário ao dossiê e à conversa.
-- IA produz sugestão e classificação sem enviar ao lead.
-- Avaliar precisão, segurança, completude e handoff em conjunto de casos.
-- Versionar prompt/política e registrar modelo/versão, sem armazenar raciocínio privado.
+## Fase 6 — Produto e Experiência
 
-**Saída:** gates de qualidade aprovados por responsável humano.
+- Backlog de produto, discovery, hipóteses, evidências, priorização, roadmap, especificações, pesquisa, protótipos e aceite.
+- Pedidos recebidos de Vendas/CS/Suporte entram como evidência, não como promessa automática.
+- Aprovação executiva para mudança de prioridade estratégica.
 
-## Fase 5 — IA ativa controlada
+## Fase 7 — Agentes e Inteligência do Produto
 
-- Habilitar somente por allowlist/ambiente e kill switch.
-- Implementar IA ativa, pedido de handoff, assumir atômico e devolver para IA.
-- Garantir silêncio imediato da IA durante atendimento humano.
-- Escalonar baixa confiança, negociação, pedido humano e temas sensíveis.
+- Catálogo e governança dos agentes Waiter, CRM, WhatsApp e Analytics.
+- Versões de prompt/política, ferramentas permitidas, avaliações, datasets, métricas, incidentes, rollout e rollback.
+- “Cérebro” permanece camada interna de orquestração, não agente vendido.
+- Ativação por gates e kill switch.
 
-**Saída:** piloto controlado com rollback simples.
+## Fase 8 — Tecnologia, Operações e Integrações
 
-## Fase 6 — Gestão e handoff de fechamento
+- Demandas técnicas, incidentes, mudanças, releases, ambientes, integrações, observabilidade e capacidade.
+- Não reconstruir GitHub/Railway/Meta dentro do Foocci; integrar status e links quando seguro.
+- Segredos permanecem no provedor apropriado.
+- Runbooks, ownership e rollback obrigatórios.
 
-- Dashboard, SLA, distribuição, agenda, motivos de perda e métricas por origem.
-- Dossiê de fechamento e contrato de handoff para Implantação.
-- Relatórios honestos e trilha de auditoria.
+## Fase 9 — Qualidade, Segurança e Compliance
 
-## Restrições de entrega
+- Auditorias, riscos, controles, incidentes, LGPD, evidências, planos de ação e aceite de release.
+- Quality gates transversais.
+- Acesso mínimo, retenção, exportação/exclusão e trilha imutável.
+- Nenhuma área aprova o próprio desvio crítico sem revisor autorizado.
 
-- Não fazer big-bang.
-- Não reescrever o CRM funcional.
-- Não migrar prospect para tabelas de cliente antes do fechamento e processo definido.
-- Não ativar flag de produção, cadastrar segredo, enviar WhatsApp real, submeter template Meta, criar cobrança, fazer deploy ou merge.
-- Entregar em commits pequenos e PR com checklist, migração, rollback e screenshots.
+## Fase 10 — Financeiro e Administrativo
+
+- Contratos/metadados, planos, faturamento, cobrança, inadimplência, despesas, orçamento e indicadores.
+- Integrar fontes financeiras confiáveis; não inventar receita a partir de status comercial.
+- Acesso altamente restrito.
+- Ações bancárias, fiscais e pagamentos externos exigem confirmação humana e ficam fora da automação inicial.
+
+## Fase 11 — Integração ponta a ponta e governança
+
+- Fluxos Marketing → Vendas → Implantação → CS → expansão.
+- Fluxos CS/Suporte → Produto → Tecnologia → Qualidade → release.
+- Fluxos Vendas/CS → Financeiro.
+- Dashboard executivo com indicadores reais e decisões pendentes.
+- Testes E2E, carga, segurança, acessibilidade, recuperação e documentação operacional.
+- Desativar rotas duplicadas somente após migração comprovada e plano de rollback.
+
+## Restrições
+
+- Um PR por fase ou subfase revisável.
+- Nada de big-bang.
+- Não apagar estruturas existentes.
+- Não criar tela vazia apenas para “cumprir departamento”.
+- Não automatizar decisão crítica sem política e aprovador.
+- Não ativar envio, IA, cobrança ou produção automaticamente.
