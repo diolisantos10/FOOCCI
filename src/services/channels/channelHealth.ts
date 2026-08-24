@@ -65,6 +65,15 @@ export interface ChannelHealthItem {
    */
   action: string;
   actionHref: string;
+  /**
+   * A EVIDÊNCIA TÉCNICA — o que o provedor respondeu, literal.
+   *
+   * Mora aqui, e **só a tela de Integrações a mostra**. Na Central de Atendimento
+   * ela é proibida: quem está atendendo cliente não conserta OAuth, e um parágrafo
+   * com "Unsupported request - method type: get (code 100)" no topo da fila só
+   * rouba a tela de quem precisa ver "1 sem resposta há +1080 min".
+   */
+  detail: string | null;
   /** ISO do último evento recebido, quando existe. */
   lastInboundAt: string | null;
   /** Horas inteiras de silêncio, quando dá para calcular. */
@@ -121,6 +130,7 @@ export function evaluateInstagramHealth(input: InstagramHealthInput): ChannelHea
     channel: "INSTAGRAM" as const,
     label: "Instagram",
     actionHref: IG_HREF,
+    detail: null as string | null,
     lastInboundAt: lastWebhookAt ? lastWebhookAt.toISOString() : null,
   };
 
@@ -129,7 +139,11 @@ export function evaluateInstagramHealth(input: InstagramHealthInput): ChannelHea
     items.push({
       ...base,
       level: "down",
-      headline: `A conexão do Instagram está com problema e as mensagens não estão chegando. ${lastError}`,
+      // O texto da Meta NÃO entra aqui. Ele viaja em `detail` e só a tela de
+      // Integrações o mostra. Aqui fica o EFEITO, que é o que qualquer pessoa
+      // entende: as mensagens não estão chegando.
+      headline: "A conexão do Instagram está com problema e as mensagens do Instagram não estão chegando.",
+      detail: lastError,
       action: "Reconectar",
       silentHours: lastWebhookAt ? Math.floor((now.getTime() - lastWebhookAt.getTime()) / (60 * 60 * 1000)) : null,
     });
@@ -242,4 +256,103 @@ const LEVEL_WEIGHT: Record<ChannelHealthLevel, number> = { down: 0, attention: 1
 
 export function sortChannelHealth(items: ChannelHealthItem[]): ChannelHealthItem[] {
   return [...items].sort((a, b) => LEVEL_WEIGHT[a.level] - LEVEL_WEIGHT[b.level]);
+}
+
+// ── O selo da Central de Atendimento ────────────────────────────────────────
+/**
+ * 24/08/2026. Uma tarja vermelha ocupava **um terço** da tela de Atendimento do
+ * Sushi Cazza, com três parágrafos e duas citações literais da Meta
+ * ("Unsupported request - method type: get (code 100)"), enquanto a linha que o
+ * atendente precisava ler — *"1 sem resposta há +1080 min"* — estava espremida
+ * embaixo. O CEO mandou tirar o aviso dali.
+ *
+ * "Dali" não é "do sistema". Silenciar um alarme para resolver o problema troca
+ * um incômodo por uma cegueira, e a cegueira é pior: foi exatamente assim que o
+ * Instagram morreu 15 dias sem ninguém ver. Então o alarme **muda de lugar, não
+ * de existência**:
+ *
+ *   · Integrações (`/integracoes/instagram`) → inteiro: efeito, evidência
+ *     técnica literal e o botão Reconectar. É a tela de quem conserta conexão.
+ *   · Atendimento → **este selo**: uma linha, discreta, acionável. Diz o efeito
+ *     e o caminho. Nunca o motivo técnico.
+ *
+ * `ChannelSeal` é um tipo POBRE de propósito (não tem `detail`, não tem
+ * `headline`): a trava do parágrafo técnico é o compilador, não a boa intenção
+ * de quem editar a tela depois (guardrail 4).
+ */
+export interface ChannelSeal {
+  channel: "INSTAGRAM";
+  label: string;
+  level: ChannelHealthLevel;
+  /** UMA linha. O efeito, em português de gente. */
+  short: string;
+  action: string;
+  actionHref: string;
+}
+
+/** Acima disto não é mais selo, é parágrafo — e parágrafo já roubou a tela uma vez. */
+export const SEAL_MAX_CHARS = 90;
+
+/**
+ * O que NUNCA pode aparecer na tela de quem está atendendo cliente.
+ *
+ * Não é enfeite de teste: `sealShortText` aplica esta mesma lista em tempo de
+ * execução e troca o texto pelo seguro se algum dia algo escapar. Prompt é
+ * aviso; isto aqui é trava.
+ */
+export const PROVIDER_JARGON = [
+  /unsupported request/i,
+  /method type/i,
+  /code\s*\d{3}/i,
+  /\btoken\b/i,
+  /webhook/i,
+  /oauth/i,
+  /graph\.(instagram|facebook)\.com/i,
+  /long[- ]?lived/i,
+  /\bapi\b/i,
+  /\bhttp\s*\d{3}/i,
+  /\[alvo:/i,
+  /permission/i,
+  /instagram_business_/i,
+  /\b\d{10,}\b/, // ids numéricos da Meta (ex.: 27899980922965770)
+];
+
+export function containsProviderJargon(text: string): boolean {
+  return PROVIDER_JARGON.some((re) => re.test(text));
+}
+
+/** Texto de último recurso: sempre verdadeiro, sempre limpo, sempre curto. */
+const SAFE_SHORT: Record<ChannelHealthLevel, string> = {
+  down: "Instagram fora do ar — as mensagens não estão chegando.",
+  attention: "Instagram sem receber mensagens — confira a conexão.",
+  info: "Instagram só recebe: ainda não dá para responder por aqui.",
+};
+
+/**
+ * A trava. Se o texto tiver jargão de provedor ou passar do tamanho de selo,
+ * ele **não vai para a tela**: vai o texto seguro. Nada de confiar que quem
+ * editar o headline amanhã vai lembrar desta regra.
+ */
+export function sealShortText(level: ChannelHealthLevel, candidate: string): string {
+  const clean = candidate.trim();
+  if (!clean || clean.length > SEAL_MAX_CHARS || containsProviderJargon(clean)) return SAFE_SHORT[level];
+  return clean;
+}
+
+/**
+ * Projeção para a Central de Atendimento.
+ *
+ * REGRA DURA: se entra item, sai selo. Um canal fora do ar **não pode** sumir
+ * daqui — pode encolher, nunca desaparecer. É por isso que esta função não tem
+ * filtro nenhum: quem decide se há algo a dizer é `evaluateInstagramHealth`.
+ */
+export function toAtendimentoSeals(items: ChannelHealthItem[]): ChannelSeal[] {
+  return items.map((item) => ({
+    channel: item.channel,
+    label: item.label,
+    level: item.level,
+    short: sealShortText(item.level, SAFE_SHORT[item.level]),
+    action: item.action,
+    actionHref: item.actionHref,
+  }));
 }

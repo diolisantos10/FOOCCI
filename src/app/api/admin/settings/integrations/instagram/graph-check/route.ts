@@ -105,10 +105,14 @@ export async function GET(req: NextRequest) {
    * a Meta recusa por falta de permissão dizendo `Unsupported request`, que se lê como
    * endpoint errado. Gravadas na conexão desde 14/08; conexões anteriores não as têm.
    */
-  const grantedPermissions = Array.isArray(meta.grantedPermissions)
+  //
+  // AUSENTE ≠ VAZIO (corrigido em 24/08/2026). `null` aqui é "a Meta não reportou";
+  // `[]` é "a Meta reportou que não concedeu nada" — e só o segundo autoriza acusar.
+  const grantedPermissions: string[] | null = Array.isArray(meta.grantedPermissions)
     ? (meta.grantedPermissions as unknown[]).filter((s): s is string => typeof s === "string")
-    : [];
-  const missingPermissions = missingInstagramPermissions(grantedPermissions);
+    : null;
+  const permissionsReported = meta.permissionsReported === true || Array.isArray(meta.grantedPermissions);
+  const missingPermissions = missingInstagramPermissions(permissionsReported ? (grantedPermissions ?? []) : null);
 
   // 1) Token validity + account identity.
   const me = await graphGet(base, "me?fields=id,username,account_type,name", token);
@@ -151,6 +155,7 @@ export async function GET(req: NextRequest) {
     profileError,
     // Vazio pode significar "conexão anterior a 14/08", não "nenhuma permissão".
     grantedPermissions,
+    permissionsReported,
     missingPermissions,
     lastError: config.lastError,
     me: me.json,
