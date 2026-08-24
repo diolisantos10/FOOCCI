@@ -1,48 +1,51 @@
 # Arquitetura Operacional Foocci v1 — Leia primeiro
 
-**Status:** especificação canônica para construção  
-**Escopo desta entrega:** organização da empresa, Departamento de Vendas e Receita e Sala de Vendas omnicanal com WhatsApp, SDR IA e SDR humano.  
-**Branch de trabalho:** `claude/sala-de-vendas-levantamento`  
-**Documento de levantamento anterior:** `docs/sala-de-vendas-levantamento.md`
+**Status:** especificação canônica do projeto completo  
+**Escopo:** construir a infraestrutura operacional interna dos 9 departamentos do Foocci, com agentes humanos, IA e híbridos, hierarquia, ordens de serviço, projetos, tarefas, aprovações, decisões, handoffs e indicadores.  
+**Prioridade operacional inicial:** Vendas e Receita/Sala de Vendas, sem encerrar o programa nos limites desse departamento.  
+**Branch de planejamento:** `claude/sala-de-vendas-levantamento`
 
 ## Resultado esperado
 
-Construir dentro do admin atual do Foocci uma operação comercial em que leads de campanhas entrem no CRM, sejam atendidos no WhatsApp por IA e humanos na **mesma conversa**, avancem pelo funil e sejam entregues à implantação sem perda de contexto.
+Transformar o admin atual do Foocci no sistema operacional interno da empresa. A plataforma deve conectar estratégia, execução e controle dos nove departamentos, aproveitando módulos que já existem e construindo somente as lacunas.
 
-Este pacote substitui improvisos e deve ser lido por inteiro antes de alterar código:
+A Sala de Vendas faz parte do projeto inteiro e permanece a primeira entrega funcional por gerar receita. O projeto só estará concluído quando a fundação compartilhada e os módulos dos 9 departamentos estiverem implementados e integrados.
+
+## Ordem obrigatória de leitura
 
 1. `01-DEPARTAMENTOS-E-AGENTES.md`
-2. `02-VENDAS-E-RECEITA-SDR.md`
-3. `03-FUNIL-E-HANDOFFS.md`
-4. `04-SALA-DE-VENDAS-UX.md`
-5. `05-DADOS-APIS-E-PERMISSOES.md`
-6. `06-PLANO-DE-CONSTRUCAO.md`
-7. `07-TESTES-E-ACEITE.md`
-8. `08-COMANDO-PARA-O-ARQUITETO.md`
+2. `09-PLANO-MESTRE-DO-PROJETO-INTEIRO.md`
+3. `02-VENDAS-E-RECEITA-SDR.md`
+4. `03-FUNIL-E-HANDOFFS.md`
+5. `04-SALA-DE-VENDAS-UX.md`
+6. `05-DADOS-APIS-E-PERMISSOES.md`
+7. `06-PLANO-DE-CONSTRUCAO.md`
+8. `07-TESTES-E-ACEITE.md`
+9. `08-COMANDO-PARA-O-ARQUITETO.md`
 
 ## Princípios que não podem ser quebrados
 
-- Evoluir o CRM já existente; não criar outro produto ou repositório.
-- `SiteLead`, o funil e os serviços comerciais atuais continuam sendo a base.
-- Conversas comerciais não podem usar tabelas de conversas dos restaurantes.
-- O humano pode assumir a qualquer momento; a IA deve parar de enviar imediatamente.
-- O humano pode devolver explicitamente a conversa à IA.
-- Controle de acesso deve existir no servidor, não apenas no menu.
-- Mudanças de banco devem ser aditivas e migráveis, sem apagar dados.
-- Envio continua bloqueado enquanto `FOOCCI_SDR_SEND_ENABLED` estiver desligado.
-- Opt-out, consentimento, idempotência e segurança de contato são obrigatórios.
-- Nenhum segredo, token, telefone privado ou PII deve ser gravado em código/log.
-- Não ativar produção, não enviar mensagens reais, não submeter templates Meta e não fazer merge automático.
+- Evoluir o monólito/admin atual; não criar outro produto ou repositório.
+- Auditar o que já existe antes de criar cada módulo.
+- Uma capacidade existente deve ser reaproveitada ou adaptada, nunca duplicada.
+- A empresa possui 9 departamentos canônicos e hierarquia: CEO → Diretor Foocci → Gerente Geral → gerentes de departamento → agentes.
+- Agente é uma função com modo `AI`, `HUMAN` ou `HYBRID`; a IA não substitui autorização humana em decisões críticas.
+- Todos os departamentos usam a mesma fundação de pessoas, permissões, OS, projetos, tarefas, aprovações, decisões, handoffs, arquivos, comentários, notificações e auditoria.
+- Controle de acesso existe no servidor e por escopo departamental.
+- Mudanças de banco são aditivas e migráveis.
+- PII, tokens e segredos não entram em código, prompt persistido ou log.
+- Envio comercial continua bloqueado enquanto `FOOCCI_SDR_SEND_ENABLED` estiver desligado.
+- Não ativar produção, enviar WhatsApp real, cadastrar credenciais, submeter templates Meta, fazer deploy ou merge automático.
 
 ## O que já existe e deve ser reaproveitado
 
-- CRM em `src/app/admin/(area)/foocci-crm/`.
-- APIs em `src/app/api/admin/foocci-crm/`.
-- Funil macro `NOVO → CONTATADO → QUALIFICADO → PROPOSTA → FECHADO`, com `PERDIDO` fora da sequência.
-- `FoocciSalesInbound`, `FoocciSalesChannel`, `LeadContactSafety` e diário/entrevista SDR.
-- Padrão de handoff já usado no atendimento de clientes: IA atendendo, humano assumiu e devolver para IA.
-- Métricas honestas do CRM, inclusive ausência de taxa quando não há amostra mínima.
+- Foocci CRM e APIs administrativas.
+- Funil comercial macro e métricas.
+- Canal comercial, inbound, safety e artefatos SDR.
+- Atendimento de clientes com padrão IA/humano e handoff.
+- Agentes oficiais do produto: Waiter, CRM, WhatsApp e Analytics.
+- Estruturas atuais de produto, restaurantes, pedidos, pagamentos, integrações e analytics encontradas na auditoria.
 
-## Fora deste ciclo
+## Definição do programa
 
-Automatizar todos os departamentos, substituir atendimento de restaurantes, trocar o provedor oficial do WhatsApp, ativar cobrança ou implantar um ERP. Este ciclo cria a fundação organizacional e entrega o Departamento de Vendas e Receita operacional.
+O Arquiteto deve construir por fases e PRs independentes. “Projeto inteiro” significa que o comando cobre toda a arquitetura e todas as entregas; não significa fazer um big-bang inseguro em um único PR.
