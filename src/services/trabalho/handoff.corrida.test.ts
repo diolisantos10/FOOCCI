@@ -58,7 +58,7 @@ rodar("dois aceites simultâneos, um handoff", () => {
 
     for (let i = 0; i < 12; i++) {
       const u = await prisma.internalUser.create({
-        data: { email: `${marca}-${i}@foocci.test`, nome: `Pessoa ${i}`, role: "MEMBRO" },
+        data: { email: `${marca}-${i}@foocci.test`, nome: `Pessoa ${i}`, role: "AGENTE_HUMANO" },
       });
       pessoas.push(u.id);
     }

@@ -5471,27 +5471,44 @@ model RaioXFinding {
 
 /// Papel de quem trabalha NA Foocci — não confundir com `Role`, que é o papel
 /// de quem trabalha NO RESTAURANTE cliente.
+/// Os seis perfis oficiais da v3 (`05-RBAC-E-PERMISSOES.md`).
+///
+/// A v1 tinha sete, com outros nomes. O CEO fixou estes seis em 25/08/2026, e a
+/// migração mapeia cada valor antigo para o novo — nenhuma linha existente muda
+/// de sentido.
 enum InternalRole {
-  CEO
-  DIRETOR
-  GERENTE_GERAL
-  GERENTE
-  MEMBRO
-  VIEWER
+  /// O CEO. Acesso integral, em toda parte.
+  MASTER_CEO
+
+  /// Acesso integral à operação Foocci.
+  DIRETOR_FOOCCI
+
+  /// Um por departamento. Enxerga o próprio departamento: equipe, backlog,
+  /// indicadores e delegações — e nada dos outros.
+  GERENTE_DEPARTAMENTO
+
+  /// Pessoa que executa. Enxerga só as ferramentas e os dados da função dela.
+  /// O SDR humano é este perfil: Sala de Vendas e nada mais do Admin.
+  AGENTE_HUMANO
 
   /// Ator técnico. NUNCA é uma credencial humana e nunca faz login interativo —
   /// existe para que uma ação executada por IA tenha autor na trilha em vez de
   /// aparecer como "sistema", que não responde por nada.
-  SYSTEM_AI
+  AGENTE_IA
+
+  /// Lê, audita, avalia e registra não conformidade. Não corrige o que auditou.
+  AUDITOR_QA
 }
 
 /// Altura na hierarquia. Separada de `InternalRole` porque cargo e papel não são
 /// a mesma coisa: uma pessoa pode ocupar o cargo de Gerente de Vendas e ter
 /// papel CEO enquanto a empresa é pequena.
+/// Níveis do organograma. Sem `GERENTE_GERAL`: o Diretor da Foocci já ocupa
+/// essa camada, e o cargo criaria um degrau a mais sem ninguém para ocupá-lo
+/// (regra 10 da hierarquia v3).
 enum PositionLevel {
   CEO
   DIRETOR
-  GERENTE_GERAL
   GERENTE
   OPERACAO
 }
@@ -5584,7 +5601,7 @@ model InternalUser {
   /// bcrypt, como o resto da casa (`src/lib/auth.ts`). Nulo = não faz login.
   passwordHash String?
 
-  role       InternalRole @default(MEMBRO)
+  role       InternalRole @default(AGENTE_HUMANO)
   positionId String?
 
   isActive    Boolean   @default(true)

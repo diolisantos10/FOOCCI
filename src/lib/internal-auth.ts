@@ -175,7 +175,7 @@ export function lerSessaoInternaDaRequest(req: NextRequest): SessaoInterna | nul
  * três com a MESMA resposta. Distinguir "esse email não existe" de "a senha
  * está errada" entrega a lista de quem trabalha aqui a quem estiver testando.
  *
- * `SYSTEM_AI` nunca entra por aqui, mesmo com hash gravado: é ator técnico, e
+ * `AGENTE_IA` nunca entra por aqui, mesmo com hash gravado: é ator técnico, e
  * ator técnico que faz login vira credencial de gente.
  */
 export async function autenticarInterno(
@@ -191,7 +191,7 @@ export async function autenticarInterno(
   });
 
   if (!user || !user.isActive || !user.passwordHash) return null;
-  if (user.role === "SYSTEM_AI") return null;
+  if (user.role === "AGENTE_IA") return null;
   if (!(await compare(senha, user.passwordHash))) return null;
 
   return {
@@ -214,9 +214,8 @@ export async function autenticarInterno(
  * revisável, não um efeito colateral de alguém ganhar um papel novo.
  */
 const PAPEIS_GLOBAIS: ReadonlySet<InternalRole> = new Set<InternalRole>([
-  "CEO",
-  "DIRETOR",
-  "GERENTE_GERAL",
+  "MASTER_CEO",
+  "DIRETOR_FOOCCI",
 ]);
 
 export function enxergaTudo(s: SessaoInterna): boolean {
@@ -237,6 +236,46 @@ export function podeLerDepartamento(s: SessaoInterna, slug: string): boolean {
  */
 export function podeAdministrarDepartamento(s: SessaoInterna, slug: string): boolean {
   return enxergaTudo(s) || s.gerencia.includes(slug);
+}
+
+/**
+ * Quem pode circular pelo Admin fora do próprio escopo.
+ *
+ * ── POR QUE ISTO É UMA FUNÇÃO E NÃO UM `if` espalhado por rota ──
+ *
+ * O critério 6 do CEO é curto e duro: *"SDR humano visualiza somente a Sala de
+ * Vendas autorizada"*. A tentação é resolver escondendo item de menu — e menu
+ * escondido não é autorização: basta digitar a URL.
+ *
+ * Uma lista fechada, num lugar só, faz o alcance crescer por linha de código
+ * revisável em vez de por descuido. Se amanhã alguém quiser dar Admin geral ao
+ * `AGENTE_HUMANO`, tem que vir aqui e explicar por quê no diff.
+ *
+ * `AUDITOR_QA` fica de fora de propósito: ele lê muito, mas o que ele lê é a
+ * trilha e as conversas que audita — não o Admin inteiro.
+ */
+const PAPEIS_DE_ADMIN_GERAL: ReadonlySet<InternalRole> = new Set<InternalRole>([
+  "MASTER_CEO",
+  "DIRETOR_FOOCCI",
+]);
+
+export function podeVerAdminGeral(s: SessaoInterna): boolean {
+  return PAPEIS_DE_ADMIN_GERAL.has(s.role);
+}
+
+/**
+ * O escopo de departamentos de uma sessão, pronto para virar filtro de consulta.
+ *
+ * `"tudo"` para quem enxerga a empresa inteira; a lista de departamentos para os
+ * demais.
+ *
+ * Existe para que o filtro entre na CONSULTA ao banco, e não só na rota. A rota
+ * protege o endereço; a consulta protege o dado. Basta um parâmetro esquecido
+ * para a consulta devolver a base inteira e a tela mostrar tudo — que é o
+ * defeito clássico de RBAC que só vive na porta.
+ */
+export function escopoDeDepartamentos(s: SessaoInterna): "tudo" | string[] {
+  return enxergaTudo(s) ? "tudo" : [...s.departamentos];
 }
 
 export type ResultadoDeAutorizacao =

@@ -11,7 +11,7 @@ import { criarCookieInterno, type SessaoInterna } from "./internal-auth";
 const SESSAO: SessaoInterna = {
   userId: "u1",
   nome: "Fulano",
-  role: "MEMBRO",
+  role: "AGENTE_HUMANO",
   departamentos: [],
   gerencia: [],
 };

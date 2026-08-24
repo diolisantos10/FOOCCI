@@ -60,7 +60,7 @@ rodar("login interno contra banco real", () => {
     });
 
     const user = await prisma.internalUser.create({
-      data: { email, nome: "Vitest", role: "GERENTE", passwordHash: await hash(senha, 10) },
+      data: { email, nome: "Vitest", role: "GERENTE_DEPARTAMENTO", passwordHash: await hash(senha, 10) },
     });
 
     await prisma.departmentMembership.create({
@@ -78,7 +78,7 @@ rodar("login interno contra banco real", () => {
   it("senha certa entra, e a sessão carrega o escopo departamental", async () => {
     const s = await autenticarInterno(email, senha);
     expect(s).not.toBeNull();
-    expect(s!.role).toBe("GERENTE");
+    expect(s!.role).toBe("GERENTE_DEPARTAMENTO");
     expect(s!.departamentos).toEqual(["vendas"]);
     expect(s!.gerencia).toEqual(["vendas"]);
   });
@@ -99,12 +99,12 @@ rodar("login interno contra banco real", () => {
     await prisma.internalUser.update({ where: { email }, data: { isActive: true } });
   });
 
-  it("SYSTEM_AI não faz login nem com hash gravado", async () => {
+  it("AGENTE_IA não faz login nem com hash gravado", async () => {
     // O ator técnico existe para dar autor a uma ação de IA na trilha. Se ele
     // entrasse com senha, viraria credencial de gente.
-    await prisma.internalUser.update({ where: { email }, data: { role: "SYSTEM_AI" } });
+    await prisma.internalUser.update({ where: { email }, data: { role: "AGENTE_IA" } });
     expect(await autenticarInterno(email, senha)).toBeNull();
-    await prisma.internalUser.update({ where: { email }, data: { role: "GERENTE" } });
+    await prisma.internalUser.update({ where: { email }, data: { role: "GERENTE_DEPARTAMENTO" } });
   });
 
   it("email é normalizado — maiúscula e espaço não trancam ninguém para fora", async () => {

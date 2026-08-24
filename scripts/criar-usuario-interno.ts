@@ -2,7 +2,7 @@
  * Cria uma pessoa da Foocci, com senha.
  *
  *   npx tsx scripts/criar-usuario-interno.ts \
- *     --email dioli@foocci.com --nome "Dioli" --papel CEO --cargo ceo
+ *     --email dioli@foocci.com --nome "Dioli" --papel MASTER_CEO --cargo ceo
  *
  * Opcional: `--departamentos vendas,marketing` e `--gerencia vendas`.
  *
@@ -12,7 +12,7 @@
  * estiver na mesma máquina. Este script SORTEIA a senha, imprime uma vez e não
  * guarda em lugar nenhum — quem criou anota e troca depois.
  *
- * O `--papel SYSTEM_AI` é aceito e cria a ficha SEM senha, de propósito: ator
+ * O `--papel AGENTE_IA` é aceito e cria a ficha SEM senha, de propósito: ator
  * técnico não faz login, e `autenticarInterno` recusa esse papel mesmo que
  * alguém grave um hash nele mais tarde.
  */
@@ -29,19 +29,18 @@ function arg(nome: string): string | undefined {
 }
 
 const PAPEIS: readonly InternalRole[] = [
-  "CEO",
-  "DIRETOR",
-  "GERENTE_GERAL",
-  "GERENTE",
-  "MEMBRO",
-  "VIEWER",
-  "SYSTEM_AI",
+  "MASTER_CEO",
+  "DIRETOR_FOOCCI",
+  "GERENTE_DEPARTAMENTO",
+  "AGENTE_HUMANO",
+  "AGENTE_IA",
+  "AUDITOR_QA",
 ];
 
 async function main() {
   const email = arg("email")?.trim().toLowerCase();
   const nome = arg("nome")?.trim();
-  const papel = (arg("papel") ?? "MEMBRO") as InternalRole;
+  const papel = (arg("papel") ?? "AGENTE_HUMANO") as InternalRole;
   const cargoSlug = arg("cargo");
   const deps = (arg("departamentos") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const gerencia = (arg("gerencia") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -72,7 +71,7 @@ async function main() {
     process.exit(2);
   }
 
-  const senha = papel === "SYSTEM_AI" ? null : randomBytes(9).toString("base64url");
+  const senha = papel === "AGENTE_IA" ? null : randomBytes(9).toString("base64url");
   const passwordHash = senha ? await hash(senha, 10) : null;
 
   const user = await prisma.internalUser.upsert({
@@ -118,7 +117,7 @@ async function main() {
   if (senha) {
     console.log(`\n  SENHA (aparece uma vez só): ${senha}\n`);
   } else {
-    console.log("\n  Sem senha — SYSTEM_AI não faz login interativo.\n");
+    console.log("\n  Sem senha — AGENTE_IA não faz login interativo.\n");
   }
 }
 
