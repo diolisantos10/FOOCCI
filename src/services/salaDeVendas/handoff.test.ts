@@ -13,6 +13,9 @@ import {
   registrarHandoff,
   aceitarHandoff,
   esperaPorGente,
+  passarParaGente,
+  devolverParaIAComDossie,
+  fecharHandoffAbertoDoLead,
   REGRA_PADRAO,
 } from "./handoff";
 
@@ -269,5 +272,230 @@ describe("a espera por gente", () => {
     );
 
     expect(r).toEqual({ medido: true, handoffsAbertos: 2, maiorEsperaMin: 30 });
+  });
+});
+
+/**
+ * ── AS TRÊS QUE JUNTAM AS DUAS METADES ──────────────────────────────────────
+ *
+ * Antes destas funções a rota chamava só `responsavel.ts`: o dono do lead
+ * trocava e `lead_handoffs` nunca recebia uma linha. Nada dava erro — os
+ * indicadores de "taxa e motivo de handoff" simplesmente respondiam sobre uma
+ * tabela vazia, e uma tabela vazia parece um dia calmo.
+ *
+ * Por isso os testes abaixo insistem tanto na ORDEM e nos casos de recusa: o
+ * defeito que eles guardam não é uma exceção, é um silêncio.
+ */
+describe("passar o lead para gente, com dossiê e gatilho", () => {
+  function banco(over: Record<string, unknown> = {}) {
+    return {
+      siteLead: {
+        findUnique: vi.fn().mockResolvedValue({
+          atendidoPor: "IA", score: 72, stage: "EM_QUALIFICACAO", ...over,
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
+      leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h1" }) },
+    };
+  }
+
+  const DOSSIE = { resumo: "pizzaria, 2 unidades, quer parar de pagar comissão" };
+
+  it("passa, troca o dono e GRAVA o registro", async () => {
+    const db = banco();
+    const r = await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "pediu para falar com uma pessoa",
+      dossie: DOSSIE,
+      motivoExplicito: "PEDIU_HUMANO",
+      agora: AGORA,
+    });
+
+    expect(r).toEqual({ ok: true, leadId: "l1", handoffId: "h1", motivo: "PEDIU_HUMANO" });
+    expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem resumo, NÃO troca o dono — a recusa vem antes da escrita", async () => {
+    // O teste mais importante deste bloco. Recusar depois de já ter trocado
+    // deixaria o lead esperando gente sem nenhum registro do porquê — que é
+    // exatamente o estado que esta seção existe para impedir.
+    const db = banco();
+    const r = await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "pediu gente",
+      dossie: {},
+      motivoExplicito: "PEDIU_HUMANO",
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.causa === "dossieIncompleto") {
+      expect(r.recusas.map((x) => x.campo)).toContain("resumo");
+    }
+    expect(db.siteLead.updateMany).not.toHaveBeenCalled();
+    expect(db.leadHandoff.create).not.toHaveBeenCalled();
+  });
+
+  it("o dono troca ANTES de o registro ser gravado", async () => {
+    const db = banco();
+    await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "pediu gente",
+      dossie: DOSSIE,
+      motivoExplicito: "PEDIU_HUMANO",
+    });
+
+    expect(db.siteLead.updateMany.mock.invocationCallOrder[0]!).toBeLessThan(
+      db.leadHandoff.create.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("o dossiê congela o score e a etapa DAQUELE momento", async () => {
+    // Sem isso a auditoria julgaria a decisão de quem pegou o lead com
+    // informação que ele não tinha.
+    const db = banco();
+    await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "pediu gente",
+      dossie: DOSSIE,
+      motivoExplicito: "PEDIU_HUMANO",
+    });
+
+    const data = db.leadHandoff.create.mock.calls[0]![0].data;
+    expect(data.scoreNoMomento).toBe(72);
+    expect(data.etapaNoMomento).toBe("EM_QUALIFICACAO");
+  });
+
+  it("sem gatilho e sem motivo explícito, recusa", async () => {
+    const db = banco();
+    const r = await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "sei lá",
+      dossie: DOSSIE,
+      sinais: {}, // conversa tranquila: nada dispara
+    });
+
+    expect(r).toEqual({ ok: false, causa: "semGatilho" });
+    expect(db.siteLead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("os sinais escolhem o gatilho, e o primeiro da ordem vence", async () => {
+    const db = banco();
+    const r = await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "quer desconto",
+      dossie: DOSSIE,
+      // Os dois disparam; "pediu desconto" explica a conversa, "score" não.
+      sinais: { pediuDesconto: true, score: 90 },
+    });
+
+    expect(r.ok && r.motivo).toBe("PEDIU_DESCONTO");
+  });
+
+  it("se o lead já não era da IA, nada é gravado", async () => {
+    const db = banco();
+    db.siteLead.updateMany.mockResolvedValueOnce({ count: 0 });
+    db.siteLead.findUnique.mockResolvedValueOnce({
+      atendidoPor: "IA", score: 10, stage: "NOVO",
+    });
+    db.siteLead.findUnique.mockResolvedValueOnce({ atendidoPor: "HUMANO" });
+
+    const r = await passarParaGente(db as never, {
+      leadId: "l1",
+      motivoEscrito: "pediu gente",
+      dossie: DOSSIE,
+      motivoExplicito: "PEDIU_HUMANO",
+    });
+
+    expect(r.ok).toBe(false);
+    expect(db.leadHandoff.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("devolver para a IA também vira registro", () => {
+  function banco() {
+    return {
+      siteLead: {
+        findUnique: vi.fn().mockResolvedValue({ score: 55, stage: "QUALIFICADO" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
+      leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h2" }) },
+    };
+  }
+
+  it("grava com motivo DEVOLUCAO_PARA_IA", async () => {
+    // Sem esta linha, `lead_handoffs` contaria só as saídas da IA — e a razão
+    // entre "quantas vezes largou" e "quantas voltaram" ficaria sem denominador.
+    const db = banco();
+    const r = await devolverParaIAComDossie(db as never, {
+      leadId: "l1",
+      userId: "u1",
+      objetivo: "confirmar o horário da demonstração",
+      agora: AGORA,
+    });
+
+    expect(r).toEqual({ ok: true, leadId: "l1", handoffId: "h2" });
+    const data = db.leadHandoff.create.mock.calls[0]![0].data;
+    expect(data.motivo).toBe("DEVOLUCAO_PARA_IA");
+    expect(data.de).toBe("HUMANO");
+    expect(data.para).toBe("IA");
+  });
+
+  it("sem objetivo, não devolve nem grava", async () => {
+    const db = banco();
+    const r = await devolverParaIAComDossie(db as never, {
+      leadId: "l1",
+      userId: "u1",
+      objetivo: "   ",
+    });
+
+    expect(r.ok).toBe(false);
+    expect(db.siteLead.updateMany).not.toHaveBeenCalled();
+    expect(db.leadHandoff.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("fechar o handoff de quem foi assumido pela fila", () => {
+  function banco(aberto: unknown) {
+    return {
+      leadHandoff: {
+        findFirst: vi.fn().mockResolvedValue(aberto),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+  }
+
+  it("fecha o mais antigo e devolve quanto tempo esperou", async () => {
+    const db = banco({ id: "h1", createdAt: new Date("2026-08-25T11:15:00Z") });
+    const r = await fecharHandoffAbertoDoLead(db as never, {
+      leadId: "l1", userId: "u1", agora: AGORA,
+    });
+
+    expect(r).toEqual({ fechou: true, handoffId: "h1", esperaMin: 45 });
+    // O mais ANTIGO: fechar o mais novo deixaria o veterano aberto para sempre,
+    // inflando a espera do painel com um registro que já foi atendido.
+    expect(db.leadHandoff.findFirst.mock.calls[0]![0].orderBy).toEqual({ createdAt: "asc" });
+  });
+
+  it("lead sem handoff aberto NÃO é erro", async () => {
+    // É o caminho mais comum de todos: lead em `NINGUEM`, que nunca passou pela
+    // IA. Tratar como falha faria a tela mostrar erro no clique normal.
+    const db = banco(null);
+    const r = await fecharHandoffAbertoDoLead(db as never, { leadId: "l1", userId: "u1" });
+
+    expect(r).toEqual({ fechou: false, handoffId: null, esperaMin: null });
+    expect(db.leadHandoff.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("perder a corrida do fechamento não inventa espera", async () => {
+    const db = banco({ id: "h1", createdAt: new Date("2026-08-25T11:15:00Z") });
+    db.leadHandoff.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const r = await fecharHandoffAbertoDoLead(db as never, {
+      leadId: "l1", userId: "u1", agora: AGORA,
+    });
+
+    expect(r).toEqual({ fechou: false, handoffId: "h1", esperaMin: null });
   });
 });

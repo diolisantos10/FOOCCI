@@ -26,7 +26,7 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { MotivoDoHandoff, SiteLeadStage, LeadAtendidoPor } from "@prisma/client";
-import { assumirComoHumano } from "./responsavel";
+import { assumirComoHumano, devolverParaIA, pedirHumano } from "./responsavel";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -305,6 +305,252 @@ export async function aceitarHandoff(
   // Corrida rara: o lead é nosso, mas outro registro de aceite venceu. O lead
   // ficou com quem chamou — e é isso que a tela precisa dizer.
   return { ok: false, causa: "jaAceito", porUserId: null };
+}
+
+// ── AS TRÊS QUE JUNTAM AS DUAS METADES ───────────────────────────────────────
+//
+// ── O DEFEITO QUE ESTA SEÇÃO FECHA ──────────────────────────────────────────
+//
+// Até aqui existiam duas metades que nunca se encontravam. `responsavel.ts`
+// trocava o dono do lead, atomicamente, e era o que a rota chamava.
+// `handoff.ts` tinha os onze gatilhos, o dossiê congelado e a tabela
+// `lead_handoffs` — e **nenhuma rota o chamava**.
+//
+// O efeito prático: toda passagem de bastão da Sala trocava o dono e não
+// gravava registro nenhum. `lead_handoffs` ficava vazia para sempre, e os
+// indicadores que leem dela — "taxa e motivo de handoff", que é o que as
+// fichas 1.4 e 1.5 declaram como a própria medida — respondiam sobre uma
+// tabela sem linhas. Não davam erro: davam silêncio, que é pior.
+//
+// ── A ORDEM, E POR QUE ELA É ASSIM ──────────────────────────────────────────
+//
+//   1. **Validar o dossiê ANTES de mexer no dono.** `validarDossie` é pura, e
+//      recusar depois de já ter trocado o responsável deixaria o lead em
+//      `AGUARDANDO_HUMANO` sem registro — exatamente o estado que esta seção
+//      existe para impedir.
+//   2. **Trocar o dono** (escrita condicional, `responsavel.ts`).
+//   3. **Só então gravar o handoff.** Uma falha ao gravar o registro nunca
+//      desfaz uma troca de mão que já valeu — e um lead com dono e sem registro
+//      é recuperável; um registro sem dono não é.
+
+export type ResultadoDePassar =
+  | { ok: true; leadId: string; handoffId: string; motivo: MotivoDoHandoff }
+  | { ok: false; causa: "semGatilho" }
+  | { ok: false; causa: "dossieIncompleto"; recusas: RecusaDoDossie[] }
+  | { ok: false; causa: "semMotivo" }
+  | { ok: false; causa: "naoExiste" }
+  | { ok: false; causa: "naoEraDaIA"; atendidoPor: LeadAtendidoPor }
+  /** O dono trocou, mas o registro não foi gravado. Estado recuperável. */
+  | { ok: false; causa: "trocouSemRegistrar"; leadId: string };
+
+/**
+ * A IA para e chama gente — com gatilho nomeado e dossiê junto.
+ *
+ * Substitui a chamada crua a `pedirHumano` na rota. A diferença que importa não
+ * é de código: é que a partir daqui **existe registro** de por que a IA largou,
+ * e o motivo é um dos onze do catálogo em vez de texto livre que ninguém agrupa.
+ *
+ * `motivoExplicito` existe para o caso em que quem chama já sabe o motivo (o
+ * lead escreveu "quero falar com uma pessoa") e não precisa de inferência. Sem
+ * gatilho e sem motivo explícito a função **recusa** — passar o lead adiante sem
+ * saber por quê é o que transforma a estatística de motivo em decoração.
+ */
+export async function passarParaGente(
+  db: Cliente,
+  params: {
+    leadId: string;
+    /** Texto livre que vai para o lead, para quem pegar a fila ler primeiro. */
+    motivoEscrito: string;
+    dossie: Dossie;
+    sinais?: SinaisDaConversa;
+    motivoExplicito?: MotivoDoHandoff;
+    regra?: RegraDeHandoff;
+    deUserId?: string | null;
+    agora?: Date;
+  },
+): Promise<ResultadoDePassar> {
+  const agora = params.agora ?? new Date();
+
+  if (!params.motivoEscrito?.trim()) return { ok: false, causa: "semMotivo" };
+
+  const disparados = params.sinais
+    ? gatilhosQueDispararam(params.sinais, params.regra)
+    : [];
+  const motivo = params.motivoExplicito ?? disparados[0];
+  if (!motivo) return { ok: false, causa: "semGatilho" };
+
+  // Lido ANTES, e só para o registro dizer de onde veio. A garantia de corrida
+  // continua sendo a condição dentro do `updateMany` de `pedirHumano`: se o
+  // estado mudar entre esta leitura e a escrita, a escrita é que recusa. O pior
+  // caso desta leitura é gravar `IA` onde era `NINGUEM` — os dois estão na lista
+  // permitida, e nenhum decide nada.
+  const antes = await db.siteLead.findUnique({
+    where: { id: params.leadId },
+    select: { atendidoPor: true, score: true, stage: true },
+  });
+  if (!antes) return { ok: false, causa: "naoExiste" };
+
+  const dossie: Dossie = {
+    ...params.dossie,
+    // O dossiê é uma fotografia. Score e etapa entram AQUI, do estado atual, e
+    // não são relidos na hora de exibir — senão a auditoria julgaria a decisão
+    // de quem pegou o lead com informação que ele não tinha.
+    scoreNoMomento: params.dossie.scoreNoMomento ?? antes.score,
+    etapaNoMomento: params.dossie.etapaNoMomento ?? antes.stage,
+  };
+
+  const recusas = validarDossie({
+    de: antes.atendidoPor,
+    para: "AGUARDANDO_HUMANO",
+    motivo,
+    dossie,
+  });
+  if (recusas.length) return { ok: false, causa: "dossieIncompleto", recusas };
+
+  const trocou = await pedirHumano(db, {
+    leadId: params.leadId,
+    motivo: params.motivoEscrito,
+    agora,
+  });
+
+  if (!trocou.ok) {
+    if (trocou.causa === "naoExiste") return { ok: false, causa: "naoExiste" };
+    if (trocou.causa === "semMotivo") return { ok: false, causa: "semMotivo" };
+    return { ok: false, causa: "naoEraDaIA", atendidoPor: trocou.atendidoPor };
+  }
+
+  const registrado = await registrarHandoff(db, {
+    leadId: params.leadId,
+    de: antes.atendidoPor,
+    para: "AGUARDANDO_HUMANO",
+    motivo,
+    dossie,
+    deUserId: params.deUserId ?? null,
+    agora,
+  });
+
+  // O dossiê já passou por `validarDossie` acima, então esta recusa é
+  // inalcançável hoje. O ramo existe porque o dono JÁ trocou: transformar isto
+  // num `throw` apagaria a informação de que a troca valeu.
+  if (!registrado.ok) return { ok: false, causa: "trocouSemRegistrar", leadId: params.leadId };
+
+  return { ok: true, leadId: params.leadId, handoffId: registrado.handoffId, motivo };
+}
+
+export type ResultadoDeDevolverComDossie =
+  | { ok: true; leadId: string; handoffId: string }
+  | { ok: false; causa: "dossieIncompleto"; recusas: RecusaDoDossie[] }
+  | { ok: false; causa: "semObjetivo" }
+  | { ok: false; causa: "naoExiste" }
+  | { ok: false; causa: "naoEraSeu"; atendenteUserId: string | null }
+  | { ok: false; causa: "trocouSemRegistrar"; leadId: string };
+
+/**
+ * O caminho inverso: a pessoa devolve o lead para a IA.
+ *
+ * Também vira linha em `lead_handoffs`, com motivo `DEVOLUCAO_PARA_IA`. Sem
+ * isso, a tabela contaria só as saídas da IA e a razão entre "quantas vezes a
+ * IA largou" e "quantas voltaram" — que é o número que diz se o handoff está
+ * sendo usado como ferramenta ou como fuga — não teria denominador.
+ */
+export async function devolverParaIAComDossie(
+  db: Cliente,
+  params: { leadId: string; userId: string; objetivo: string; dossie?: Dossie; agora?: Date },
+): Promise<ResultadoDeDevolverComDossie> {
+  const agora = params.agora ?? new Date();
+
+  const dossie: Dossie = { ...params.dossie, objetivo: params.objetivo };
+
+  const recusas = validarDossie({
+    de: "HUMANO",
+    para: "IA",
+    motivo: "DEVOLUCAO_PARA_IA",
+    dossie,
+  });
+  if (recusas.length) return { ok: false, causa: "dossieIncompleto", recusas };
+
+  const antes = await db.siteLead.findUnique({
+    where: { id: params.leadId },
+    select: { score: true, stage: true },
+  });
+  if (!antes) return { ok: false, causa: "naoExiste" };
+
+  const trocou = await devolverParaIA(db, {
+    leadId: params.leadId,
+    userId: params.userId,
+    objetivo: params.objetivo,
+    agora,
+  });
+
+  if (!trocou.ok) {
+    if (trocou.causa === "naoExiste") return { ok: false, causa: "naoExiste" };
+    if (trocou.causa === "semObjetivo") return { ok: false, causa: "semObjetivo" };
+    return { ok: false, causa: "naoEraSeu", atendenteUserId: trocou.atendenteUserId };
+  }
+
+  const registrado = await registrarHandoff(db, {
+    leadId: params.leadId,
+    de: "HUMANO",
+    para: "IA",
+    motivo: "DEVOLUCAO_PARA_IA",
+    dossie: {
+      ...dossie,
+      scoreNoMomento: dossie.scoreNoMomento ?? antes.score,
+      etapaNoMomento: dossie.etapaNoMomento ?? antes.stage,
+    },
+    deUserId: params.userId,
+    agora,
+  });
+
+  if (!registrado.ok) return { ok: false, causa: "trocouSemRegistrar", leadId: params.leadId };
+
+  return { ok: true, leadId: params.leadId, handoffId: registrado.handoffId };
+}
+
+/**
+ * Fecha o handoff aberto de um lead que acabou de ser assumido.
+ *
+ * O SDR assume pela FILA, não por um id de handoff — ele vê "3 esperando gente"
+ * e clica. `aceitarHandoff` exige o id e serve ao caminho em que ele já é
+ * conhecido; esta serve ao caminho real da tela.
+ *
+ * **Não achar handoff aberto não é erro.** Um lead em `NINGUEM`, que nunca
+ * passou pela IA, nunca gerou registro — e assumi-lo é normal. Tratar isso como
+ * falha faria a tela mostrar erro no caminho mais comum de todos.
+ */
+export async function fecharHandoffAbertoDoLead(
+  db: Cliente,
+  params: { leadId: string; userId: string; agora?: Date },
+): Promise<{ fechou: boolean; handoffId: string | null; esperaMin: number | null }> {
+  const agora = params.agora ?? new Date();
+
+  const aberto = await db.leadHandoff.findFirst({
+    where: {
+      leadId: params.leadId,
+      aceitoEm: null,
+      para: { in: ["HUMANO", "AGUARDANDO_HUMANO"] },
+    },
+    // O mais ANTIGO: é ele que está contando tempo na fila. Fechar o mais novo
+    // deixaria o veterano aberto para sempre, inflando a espera do painel com um
+    // registro que já foi atendido.
+    orderBy: { createdAt: "asc" },
+    select: { id: true, createdAt: true },
+  });
+
+  if (!aberto) return { fechou: false, handoffId: null, esperaMin: null };
+
+  const marcados = await db.leadHandoff.updateMany({
+    where: { id: aberto.id, aceitoEm: null },
+    data: { aceitoEm: agora, paraUserId: params.userId },
+  });
+
+  if (marcados.count !== 1) return { fechou: false, handoffId: aberto.id, esperaMin: null };
+
+  return {
+    fechou: true,
+    handoffId: aberto.id,
+    esperaMin: Math.floor((agora.getTime() - aberto.createdAt.getTime()) / 60_000),
+  };
 }
 
 // ── Espera por gente ─────────────────────────────────────────────────────────

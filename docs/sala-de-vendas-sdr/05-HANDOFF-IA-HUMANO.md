@@ -65,6 +65,45 @@ Duas escritas condicionais, **nesta ordem**:
 Marcar o handoff primeiro criaria o estado mais confuso possível: o registro diz
 que Fulano pegou, e o lead está com outra pessoa.
 
+## Como a rota chama isto — e o buraco que existia até 25/08
+
+Por uma rodada inteira, `POST /api/admin/sala-de-vendas/responsavel` chamou
+**somente** `responsavel.ts`: o dono do lead trocava e `lead_handoffs` não
+recebia linha nenhuma.
+
+Nada quebrava. `esperaPorGente` respondia "nenhum aberto", o painel mostrava a
+fila vazia, e "taxa e motivo de handoff" — que as fichas 1.4 e 1.5 declaram como
+a **própria medida do agente** — respondia sobre uma tabela sem registros. Uma
+tabela vazia parece um dia calmo, e é assim que um indicador morre sem ninguém
+notar.
+
+Hoje a rota chama três orquestradores de `handoff.ts`, e cada um faz as duas
+metades na ordem certa:
+
+| Ação da rota | Função | O que grava |
+|---|---|---|
+| `pedirHumano` | `passarParaGente` | motivo do catálogo + dossiê congelado |
+| `devolver` | `devolverParaIAComDossie` | `DEVOLUCAO_PARA_IA` + objetivo |
+| `assumir` | `fecharHandoffAbertoDoLead` | fecha o handoff mais antigo em aberto |
+
+**A ordem, e por que ela é assim:**
+
+1. **Validar o dossiê ANTES de mexer no dono.** `validarDossie` é pura. Recusar
+   depois de já ter trocado deixaria o lead em `AGUARDANDO_HUMANO` sem registro
+   — exatamente o estado que este arquivo existe para impedir.
+2. **Trocar o dono** (escrita condicional).
+3. **Só então gravar.** Uma falha ao gravar nunca desfaz uma troca de mão que já
+   valeu: lead com dono e sem registro é recuperável; registro sem dono não é.
+
+Quando (3) falha, a rota devolve **200 com aviso**, e não erro. O lead trocou de
+mão de verdade — dizer "falhou" faria a pessoa tentar de novo e ouvir "este lead
+não está com você".
+
+`assumir` fecha **o handoff mais antigo** em aberto. Fechar o mais novo deixaria
+o veterano aberto para sempre, inflando a espera do painel com um registro que já
+foi atendido. E não achar handoff aberto **não é erro**: lead em `NINGUEM`, que
+nunca passou pela IA, nunca gerou um — é o caminho mais comum de todos.
+
 ## A espera por gente
 
 `esperaPorGente` devolve **"não medido"** quando não há handoff aberto — e não
