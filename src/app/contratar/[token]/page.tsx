@@ -10,6 +10,7 @@ import { notFound } from "next/navigation";
 import { PlanSubscriptionService, CYCLE_MONTHS } from "@/services/billing/PlanSubscriptionService";
 import { TERMS_SECTIONS, TERMS_VERSION } from "@/lib/billing/terms";
 import { AcceptClient } from "./AcceptClient";
+import { FoocciWordmark } from "@/components/brand/FoocciWordmark";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,8 @@ export default async function ContratarPage({ params }: { params: { token: strin
     <main className="min-h-screen bg-canvas px-4 py-10">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 text-center">
-          <div className="text-2xl font-semibold tracking-tight">
-            f<span className="text-brand-500">oo</span>cci
+          <div className="flex justify-center">
+            <FoocciWordmark className="h-7 w-auto" />
           </div>
           <h1 className="mt-4 text-xl font-semibold text-ink">Contratação do plano</h1>
           <p className="mt-1 text-sm text-ink2">

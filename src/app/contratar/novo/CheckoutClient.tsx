@@ -58,6 +58,7 @@ import {
   SITE_PLAN_TO_CODE,
 } from "@/lib/billing/pricing";
 import { suggestSlug, validateSlugShape } from "@/lib/billing/checkout-slug";
+import { PRECOS_URL } from "@/components/marketing/config";
 
 type SlugState =
   | { kind: "idle" }
@@ -292,6 +293,26 @@ export function CheckoutClient({
       {/* ── 1. Plano e ciclo ─────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <h2 className="text-base font-semibold text-ink">1. Seu plano</h2>
+
+        {/*
+          A SAÍDA PARA QUEM AINDA ESTÁ EM DÚVIDA (pedido do CEO, 24/08/2026).
+          Aqui os três planos aparecem um de cada vez — o preço muda conforme a
+          escolha. Quem quer COMPARAR os três lado a lado precisava adivinhar que
+          isso mora noutra página.
+
+          Abre em nova aba de propósito: o que já foi digitado neste formulário
+          vive no navegador e some se a pessoa sair da página. Mandar comparar
+          preço e, de brinde, apagar o cadastro dela seria pior que não oferecer
+          a comparação.
+        */}
+        <a
+          href={PRECOS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1.5 inline-flex items-center gap-1 rounded-md text-sm font-semibold text-brand-600 underline decoration-brand-200 underline-offset-4 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          Ainda em dúvida entre os planos? Compare os três aqui
+        </a>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
           {planCodes.map((p) => (
