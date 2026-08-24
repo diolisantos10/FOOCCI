@@ -25,6 +25,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "type-check": "tsc --noEmit",
+    "type-check:tests": "tsc -p tsconfig.tests.json --noEmit",
+    "type-check:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
   },

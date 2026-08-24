@@ -18,9 +18,25 @@ _Atualizado em 24/08/2026. Este arquivo é o índice de progresso do programa. U
 
 ---
 
+### Fase 1 · PR 1.1 — Identidade interna, departamentos e RBAC
+
+Construído em 24/08/2026, com o proprietário ausente e sob autorização dele. Cada decisão tomada no lugar dele está em **ADR-005**, uma a uma, para poder ser revertida sabendo o quê e por quê.
+
+- **5 tabelas novas**, aditivas: `departments`, `positions`, `internal_users`, `department_memberships`, `internal_audit_events`. Migração gerada por diferença de schema e **aplicada num Postgres limpo para provar que roda** — zero `DROP`, zero `ALTER` destrutivo.
+- **Identidade interna** (`src/lib/internal-auth.ts`): sessão própria com cookie assinado por HMAC, senha em bcrypt como o resto da casa. Fora do NextAuth de propósito — colocar o pessoal da Foocci lá exigiria inventar um restaurante fictício para a própria empresa.
+- **RBAC no servidor**, separando *pertencer* de *gerenciar*: membro de Vendas lê Vendas, só o gerente administra.
+- **Convivência com `ADMIN_SECRET`** (ADR-003): rota nova não aceita a senha antiga, e todo acesso por ela entra na trilha como `LEGACY_ADMIN_SECRET`.
+- **9 departamentos e 12 cargos** semeados. **Todos os cargos nascem vagos** — ninguém foi inventado.
+- **Segredo de sessão é trava, não recomendação:** em produção, sem `INTERNAL_SESSION_SECRET`, o sistema recusa e explica em vez de sortear um segredo por instância — que derrubaria o login de forma intermitente, sem erro no log (ADR-005, decisão 6).
+- **36 testes novos:** 12 do organograma, 14 do RBAC, 4 da trava do segredo e 6 de integração contra banco real.
+- **O tipo do teste passa a ser conferido** no código deste programa (`npm run type-check:tests`) — o `type-check` da casa exclui teste, e foi assim que um teste meu com dois campos inexistentes ficou verde. Ver achado A-03.
+- **Suíte inteira verde:** `tsc --noEmit` limpo, 6.588 testes passando em 506 arquivos. Nenhum teste da casa quebrou.
+
+---
+
 ## Em andamento
 
-Nada. A Fase 1 aguarda as duas decisões do proprietário listadas abaixo.
+Nada. O PR 1.1 está pronto para revisão; o 1.2 começa quando este for aceito.
 
 ---
 
@@ -28,8 +44,10 @@ Nada. A Fase 1 aguarda as duas decisões do proprietário listadas abaixo.
 
 | Fase | Departamento / entrega | Depende de |
 | --- | --- | --- |
-| 1 | Núcleo operacional compartilhado | decisões D-01 e D-02 |
-| 1b | Divisão do schema por domínio (ADR-004) | Fase 1 |
+| 1b | Fichas de agente sobre `AgentProfile` (PR 1.2) | PR 1.1 |
+| 1c | OS, projetos, tarefas e handoffs (PR 1.3) | PR 1.2 |
+| 1d | Aprovações, decisões, eventos e dashboard (PR 1.4) | PR 1.3 |
+| 1e | Divisão do schema por domínio (PR 1.5, ADR-004) | PR 1.4 |
 | 2 | Vendas e Receita — Sala de Vendas | Fase 1 |
 | 3 | Marketing & Growth | Fase 1 |
 | 4 | Implantação e Onboarding | Fase 2 |
@@ -47,7 +65,9 @@ Nada. A Fase 1 aguarda as duas decisões do proprietário listadas abaixo.
 
 _A Fase 1 não começa sem as duas primeiras. As demais têm data mais folgada, mas estão aqui para não sumirem._
 
-### D-01 · Os quatro ADRs da Fase 0 — aprovados? ⛔ **trava a Fase 1**
+### D-01 · Os quatro ADRs da Fase 0 — confirma? ✅ *adotados sob autorização*
+
+Segui os quatro como aprovados durante a ausência do proprietário (ADR-005). A confirmação continua devida — o custo de reverter é baixo, porque a Fase 1 é aditiva e nada foi ativado.
 
 | ADR | O que decide | Recomendação |
 | --- | --- | --- |
@@ -56,11 +76,17 @@ _A Fase 1 não começa sem as duas primeiras. As demais têm data mais folgada, 
 | 003 | `ADMIN_SECRET` convive com o login novo por prazo, com rastro | aprovar |
 | 004 | O schema passa a ser dividido por domínio, em PR isolado | aprovar |
 
-### D-02 · Quem entra no sistema, e com qual papel? ⛔ **trava a Fase 1**
+### D-02 · Quem ocupa cada cargo? *(não trava mais)*
 
-O admin inteiro é uma senha compartilhada hoje. Para construir hierarquia e RBAC é preciso saber quem existe.
+Resolvi o bloqueio sem inventar ninguém: a hierarquia foi construída sobre **cargos**, e os 12 cargos nascem **vagos**. A Fase 1 andou.
 
-Mínimo para começar: **quem é o CEO, quem é o Diretor Foocci, quem é o Gerente Geral** — e se, no início, a mesma pessoa acumula os três (o plano mestre já prevê acúmulo).
+Falta o fato: **quem é o CEO, o Diretor Foocci e o Gerente Geral** — pode ser a mesma pessoa nos três. Um comando preenche:
+
+```bash
+npx tsx scripts/criar-usuario-interno.ts --email <email> --nome "<nome>" --papel CEO --cargo ceo
+```
+
+Enquanto ninguém for cadastrado, o sistema funciona e diz a verdade: cargo vago aparece como vago.
 
 ### D-03 · Quando desligar o `ADMIN_SECRET`?
 
@@ -73,6 +99,28 @@ Sem teto, o gate humano de orçamento não tem contra o quê comparar.
 ### D-05 · Qual é a fonte financeira confiável? (Fase 10)
 
 `FECHADO` no funil **não** é receita. Sem uma fonte de verdade financeira, o dashboard executivo mostra "não medido" no lugar de faturamento — o que é honesto, mas provavelmente não é o que o CEO quer ver.
+
+---
+
+## Achados registrados (não são decisão do CEO — são fatos com dono a definir)
+
+_Todos anteriores a este programa. Nenhum bloqueia a Fase 1. Nenhum foi consertado aqui: mexer em área alheia dentro do PR da organização interna é desvio de escopo, e some do radar depois._
+
+### A-01 · A cadeia de migrações não replica do zero
+
+`20250506000000_saipos_integration` falha num banco limpo. Não atrapalha hoje — produção existe e está adiante disso. Mas significa que **não dá para reconstruir o banco do zero**, o que atinge ambiente de teste novo, onboarding e recuperação de desastre.
+
+### A-02 · Dois arquivos de teste diferem só na caixa da letra
+
+`crmExecutionClassification.test.ts` e `CrmExecutionClassification.test.ts` são **dois arquivos diferentes**, os dois versionados. Em Mac ou Windows — sistemas indiferentes a maiúscula — um sobrescreve o outro no clone e **um dos testes some sem avisar**. Aqui em Linux os dois convivem, e é por isso que ninguém viu.
+
+### A-03 · ~750 erros de tipo em ~150 arquivos de teste antigos
+
+O `type-check` da casa exclui teste de propósito, para o `next build` só olhar o que vai para produção. O efeito colateral é que o tipo do teste nunca é conferido — o Vitest apaga os tipos e roda assim mesmo.
+
+Ligando a conferência no repositório inteiro aparecem ~750 erros, quase todos de índice não checado em código de teste. É dívida antiga, medida agora. **O número está aqui em vez de escondido atrás de uma lista de exclusões** que pareceria cobertura sem ser.
+
+Fica valendo para o código deste programa, que nasce limpo: `npm run type-check:tests`. E `npm run type-check:scripts`, que já cobre `scripts/` inteiro e está verde.
 
 ---
 

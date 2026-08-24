@@ -5402,3 +5402,201 @@ model RaioXFinding {
   @@index([probeId, severity])
   @@map("raiox_findings")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORGANIZAÇÃO INTERNA DA FOOCCI
+//
+// Fase 1 do programa `docs/arquitetura-operacional-foocci-v1/`.
+//
+// Até aqui o repositório descrevia muito bem o PRODUTO e quase nada a EMPRESA:
+// 143 models e nenhum dizia quem trabalha aqui. O admin inteiro era uma senha
+// só (`ADMIN_SECRET`), e o model `User` pertence ao RESTAURANTE — tem
+// `restaurantId` obrigatório. Sem identidade interna não existe responsável por
+// tarefa, autor de decisão, nem "quem assumiu a conversa".
+//
+// Estes models são a fundação que os 9 departamentos compartilham. São
+// aditivos: nada existente foi alterado.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Papel de quem trabalha NA Foocci — não confundir com `Role`, que é o papel
+/// de quem trabalha NO RESTAURANTE cliente.
+enum InternalRole {
+  CEO
+  DIRETOR
+  GERENTE_GERAL
+  GERENTE
+  MEMBRO
+  VIEWER
+
+  /// Ator técnico. NUNCA é uma credencial humana e nunca faz login interativo —
+  /// existe para que uma ação executada por IA tenha autor na trilha em vez de
+  /// aparecer como "sistema", que não responde por nada.
+  SYSTEM_AI
+}
+
+/// Altura na hierarquia. Separada de `InternalRole` porque cargo e papel não são
+/// a mesma coisa: uma pessoa pode ocupar o cargo de Gerente de Vendas e ter
+/// papel CEO enquanto a empresa é pequena.
+enum PositionLevel {
+  CEO
+  DIRETOR
+  GERENTE_GERAL
+  GERENTE
+  OPERACAO
+}
+
+/// Um dos 9 departamentos canônicos.
+model Department {
+  id     String @id @default(cuid())
+  /// Ordem canônica do plano mestre (1 = Marketing … 9 = Financeiro).
+  numero Int    @unique
+  slug   String @unique
+  nome   String
+  missao String @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  positions   Position[]
+  memberships DepartmentMembership[]
+
+  @@map("departments")
+}
+
+/// Um cargo no organograma. Existe INDEPENDENTE de ter gente nele.
+///
+/// Isto é de propósito: o plano mestre manda preservar a posição organizacional
+/// "para permitir crescimento sem reconstrução". Cargo vago é informação — dizer
+/// que o Gerente de Produto não existe é diferente de dizer que ninguém o ocupa.
+model Position {
+  id     String        @id @default(cuid())
+  slug   String        @unique
+  titulo String
+  nivel  PositionLevel
+
+  /// Nulo para CEO, Diretor e Gerente Geral, que estão acima dos departamentos.
+  departmentId String?
+
+  /// A quem este cargo se reporta. Auto-relação: é o organograma.
+  reportsToPositionId String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department  Department? @relation(fields: [departmentId], references: [id])
+  reportsTo   Position?   @relation("Organograma", fields: [reportsToPositionId], references: [id])
+  subordinate Position[]  @relation("Organograma")
+
+  ocupantes   InternalUser[]
+  memberships DepartmentMembership[]
+
+  @@index([departmentId])
+  @@index([reportsToPositionId])
+  @@map("positions")
+}
+
+/// Quem trabalha na Foocci.
+///
+/// `passwordHash` é opcional porque `SYSTEM_AI` não tem senha — e um campo
+/// obrigatório forçaria alguém a inventar uma para o ator técnico, que é
+/// exatamente como uma credencial de sistema vira credencial de gente.
+model InternalUser {
+  id    String @id @default(cuid())
+  email String @unique
+  nome  String
+
+  /// bcrypt, como o resto da casa (`src/lib/auth.ts`). Nulo = não faz login.
+  passwordHash String?
+
+  role       InternalRole @default(MEMBRO)
+  positionId String?
+
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  position    Position?              @relation(fields: [positionId], references: [id])
+  memberships DepartmentMembership[]
+
+  @@index([role])
+  @@index([positionId])
+  @@map("internal_users")
+}
+
+/// A que departamentos a pessoa pertence. Uma pessoa pode acumular — o plano
+/// mestre prevê acúmulo enquanto a empresa é pequena.
+model DepartmentMembership {
+  id             String  @id @default(cuid())
+  internalUserId String
+  departmentId   String
+  positionId     String?
+
+  /// Gerente do departamento. É o que decide quem administra a área — não o
+  /// `InternalRole`, que é a altura na empresa.
+  isManager Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  internalUser InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  position     Position?    @relation(fields: [positionId], references: [id])
+
+  @@unique([internalUserId, departmentId])
+  @@index([departmentId, isManager])
+  @@map("department_memberships")
+}
+
+/// Quem é o ator de uma ação interna.
+enum InternalActorType {
+  INTERNAL_USER
+
+  /// A senha compartilhada antiga. Continua válida durante a transição (ADR-003),
+  /// mas SEMPRE deixa rastro — é assim que a convivência vira número medido em
+  /// vez de suposição, e é esse número que sustenta a decisão de desligá-la.
+  LEGACY_ADMIN_SECRET
+
+  /// Nenhuma sessão: a tentativa chegou sem identidade.
+  ANONIMO
+
+  SYSTEM
+}
+
+enum InternalActionResult {
+  PERMITIDO
+  NEGADO
+}
+
+/// Trilha append-only de ação interna sensível.
+///
+/// Guarda TAMBÉM o que foi negado. Uma trilha que só registra sucesso não
+/// responde "alguém tentou entrar onde não devia?", que é a pergunta que uma
+/// trilha existe para responder.
+model InternalAuditEvent {
+  id String @id @default(cuid())
+
+  actorType  InternalActorType
+  actorId    String?
+  /// Nome legível de quem agiu. Guardado no evento de propósito: se a pessoa
+  /// for desativada depois, o histórico continua dizendo quem foi.
+  actorLabel String
+
+  acao      String
+  recurso   String
+  resultado InternalActionResult
+  /// Obrigatório quando NEGADO — achado sem motivo é ruído.
+  motivo    String?
+
+  departmentId String?
+  origemIp     String?
+  detalhe      Json     @default("{}")
+  ocorridoEm   DateTime @default(now())
+
+  @@index([ocorridoEm])
+  @@index([actorType, ocorridoEm])
+  @@index([resultado, ocorridoEm])
+  @@map("internal_audit_events")
+}
