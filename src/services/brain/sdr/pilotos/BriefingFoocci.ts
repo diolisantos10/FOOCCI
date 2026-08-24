@@ -92,10 +92,12 @@ export const RESPOSTAS: Record<string, RespostaComFonte> = {
   site_e_canais: {
     valor:
       "Site em foocci.com.br. Hoje o site comercial vive em /site atrás de senha (prévia privada) e " +
-      "vai para a raiz, indexável, no lançamento. WhatsApp comercial de vendas ainda NÃO existe: " +
-      "não há número configurado e nenhum botão de WhatsApp aparece no site. Cardápio online é o " +
-      "próprio produto.",
-    fonte: "docs/foocci-site/pre-launch-mode-v1.md e private-preview-v1.md; WHATSAPP_SALES_NUMBER = null em components/marketing/config.ts",
+      "vai para a raiz, indexável, no lançamento. WhatsApp comercial de vendas EXISTE desde 25/08/2026: " +
+      "quem preenche o formulário do site é levado ao WhatsApp com a mensagem pronta, e é ele quem " +
+      "manda o primeiro 'oi'. A conversa cai num aparelho e é respondida por uma PESSOA — a recepção " +
+      "automática (o 'oi' virar registro na Sala de Vendas sozinho) ainda não está ligada. Cardápio " +
+      "online é o próprio produto.",
+    fonte: "WHATSAPP_SALES_NUMBER em components/marketing/config.ts; recepção depende de FOOCCI_SALES_PHONE_NUMBER_ID/ACCESS_TOKEN, ausentes",
   },
 
   identidade_visual: {

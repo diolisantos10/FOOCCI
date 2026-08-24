@@ -68,6 +68,16 @@ O Agente Gerente Comercial vê SLA, conversão, produtividade e distribuição. 
 
 O canal usa a **integração oficial** prevista no projeto. Não se cria dependência estrutural de solução não oficial.
 
+**Estado em 25/08/2026 — duas metades, e só uma está ligada:**
+
+| | Estado | Do que depende |
+|---|---|---|
+| **Sair do site para o WhatsApp** — a pessoa preenche o formulário, o lead é gravado e ela é levada ao WhatsApp com a mensagem pronta e o `#código` | ✅ ligado | nada; o número `+55 11 94372-3316` está no código |
+| **A recepção** — o "oi" ser reconhecido e virar registro na Sala sozinho | ⛔ desligado | cadastro do número na Meta (`FOOCCI_SALES_PHONE_NUMBER_ID` e `FOOCCI_SALES_ACCESS_TOKEN`) |
+| **O envio** — a Foocci escrever primeiro | ⛔ desligado, e é deliberado | decisão do CEO, com o diário do SDR na mão |
+
+Enquanto a segunda linha estiver desligada, **a mensagem chega num aparelho e quem responde é uma pessoa**. O caminho funciona; ele só não é automático — e chamar isso de automático seria vender piloto como pronto.
+
 ## O que a Sala NÃO faz nesta fase
 
 - não envia mensagem real enquanto o envio estiver desligado;
@@ -76,7 +86,8 @@ O canal usa a **integração oficial** prevista no projeto. Não se cria depend�
 
 ## Duas pendências que não são de engenharia
 
-1. **O número de WhatsApp de vendas da Foocci não existe.** Sem ele, a Sala é construída e testada, mas não fala com ninguém.
-2. **Não há conta de teste isolada.** Sem ela não há como exercitar o fluxo ponta a ponta sem tocar em dado real.
+1. ~~**O número de WhatsApp de vendas da Foocci não existe.**~~ **Resolvida em 25/08/2026 — e a pendência estava errada desde que foi escrita:** o número já tinha sido decidido pelo CEO em 23/08 e estava neste repositório, em `docs/whatsapp-vendas-passo-a-passo.md`. Faltava ligar a chave, não decidir. Está ligado.
+2. **Falta o cadastro do número na Meta** para a recepção automática. Isso sim é decisão e trabalho do proprietário — e tem uma escolha embutida: instalar o WhatsApp comum nesse chip para atender à mão hoje **impede** a entrada na API depois sem apagar a conta antes.
+3. **Não há conta de teste isolada.** Sem ela não há como exercitar o fluxo ponta a ponta sem tocar em dado real.
 
-Ambas são decisão do proprietário.
+As duas últimas são decisão do proprietário.

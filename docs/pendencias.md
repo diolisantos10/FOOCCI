@@ -32,9 +32,14 @@ em cada campo entendido; e o lead do site virando entrevista (`LeadParaSondagem.
 - Ninguém chama `/api/sdr/entrevista`: o motor segue desligado do mundo.
 - Sete perguntas comerciais para o CEO (preço, alçada de fechamento, desconto,
   fidelidade, prazo de implantação, formas de pagamento, prova citável).
-- Falta o CEO executar o cadastro do número **+55 11 94372-3316** e me devolver
-  `FOOCCI_SALES_PHONE_NUMBER_ID`, `FOOCCI_SALES_ACCESS_TOKEN`, o número para
-  `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` (⚠️ congela no build) e `SDR_DIARIO_SECRET`.
+- Falta o CEO executar o cadastro do número **+55 11 94372-3316** na Meta e me
+  devolver `FOOCCI_SALES_PHONE_NUMBER_ID`, `FOOCCI_SALES_ACCESS_TOKEN` e
+  `SDR_DIARIO_SECRET`. **`NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` saiu da lista em
+  25/08/2026:** o número foi fixado no código, o site já leva a pessoa ao WhatsApp,
+  e a variável só volta a ser necessária para TROCAR de número.
+  ⚠️ O que ainda NÃO existe é a **recepção**: hoje o "oi" chega num aparelho e quem
+  responde é gente. Sem as duas chaves da Meta, ele não vira registro na Sala de
+  Vendas sozinho.
 
 ## 🟢 23/08 (8ª rodada) — (A) SUBIU. E duas lições que custaram deploy.
 

@@ -40,16 +40,33 @@ disparo). As outras variáveis deste guia não têm esse problema.
 
 ## O que você vai ter no fim
 
-Quatro coisas para me entregar:
+**Uma coisa a menos desde 25/08/2026:** o número `5511943723316` **já está fixo no
+código** (`src/components/marketing/config.ts`). Ele não precisa mais de variável
+no Railway, e com isso some a armadilha nº 3 para ele — o número sobe junto com o
+código. A variável continua existindo e, se preenchida, **vence** o valor fixo:
+é por ali que se TROCA de número um dia, e aí a armadilha do build volta a valer.
+
+Três coisas para me entregar:
 
 | O que | Onde vai | Vira a variável |
 |---|---|---|
 | ID do número de vendas | Railway | `FOOCCI_SALES_PHONE_NUMBER_ID` |
 | Token permanente | Railway | `FOOCCI_SALES_ACCESS_TOKEN` |
-| O número, só dígitos: `5511943723316` | Railway | `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` |
 | Um segredo qualquer, longo, que você inventa | Railway | `SDR_DIARIO_SECRET` |
 
 Tempo: cerca de 40 minutos, mais a espera da aprovação do nome de exibição.
+
+> ⚠️ **Uma escolha que precisa ser feita ANTES de instalar o WhatsApp nesse chip.**
+> As duas coisas abaixo não cabem no mesmo número ao mesmo tempo:
+>
+> - **Atender à mão hoje** — instalar o WhatsApp (comum ou Business) no chip e
+>   responder quem chegar pelo site. Funciona imediatamente, sem Meta, sem token.
+> - **Recepção automática depois** — o número entra na API da Meta e o "oi" vira
+>   registro na Sala de Vendas sozinho. Para isso a conta de WhatsApp do aplicativo
+>   **precisa ser apagada** antes (armadilha nº 2).
+>
+> Dá para fazer o primeiro agora e migrar para o segundo depois — só não é de
+> graça: apagar a conta apaga o histórico de conversa daquele aparelho.
 
 ---
 
@@ -152,16 +169,15 @@ No serviço do Foocci, aba **Variables**, crie:
 ```
 FOOCCI_SALES_PHONE_NUMBER_ID = (o da Parte 3)
 FOOCCI_SALES_ACCESS_TOKEN    = (o da Parte 4)
-NEXT_PUBLIC_WHATSAPP_SALES_NUMBER = 5511943723316
 SDR_DIARIO_SECRET = (invente uma senha longa, 20+ caracteres)
 ```
 
+`NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` **saiu desta lista** em 25/08/2026: o número
+está fixo no código. Só crie essa variável no dia em que o número MUDAR — e, nesse
+dia, a armadilha nº 3 volta a valer (salvar sem refazer o build não muda nada).
+
 **NÃO crie** `FOOCCI_SDR_SEND_ENABLED`. Ela fica de fora — é ela que solta a
 mensagem, e a decisão de soltar é sua, depois, com o diário na mão.
-
-🟥 **Depois de salvar, peça um novo deploy** — por causa da armadilha nº 3 lá em
-cima. Sem build novo, o botão de WhatsApp **não aparece no site**, mesmo com tudo
-certo.
 
 ---
 

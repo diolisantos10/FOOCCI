@@ -1,9 +1,20 @@
 /**
  * A chave que acende o caminho do WhatsApp, e a mensagem que a pessoa vai assinar.
  *
- * O teste que mais importa aqui é o de NÃO-REGRESSÃO: sem número configurado —
- * que é o estado de hoje em produção — `whatsappUrl` devolve `null` e o site
- * inteiro continua funcionando como antes.
+ * ── ESTE ARQUIVO MUDOU DE LADO EM 25/08/2026 ────────────────────────────────
+ *
+ * Até aqui, o teste principal afirmava que o número estava DESLIGADO, e existia
+ * para que ninguém acendesse o caminho do WhatsApp sem decisão do CEO. A decisão
+ * veio: o número é 11 94372-3316.
+ *
+ * Então o teste inverte, e continua sendo a mesma trava apontando para o mesmo
+ * lugar — o número que o site publica é uma decisão do CEO, e ele não pode mudar
+ * por acidente, nem para vazio nem para outro. Por isso o valor exato está escrito
+ * aqui: se alguém trocar um dígito em `config.ts`, este arquivo reprova.
+ *
+ * O caminho de "sem número" continua testado, agora com o `null` passado à mão —
+ * é o comportamento de qualquer ambiente onde a chave não esteja presente, e ele
+ * não pode apodrecer só porque hoje há número.
  */
 
 import { describe, it, expect } from "vitest";
@@ -17,16 +28,27 @@ import {
 const NUMERO = "5511999998888";
 
 describe("WHATSAPP_SALES_NUMBER — o estado de hoje", () => {
-  it("está desligado enquanto ninguém configurar o número", () => {
-    // Se este teste falhar, alguém acendeu o caminho do WhatsApp. Isso é uma
-    // decisão do CEO (qual número o Foocci usa para vender), não um detalhe.
-    expect(WHATSAPP_SALES_NUMBER).toBeNull();
+  it("é o número de vendas da Foocci, dígito por dígito", () => {
+    // Se este teste falhar, o número que o site publica mudou. Isso é uma decisão
+    // do CEO (com quem o restaurante vai falar), não um detalhe de configuração.
+    expect(WHATSAPP_SALES_NUMBER).toBe("5511943723316");
+  });
+
+  it("o site mostra +55 (11) 94372-3316 — o plano B de quem não conseguir abrir o app", () => {
+    expect(formatSalesNumber()).toBe("+55 (11) 94372-3316");
+  });
+
+  it("o botão do formulário leva a esse número, com a mensagem escrita", () => {
+    const url = whatsappUrl("Oi! Sou Ana e quero conhecer o Foocci. #A7K2M")!;
+    expect(url.startsWith("https://wa.me/5511943723316?text=")).toBe(true);
+    expect(decodeURIComponent(url.split("?text=")[1]!)).toContain("#A7K2M");
   });
 
   it("sem número, whatsappUrl devolve null e nada no site muda", () => {
-    expect(whatsappUrl()).toBeNull();
-    expect(whatsappUrl("qualquer mensagem")).toBeNull();
-    expect(formatSalesNumber()).toBeNull();
+    // O caminho de ambiente sem chave. Ele não some do teste só porque hoje há
+    // número: é o que acontece em qualquer build onde a chave falte.
+    expect(whatsappUrl("qualquer mensagem", null)).toBeNull();
+    expect(formatSalesNumber(null)).toBeNull();
   });
 });
 

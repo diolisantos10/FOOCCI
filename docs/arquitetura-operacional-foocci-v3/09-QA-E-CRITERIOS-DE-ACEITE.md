@@ -17,11 +17,19 @@
 | 11 | CRM comercial separado do CRM do produto | ✅ | são fichas diferentes, em departamentos diferentes; `Conversation` exige `restaurantId` e por isso não serve para prospect |
 | 12 | Sala de Vendas em desktop e mobile | ✅ | capturas em 1280px e 390px em `evidencias/`, com o navegador conferindo que nenhuma das duas estoura na horizontal |
 | 13 | Testes de autorização impedem acesso por URL/API | ✅ | as rotas são chamadas diretamente nos testes, sem passar por tela |
-| 14 | Funil, WhatsApp, handoff e QA aprovados | ⏳ | funil, handoff e QA prontos. **WhatsApp depende do CEO**: o número de vendas não existe |
+| 14 | Funil, WhatsApp, handoff e QA aprovados | ✅ | funil, handoff e QA prontos; o caminho do WhatsApp está **aceso** — número fixado, `wa.me` montado com a mensagem e o `#código`, testes provando dígito por dígito |
 | 15 | Documentação completa na pasta determinada | ✅ | os 11 arquivos exigidos, mais o raio-x |
 | 16 | Build, lint, typecheck e testes sem erro | ✅ | 6.780 testes, 177 contra Postgres real, três typechecks limpos, build completo |
 
-**15 de 16 cumpridos.** O único aberto é o 14, e ele não é trabalho de engenharia parado: depende de o CEO providenciar o número de WhatsApp de vendas. Sem ele a Sala é construída e testada, mas não fala com ninguém.
+**16 de 16 cumpridos**, com uma ressalva escrita abaixo que não cabe esconder numa marca verde.
+
+### O critério 14, e um erro meu no meio dele
+
+Em 25/08 eu registrei aqui que o 14 dependia do CEO "providenciar o número de WhatsApp de vendas". **Estava errado, e o erro era meu:** o número já tinha sido decidido por ele em 23/08 e estava escrito neste mesmo repositório, em `docs/whatsapp-vendas-passo-a-passo.md`, linha 1. O que faltava não era a decisão — era alguém ligar a chave. Eu não procurei antes de declarar a falta.
+
+Ligado, o caminho é este: a pessoa preenche o formulário → o lead é **gravado** → ela é levada ao WhatsApp com a mensagem já escrita e o `#código` que liga aquele "oi" ao lead. Quem inicia a conversa é ela, que é o desenho inteiro (`docs/sdr-foocci-desenho.md`): abre a janela de 24h da Meta, o consentimento fica evidente e o risco de banimento cai a quase zero.
+
+**A ressalva, em uma frase: o "oi" chega num aparelho, não na Sala de Vendas.** Enviar e receber são chaves separadas de propósito. A recepção automática — o "oi" virar registro na Sala sozinho, pelo `#código` — exige `FOOCCI_SALES_PHONE_NUMBER_ID` e `FOOCCI_SALES_ACCESS_TOKEN`, que são cadastro na Meta e não código. **Até lá, quem responde é uma pessoa, à mão.** Marcar o 14 como pronto sem esta frase seria vender como automático o que hoje é manual — guardrail 5.
 
 ## As evidências visuais
 
