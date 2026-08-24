@@ -65,6 +65,7 @@ import { reasonCrmMessage } from "./CrmAgentReasoner";
 import {
   getCrmPilotConfig,
   resolveCrmPilotAccess,
+  resolveLiveCrmPilotMode,
   crmAbPicksAgent,
   agentMessagePassesFloor,
 } from "./CrmAgentPilotService";
@@ -1490,7 +1491,16 @@ export class ScheduledCampaignRunnerService {
     // quando a campanha sai por TEXTO LIVRE — com modelo aprovado, quem chega ao
     // cliente é o texto do modelo, e creditar o agente por ele seria medir fumaça.
     // SHADOW_ONLY/paused (o default) desliga tudo.
-    const crmPilot = await getCrmPilotConfig(campaign.restaurantId).catch(() => null);
+    const crmPilotStored = await getCrmPilotConfig(campaign.restaurantId).catch(() => null);
+    // TRAVA: o degrau GRAVADO não basta. Vale o degrau que o portão de qualidade
+    // do CRM sustenta AGORA — vermelho/vencido/ilegível derruba para SHADOW_ONLY
+    // e a campanha sai pelo SORTEIO. Ninguém deixa de receber; só não recebe
+    // texto de IA solta. Resolvido UMA vez por campanha (não por destinatário).
+    const crmPilotLive = crmPilotStored
+      ? await resolveLiveCrmPilotMode(crmPilotStored).catch(() => ({ mode: "SHADOW_ONLY" as const, demoted: true, reason: "trava: falha ao ler veredito" }))
+      : null;
+    if (crmPilotLive?.demoted) console.warn("[crm-pilot]", crmPilotLive.reason);
+    const crmPilot = crmPilotStored && crmPilotLive ? { ...crmPilotStored, mode: crmPilotLive.mode } : null;
     const crmPilotActive = !!crmPilot && crmPilot.mode !== "SHADOW_ONLY" && !crmPilot.paused && !templateMode;
 
     // ── Escolha inteligente da frase (bandit paciente) ────────────────────────
