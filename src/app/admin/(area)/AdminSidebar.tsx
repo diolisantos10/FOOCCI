@@ -4,7 +4,34 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function AdminSidebar() {
+/**
+ * O que cada papel alcança no menu.
+ *
+ * ── POR QUE O MENU FILTRA, SE O SERVIDOR JÁ NEGA ──
+ *
+ * Não é segurança: a fechadura está em cada rota, e ela nega mesmo com o menu
+ * aberto. É honestidade de controle.
+ *
+ * Abrindo a Sala de Vendas num navegador de verdade, o SDR humano via a barra
+ * lateral inteira — Departamentos, Agentes, Qualidade, Brain, Restaurantes. Vinte
+ * portas que batem na cara dele com 403. Um menu assim não é neutro: ensina que
+ * o sistema é imprevisível, e a pessoa passa a não confiar no que ela PODE
+ * clicar.
+ *
+ * `null` = vê tudo. Os papéis com escopo veem só o que existe para eles.
+ */
+const MENU_POR_PAPEL: Readonly<Record<string, readonly string[] | null>> = {
+  MASTER_CEO: null,
+  DIRETOR_FOOCCI: null,
+  // O gerente vê a estrutura e a área de trabalho do time dele. O resto do
+  // Admin continua fora — crescer dentro do departamento, não para os lados.
+  GERENTE_DEPARTAMENTO: ["/admin/departamentos", "/admin/sala-de-vendas", "/admin/foocci-crm"],
+  // Critério 6 do CEO: a Sala de Vendas e nada mais.
+  AGENTE_HUMANO: ["/admin/sala-de-vendas"],
+  AUDITOR_QA: ["/admin/departamentos", "/admin/sala-de-vendas", "/admin/quality"],
+};
+
+export function AdminSidebar({ papel }: { papel?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -19,6 +46,8 @@ export function AdminSidebar() {
     } catch { /* ignore */ }
     router.replace("/admin/login");
   }
+
+  const permitidos = papel ? MENU_POR_PAPEL[papel] : null;
 
   // Grupos com título. Nenhum link foi removido — apenas reorganizado.
   // Os itens de teste WhatsApp/labs ficam agrupados em TESTES por ora (faxina é outra fase).
@@ -137,7 +166,15 @@ export function AdminSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {navGroups.map((group, gi) => (
+        {navGroups
+          // Grupo que ficou sem item nenhum some inteiro — um título de seção
+          // sozinho é pior que a ausência dele.
+          .map((g) => ({
+            ...g,
+            items: permitidos ? g.items.filter((i) => permitidos.includes(i.href)) : g.items,
+          }))
+          .filter((g) => g.items.length > 0)
+          .map((group, gi) => (
           <div key={group.title} className={gi > 0 ? "mt-4" : undefined}>
             <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
               {group.title}

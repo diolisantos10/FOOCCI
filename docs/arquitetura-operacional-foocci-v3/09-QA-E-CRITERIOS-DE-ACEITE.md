@@ -15,13 +15,28 @@
 | 9 | Nenhuma transferência perde histórico | ✅ | o teste compara a linha do tempo inteira depois do ciclo |
 | 10 | Toda ação sensível gera auditoria | ✅ | negativas entram na trilha com ator e motivo; trilha fora do ar **não** abre a porta |
 | 11 | CRM comercial separado do CRM do produto | ✅ | são fichas diferentes, em departamentos diferentes; `Conversation` exige `restaurantId` e por isso não serve para prospect |
-| 12 | Sala de Vendas em desktop e mobile | ⏳ | a tela é responsiva por construção; **falta verificação visual nas duas larguras** |
+| 12 | Sala de Vendas em desktop e mobile | ✅ | capturas em 1280px e 390px em `evidencias/`, com o navegador conferindo que nenhuma das duas estoura na horizontal |
 | 13 | Testes de autorização impedem acesso por URL/API | ✅ | as rotas são chamadas diretamente nos testes, sem passar por tela |
 | 14 | Funil, WhatsApp, handoff e QA aprovados | ⏳ | funil, handoff e QA prontos. **WhatsApp depende do CEO**: o número de vendas não existe |
 | 15 | Documentação completa na pasta determinada | ✅ | os 11 arquivos exigidos, mais o raio-x |
 | 16 | Build, lint, typecheck e testes sem erro | ✅ | 6.780 testes, 177 contra Postgres real, três typechecks limpos, build completo |
 
-**14 de 16 cumpridos.** Os dois restantes não são trabalho de engenharia parado: um é verificação visual, o outro depende de o CEO providenciar o número de WhatsApp de vendas.
+**15 de 16 cumpridos.** O único aberto é o 14, e ele não é trabalho de engenharia parado: depende de o CEO providenciar o número de WhatsApp de vendas. Sem ele a Sala é construída e testada, mas não fala com ninguém.
+
+## As evidências visuais
+
+Em `evidencias/`, capturadas contra o sistema rodando de verdade, com sessão interna assinada:
+
+| Arquivo | O que prova |
+| --- | --- |
+| `sala-de-vendas-sdr-desktop.png` | as sete filas com contagem, os leads que a IA devolveu, o motivo do pedido e o botão de assumir |
+| `sala-de-vendas-sdr-mobile.png` | a 390px: filas empilhadas, sem estouro horizontal, menu recolhido no ☰ |
+| `departamentos-ceo-desktop.png` | os seis cards, o Agente Gerente destacado, os indicadores de governança |
+| `departamentos-negado-ao-sdr-*.png` | o que o SDR vê ao tentar a área que não é dele |
+
+**O que a captura da Sala mostra sem precisar de legenda:** o SDR vê 3 leads, não os 4 que existem. O quarto está com a IA, e o escopo da consulta o deixa de fora. O isolamento não é uma afirmação deste documento — está na tela.
+
+E o menu: 1 item para o SDR, 19 para o CEO. Verificado também por `curl`, direto no HTML que o servidor manda, sem navegador no meio.
 
 ## O instrumento da liberação
 
