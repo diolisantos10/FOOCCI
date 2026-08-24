@@ -44,13 +44,24 @@ describe("BrainShadowEvidenceService — evidência por-agente", () => {
 
   it("getShadowStats(crm) filtra SÓ o agente crm — não casa linhas nulas", async () => {
     await getShadowStats("r1", { agentId: "crm" });
-    expect(db.brainShadowLog.findMany.mock.calls[0][0].where).toMatchObject({ agentId: "crm" });
+    const where = db.brainShadowLog.findMany.mock.calls[0][0].where;
+    expect(where.AND).toContainEqual({ agentId: "crm" });
   });
 
   it("getShadowStats(whatsapp) casa também a evidência antiga (agentId nulo)", async () => {
     await getShadowStats("r1", { agentId: "whatsapp" });
     const where = db.brainShadowLog.findMany.mock.calls[0][0].where;
-    expect(where.OR).toEqual([{ agentId: "whatsapp" }, { agentId: null }]);
+    // AND explícito: o filtro de agente e o de degrau usam a MESMA chave `OR`.
+    // Combiná-los por spread apagaria um dos dois em silêncio — foi o que quase
+    // aconteceu em 24/08/2026, e é por isso que a asserção olha o AND.
+    expect(where.AND).toContainEqual({ OR: [{ agentId: "whatsapp" }, { agentId: null }] });
+  });
+
+  it("o filtro de agente e o de degrau CONVIVEM (nenhum apaga o outro)", async () => {
+    await getShadowStats("r1", { agentId: "whatsapp" });
+    const where = db.brainShadowLog.findMany.mock.calls[0][0].where;
+    expect(where.AND).toContainEqual({ OR: [{ agentId: "whatsapp" }, { agentId: null }] });
+    expect(where.AND).toContainEqual({ OR: [{ stage: null }, { stage: "SHADOW" }] });
   });
 
   it("agrega taxa de coerência PASS só sobre amostras LLM", async () => {
