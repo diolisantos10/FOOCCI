@@ -13,10 +13,11 @@
  *    conclui que a empresa está morta. Enquanto o número não estiver verificado,
  *    o site continua com a porta que funciona (o formulário).
  *
- * 2. **Só no desktop (`lg`).** No celular quem faz esse papel é a barra fixa de
- *    baixo (`StickyMobileCta`), que já é o convite comercial da tela. Dois botões
- *    disputando o mesmo canto do celular é ruído, e o dedo do visitante acerta o
- *    errado.
+ * 2. **No celular ele sobe, não some.** Ele nasceu só no desktop porque a barra
+ *    fixa de baixo era o convite comercial do celular. Desde 24/08/2026 aquela
+ *    barra virou "Assinar" (ordem do CEO), então a dúvida ficaria sem porta no
+ *    celular — que é onde quase todo dono de restaurante abre o site. Agora ele
+ *    aparece em toda tela, e no celular fica ACIMA da barra, sem tapá-la.
  *
  * 3. **Não abre conversa sozinho.** É um link: quem escreve primeiro é sempre o
  *    visitante. O envio automático do SDR continua desligado por outra chave, e
@@ -43,7 +44,7 @@ export function BotaoAgenteFlutuante() {
       rel="noopener noreferrer"
       // `group` para o rótulo crescer no hover: parado ele é só o ícone (não tapa
       // conteúdo), e ao passar o mouse ele se explica.
-      className="group fixed bottom-6 right-6 z-40 hidden items-center gap-0 rounded-full bg-[#25D366] py-3 pl-3 pr-3 text-white shadow-lg transition-all hover:gap-2 hover:pr-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 lg:inline-flex"
+      className="group fixed bottom-24 right-5 z-40 inline-flex items-center gap-0 rounded-full bg-[#25D366] py-3 pl-3 pr-3 text-white shadow-lg transition-all hover:gap-2 hover:pr-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 lg:bottom-6 lg:right-6"
     >
       <WhatsAppGlyph />
       <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-all group-hover:max-w-[12rem] group-hover:opacity-100">

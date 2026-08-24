@@ -9,19 +9,24 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS } from "./config";
-import type { ChamadaComercial } from "@/lib/site/canalDeVendas";
+import { LOGIN_URL, NAV_LINKS, ASSINAR_URL, ASSINAR_CTA_LABEL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
 
 /**
- * O botão laranja NÃO decide sozinho para onde vai nem como se chama: recebe a
- * `chamada` já resolvida pelo layout, que roda no servidor. Este componente é
- * `"use client"`, e variável sem `NEXT_PUBLIC_` chega vazia aqui — ler o estado
- * do canal daqui dentro apagaria o botão sem explicação nenhuma.
+ * DOIS BOTÕES NO TOPO, E SÓ DOIS: **Entrar** (quem já é cliente) e **Assinar**
+ * (quem quer virar). Ordem do CEO em 24/08/2026 — ver `ASSINAR_URL` no config.
+ *
+ * A conversa com o agente SAIU daqui de propósito. Quem tem dúvida usa o botão
+ * verde do canto da tela, que fala com o SDR no WhatsApp. Topo que convida para
+ * conversar ensina o visitante decidido a pedir reunião em vez de assinar — e
+ * quem ainda não decidiu não some: o botão do canto está em toda página.
+ *
+ * Este componente não recebe mais a chamada comercial: o topo deixou de depender
+ * do canal de vendas estar aceso ou apagado.
  */
-export function MarketingHeader({ chamada }: { chamada: ChamadaComercial }) {
+export function MarketingHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -81,10 +86,10 @@ export function MarketingHeader({ chamada }: { chamada: ChamadaComercial }) {
             Entrar
           </Link>
           <Link
-            href={chamada.href}
+            href={ASSINAR_URL}
             className={`inline-flex items-center rounded-xl bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 ${FOCUS}`}
           >
-            {chamada.label}
+            {ASSINAR_CTA_LABEL}
           </Link>
         </div>
 
@@ -121,11 +126,11 @@ export function MarketingHeader({ chamada }: { chamada: ChamadaComercial }) {
                 Entrar
               </Link>
               <Link
-                href={chamada.href}
+                href={ASSINAR_URL}
                 onClick={() => setOpen(false)}
                 className={`inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-3 text-base font-semibold text-white hover:bg-brand-600 ${FOCUS}`}
               >
-                {chamada.label}
+                {ASSINAR_CTA_LABEL}
               </Link>
             </div>
           </nav>

@@ -10,6 +10,20 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟢 24/08 (2) — O topo vira Entrar + Assinar (ordem do CEO)
+
+Bloco `claude/topo-entrar-e-assinar`. Detalhe em `docs/topo-entrar-e-assinar.md`.
+
+O botão laranja de conversa saiu do topo; entraram **Entrar** e **Assinar**, este
+apontando para `/contratar/novo` — checkout self-service que **cobra de verdade**
+(conferido no código e medido de fora antes de escrever o botão). A dúvida foi
+para o botão verde do canto, que **passou a aparecer também no celular**, porque a
+barra fixa de baixo virou "Assinar".
+
+**Aberto:**
+- O painel de WhatsApp do formulário segue dormente — leitura e duas saídas no
+  documento do bloco. Recomendação: acender só depois da sala de vendas.
+
 ## 🟢 24/08 — O site manda falar com o agente (ordem do CEO)
 
 Bloco `claude/site-fala-com-agente`. Detalhe em `docs/site-fala-com-agente.md`.

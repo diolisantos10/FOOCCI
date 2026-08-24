@@ -158,6 +158,28 @@ export const DEMO_CTA_LABEL = "Agende uma demonstração";
  *
  * Ver `src/app/site/(gated)/falar-com-agente/route.ts` e `@/lib/site/canalDeVendas`.
  */
+/**
+ * ⚑ O TOPO DO SITE NÃO CONVIDA PARA CONVERSA — CONVIDA PARA ASSINAR.
+ *
+ * Decisão do CEO (24/08/2026), palavras dele: *"O botão laranja lá em cima,
+ * 'fale com especialista' ou coisa do tipo, tem que ser banido do site. No lugar
+ * disso, colocar pro cliente já assinar. Então é um botão pra entrar e um botão
+ * pra já ir pra tela da assinatura. E o contato com dúvida ou qualquer coisa do
+ * tipo é WhatsApp."*
+ *
+ * O destino é o checkout self-service, que **existe e cobra de verdade**: o
+ * cliente escolhe plano e ciclo, aceita o Termo, paga e sai com a loja no ar, sem
+ * humano no meio (`/contratar/novo` → `POST /api/billing/checkout`). Isto foi
+ * CONFERIDO antes de o botão ser escrito — botão dizendo "Assinar" que caísse num
+ * formulário de contato seria a mesma doença que a gente acabou de arrancar do
+ * site: o texto prometendo o que o destino não entrega.
+ *
+ * Sem plano na URL de propósito: a tela abre no Crescimento mensal e o cliente
+ * troca ali mesmo, vendo os três preços. Escolher por ele seria empurrar plano.
+ */
+export const ASSINAR_URL = "/contratar/novo";
+export const ASSINAR_CTA_LABEL = "Assinar";
+
 export const AGENTE_URL = "/site/falar-com-agente";
 
 /** O rótulo do botão laranja quando o canal está no ar. */
