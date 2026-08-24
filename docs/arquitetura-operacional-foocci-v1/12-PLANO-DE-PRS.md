@@ -10,7 +10,7 @@ Cada PR carrega, sem exceção: resumo, mapa de reaproveitamento, ADRs, migraç�
 
 `claude/fase-0-raio-x-e-fundacao` · **somente documentação, zero código**
 
-Auditoria, mapa de reaproveitamento, 32 fichas de agente, 4 ADRs, status e este plano. Nenhuma migração, nenhum dado tocado.
+Auditoria, mapa de reaproveitamento, 37 fichas de agente, 4 ADRs, status e este plano. Nenhuma migração, nenhum dado tocado.
 
 **Gate:** aceite dos ADRs (D-01) e nomes da hierarquia (D-02).
 
@@ -26,7 +26,7 @@ Auditoria, mapa de reaproveitamento, 32 fichas de agente, 4 ADRs, status e este 
 **Aceite:** gerente de um departamento não enxerga outro; tentativa negada fica em log; `ADMIN_SECRET` continua abrindo o que já abria.
 
 ### PR 1.2 — Fichas de agente sobre `AgentProfile`
-Estende `AgentProfile` com `departmentId`, `executionMode` (AI/HUMAN/HYBRID), `ownerInternalUserId` e `managerInternalUserId` (ADR-002). Semeia as 32 fichas do documento 11. `/admin/sala-dos-agentes` passa a listar por departamento.
+Estende `AgentProfile` com `population`, `departmentId`, `executionMode` (AI/HUMAN/HYBRID), `ownerPositionId` e `managerPositionId` (ADR-002, emendado por ADR-006 — dono é cargo, não pessoa). Semeia as fichas do documento 11. `/admin/sala-dos-agentes` passa a listar por departamento.
 
 **Aceite:** as 4 fichas existentes continuam funcionando sem alteração; toda ficha nova tem dono humano; nenhuma ficha nasce ativa.
 

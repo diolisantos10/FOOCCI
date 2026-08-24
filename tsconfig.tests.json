@@ -42,8 +42,15 @@
     "src/lib/internal-auth.ts",
     "src/lib/internal-auth.*.test.ts",
     "src/services/organizacao/**/*.ts",
+    "src/services/agents/fichasDaEmpresa.ts",
+    "src/services/agents/fichasDaEmpresa.test.ts",
+    "src/services/agents/separacaoDePopulacoes.test.ts",
+    "src/app/api/admin/fichas-da-empresa/**/*.ts",
+    "src/app/admin/(area)/sala-dos-agentes/_fichas.ts",
+    "src/app/admin/(area)/sala-dos-agentes/_fichas.test.ts",
     "scripts/seed-organizacao.ts",
-    "scripts/criar-usuario-interno.ts"
+    "scripts/criar-usuario-interno.ts",
+    "scripts/seed-fichas.ts"
   ],
   "exclude": ["node_modules"]
 }

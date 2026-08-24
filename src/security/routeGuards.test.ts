@@ -79,7 +79,17 @@ const TENANT_HELPER =
   /\b(getTenantContext|getTenantId|assertTenant|getTenantIdFromRequest)\b/;
 
 // Known admin guards. A route under /api/admin/** must reference one of these…
-const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest)\b/;
+//
+// `autorizarInterno` entrou na lista em 24/08/2026, com a identidade interna
+// (`src/lib/internal-auth.ts`). Ele NÃO é uma exceção que "faz auth própria": é
+// uma guarda de verdade, e mais forte que a senha compartilhada — exige sessão
+// assinada, papel e escopo departamental, e escreve toda negativa na trilha.
+//
+// ADR-003 manda que rota NOVA nasça exigindo sessão interna e não aceite
+// `ADMIN_SECRET`. Sem esta entrada, cumprir o ADR reprovaria neste portão, e o
+// caminho de menor esforço para o próximo engenheiro seria voltar a usar a senha
+// velha — que é exatamente o que o ADR existe para impedir.
+const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno)\b/;
 
 // …unless it is one of these vetted exceptions. Each does its OWN auth and cannot
 // use the shared helper. Adding to this list is a conscious, reviewed act — a NEW

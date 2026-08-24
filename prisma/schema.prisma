@@ -3085,13 +3085,64 @@ model AgentProfile {
   createdBy String?
   updatedBy String?
 
+  // ── Organização interna (ADR-002 + ADR-006) ────────────────────────────────
+  //
+  // Campos aditivos. Toda linha que já existia continua significando o mesmo:
+  // `population` nasce PRODUTO e `executionMode` nasce AI, que é o que os
+  // quatro agentes de produto sempre foram.
+
+  /// A qual das três populações esta ficha pertence. Ver ADR-006.
+  ///
+  /// Em 07/08/2026 quatro fichas foram apagadas por confundir DUAS populações.
+  /// Este campo existe para que a terceira não repita o acidente — e para que a
+  /// tela de produto nunca liste, sem querer, o Closer da empresa.
+  population AgentPopulation @default(PRODUTO)
+
+  /// IA executa sozinha · HUMAN é pessoa · HYBRID é IA com humano no comando.
+  executionMode AgentExecutionMode @default(AI)
+
+  /// Nulo para agente de produto, que não pertence a departamento da empresa.
+  departmentId String?
+
+  /// O CARGO responsável pela ficha, e o CARGO que a gerencia — não a pessoa.
+  ownerPositionId   String?
+  managerPositionId String?
+
+  /// Numeração do catálogo aprovado ("2.2"). É como o proprietário chama a ficha.
+  catalogNumber String?
+
   versions  AgentProfileVersion[]
   overrides RestaurantAgentProfileOverride[]
+
+  department      Department? @relation(fields: [departmentId], references: [id])
+  ownerPosition   Position?   @relation("DonoDaFicha", fields: [ownerPositionId], references: [id])
+  managerPosition Position?   @relation("GestorDaFicha", fields: [managerPositionId], references: [id])
 
   @@index([area])
   @@index([status])
   @@index([visibility])
+  @@index([population])
+  @@index([departmentId])
   @@map("agent_profiles")
+}
+
+/// As três populações de agente. Elas NÃO se medem igual, e somá-las produz um
+/// total sem significado — por isso o campo é enum e não booleano.
+///
+/// `PRODUTO`         roda dentro do sistema, para o lojista ou o cliente final.
+/// `DESENVOLVIMENTO` constrói o Foocci (vive em `.claude/agents/`).
+/// `EMPRESA`         quem trabalha NA Foocci: SDR, Closer, Gerente Financeiro.
+enum AgentPopulation {
+  PRODUTO
+  DESENVOLVIMENTO
+  EMPRESA
+}
+
+/// Como a ficha executa. `HUMAN` com dono preenchido é ficha de gente, não de IA.
+enum AgentExecutionMode {
+  AI
+  HUMAN
+  HYBRID
 }
 
 /// Immutable snapshot of an AgentProfile at a specific version.
@@ -5460,6 +5511,7 @@ model Department {
 
   positions   Position[]
   memberships DepartmentMembership[]
+  fichas      AgentProfile[]
 
   @@map("departments")
 }
@@ -5491,6 +5543,16 @@ model Position {
 
   ocupantes   InternalUser[]
   memberships DepartmentMembership[]
+
+  /// Fichas cujo DONO é este cargo, e fichas cujo GESTOR é este cargo.
+  ///
+  /// O dono é cargo, não pessoa, pelo mesmo motivo do organograma: os cargos
+  /// nascem vagos e uma ficha precisa ter responsável desde o primeiro dia.
+  /// "Dono: Gerente de Vendas (vago)" é verdade e é acionável; dono nulo até
+  /// alguém ser contratado seria uma ficha sem responsável — que é o mesmo que
+  /// IA sem responsável.
+  fichasQueDono     AgentProfile[] @relation("DonoDaFicha")
+  fichasQueGerencia AgentProfile[] @relation("GestorDaFicha")
 
   @@index([departmentId])
   @@index([reportsToPositionId])

@@ -18,6 +18,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import type { CartaoAgente, CartaoMotor, Medida } from "@/services/agents/salaDosAgentes.types";
 import { CartaoDeAgente } from "./_cartao";
+import { AbaEmpresa } from "./_abaEmpresa";
 import { useSalaDosAgentes } from "./_dados";
 import { estaEmOperacao } from "./_estados";
 import {
@@ -34,9 +35,40 @@ import {
   temNaoMedido,
 } from "./_ui";
 
-export type Aba = "agentes" | "configuracoes";
+export type Aba = "agentes" | "configuracoes" | "empresa";
 
+/**
+ * A aba "A empresa" tem busca própria, portão próprio e componente próprio.
+ *
+ * Por isso ela desvia aqui, antes de qualquer hook: pendurá-la na busca da Sala
+ * faria uma falha em `/api/admin/sala-dos-agentes` apagar os 9 departamentos da
+ * tela, e vice-versa. São dois assuntos — quando um cai, o outro segue de pé.
+ */
 export function SalaDosAgentesClient({ aba }: { aba: Aba }) {
+  if (aba === "empresa") return <MolduraDaEmpresa />;
+  return <SalaDoProduto aba={aba} />;
+}
+
+function MolduraDaEmpresa() {
+  return (
+    <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-[-.02em] text-ink">Sala dos Agentes</h1>
+          <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+            Quem trabalha na Foocci: os 9 departamentos, as pessoas e os agentes de cada um, com
+            dono e com limite escrito.
+          </p>
+        </header>
+
+        <Abas atual="empresa" />
+        <AbaEmpresa />
+      </div>
+    </div>
+  );
+}
+
+function SalaDoProduto({ aba }: { aba: Exclude<Aba, "empresa"> }) {
   const { estado, recarregar } = useSalaDosAgentes();
 
   const cabecalho =
@@ -109,6 +141,7 @@ function Abas({ atual }: { atual: Aba }) {
   const itens: Array<{ id: Aba; texto: string; href: string }> = [
     { id: "agentes", texto: "Agentes", href: "/admin/sala-dos-agentes" },
     { id: "configuracoes", texto: "Configurações", href: "/admin/sala-dos-agentes?aba=configuracoes" },
+    { id: "empresa", texto: "A empresa", href: "/admin/sala-dos-agentes?aba=empresa" },
   ];
 
   return (

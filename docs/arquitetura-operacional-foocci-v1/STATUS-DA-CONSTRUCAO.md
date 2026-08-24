@@ -11,7 +11,7 @@ _Atualizado em 24/08/2026. Este arquivo é o índice de progresso do programa. U
 - Os 10 documentos da fonte canônica lidos na ordem de `00-LEIA-PRIMEIRO.md`.
 - Repositório auditado: 143 models, 37 páginas de admin, ~190 rotas de API, 45 serviços.
 - Mapa `EXISTE / PARCIAL / A CONSTRUIR / N/A` publicado em `10-RAIO-X-E-MAPA-DE-REAPROVEITAMENTO.md`.
-- Catálogo de 32 fichas de agente publicado em `11-FICHAS-DOS-AGENTES.md`.
+- Catálogo de 37 fichas de agente publicado em `11-FICHAS-DOS-AGENTES.md`. (A Fase 0 publicou "32" — a soma estava errada; corrigida na Fase 1 e agora contada por teste.)
 - Quatro ADRs registrados.
 - Baseline: `tsc --noEmit` **limpo**; suíte Vitest e `next build` no PR.
 - Produção intocada. Nenhuma migração aplicada.
@@ -34,9 +34,24 @@ Construído em 24/08/2026, com o proprietário ausente e sob autorização dele.
 
 ---
 
+### Fase 1 · PR 1.2 — Fichas da empresa sobre `AgentProfile`
+
+As 37 fichas do catálogo deixam de ser papel e viram linha de banco, com dono e com limite escrito. Decisões que emendam o ADR-002 estão no **ADR-006**.
+
+- **O catálogo é o markdown — o código lê, não copia.** `fichasDaEmpresa.ts` lê `11-FICHAS-DOS-AGENTES.md`. O texto que o proprietário aprova é o texto que vai para o banco, sem transcrição no meio.
+- **6 colunas novas** em `agent_profiles`, aditivas. Provado num banco com a forma da produção: uma linha criada ANTES da migração sai dela como PRODUTO/AI, sem departamento — exatamente o que sempre foi.
+- **Três populações separadas por trava, não por convenção** (ADR-006). `getActiveAgentProfiles`, que alimenta o runtime do produto, filtrava só por `status: ACTIVE`: no dia em que o proprietário ativasse a ficha do Closer, ele entraria calado na lista de agentes que rodam dentro do restaurante do cliente. Agora filtra por população, e há teste espiando a consulta.
+- **Dono é cargo, não pessoa.** Todas as 34 fichas de departamento têm dono; hoje todos os cargos estão vagos, e a tela diz "vago".
+- **Nenhuma ficha nasce ligada.** 30 criadas, todas `DRAFT` com runtime desligado. E rodar o seed de novo não desliga o que o proprietário tiver ligado.
+- **As 4 de produto não foram tocadas por dentro:** ganharam departamento e número de catálogo; `allowedActions` e `status` continuam como estavam.
+- **Aba nova** em `/admin/sala-dos-agentes?aba=empresa`, por departamento, com "o que esta ficha NÃO pode fazer" a um toque.
+- **52 testes novos.** A rota nova exige sessão interna (ADR-003) e o portão de segurança da casa foi ensinado a reconhecê-la como guarda de verdade.
+
+---
+
 ## Em andamento
 
-Nada. O PR 1.1 está pronto para revisão; o 1.2 começa quando este for aceito.
+Nada. Os PRs 1.1 e 1.2 estão prontos para revisão; o 1.3 começa quando forem aceitos.
 
 ---
 
@@ -44,7 +59,6 @@ Nada. O PR 1.1 está pronto para revisão; o 1.2 começa quando este for aceito.
 
 | Fase | Departamento / entrega | Depende de |
 | --- | --- | --- |
-| 1b | Fichas de agente sobre `AgentProfile` (PR 1.2) | PR 1.1 |
 | 1c | OS, projetos, tarefas e handoffs (PR 1.3) | PR 1.2 |
 | 1d | Aprovações, decisões, eventos e dashboard (PR 1.4) | PR 1.3 |
 | 1e | Divisão do schema por domínio (PR 1.5, ADR-004) | PR 1.4 |
@@ -104,7 +118,7 @@ Sem teto, o gate humano de orçamento não tem contra o quê comparar.
 
 ## Achados registrados (não são decisão do CEO — são fatos com dono a definir)
 
-_Todos anteriores a este programa. Nenhum bloqueia a Fase 1. Nenhum foi consertado aqui: mexer em área alheia dentro do PR da organização interna é desvio de escopo, e some do radar depois._
+_Nenhum bloqueia a Fase 1. A-01 a A-03 são anteriores a este programa; A-04 é uma ambiguidade que ele encontrou. Nenhum foi consertado aqui: mexer em área alheia dentro do PR da organização interna é desvio de escopo, e some do radar depois._
 
 ### A-01 · A cadeia de migrações não replica do zero
 
@@ -113,6 +127,12 @@ _Todos anteriores a este programa. Nenhum bloqueia a Fase 1. Nenhum foi conserta
 ### A-02 · Dois arquivos de teste diferem só na caixa da letra
 
 `crmExecutionClassification.test.ts` e `CrmExecutionClassification.test.ts` são **dois arquivos diferentes**, os dois versionados. Em Mac ou Windows — sistemas indiferentes a maiúscula — um sobrescreve o outro no clone e **um dos testes some sem avisar**. Aqui em Linux os dois convivem, e é por isso que ninguém viu.
+
+### A-04 · O `suporte-tecnico` encosta em duas fichas ao mesmo tempo
+
+Ele se descreve como "engenheiro de plantão / assistência técnica 24h" e cabe tanto na ficha 4.2 (Suporte N1) quanto na 7.3 (Incidente e Runbook). **Não amarrei a nenhuma:** escolher no chute faria uma função da empresa herdar, calada, as permissões de um agente de produto em operação.
+
+Pergunta ao proprietário: o `suporte-tecnico` de hoje é a 4.2, a 7.3, ou são coisas diferentes?
 
 ### A-03 · ~750 erros de tipo em ~150 arquivos de teste antigos
 

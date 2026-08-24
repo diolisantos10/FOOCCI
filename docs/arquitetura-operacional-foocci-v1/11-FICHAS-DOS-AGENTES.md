@@ -138,8 +138,10 @@ Relacionamento de saída com o cliente do restaurante. Governado por `CrmAgentPi
 ### 6.4 WhatsApp · IA *(agente de produto, já existe)*
 Recepção de entrada no WhatsApp do restaurante. Governado por `WhatsAppAgentConfig`.
 
-### 6.5 Analytics · IA *(agente de produto, já existe)*
+### 6.5 Analytics · IA *(o slot existe vazio — a ficha ainda não foi escrita)*
 Leitura de dados do restaurante.
+**Não pode:** nada, porque nada foi escrito. O slug `analytics-product` existe no registro desde a Fase 0 como *placeholder*: zero regra, zero ferramenta, `DRAFT`. Chamar isso de "agente que já existe" seria vender como pronto o que é uma vaga com nome.
+**Escala quando:** sempre. Enquanto esta ficha não for escrita e aprovada, não há agente de Analytics — há uma linha reservada.
 
 ### 6.6 Agente de Avaliação e Gate · HÍBRIDO
 **Pode:** rodar dataset de avaliação, comparar versões, medir qualidade, custo e latência, bloquear promoção que regrediu.
@@ -210,10 +212,28 @@ Acesso mais restrito do sistema. Segregação de função obrigatória.
 
 ## Contagem
 
-**32 fichas:** 3 de direção, 9 de gerência departamental, 20 operacionais.
-Modo: **11 IA · 12 HUMANO · 9 HÍBRIDO.**
+**37 fichas:** 3 de direção, 9 de gerência departamental, 25 operacionais.
+Modo: **11 IA · 15 HUMANO · 11 HÍBRIDO.**
 
-Das 32, **quatro já existem** semeadas (`waiter`, `crm`, `whatsapp`, `suporte-tecnico`). As outras 28 são novas — e nascem em `AgentProfile`, não numa tabela paralela.
+| Departamento | Fichas |
+| --- | --- |
+| 1 · Marketing & Growth | 3 |
+| 2 · Vendas e Receita | 6 |
+| 3 · Implantação e Onboarding | 3 |
+| 4 · Sucesso do Cliente e Suporte | 4 |
+| 5 · Produto e Experiência | 3 |
+| 6 · Agentes e Inteligência do Produto | 6 |
+| 7 · Tecnologia, Operações e Integrações | 3 |
+| 8 · Qualidade, Segurança e Compliance | 3 |
+| 9 · Financeiro e Administrativo | 3 |
+| Direção (CEO, Diretor, Gerente Geral) | 3 |
+| **Total** | **37** |
+
+Das 37, **quatro já existem** semeadas (`waiter`, `crm`, `whatsapp`, `suporte-tecnico`). As outras 33 são novas — e nascem em `AgentProfile`, não numa tabela paralela.
+
+> **Correção de 24/08/2026.** A versão anterior desta seção dizia "32 fichas · 11 IA · 12 HUMANO · 9 HÍBRIDO". Estava errada: eu somei à mão e a soma não fechava com as fichas listadas acima. O número certo é 37, e agora ele é **contado do próprio documento por código** — `agentesCanonicos.test.ts` lê este arquivo, conta os cabeçalhos e falha se a tabela acima divergir.
+>
+> Fica registrado em vez de corrigido em silêncio: um catálogo que erra a própria contagem é exatamente o defeito que este programa existe para achar, e ele apareceu aqui dentro primeiro.
 
 ## O que estas fichas ainda NÃO fazem
 
