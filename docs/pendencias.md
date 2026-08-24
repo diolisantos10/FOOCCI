@@ -10,6 +10,19 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 📚 24/08 — Doutrina registrada: `docs/licoes-o-que-deriva.md`
+
+Do caso da marca: (1) existe defeito que não quebra, **deriva** — e some do radar
+por não gerar erro; (2) régua que só cobre a tela conhecida não impede a próxima,
+por isso o teste varre o repositório inteiro, **inclusive o arquivo que ainda não
+existe**; (3) imitação anda em bando — procure as irmãs, e comece onde tem
+dinheiro do outro lado; (4) quando o relato disser que algo *mudou*, **confirme
+que mudou** antes de procurar culpado.
+
+As três primeiras servem a mais de um produto (a casa irmã teve caso da mesma
+família) — **propostas ao Diretor Geral** em `docs/perguntas-ao-diretor-geral.md`,
+não escritas no kit por conta própria.
+
 ## 🟢 24/08 (3) — A marca oficial no checkout, e o link para comparar planos
 
 Bloco `claude/checkout-marca-e-link`. Detalhe em `docs/marca-no-checkout.md`.

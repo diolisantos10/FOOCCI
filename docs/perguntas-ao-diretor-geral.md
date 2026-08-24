@@ -268,6 +268,43 @@ tem casa.
 
 ---
 
+## Proposta ao Brain — "o que deriva" (Foocci, 24/08/2026)
+
+Origem: `docs/licoes-o-que-deriva.md` e `docs/marca-no-checkout.md`. O caso é do
+Foocci, mas a **classe** de defeito não é: a casa irmã registrou o mesmo padrão de
+marca aproximada no PR #324 da Dioli, e o caminho fixo com versão embutida que
+congelou o deploy dela por seis dias é da mesma família. Por isso não escrevo no
+kit — proponho.
+
+**Três regras candidatas a doutrina de todos os produtos:**
+
+1. **Identidade vem de fonte declarada, nunca de reprodução local.** Marca, cor,
+   nome, número, preço. O teste de bolso: *"o que acontece se alguém mudar a fonte
+   padrão/a escala de cor?"* — se a resposta for "aí muda também", é derivação, não
+   implementação. Este defeito **não quebra: ele deriva**, e por isso não gera erro,
+   não aparece em log e não entra em relatório nenhum.
+
+2. **Régua de classe, não de caso.** Ao corrigir uma imitação, o teste tem de valer
+   para **o arquivo que ainda não existe** — varredura no repositório inteiro, não
+   conferência das telas conhecidas. Conserto de caso conserta um dia; teste de
+   classe conserta o ano. É o guardrail 4 aplicado à identidade.
+
+3. **Imitação anda em bando, e mora onde tem dinheiro.** Achou uma, procure as
+   irmãs antes de comemorar — e comece pelo checkout, pagamento e contrato, onde
+   parecer outra empresa custa mais caro.
+
+**A pergunta:** isto vira regra do Brain (e portanto portão nos outros produtos),
+ou fica como lição do Foocci? Se virar regra, falta decidir **quem escreve o
+varredor genérico** — cada produto o seu, ou um molde no kit.
+
+> Nota de método, que talvez valha mais que as três: o pedido que chegou foi
+> *"conserte a logo"*. `git log -S` mostrou que **ninguém tinha trocado nada** — a
+> tela nasceu sem o arquivo oficial. Consertar sem medir teria entregue a tela
+> certa **com a conclusão errada**. Quando o relato disser que algo *mudou*,
+> confirmar que mudou é parte do conserto.
+
+---
+
 ## Respondidas
 
 *Nenhuma ainda. Quando houver, a resposta fica aqui — e se valer para mais de um
