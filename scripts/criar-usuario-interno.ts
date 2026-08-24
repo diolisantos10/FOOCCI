@@ -74,9 +74,32 @@ async function main() {
   const senha = papel === "AGENTE_IA" ? null : randomBytes(9).toString("base64url");
   const passwordHash = senha ? await hash(senha, 10) : null;
 
+  // ── O DEFEITO QUE ESTAVA AQUI ───────────────────────────────────────────
+  //
+  // O `update` não gravava `passwordHash` — só o `create`. Rodar o script para
+  // um e-mail que JÁ EXISTIA imprimia uma senha nova, em letras garrafais, e
+  // guardava a antiga. A senha impressa simplesmente não funcionava, e a pessoa
+  // concluía que o login estava quebrado.
+  //
+  // Foi assim que eu perdi duas rodadas de verificação achando que a rota de
+  // login não funcionava — ela funcionava; o script é que mentia.
+  //
+  // Agora a regra é explícita: **se a senha é impressa, ela é gravada.** As duas
+  // coisas acontecem juntas ou não acontecem.
+  const jaExistia = await prisma.internalUser.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
   const user = await prisma.internalUser.upsert({
     where: { email },
-    update: { nome, role: papel, positionId: cargo?.id ?? null, isActive: true },
+    update: {
+      nome,
+      role: papel,
+      positionId: cargo?.id ?? null,
+      isActive: true,
+      passwordHash,
+    },
     create: { email, nome, role: papel, passwordHash, positionId: cargo?.id ?? null },
   });
 
@@ -109,7 +132,11 @@ async function main() {
     },
   });
 
-  console.log(`\n✓ ${nome} · ${email} · papel ${papel}`);
+  console.log(
+    jaExistia
+      ? `\n✓ ${nome} · ${email} · papel ${papel}  (já existia — SENHA TROCADA)`
+      : `\n✓ ${nome} · ${email} · papel ${papel}`,
+  );
   if (cargo) console.log(`  cargo: ${cargo.titulo}`);
   if (deps.length) console.log(`  departamentos: ${deps.join(", ")}`);
   if (gerencia.length) console.log(`  gerencia: ${gerencia.join(", ")}`);

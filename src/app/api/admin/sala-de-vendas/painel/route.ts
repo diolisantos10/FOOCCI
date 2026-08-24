@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { autorizarInterno } from "@/lib/internal-auth";
 import { visaoDoGerente } from "@/services/salaDeVendas/painel";
+import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Período inválido." }, { status: 400 });
   }
 
-  const data = await visaoDoGerente(prisma, { de, ate, agora });
+  // O painel lê handoffs, propostas e avaliações — todas sob RLS. Sem
+  // identidade declarada, ele mostraria uma operação vazia para o gerente.
+  const data = await comSessao(prisma, auth.sessao, (tx) =>
+    visaoDoGerente(tx as never, { de, ate, agora }),
+  );
   return NextResponse.json({ ok: true, data });
 }

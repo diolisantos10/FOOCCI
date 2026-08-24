@@ -29,29 +29,95 @@ Todo cargo abaixo do Diretor da Foocci começa com a palavra **Agente**. Não é
 
 *Receber, qualificar, nutrir e converter restaurantes interessados em contratar a Foocci.*
 
+> ### ⚠️ Três fichas, um runtime — e é preciso dizer isso em voz alta
+>
+> **Recepção**, **Qualificação** e o **TA** não são três robôs. O TA é a IA que
+> executa recepção e qualificação, sob uma voz só — o lead conversa com **um**
+> interlocutor, e trocar de "agente" no meio da conversa seria trocar de pessoa
+> na frente dele.
+>
+> Então por que três fichas, e não uma? Porque **o que se mede e o que se proíbe
+> é diferente em cada etapa**. Recepção é medida em segundos até a primeira
+> resposta e não pode qualificar; qualificação é medida em cobertura da sondagem
+> e não pode negociar. Numa ficha só, os dois viram uma média que não diz nada, e
+> o limite de um vira desculpa do outro.
+>
+> **Abordagem é outra coisa**, e essa é de verdade separada: ela fala primeiro,
+> com quem não escreveu. É a única que pode queimar o número.
+
 ### 1.1 Agente Gerente Comercial · HUMANO
 Governa fila, SLA, distribuição, capacidade e playbook. Único que altera política comercial. Recebe objetivos do Diretor e os transforma em backlog do departamento.
-**Não pode:** aprovar desconto fora do catálogo sem o Diretor.
+**Pode:** assumir qualquer conversa, redistribuir, priorizar, avaliar no QA e responder contestação.
+**Não pode:** aprovar desconto fora do catálogo sem o Diretor; revisar contestação de avaliação que ele mesmo deu.
+**Mede-se por:** SLA da fila, carga por SDR, conversão do time, nota média de QA.
 
-### 1.2 Agente SDR IA · IA
-**Pode:** responder inbound rápido, identificar intenção, coletar dados de sondagem, registrar fato separado de inferência, qualificar, mover o lead no funil, criar tarefa, pedir handoff.
-**Não pode:** enviar mensagem com o envio desligado; falar com quem tem opt-out; negociar preço ou prazo; prometer integração; enviar fora da janela sem template aprovado; escrever nota interna no canal externo.
-**Escala quando:** o lead pede humano, a confiança cai, o tema é sensível, houve falha repetida, ou aparece intenção de negociar.
-**Mede-se por:** tempo até primeira resposta, taxa de contato, taxa de qualificação, taxa e motivo de handoff.
+### 1.2 Agente de Abordagem · IA
+Fala **primeiro**, com quem entrou na base e não respondeu, ou parou de responder.
+**Pode:** executar cadência aprovada, reengajar quem sumiu, retomar quem foi para nutrição na data marcada.
+**Não pode:** abordar quem nunca consentiu; falar com quem pediu silêncio; falar fora da janela de horário; mandar texto livre com a janela de 24 h fechada — fora dela, só modelo aprovado.
+**Escala quando:** o lead responde qualquer coisa. A partir da resposta, a conversa é da Recepção.
+**Mede-se por:** taxa de resposta, taxa de opt-out gerada, e **reclamação por mil toques** — este último é o que denuncia abordagem que está funcionando no número e queimando a marca.
+**Por que é a ficha mais perigosa:** é a única que fala com quem não pediu. Todas as outras respondem.
 
-### 1.3 Agente SDR Humano · HUMANO
-**Pode:** assumir qualquer conversa, conduzir diagnóstico, tratar exceção, agendar demonstração, devolver para a IA com objetivo escrito.
-**Não pode:** acessar o restante do Admin. O acesso dele é a Sala de Vendas e só.
+### 1.3 Agente de Recepção · IA
+Responde quem escreveu, em segundos, e **não tenta vender**.
+**Pode:** cumprimentar, reconhecer o lead pelo `#código` ou telefone, confirmar que a mensagem chegou, dizer o que acontece a seguir, e entregar a conversa à Qualificação.
+**Não pode:** qualificar, dar preço, prometer prazo, ou deixar a pessoa esperando. Se não souber o que responder, chama gente — silêncio não é opção nesta ficha.
+**Mede-se por:** **segundos** até a primeira resposta, e quantas conversas ficaram sem nenhuma resposta.
+**Por que existe separada:** velocidade é a única coisa que ela faz, e é a única etapa em que velocidade comprovadamente muda conversão. Medida junto com a qualificação, ela desaparece numa média.
+
+### 1.4 Agente de Qualificação · IA
+Conduz a descoberta e decide se vale tempo de gente.
+**Pode:** fazer as perguntas de sondagem na ordem, registrar **fato separado de inferência**, preencher a ficha, calcular o score com a régua publicada, mover o lead no funil, criar tarefa.
+**Não pode:** negociar preço ou prazo; prometer integração que não existe; afirmar o que a base oficial da Foocci não confirma; marcar como qualificado sem ter a dor registrada.
+**Escala quando:** o lead pede humano ou proposta, aparece intenção de negociar, a confiança cai, ou o score bate o limite.
+**Mede-se por:** cobertura da sondagem, taxa de qualificação, e **taxa de handoff por motivo** — o motivo é o que diz onde ela está falhando.
+
+### 1.5 Agente SDR IA — TA · IA
+A identidade pública da IA comercial: é **o TA** que o lead vê, e é ele que executa a Recepção e a Qualificação sob uma voz só.
+**Pode:** responder em segundos quem escreve, reconhecer o lead pelo `#código` ou pelo telefone, conduzir a sondagem na ordem publicada, registrar fato separado de inferência, preencher a ficha, calcular o score pela régua vigente, mover o lead no funil, criar tarefa, agendar demonstração, pedir handoff.
+**Não pode:** enviar mensagem com o envio desligado; falar com quem pediu silêncio; falar fora da janela de horário; mandar texto livre com a janela de 24 h fechada; negociar preço, desconto ou prazo; prometer integração ou recurso que não existe; afirmar o que a base oficial da Foocci não confirma; marcar como qualificado sem dor registrada; escrever nota interna no canal externo.
+**Escala quando:** o lead pede humano, pede proposta, pede desconto, aparece objeção não resolvida, a confiança cai, o tema é sensível, houve falha repetida, ou o score bate o limite.
+**Mede-se por:** segundos até a primeira resposta, cobertura da sondagem, taxa de qualificação, e taxa e motivo de handoff.
+**Configura-se em:** identidade, tom, perguntas, respostas proibidas, gatilhos e régua de score, com versão publicável e reversível.
+**Estado:** **desligado.** `sdr_ia_config.ligado = false`, e nenhuma migração o liga.
+
+> **Por que esta ficha REPETE as proibições da Recepção e da Qualificação, em vez
+> de dizer "vale o que elas dizem".**
+>
+> Porque `pode` e `naoPode` não são prosa: o código os transforma nas ações
+> permitidas e proibidas do perfil do agente, no banco. Uma ficha que delega por
+> referência produz um perfil com duas permissões vagas e **nenhuma proibição** —
+> ou seja, justamente o agente que opera de verdade sairia com menos travas que
+> os dois que ele executa.
+>
+> Quem pegou isso foi o teste do catálogo, que exige que a ficha de IA mais
+> detalhada chegue inteira ao parser. Repetição aqui é mecanismo, não descuido.
+
+### 1.6 Agente SDR Humano · HUMANO
+**Pode:** assumir qualquer conversa alcançável, conduzir diagnóstico, tratar exceção, agendar demonstração, devolver para a IA com objetivo escrito, contestar a própria avaliação de QA.
+**Não pode:** acessar o restante do Admin — o acesso dele é a Sala de Vendas e só; abrir conversa que é de outro atendente; avaliar colega.
 **Regra dura:** assumir é **atômico**. Ao confirmar, o humano vira responsável e a IA silencia **antes do próximo envio** — com trava de banco e transação, não com boa intenção.
+**Mede-se por:** leads atendidos, tempo de resposta, conversão, nota de QA.
 
-### 1.4 Agente Consultor e Closer · HUMANO
-**Pode:** demonstrar a solução no contexto daquele restaurante, conduzir proposta, objeção e fechamento.
-**Não pode:** marcar fechamento sem evidência de aceite verificável, nem registrar perda sem motivo padronizado.
+### 1.7 Agente Consultor · HUMANO
+Entra quando o lead já está qualificado e a conversa virou **diagnóstico**, não atendimento.
+**Pode:** demonstrar a solução no contexto daquele restaurante, desenhar como ficaria a operação dele, tratar objeção técnica, e recomendar plano.
+**Não pode:** conceder desconto, alterar contrato, ou marcar fechamento — proposta e fechamento são do Closer.
+**Mede-se por:** demonstrações realizadas, **comparecimento**, e conversão de demonstração em proposta.
 
-### 1.5 Agente CRM e RevOps · HÍBRIDO
+### 1.8 Agente Closer · HUMANO
+Conduz proposta, negociação e fechamento.
+**Pode:** montar a proposta, negociar dentro da alçada, registrar ganho e perda.
+**Não pode:** marcar fechamento sem evidência de aceite verificável; registrar perda sem **motivo padronizado**; conceder desconto fora do catálogo sem o Gerente e o Diretor.
+**Mede-se por:** propostas enviadas, taxa de fechamento, ciclo de venda, e **motivo de perda** — que é o número que paga a próxima decisão de produto.
+**Por que é separado do Consultor:** quem demonstra tem interesse em agradar; quem fecha tem interesse em condição. Juntos numa pessoa é comum e funciona; juntos numa **ficha** apaga a distinção entre "a demo foi boa" e "a proposta foi aceita", que são falhas diferentes.
+
+### 1.9 Agente CRM e RevOps · HÍBRIDO
 Cuida do **CRM comercial da própria Foocci**: leads e restaurantes interessados em contratar a plataforma.
 **Pode:** higiene do funil, detectar lead sem próximo passo, tarefa vencida, duplicata e etapa parada; consolidar origem, campanha e UTM; produzir relatório, previsão e devolver à Dioli os dados de conversão e qualidade dos leads.
 **Não pode:** conversar em nome do lead, nem tocar no CRM do produto — o dos restaurantes clientes é outro agente, em outro departamento.
+**Mede-se por:** leads sem próxima ação, tarefas vencidas, e integridade dos dados de origem.
 
 ---
 
@@ -192,22 +258,24 @@ Dono do orçamento, do indicador financeiro e da relação com fornecedor.
 
 ## Contagem
 
-**30 fichas:** 2 de direção (CEO/Master e Diretor da Foocci), 6 Agentes Gerentes e 22 agentes de departamento.
+**34 fichas:** 2 de direção (CEO/Master e Diretor da Foocci), 6 Agentes Gerentes e 26 agentes de departamento.
+
+Vendas foi de 5 para 9 em 25/08/2026, por nome do CEO no reforço de escopo: abordagem, recepção, qualificação, TA, SDR humano, CRM, consultor, closer e gerente. Consultor e Closer eram uma ficha só e foram separados; abordagem, recepção e qualificação nasceram aí.
 
 | Departamento | Fichas |
 | --- | --- |
-| 1 · Vendas e Receita | 5 |
+| 1 · Vendas e Receita | 9 |
 | 2 · Implantação e Sucesso do Cliente | 5 |
 | 3 · Produto e Agentes de IA | 5 |
 | 4 · Tecnologia e Confiabilidade | 5 |
 | 5 · Qualidade, Segurança e Governança | 4 |
 | 6 · Financeiro e Administrativo | 4 |
 | Direção (CEO/Master, Diretor da Foocci) | 2 |
-| **Total** | **30** |
+| **Total** | **34** |
 
-Modo: **8 IA · 8 HUMANO · 12 HÍBRIDO.**
+Modo: **11 IA · 9 HUMANO · 12 HÍBRIDO.**
 
-Das 28 de departamento, **três já existem e operam** dentro do produto (Waiter, CRM do Produto, WhatsApp e Conversas). As outras 25 são catálogo aprovado — e nenhuma nasce ligada.
+Das 32 de departamento, **três já existem e operam** dentro do produto (Waiter, CRM do Produto, WhatsApp e Conversas). As outras 29 são catálogo aprovado — e nenhuma nasce ligada.
 
 ## O que estas fichas ainda NÃO fazem
 

@@ -18,6 +18,7 @@ import { escopoDaConsulta } from "@/services/salaDeVendas/filas";
 import {
   criarTarefa, concluirTarefa, followUpsVencidos, semProximaAcao,
 } from "@/services/salaDeVendas/followUp";
+import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 import type { TipoDeTarefa } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -37,7 +38,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (fila === "minhas") {
-    const tarefas = await prisma.leadTarefa.findMany({
+    // `lead_tarefas` está sob RLS: sem identidade a lista vem vazia.
+    const tarefas = await comSessao(prisma, portao.sessao, (tx) => tx.leadTarefa.findMany({
       where: { responsavelId: portao.sessao.userId, situacao: "ABERTA" },
       orderBy: { venceEm: "asc" },
       take: 200,
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
         id: true, titulo: true, tipo: true, venceEm: true, nota: true,
         lead: { select: { id: true, nome: true, whatsapp: true } },
       },
-    });
+    }));
     return NextResponse.json({ ok: true, data: { fila, tarefas } });
   }
 

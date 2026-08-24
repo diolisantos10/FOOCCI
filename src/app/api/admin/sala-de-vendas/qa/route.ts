@@ -24,6 +24,7 @@ import {
   avaliar, contestar, revisarContestacao, filaDeRevisao, desempenhoDe,
   type NotaDeCriterio,
 } from "@/services/salaDeVendas/qa";
+import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 import type { AutorDaMensagem, SiteLeadStage } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -41,10 +42,13 @@ export async function GET(req: NextRequest) {
       ? (req.nextUrl.searchParams.get("userId") ?? portao.sessao.userId)
       : portao.sessao.userId;
 
-    const [meu, daIA] = await Promise.all([
-      desempenhoDe(prisma, { avaliadoUserId: alvo }),
-      desempenhoDe(prisma, { avaliado: "IA" }),
-    ]);
+    // `lead_avaliacoes_qa` está sob RLS.
+    const [meu, daIA] = await comSessao(prisma, portao.sessao, (tx) =>
+      Promise.all([
+        desempenhoDe(tx, { avaliadoUserId: alvo }),
+        desempenhoDe(tx, { avaliado: "IA" }),
+      ]),
+    );
 
     return NextResponse.json({ ok: true, data: { userId: alvo, desempenho: meu, ia: daIA } });
   }

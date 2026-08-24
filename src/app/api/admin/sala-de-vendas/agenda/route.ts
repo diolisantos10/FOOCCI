@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { guardarSalaDeVendas, somenteLeitura, podeVerOLead, vePelaOperacaoToda } from "../_guarda";
 import { agendar, marcarSituacao, remarcar, agendaDaJanela } from "@/services/salaDeVendas/agenda";
+import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 import type { SituacaoDoCompromisso } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -37,7 +38,10 @@ export async function GET(req: NextRequest) {
     ? (p.get("responsavelId") || null)
     : portao.sessao.userId;
 
-  const compromissos = await agendaDaJanela(prisma, { de, ate, responsavelId });
+  // `lead_compromissos` está sob RLS.
+  const compromissos = await comSessao(prisma, portao.sessao, (tx) =>
+    agendaDaJanela(tx, { de, ate, responsavelId }),
+  );
   return NextResponse.json({ ok: true, data: { de, ate, compromissos } });
 }
 

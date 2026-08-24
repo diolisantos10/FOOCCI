@@ -19,6 +19,11 @@ const PARA_TODOS = [
   { href: "/admin/sala-de-vendas", rotulo: "Filas" },
   { href: "/admin/sala-de-vendas/atendimento", rotulo: "Atendimento" },
   { href: "/admin/sala-de-vendas/funil", rotulo: "Funil" },
+  // As fichas ficam visíveis para TODO MUNDO da Sala, o SDR incluído: elas dizem
+  // o que cada função pode e não pode, e o SDR precisa ler a dele para saber
+  // onde ele para e onde o Closer começa. Esconder a alçada a transforma em
+  // folclore — e folclore se resolve perguntando ao colega mais antigo.
+  { href: "/admin/sala-de-vendas/agentes", rotulo: "Agentes" },
 ];
 
 const PAPEIS_DO_PAINEL = new Set([

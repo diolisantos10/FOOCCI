@@ -32,6 +32,7 @@ import { detectOptOutIntent } from "@/services/crm/ContactSafetyService";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { registrarEntrada } from "@/services/salaDeVendas/conversa";
+import { comIdentidade, comoSistema } from "@/services/salaDeVendas/identidadeNoBanco";
 import type { TipoDaMensagem } from "@prisma/client";
 
 // ─── A parte pura ───────────────────────────────────────────────────────────────
@@ -224,12 +225,22 @@ async function gravarNaConversa(
   msg: MensagemDeVendas,
   agora: Date,
 ): Promise<void> {
-  if (!msg.waMessageId) return;
+  // Capturado numa const: o estreitamento de `msg.waMessageId` pelo `if` acima
+  // não sobrevive à entrada no fecho passado a `comIdentidade`.
+  const waMessageId = msg.waMessageId;
+  if (!waMessageId) return;
 
   try {
-    const r = await registrarEntrada(prisma, {
+    // Roda como SISTEMA porque não há pessoa logada: é a Meta entregando um
+    // webhook. Sem declarar identidade, a verificação de duplicata dentro de
+    // `registrarEntrada` não enxergaria a mensagem já gravada (RLS) e a
+    // reentrega seria tratada como um lead inexistente.
+    const r = await comIdentidade(
+      prisma,
+      comoSistema("webhook da Meta: recepção de mensagem, sem usuário logado"),
+      (tx) => registrarEntrada(tx, {
       leadId,
-      waMessageId: msg.waMessageId,
+      waMessageId,
       tipo: msg.tipo ?? "TEXTO",
       tipoCru: msg.tipoCru ?? null,
       texto: msg.text ?? null,
@@ -239,7 +250,8 @@ async function gravarNaConversa(
       midiaNome: msg.midiaNome ?? null,
       duracaoSeg: msg.duracaoSeg ?? null,
       ocorreuEm: agora,
-    });
+      }),
+    );
 
     if (!r.ok) {
       console.error(`[foocci-sdr] mensagem NÃO gravada na conversa do lead ${leadId}: ${r.causa}`);

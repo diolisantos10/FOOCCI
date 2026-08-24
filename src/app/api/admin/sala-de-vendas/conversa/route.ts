@@ -32,6 +32,7 @@ import {
   janelaDe24h,
 } from "@/services/salaDeVendas/conversa";
 import { explicacaoDoScore } from "@/services/salaDeVendas/score";
+import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,15 +67,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Lead não encontrado." }, { status: 404 });
   }
 
-  const [mensagens, fatores, ultimaEntrada] = await Promise.all([
-    lerConversa(prisma, { leadId }),
-    explicacaoDoScore(prisma, leadId),
-    prisma.leadMensagem.findFirst({
-      where: { leadId, direcao: "ENTRADA" },
-      orderBy: { ocorreuEm: "desc" },
-      select: { ocorreuEm: true },
-    }),
-  ]);
+  // As três leituras vão DENTRO da identidade: `lead_mensagens` e
+  // `lead_score_fatores` estão sob RLS, e sem declarar quem pergunta elas
+  // devolvem lista vazia — a conversa apareceria em branco para o próprio dono.
+  const [mensagens, fatores, ultimaEntrada] = await comSessao(prisma, portao.sessao, (tx) =>
+    Promise.all([
+      lerConversa(tx, { leadId }),
+      explicacaoDoScore(tx, leadId),
+      tx.leadMensagem.findFirst({
+        where: { leadId, direcao: "ENTRADA" },
+        orderBy: { ocorreuEm: "desc" },
+        select: { ocorreuEm: true },
+      }),
+    ]),
+  );
 
   return NextResponse.json({
     ok: true,
