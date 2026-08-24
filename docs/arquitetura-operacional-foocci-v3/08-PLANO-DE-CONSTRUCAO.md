@@ -33,7 +33,9 @@ A fase revelou que a Sala **não era construção do zero**. `SiteLead` já tinh
 - [x] CRM comercial separado do CRM do produto *(já era, e foi verificado)*
 - [ ] Kanban — a lista existe; a visão de quadro fica para a próxima entrega
 - [ ] Ficha 360º dentro da Sala — hoje vive no CRM da Foocci, na gaveta de contato
-- [ ] Envio real pelo WhatsApp — **depende do CEO**: o número de vendas não existe
+- [x] Saída para o WhatsApp — aceso em 25/08/2026 com o número **11 94372-3316**, que já era decisão do CEO desde 23/08 e estava no repositório; eu é que havia registrado como faltando
+- [ ] **Recepção** do WhatsApp — o "oi" virar registro na Sala sozinho. Depende do cadastro do número na Meta, que é trabalho do CEO. Hoje a mensagem cai num aparelho e quem responde é gente
+- [ ] **Envio** pelo Foocci — desligado de propósito. É a última chave, e ela é decisão do CEO com o diário do SDR na mão
 
 **Gate cumprido no que foi entregue:** SDR humano não alcança o resto do Admin nem por URL nem por API; a transferência preserva o histórico inteiro (verificado no ciclo IA → humano → IA).
 

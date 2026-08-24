@@ -43,6 +43,7 @@ O que a v1 produziu em **código** não é jogado fora. Ela entregou identidade 
 | 08 | Plano de construção | as 5 fases, em ordem |
 | 09 | QA e critérios de aceite | como se sabe que acabou |
 | 10 | Plano de migração | o caminho da v1 para a v3 |
+| 11 | **Backlog** | o que ficou aberto, de quem é cada item, e o que trava o resto |
 
 ## As três regras que atravessam tudo
 
