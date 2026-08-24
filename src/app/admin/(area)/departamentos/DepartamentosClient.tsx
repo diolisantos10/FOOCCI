@@ -203,6 +203,14 @@ function Card({ departamento: d }: { departamento: DepartamentoNaTela }) {
           {i.agentes} agentes · {i.ia} IA · {i.humano} pessoa · {i.hibrido} híbrido
           {i.jaOperam > 0 && ` · ${i.jaOperam} já operam`}
         </p>
+
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+          <span className="text-muted">
+            Fila: <span className="font-medium text-ink2">{i.backlogAberto}</span>
+          </span>
+          <Saude saude={d.saude} />
+          <Comando comando={d.comando} />
+        </div>
       </header>
 
       <div className="px-4 py-3">
@@ -220,8 +228,88 @@ function Card({ departamento: d }: { departamento: DepartamentoNaTela }) {
             <Linha key={a.slug} agente={a} />
           ))}
         </ul>
+
+        {d.controla.length > 0 && (
+          <details className="mt-3">
+            <summary className="cursor-pointer list-none text-[12.5px] font-medium text-ink2 hover:text-ink">
+              O que este departamento controla ({d.controla.length})
+            </summary>
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[12px] leading-relaxed text-muted">
+              {d.controla.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+            {d.escalaQuando && (
+              <>
+                <p className="mt-2 text-[12px] font-medium text-ink2">Devolve para cima quando:</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{d.escalaQuando}</p>
+              </>
+            )}
+          </details>
+        )}
       </div>
     </section>
+  );
+}
+
+/**
+ * A saúde do departamento.
+ *
+ * `semAuditoria` tem texto próprio de propósito: um departamento que nunca foi
+ * auditado e um auditado-e-limpo são os dois zero, e só um é boa notícia.
+ * Mostrar "0 falhas" nos dois casos seria a mentira mais cara desta tela.
+ */
+function Saude({ saude }: { saude: DepartamentoNaTela["saude"] }) {
+  if (saude.leitura === "semAuditoria") {
+    return (
+      <span className="text-muted">
+        Qualidade: <em className="not-italic text-muted">nunca auditado</em>
+      </span>
+    );
+  }
+  if (saude.leitura === "limpo") {
+    return (
+      <span className="text-muted">
+        Qualidade: <span className="font-medium text-ink2">sem falha aberta</span>
+      </span>
+    );
+  }
+  return (
+    <span className={saude.leitura === "bloqueado" ? "text-red-700" : "text-amber-700"}>
+      Qualidade:{" "}
+      <span className="font-medium">
+        {saude.abertas} aberta(s)
+        {saude.bloqueantes > 0 && `, ${saude.bloqueantes} bloqueante(s)`}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Quantas ordens pularam o Agente Gerente em 30 dias.
+ *
+ * A promessa do documento 01: "a regra vira número, e o número aparece". Um pulo
+ * é exceção; um terço das ordens pulando é uma estrutura que não está
+ * funcionando — e aí a conversa é sobre a estrutura, não sobre a regra.
+ *
+ * Sem delegação nenhuma NÃO é saudável: é ausência de dado.
+ */
+function Comando({ comando }: { comando: DepartamentoNaTela["comando"] }) {
+  if (comando.leitura === "semDados") {
+    return (
+      <span className="text-muted">
+        Comando: <em className="not-italic text-muted">nenhuma ordem registrada</em>
+      </span>
+    );
+  }
+  const pct = Math.round((comando.proporcao ?? 0) * 100);
+  return (
+    <span className={comando.leitura === "atencao" ? "text-amber-700" : "text-muted"}>
+      Comando:{" "}
+      <span className="font-medium">
+        {comando.pularamOGerente} de {comando.total} pularam o gerente ({pct}%)
+      </span>
+    </span>
   );
 }
 

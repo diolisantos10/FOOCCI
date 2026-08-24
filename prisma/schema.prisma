@@ -3114,9 +3114,10 @@ model AgentProfile {
   versions  AgentProfileVersion[]
   overrides RestaurantAgentProfileOverride[]
 
-  department      Department? @relation(fields: [departmentId], references: [id])
-  ownerPosition   Position?   @relation("DonoDaFicha", fields: [ownerPositionId], references: [id])
-  managerPosition Position?   @relation("GestorDaFicha", fields: [managerPositionId], references: [id])
+  naoConformidades NaoConformidade[]
+  department       Department?       @relation(fields: [departmentId], references: [id])
+  ownerPosition    Position?         @relation("DonoDaFicha", fields: [ownerPositionId], references: [id])
+  managerPosition  Position?         @relation("GestorDaFicha", fields: [managerPositionId], references: [id])
 
   @@index([area])
   @@index([status])
@@ -5578,11 +5579,13 @@ model Department {
   memberships DepartmentMembership[]
   fichas      AgentProfile[]
 
+  delegacoes        Delegacao[]
+  naoConformidades  NaoConformidade[]
   ordensDeServico   WorkOrder[]
   projetos          Project[]
   tarefas           Task[]
-  handoffsEnviados  Handoff[]   @relation("HandoffOrigem")
-  handoffsRecebidos Handoff[]   @relation("HandoffDestino")
+  handoffsEnviados  Handoff[]         @relation("HandoffOrigem")
+  handoffsRecebidos Handoff[]         @relation("HandoffDestino")
 
   @@map("departments")
 }
@@ -5625,6 +5628,8 @@ model Position {
   fichasQueDono     AgentProfile[] @relation("DonoDaFicha")
   fichasQueGerencia AgentProfile[] @relation("GestorDaFicha")
 
+  delegouDe           Delegacao[] @relation("DelegouDe")
+  delegouPara         Delegacao[] @relation("DelegouPara")
   osQuePatrocina      WorkOrder[] @relation("OsSponsor")
   osQueResponde       WorkOrder[] @relation("OsOwner")
   projetosQueDono     Project[]   @relation("ProjetoOwner")
@@ -5661,11 +5666,13 @@ model InternalUser {
   position    Position?              @relation(fields: [positionId], references: [id])
   memberships DepartmentMembership[]
 
-  leadsQueAtende     SiteLead[]  @relation("LeadAtendente")
-  osQueSolicitou     WorkOrder[] @relation("OsSolicitante")
-  tarefasDaPessoa    Task[]      @relation("TarefaPessoa")
-  handoffsQueEnviou  Handoff[]   @relation("HandoffEmissor")
-  handoffsQueAceitou Handoff[]   @relation("HandoffReceptor")
+  leadsQueAtende     SiteLead[]        @relation("LeadAtendente")
+  falhasQueAchou     NaoConformidade[] @relation("FalhaEncontradaPor")
+  falhasQueAceitou   NaoConformidade[] @relation("FalhaAceitaPor")
+  osQueSolicitou     WorkOrder[]       @relation("OsSolicitante")
+  tarefasDaPessoa    Task[]            @relation("TarefaPessoa")
+  handoffsQueEnviou  Handoff[]         @relation("HandoffEmissor")
+  handoffsQueAceitou Handoff[]         @relation("HandoffReceptor")
 
   @@index([role])
   @@index([positionId])
@@ -5825,9 +5832,10 @@ model WorkOrder {
   owner       Position?     @relation("OsOwner", fields: [ownerPositionId], references: [id])
   department  Department?   @relation(fields: [departmentId], references: [id])
 
-  projects Project[]
-  tasks    Task[]
-  handoffs Handoff[]
+  projects   Project[]
+  tasks      Task[]
+  handoffs   Handoff[]
+  delegacoes Delegacao[]
 
   @@index([status])
   @@index([departmentId])
@@ -5893,9 +5901,10 @@ model Task {
   assigneePosition Position?     @relation("TarefaCargo", fields: [assigneePositionId], references: [id])
   assigneeUser     InternalUser? @relation("TarefaPessoa", fields: [assigneeUserId], references: [id])
 
-  dependeDe TaskDependency[] @relation("TarefaQueDepende")
-  bloqueia  TaskDependency[] @relation("TarefaDaQualDepende")
-  handoffs  Handoff[]
+  dependeDe  TaskDependency[] @relation("TarefaQueDepende")
+  bloqueia   TaskDependency[] @relation("TarefaDaQualDepende")
+  handoffs   Handoff[]
+  delegacoes Delegacao[]
 
   @@index([status])
   @@index([projectId])
@@ -6009,4 +6018,137 @@ model DomainEvent {
   @@index([tipo, ocorridoEm])
   @@index([ocorridoEm])
   @@map("domain_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOVERNANÇA DO DEPARTAMENTO (v3, Fase 4)
+//
+// O documento 01 exige que cada departamento tenha dono, fila, entradas, saídas,
+// SLA, métricas e regras de escalonamento. Dono e fila já existem (cargo e
+// backlog). Falta o que registra o COMANDO e a QUALIDADE.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Uma ordem descendo a hierarquia.
+///
+/// ── POR QUE ISTO É UMA TABELA, E NÃO UM CAMPO NA TAREFA ──
+///
+/// A regra 7 da hierarquia diz que "o Diretor não opera rotineiramente delegando
+/// direto aos agentes subordinados". É um HÁBITO, e hábito não se implementa com
+/// `if`.
+///
+/// Bloquear seria errado: numa urgência, o Diretor PRECISA poder falar direto
+/// com quem executa. O que não pode é isso virar rotina sem ninguém perceber.
+///
+/// Então a delegação registra o caminho, e o caminho vira número: quantas vezes,
+/// no período, uma ordem pulou o Agente Gerente. Um pulo é exceção. Trinta pulos
+/// por mês é uma estrutura que não está funcionando — e aí a conversa é sobre a
+/// estrutura, não sobre a regra.
+model Delegacao {
+  id String @id @default(cuid())
+
+  /// Cargo de quem delegou e de quem recebeu.
+  dePositionId   String
+  paraPositionId String
+
+  departmentId String?
+
+  /// O que foi pedido, e como se sabe que terminou.
+  objetivo         String    @db.Text
+  criterioDeAceite String?   @db.Text
+  prazo            DateTime?
+
+  /// O item gerado, quando houver.
+  workOrderId String?
+  taskId      String?
+
+  /// `true` quando a ordem pulou o Agente Gerente do departamento.
+  ///
+  /// Calculado na escrita e GRAVADO, não deduzido na leitura: o organograma
+  /// muda, e um relatório de junho precisa dizer o que era verdade em junho.
+  pulouGerente Boolean @default(false)
+
+  /// Quem registrou. Pessoa, porque ordem tem autor.
+  criadoPorId String?
+  criadoEm    DateTime @default(now())
+
+  de         Position    @relation("DelegouDe", fields: [dePositionId], references: [id])
+  para       Position    @relation("DelegouPara", fields: [paraPositionId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  workOrder  WorkOrder?  @relation(fields: [workOrderId], references: [id])
+  task       Task?       @relation(fields: [taskId], references: [id])
+
+  @@index([departmentId, criadoEm])
+  @@index([pulouGerente, criadoEm])
+  @@index([paraPositionId])
+  @@map("delegacoes")
+}
+
+/// Gravidade de uma não conformidade.
+enum GravidadeDaFalha {
+  /// Não impede a operação, mas precisa entrar na fila.
+  BAIXA
+  /// Atrapalha e tem prazo.
+  MEDIA
+  /// Para a operação até resolver.
+  ALTA
+  /// Risco a cliente, dado ou dinheiro: bloqueia agora.
+  BLOQUEANTE
+}
+
+enum SituacaoDaFalha {
+  ABERTA
+  EM_TRATAMENTO
+  RESOLVIDA
+  /// Aceita conscientemente, com quem aceitou registrado.
+  ACEITA
+}
+
+/// Uma não conformidade encontrada por auditoria ou avaliação.
+///
+/// ── A REGRA QUE ESTE MODELO IMPÕE ──
+///
+/// **Ausência de evidência não é aprovação.** Toda falha nasce com evidência
+/// anexada, e uma falha sem evidência não pode ser aberta — senão a auditoria
+/// vira opinião, e opinião não sustenta bloqueio de mudança crítica.
+///
+/// **Quem audita não assina a liberação do que auditou.** `aceitaPorId` nunca
+/// pode ser igual a `encontradaPorId`. A trava está no serviço, com teste.
+model NaoConformidade {
+  id String @id @default(cuid())
+
+  titulo    String
+  descricao String @db.Text
+
+  gravidade GravidadeDaFalha
+  situacao  SituacaoDaFalha  @default(ABERTA)
+
+  /// Onde foi encontrada: departamento e, quando couber, o agente avaliado.
+  departmentId   String?
+  agentProfileId String?
+
+  /// A prova. Sem ela a falha não existe — o serviço recusa criar sem evidência.
+  evidencia Json @default("[]")
+
+  /// O que se vai fazer, e até quando.
+  planoDeAcao String?   @db.Text
+  prazo       DateTime?
+
+  encontradaPorId String?
+  /// Quem aceitou o risco, quando `situacao = ACEITA`. NUNCA quem encontrou.
+  aceitaPorId     String?
+  motivoDaAceite  String? @db.Text
+
+  criadaEm    DateTime  @default(now())
+  resolvidaEm DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  agentProfile  AgentProfile? @relation(fields: [agentProfileId], references: [id])
+  encontradaPor InternalUser? @relation("FalhaEncontradaPor", fields: [encontradaPorId], references: [id])
+  aceitaPor     InternalUser? @relation("FalhaAceitaPor", fields: [aceitaPorId], references: [id])
+
+  @@index([situacao, gravidade])
+  @@index([departmentId, criadaEm])
+  @@index([agentProfileId])
+  @@map("nao_conformidades")
 }

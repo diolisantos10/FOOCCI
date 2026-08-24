@@ -31,6 +31,17 @@ export interface DepartamentoCanonico {
   nome: string;
   missao: string;
   rota: string;
+  /**
+   * O que este departamento controla — a lista do comando do CEO.
+   *
+   * Não é decoração: é a fronteira. Quando duas áreas discutem de quem é um
+   * assunto, é esta lista que responde. Sem ela, "entradas e saídas" do
+   * documento 01 viram acordo verbal, e acordo verbal muda de lado conforme
+   * quem está na sala.
+   */
+  controla: readonly string[];
+  /** Quando o departamento devolve a decisão para cima. */
+  escalaQuando: string;
 }
 
 export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
@@ -41,6 +52,21 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     missao:
       "Receber, qualificar, nutrir e converter restaurantes interessados em contratar a Foocci.",
     rota: "/admin/vendas",
+    controla: [
+      "leads originados de campanhas",
+      "entrada de leads pelo WhatsApp",
+      "distribuição automática e manual",
+      "atendimento por IA ou humano",
+      "transferência IA ↔ humano",
+      "qualificação e lead scoring",
+      "funil comercial e follow-ups",
+      "agendamentos, propostas e negociação",
+      "fechamento e motivos de perda",
+      "origem, campanha, UTM e atribuição",
+      "metas, produtividade e conversão",
+      "auditoria e QA das conversas",
+    ],
+    escalaQuando: "desconto fora do catálogo, promessa de integração inexistente, ou pedido de exceção contratual.",
   },
   {
     numero: 2,
@@ -49,6 +75,19 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     missao:
       "Receber o cliente vendido, implantar, acompanhar a operação, prestar suporte e trabalhar retenção.",
     rota: "/admin/cliente",
+    controla: [
+      "handoff de venda para implantação",
+      "kickoff e checklist de implantação",
+      "cadastro e configuração do restaurante",
+      "importação de cardápio e dados",
+      "configuração de canais e integrações",
+      "treinamento e go-live",
+      "chamados, SLA e escalonamento N1 → N2",
+      "saúde da carteira e adoção",
+      "risco de cancelamento, retenção e expansão",
+      "voz do cliente",
+    ],
+    escalaQuando: "incidente de pagamento, segurança ou dado sensível; ou pedido que exige decisão comercial.",
   },
   {
     numero: 3,
@@ -57,6 +96,15 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     missao:
       "Evoluir a plataforma e governar os agentes que fazem parte do produto vendido aos restaurantes.",
     rota: "/admin/produto",
+    controla: [
+      "backlog do produto e discovery",
+      "priorização, requisitos e critérios de aceite",
+      "avaliação dos agentes",
+      "prompts, políticas e versões dos agentes",
+      "testes controlados, rollout e rollback",
+      "métricas de desempenho do produto",
+    ],
+    escalaQuando: "rollout de agente sem avaliação aprovada, ou mudança que altere promessa comercial.",
   },
   {
     numero: 4,
@@ -64,6 +112,15 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     nome: "Tecnologia e Confiabilidade",
     missao: "Construir, integrar e manter a plataforma estável e disponível.",
     rota: "/admin/tecnologia",
+    controla: [
+      "aplicação, APIs e banco de dados",
+      "WhatsApp, pagamentos e integrações",
+      "filas e processamento",
+      "monitoramento e disponibilidade",
+      "incidentes, releases e runbooks",
+      "logs, observabilidade e recuperação de falhas",
+    ],
+    escalaQuando: "indisponibilidade, perda de dado, custo de infraestrutura acima do previsto, ou troca de credencial.",
   },
   {
     numero: 5,
@@ -72,6 +129,16 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     missao:
       "Impedir falha comercial, operacional, técnica, legal e comportamental dos agentes de IA.",
     rota: "/admin/qualidade",
+    controla: [
+      "QA da plataforma e da Sala de Vendas",
+      "auditoria de conversas e avaliação de respostas da IA",
+      "aderência a scripts e políticas",
+      "segurança, privacidade e LGPD",
+      "consentimento, opt-out e dados sensíveis",
+      "evidências de auditoria e planos de ação",
+      "bloqueios de risco e aprovação de mudanças críticas em agentes",
+    ],
+    escalaQuando: "suspeita de vazamento, tratamento indevido de dado pessoal, ou não conformidade bloqueante.",
   },
   {
     numero: 6,
@@ -79,6 +146,14 @@ export const DEPARTAMENTOS: readonly DepartamentoCanonico[] = [
     nome: "Financeiro e Administrativo",
     missao: "Administrar o financeiro e os contratos da Foocci.",
     rota: "/admin/financeiro",
+    controla: [
+      "contratos, planos e assinaturas",
+      "faturamento, cobrança e inadimplência",
+      "contas a pagar e a receber",
+      "orçamento e indicadores financeiros",
+      "fornecedores e conciliação",
+    ],
+    escalaQuando: "pagamento fora de alçada, divergência de conciliação, ou emissão fiscal.",
   },
 ] as const;
 

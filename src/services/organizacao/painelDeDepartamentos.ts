@@ -17,6 +17,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { DEPARTAMENTOS } from "./departamentosCanonicos";
+import { caminhoDoComando, type CaminhoDoComando } from "@/services/governanca/delegacao";
+import { saudeDoDepartamento, type SaudeDoDepartamento } from "@/services/governanca/naoConformidade";
 
 export type ModoNaTela = "AI" | "HUMAN" | "HYBRID";
 
@@ -51,6 +53,8 @@ export interface IndicadoresDoDepartamento {
   vagos: number;
   /** Agentes de produto que já rodam de verdade dentro do sistema. */
   jaOperam: number;
+  /** Itens de trabalho abertos: a fila do departamento. */
+  backlogAberto: number;
 }
 
 export interface DepartamentoNaTela {
@@ -63,6 +67,16 @@ export interface DepartamentoNaTela {
   gerente: AgenteNaTela | null;
   agentes: AgenteNaTela[];
   indicadores: IndicadoresDoDepartamento;
+
+  // ── O mínimo de governança do documento 01 ──
+  /** O que o departamento controla. É a fronteira entre as áreas. */
+  controla: readonly string[];
+  /** Quando devolve a decisão para cima. */
+  escalaQuando: string;
+  /** Não conformidades. `semAuditoria` NÃO é o mesmo que limpo. */
+  saude: SaudeDoDepartamento;
+  /** Quantas ordens pularam o Agente Gerente nos últimos 30 dias. */
+  comando: CaminhoDoComando;
 }
 
 export interface PessoaNaDirecao {
@@ -186,11 +200,29 @@ export async function montarPainel(): Promise<ResultadoDoPainel> {
 
     const ativos = departamentos.filter((d) => d.isActive);
 
+    // Trinta dias: janela curta o bastante para o número reagir a uma mudança de
+    // hábito, e longa o bastante para não oscilar com uma semana atípica.
+    const ate = new Date();
+    const de = new Date(ate.getTime() - 30 * 86_400_000);
+
+    const governanca = await Promise.all(
+      ativos.map(async (d) => ({
+        id: d.id,
+        backlogAberto: await prisma.task.count({
+          where: { departmentId: d.id, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } },
+        }),
+        saude: await saudeDoDepartamento(prisma, d.id),
+        comando: await caminhoDoComando(prisma, { departmentId: d.id, de, ate }),
+      })),
+    );
+    const porId = new Map(governanca.map((g) => [g.id, g]));
+
     const cards: DepartamentoNaTela[] = ativos.map((d) => {
       const todos = (porDepartamento.get(d.id) ?? []).sort(porNumeroDoCatalogo);
       const gerente = todos.find((a) => a.ehGerente) ?? null;
       const subordinados = todos.filter((a) => !a.ehGerente);
       const canonico = DEPARTAMENTOS.find((c) => c.slug === d.slug);
+      const g = porId.get(d.id);
 
       return {
         numero: d.numero,
@@ -209,6 +241,16 @@ export async function montarPainel(): Promise<ResultadoDoPainel> {
           ligados: todos.filter((a) => a.isRuntimeEnabled).length,
           vagos: todos.filter((a) => !a.responsavel?.ocupante).length,
           jaOperam: todos.filter((a) => a.populacao === "PRODUTO").length,
+          backlogAberto: g?.backlogAberto ?? 0,
+        },
+        controla: canonico?.controla ?? [],
+        escalaQuando: canonico?.escalaQuando ?? "",
+        saude: g?.saude ?? { abertas: 0, bloqueantes: 0, aceitas: 0, leitura: "semAuditoria" },
+        comando: g?.comando ?? {
+          total: 0,
+          pularamOGerente: 0,
+          proporcao: null,
+          leitura: "semDados",
         },
       };
     });
