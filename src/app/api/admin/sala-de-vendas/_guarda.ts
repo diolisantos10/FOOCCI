@@ -62,3 +62,84 @@ export async function guardarSalaDeVendas(req: NextRequest, acao: string): Promi
 export function somenteLeitura(sessao: SessaoInterna): boolean {
   return sessao.role === "AUDITOR_QA";
 }
+
+/** Quem enxerga a operação inteira, e não só o próprio quadro. */
+export function vePelaOperacaoToda(sessao: SessaoInterna): boolean {
+  return (
+    sessao.role === "MASTER_CEO" ||
+    sessao.role === "DIRETOR_FOOCCI" ||
+    sessao.role === "GERENTE_DEPARTAMENTO" ||
+    sessao.role === "AUDITOR_QA"
+  );
+}
+
+export type AcessoAoLead =
+  | { ok: true }
+  | { ok: false; resposta: NextResponse };
+
+/**
+ * A TERCEIRA CAMADA, aplicada a UM lead.
+ *
+ * ── POR QUE ESTA FUNÇÃO PRECISA EXISTIR ─────────────────────────────────────
+ *
+ * `escopoDaConsulta` protege as LISTAS: entra no `where` e o SDR nunca vê na
+ * fila um lead que não é dele. Mas a tela de atendimento não busca uma lista —
+ * busca UM lead, por id, vindo da URL.
+ *
+ * Sem esta checagem, `/api/admin/sala-de-vendas/conversa?leadId=<qualquer>`
+ * devolveria a conversa de qualquer prospecto a qualquer SDR autenticado: a
+ * guarda de rota diria "sim, você é SDR" e entregaria o dado. É exatamente o
+ * buraco que o item 19 manda fechar — "impedir acesso direto por URL ou API".
+ *
+ * O SDR alcança: o que é dele, o que não é de ninguém, e o que está esperando
+ * gente. Não alcança conversa que outra pessoa está conduzindo — nem para ler.
+ */
+export async function podeVerOLead(
+  sessao: SessaoInterna,
+  leadId: string,
+  acao: string,
+): Promise<AcessoAoLead> {
+  if (vePelaOperacaoToda(sessao)) return { ok: true };
+
+  const lead = await prisma.siteLead.findUnique({
+    where: { id: leadId },
+    select: { atendenteUserId: true, atendidoPor: true },
+  });
+
+  const alcanca =
+    lead !== null &&
+    (lead.atendenteUserId === sessao.userId ||
+      lead.atendidoPor === "NINGUEM" ||
+      lead.atendidoPor === "AGUARDANDO_HUMANO");
+
+  if (alcanca) return { ok: true };
+
+  try {
+    await prisma.internalAuditEvent.create({
+      data: {
+        actorType: "INTERNAL_USER",
+        actorLabel: `${sessao.nome} (${sessao.userId})`,
+        acao,
+        recurso: `lead:${leadId}`,
+        resultado: "NEGADO",
+        motivo: lead ? "lead de outro atendente" : "lead inexistente",
+      },
+    });
+  } catch {
+    // Trilha fora do ar não abre a porta.
+  }
+
+  // ── POR QUE 404, E NÃO 403 ──
+  //
+  // Um 403 confirmaria que o lead existe — e num sistema comercial isso já é
+  // informação: dá para varrer ids e medir o tamanho da base sem ler um dado
+  // sequer. "Não encontrado" é a mesma resposta para o lead que não existe e
+  // para o que não é seu, e as duas são verdade da posição de quem perguntou.
+  return {
+    ok: false,
+    resposta: NextResponse.json(
+      { ok: false, error: "Lead não encontrado." },
+      { status: 404 },
+    ),
+  };
+}
