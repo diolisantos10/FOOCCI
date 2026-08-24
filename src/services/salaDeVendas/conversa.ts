@@ -1,0 +1,447 @@
+/**
+ * A CONVERSA DE UM LEAD — receber, enviar, e nunca contar a história errada.
+ *
+ * Este arquivo é o que transforma "chegou um webhook" em "a tela do vendedor
+ * mostra a mensagem". Três coisas o governam, e as três nasceram de defeitos
+ * concretos que este tipo de tela produz quando ninguém pensa nelas.
+ *
+ * ── 1. A MESMA MENSAGEM NÃO PODE ENTRAR DUAS VEZES ───────────────────────────
+ *
+ * A Meta reentrega webhook quando não recebe 200 rápido o bastante — e ela
+ * reentrega a mensagem inteira, idêntica. Sem trava, a conversa mostra o cliente
+ * dizendo "quanto custa?" duas vezes, e o vendedor responde duas vezes.
+ *
+ * A trava é a restrição UNIQUE em `waMessageId`, no banco. **Não** é o `findFirst`
+ * antes do `create`: entre a leitura e a escrita cabe o segundo webhook, e ele
+ * cabe justamente quando a Meta está reentregando em rajada. Guardrail 4 —
+ * prompt é aviso, código é trava, e aqui a trava é do Postgres.
+ *
+ * ── 2. A ORDEM DA CONVERSA É A DO RELÓGIO DO PROVEDOR ────────────────────────
+ *
+ * `ocorreuEm` vem do carimbo da Meta; `createdAt` é quando gravamos. Numa
+ * reentrega, a segunda é minutos depois da primeira, e ordenar por ela
+ * embaralharia a conversa — colocando a resposta antes da pergunta.
+ *
+ * ── 3. "NÃO LIDAS" É CONTADO, NÃO ESTIMADO ───────────────────────────────────
+ *
+ * O contador em `SiteLead.naoLidas` é cache — a verdade são as linhas com
+ * `lidaEm = null`. Cache existe porque a lista de conversas mostra o número em
+ * TODA linha, e um `count` por lead a cada carregamento é o que faz uma tela de
+ * atendimento ficar lenta justamente no dia movimentado.
+ */
+
+import type { Prisma, PrismaClient } from "@prisma/client";
+import type {
+  DirecaoDaMensagem,
+  TipoDaMensagem,
+  StatusDaMensagem,
+  AutorDaMensagem,
+} from "@prisma/client";
+
+type Cliente = PrismaClient | Prisma.TransactionClient;
+
+/** Erro de unicidade do Postgres, via Prisma. */
+const VIOLOU_UNICIDADE = "P2002";
+
+function ehViolacaoDeUnicidade(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { code?: string }).code === VIOLOU_UNICIDADE;
+}
+
+// ── O que chega ──────────────────────────────────────────────────────────────
+
+export interface MensagemQueChegou {
+  leadId: string;
+  /** Id da mensagem na Meta. É a chave da idempotência. */
+  waMessageId: string;
+  tipo: TipoDaMensagem;
+  /** Tipo cru do provedor, preservado quando `tipo = NAO_SUPORTADO`. */
+  tipoCru?: string | null;
+  texto?: string | null;
+  legenda?: string | null;
+  midiaId?: string | null;
+  midiaMimeType?: string | null;
+  midiaNome?: string | null;
+  duracaoSeg?: number | null;
+  /** Carimbo do provedor. */
+  ocorreuEm: Date;
+}
+
+export type ResultadoDeEntrada =
+  | { ok: true; mensagemId: string; repetida: false }
+  /** Já estava gravada. NÃO é erro — é o webhook fazendo o trabalho dele. */
+  | { ok: true; mensagemId: string; repetida: true }
+  | { ok: false; causa: "leadNaoExiste" };
+
+/**
+ * Grava uma mensagem que o lead mandou.
+ *
+ * Devolve `repetida: true` na reentrega, em vez de estourar: reentrega é
+ * comportamento normal do provedor, e um erro aqui faria o webhook devolver 500
+ * — o que ensina a Meta a reentregar mais ainda.
+ */
+export async function registrarEntrada(
+  db: Cliente,
+  m: MensagemQueChegou,
+): Promise<ResultadoDeEntrada> {
+  try {
+    const criada = await db.leadMensagem.create({
+      data: {
+        leadId: m.leadId,
+        direcao: "ENTRADA",
+        tipo: m.tipo,
+        tipoCru: m.tipoCru ?? null,
+        status: "RECEBIDA",
+        waMessageId: m.waMessageId,
+        texto: m.texto ?? null,
+        legenda: m.legenda ?? null,
+        midiaId: m.midiaId ?? null,
+        midiaMimeType: m.midiaMimeType ?? null,
+        midiaNome: m.midiaNome ?? null,
+        duracaoSeg: m.duracaoSeg ?? null,
+        ocorreuEm: m.ocorreuEm,
+      },
+      select: { id: true },
+    });
+
+    await atualizarEspelhoDaEntrada(db, m);
+    return { ok: true, mensagemId: criada.id, repetida: false };
+  } catch (e) {
+    if (ehViolacaoDeUnicidade(e)) {
+      // A trava funcionou. Devolve a que já existe, e NÃO mexe no espelho — o
+      // contador de não lidas já foi incrementado na primeira vez, e somar de
+      // novo faria a tela mostrar duas mensagens onde há uma.
+      const jaExiste = await db.leadMensagem.findUnique({
+        where: { waMessageId: m.waMessageId },
+        select: { id: true },
+      });
+      if (jaExiste) return { ok: true, mensagemId: jaExiste.id, repetida: true };
+    }
+
+    // Chave estrangeira: o lead sumiu entre o webhook e a gravação.
+    return { ok: false, causa: "leadNaoExiste" };
+  }
+}
+
+/**
+ * O espelho na linha do lead: última mensagem, não lidas, primeira resposta.
+ *
+ * `primeiraRespostaEm` só é escrito quando ainda está vazio — ele congela o
+ * momento em que a pessoa respondeu PELA PRIMEIRA VEZ, que é o que o indicador
+ * de tempo de primeira resposta mede. Sobrescrever a cada mensagem transformaria
+ * o indicador em "tempo desde a última resposta", que é outra coisa e sempre
+ * parece melhor.
+ */
+async function atualizarEspelhoDaEntrada(db: Cliente, m: MensagemQueChegou): Promise<void> {
+  await db.siteLead.update({
+    where: { id: m.leadId },
+    data: {
+      ultimaMensagemEm: m.ocorreuEm,
+      ultimaMensagemTexto: resumoDoTexto(m),
+      ultimaMensagemDeQuem: "ENTRADA",
+      naoLidas: { increment: 1 },
+      lastInteractionAt: m.ocorreuEm,
+    },
+  });
+
+  await db.siteLead.updateMany({
+    where: { id: m.leadId, primeiraRespostaEm: null },
+    data: { primeiraRespostaEm: m.ocorreuEm },
+  });
+}
+
+/**
+ * O texto curto que a LISTA mostra.
+ *
+ * Mídia sem legenda não vira string vazia: vira "🎤 Áudio". Uma linha em branco
+ * na lista de conversas parece defeito, e faz o vendedor abrir a conversa só
+ * para descobrir o que chegou.
+ */
+export function resumoDoTexto(m: {
+  tipo: TipoDaMensagem;
+  texto?: string | null;
+  legenda?: string | null;
+  midiaNome?: string | null;
+}): string {
+  const escrito = (m.texto ?? m.legenda ?? "").trim();
+  if (escrito) return escrito.slice(0, 280);
+
+  switch (m.tipo) {
+    case "AUDIO": return "🎤 Áudio";
+    case "IMAGEM": return "🖼️ Imagem";
+    case "VIDEO": return "🎬 Vídeo";
+    case "DOCUMENTO": return m.midiaNome ? `📎 ${m.midiaNome}` : "📎 Documento";
+    case "TEMPLATE": return "📋 Modelo enviado";
+    case "NAO_SUPORTADO": return "📦 Conteúdo não suportado";
+    default: return "";
+  }
+}
+
+// ── O que sai ────────────────────────────────────────────────────────────────
+
+export interface MensagemParaEnviar {
+  leadId: string;
+  texto: string;
+  autor: AutorDaMensagem;
+  /** Obrigatório quando `autor = HUMANO`: toda mensagem tem responsável. */
+  autorUserId?: string | null;
+  tipo?: TipoDaMensagem;
+  templateNome?: string | null;
+  agora?: Date;
+}
+
+export type ResultadoDeSaida =
+  | { ok: true; mensagemId: string }
+  | { ok: false; causa: "semTexto" }
+  | { ok: false; causa: "humanoSemAutor" };
+
+/**
+ * Registra uma mensagem de saída como PENDENTE, antes de tentar entregar.
+ *
+ * ── POR QUE GRAVAR ANTES DE ENVIAR ──
+ *
+ * Se o envio for gravado só depois do sucesso, uma queda entre o `POST` e a
+ * gravação produz o pior estado possível: o cliente recebeu, e o sistema não
+ * sabe. O vendedor manda de novo. Gravando antes, o pior caso é uma linha
+ * PENDENTE que nunca saiu — visível, corrigível, e honesta.
+ */
+export async function registrarSaida(
+  db: Cliente,
+  m: MensagemParaEnviar,
+): Promise<ResultadoDeSaida> {
+  const texto = m.texto?.trim();
+  if (!texto) return { ok: false, causa: "semTexto" };
+
+  // Item 19 do comando: registrar o responsável por cada mensagem. Sem esta
+  // recusa, uma mensagem humana sem autor viraria uma mensagem órfã — e a
+  // auditoria não conseguiria dizer quem falou em nome da empresa.
+  if (m.autor === "HUMANO" && !m.autorUserId) return { ok: false, causa: "humanoSemAutor" };
+
+  const agora = m.agora ?? new Date();
+
+  const criada = await db.leadMensagem.create({
+    data: {
+      leadId: m.leadId,
+      direcao: "SAIDA",
+      tipo: m.tipo ?? "TEXTO",
+      status: "PENDENTE",
+      texto,
+      autor: m.autor,
+      autorUserId: m.autorUserId ?? null,
+      templateNome: m.templateNome ?? null,
+      ocorreuEm: agora,
+    },
+    select: { id: true },
+  });
+
+  await db.siteLead.update({
+    where: { id: m.leadId },
+    data: {
+      ultimaMensagemEm: agora,
+      ultimaMensagemTexto: texto.slice(0, 280),
+      ultimaMensagemDeQuem: "SAIDA",
+      lastContactedAt: agora,
+      lastInteractionAt: agora,
+    },
+  });
+
+  return { ok: true, mensagemId: criada.id };
+}
+
+/** Confirma que o provedor aceitou, guardando o id que ele devolveu. */
+export async function confirmarEnvio(
+  db: Cliente,
+  params: { mensagemId: string; waMessageId: string },
+): Promise<void> {
+  await db.leadMensagem.update({
+    where: { id: params.mensagemId },
+    data: { status: "ENVIADA", waMessageId: params.waMessageId },
+  });
+}
+
+/** Marca a falha, com o motivo do provedor. Nunca guarda token. */
+export async function registrarFalhaDeEnvio(
+  db: Cliente,
+  params: { mensagemId: string; erro: string },
+): Promise<void> {
+  await db.leadMensagem.update({
+    where: { id: params.mensagemId },
+    data: {
+      status: "FALHOU",
+      erro: params.erro.slice(0, 1000),
+      tentativas: { increment: 1 },
+    },
+  });
+}
+
+/**
+ * A ordem em que os estados de entrega podem avançar.
+ *
+ * ── POR QUE ISTO É UMA ESCADA, E NÃO UMA ATRIBUIÇÃO ──
+ *
+ * A Meta entrega os callbacks de status FORA DE ORDEM com frequência: `read`
+ * chega antes de `delivered` mais vezes do que se imagina. Atribuir o último que
+ * chegou faria uma mensagem já lida voltar para "entregue" na tela — o vendedor
+ * vê o ✓✓ azul virar cinza e conclui que o sistema está errado. Ele estaria.
+ */
+const ESCADA: Record<string, number> = {
+  PENDENTE: 0,
+  ENVIADA: 1,
+  ENTREGUE: 2,
+  LIDA: 3,
+};
+
+export function avancaStatus(atual: StatusDaMensagem, novo: StatusDaMensagem): boolean {
+  // FALHOU é terminal e vem de fora da escada: uma falha reportada vale mais que
+  // qualquer avanço, porque é a única que exige ação de alguém.
+  if (novo === "FALHOU") return atual !== "FALHOU";
+  if (atual === "FALHOU") return false;
+
+  const de = ESCADA[atual];
+  const para = ESCADA[novo];
+  if (de === undefined || para === undefined) return false;
+  return para > de;
+}
+
+/**
+ * Aplica um callback de status do provedor.
+ *
+ * A escrita é CONDICIONAL no status atual, e não uma leitura seguida de escrita:
+ * dois callbacks chegando no mesmo instante são a regra, não a exceção.
+ */
+export async function aplicarStatus(
+  db: Cliente,
+  params: { waMessageId: string; status: StatusDaMensagem; erro?: string | null },
+): Promise<{ aplicado: boolean }> {
+  const atual = await db.leadMensagem.findUnique({
+    where: { waMessageId: params.waMessageId },
+    select: { id: true, status: true },
+  });
+
+  if (!atual) return { aplicado: false };
+  if (!avancaStatus(atual.status, params.status)) return { aplicado: false };
+
+  const alterados = await db.leadMensagem.updateMany({
+    where: { id: atual.id, status: atual.status },
+    data: {
+      status: params.status,
+      erro: params.erro ? params.erro.slice(0, 1000) : undefined,
+    },
+  });
+
+  return { aplicado: alterados.count === 1 };
+}
+
+// ── Leitura ──────────────────────────────────────────────────────────────────
+
+/**
+ * Marca como lidas as mensagens que o lead mandou, e zera o contador.
+ *
+ * Zera com `set: 0` e não com `decrement`: decrementar por mensagem lida deixa o
+ * contador negativo no dia em que dois atendentes abrirem a mesma conversa.
+ */
+export async function marcarComoLidas(
+  db: Cliente,
+  params: { leadId: string; agora?: Date },
+): Promise<{ lidas: number }> {
+  const agora = params.agora ?? new Date();
+
+  const r = await db.leadMensagem.updateMany({
+    where: { leadId: params.leadId, direcao: "ENTRADA", lidaEm: null },
+    data: { lidaEm: agora },
+  });
+
+  await db.siteLead.update({
+    where: { id: params.leadId },
+    data: { naoLidas: 0 },
+  });
+
+  return { lidas: r.count };
+}
+
+export interface MensagemNaTela {
+  id: string;
+  direcao: DirecaoDaMensagem;
+  tipo: TipoDaMensagem;
+  status: StatusDaMensagem;
+  texto: string | null;
+  legenda: string | null;
+  midiaNome: string | null;
+  midiaMimeType: string | null;
+  duracaoSeg: number | null;
+  autor: AutorDaMensagem | null;
+  autorNome: string | null;
+  erro: string | null;
+  ocorreuEm: Date;
+}
+
+/**
+ * A conversa, em ordem cronológica do provedor.
+ *
+ * `limite` existe porque uma conversa de três meses não cabe numa tela nem numa
+ * resposta de API — e carregá-la inteira é como a tela de atendimento trava.
+ */
+export async function lerConversa(
+  db: Cliente,
+  params: { leadId: string; limite?: number },
+): Promise<MensagemNaTela[]> {
+  const limite = Math.min(Math.max(params.limite ?? 200, 1), 500);
+
+  const linhas = await db.leadMensagem.findMany({
+    where: { leadId: params.leadId },
+    orderBy: { ocorreuEm: "desc" },
+    take: limite,
+    select: {
+      id: true, direcao: true, tipo: true, status: true, texto: true,
+      legenda: true, midiaNome: true, midiaMimeType: true, duracaoSeg: true,
+      autor: true, erro: true, ocorreuEm: true,
+      autorUser: { select: { nome: true } },
+    },
+  });
+
+  // Buscamos do mais novo para o mais velho (para pegar as ÚLTIMAS N) e
+  // devolvemos na ordem de leitura.
+  return linhas.reverse().map((l) => ({
+    id: l.id,
+    direcao: l.direcao,
+    tipo: l.tipo,
+    status: l.status,
+    texto: l.texto,
+    legenda: l.legenda,
+    midiaNome: l.midiaNome,
+    midiaMimeType: l.midiaMimeType,
+    duracaoSeg: l.duracaoSeg,
+    autor: l.autor,
+    autorNome: l.autorUser?.nome ?? null,
+    erro: l.erro,
+    ocorreuEm: l.ocorreuEm,
+  }));
+}
+
+// ── A janela de 24 horas ─────────────────────────────────────────────────────
+
+export type JanelaDe24h =
+  | { aberta: true; fechaEm: Date }
+  /** Nunca houve mensagem do lead: a janela nunca chegou a abrir. */
+  | { aberta: false; motivo: "nuncaFalou" }
+  | { aberta: false; motivo: "expirou"; ultimaEm: Date };
+
+/**
+ * A janela de texto livre da Meta.
+ *
+ * Fora dela, só modelo aprovado sai — e mandar texto livre com a janela fechada
+ * é erro de API que o vendedor lê como "o sistema não enviou", sem entender por
+ * quê. A tela precisa dizer isso ANTES de ele digitar.
+ *
+ * Puro de propósito: a regra é a mesma para a tela, para a rota e para a cadência.
+ */
+export function janelaDe24h(
+  ultimaEntradaEm: Date | null,
+  agora: Date,
+): JanelaDe24h {
+  if (!ultimaEntradaEm) return { aberta: false, motivo: "nuncaFalou" };
+
+  const fechaEm = new Date(ultimaEntradaEm.getTime() + 24 * 3_600_000);
+  if (agora < fechaEm) return { aberta: true, fechaEm };
+
+  return { aberta: false, motivo: "expirou", ultimaEm: ultimaEntradaEm };
+}

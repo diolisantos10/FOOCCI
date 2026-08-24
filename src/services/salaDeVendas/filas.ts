@@ -124,7 +124,10 @@ export function filtroDaFila(
         // aconteceu depois. E o funil ainda está aberto.
         return {
           lastContactedAt: { not: null, lt: limite },
-          stage: { notIn: ["FECHADO", "PERDIDO"] },
+          // "Funil ainda aberto" = não terminou. As três terminais entram aqui:
+          // GANHO e PERDIDO encerraram, e NUTRICAO é espera deliberada — cobrar
+          // silêncio de quem a gente mesmo mandou esperar seria ruído.
+          stage: { notIn: ["GANHO", "PERDIDO", "NUTRICAO"] },
         };
       case "followUpVencido":
         // Prometido e não cumprido: alguém pediu gente há mais de um dia e o
