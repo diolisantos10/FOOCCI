@@ -27,7 +27,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const auth = autorizarInterno(req);
+  // ── POR QUE ESTA ROTA EXIGE PAPEL, E NÃO SÓ SESSÃO ──
+  //
+  // A primeira versão aceitava qualquer sessão interna válida. Isso deixava o
+  // SDR humano ler o organograma inteiro da empresa — quem trabalha em cada
+  // área, quem responde por quê — e contraria o critério 6 do CEO: ele vê a
+  // Sala de Vendas e nada mais do Admin.
+  //
+  // `AUDITOR_QA` entra porque auditar sem enxergar a estrutura é auditar no
+  // escuro. `AGENTE_IA` fica de fora: ator técnico não abre tela.
+  const auth = autorizarInterno(req, {
+    papeis: ["MASTER_CEO", "DIRETOR_FOOCCI", "GERENTE_DEPARTAMENTO", "AUDITOR_QA"],
+  });
 
   if (!auth.ok) {
     // Toda negativa vira linha na trilha. Sem ela, "ninguém tentou entrar" seria

@@ -5047,6 +5047,23 @@ model SiteLead {
   /// Guardrail 6: quem auditar precisa saber de onde veio, não só que existe.
   optOutCanal          String?
 
+  // ── QUEM ATENDE AGORA (v3, Sala de Vendas) ─────────────────────────────────
+  //
+  // A pergunta que a base não sabia responder: "de quem é este lead NESTE
+  // momento?". Sem ela não existe fila "sem responsável", não existe "meus
+  // leads", e não existe handoff — dois atendentes podem responder o mesmo lead
+  // sem nenhum dos dois saber do outro.
+  //
+  /// Estado da responsabilidade. Muda por escrita CONDICIONAL, nunca por
+  /// leitura-seguida-de-escrita: ver `src/services/salaDeVendas/responsavel.ts`.
+  atendidoPor     LeadAtendidoPor @default(NINGUEM)
+  /// A pessoa que assumiu, quando `atendidoPor = HUMANO`.
+  atendenteUserId String?
+  /// Desde quando o responsável atual responde. É o relógio do SLA de handoff.
+  atendenteDesde  DateTime?
+  /// Por que a IA pediu gente. Sem motivo, quem pega não sabe o que fazer.
+  motivoDoPedido  String?
+
   /// Última vez que a FOOCCI falou com esta pessoa (interação de saída).
   /// null = ninguém abordou ainda. É o filtro "quem falta abordar" do SDR.
   lastContactedAt   DateTime?
@@ -5054,8 +5071,11 @@ model SiteLead {
   lastInteractionAt DateTime?
 
   interactions SiteLeadInteraction[]
+  atendente    InternalUser?         @relation("LeadAtendente", fields: [atendenteUserId], references: [id])
 
   @@index([createdAt])
+  @@index([atendidoPor, stage])
+  @@index([atendenteUserId])
   @@index([notifiedAt])
   @@index([stage, createdAt])
   @@index([utmCampaign])
@@ -5108,6 +5128,9 @@ model SiteLeadInteraction {
   actor     String
   /// Texto curto: motivo da perda, resumo da conversa, o que foi dito.
   nota      String?
+  /// `true` = o lead NUNCA vê. Nota interna que vaza para o canal externo é o
+  /// pior defeito possível nesta tela, e a trava é aqui, não na cor do campo.
+  interna   Boolean                 @default(false)
   createdAt DateTime                @default(now())
 
   @@index([leadId, createdAt])
@@ -5117,6 +5140,27 @@ model SiteLeadInteraction {
 
 /// Tipos de interação. `direcaoDeSaida` em `foocciCrmFunnel.ts` diz quais contam
 /// como "a Foocci falou com a pessoa" (e portanto mexem em `lastContactedAt`).
+/// Quem está atendendo o lead AGORA.
+///
+/// Não é "quem já falou com ele" — é quem responde pela próxima mensagem. Essa
+/// distinção é a que sustenta as filas da Sala de Vendas: "aguardando humano" é
+/// um lead que a IA devolveu e que ninguém pegou, e ele é invisível em qualquer
+/// lista organizada por etapa do funil.
+enum LeadAtendidoPor {
+  /// Ninguém assumiu. Cai na fila "Sem responsável", que é visível e cobrada.
+  NINGUEM
+
+  /// O Agente SDR IA está conduzindo.
+  IA
+
+  /// Uma pessoa assumiu. A IA silencia ANTES do próximo envio.
+  HUMANO
+
+  /// A IA devolveu e pediu gente. Fila mais importante da tela: uma venda em
+  /// queda livre que não aparece em nenhuma outra lista.
+  AGUARDANDO_HUMANO
+}
+
 enum SiteLeadInteractionType {
   CAPTURA // entrou na base
   REENVIO_FORMULARIO // a mesma pessoa preencheu de novo
@@ -5126,6 +5170,10 @@ enum SiteLeadInteractionType {
   LIGACAO // saída: telefonema
   REUNIAO // saída: demonstração/reunião realizada
   NOTA // observação livre, sem contato
+  ASSUMIU_HUMANO // uma pessoa pegou a conversa; a IA silencia
+  DEVOLVEU_PARA_IA // a pessoa devolveu, com objetivo escrito
+  PEDIU_HUMANO // a IA parou e pediu gente
+  NOTA_INTERNA // nota que o lead NUNCA vê
 }
 
 // ═══════════════════════════════════════════
@@ -5613,6 +5661,7 @@ model InternalUser {
   position    Position?              @relation(fields: [positionId], references: [id])
   memberships DepartmentMembership[]
 
+  leadsQueAtende     SiteLead[]  @relation("LeadAtendente")
   osQueSolicitou     WorkOrder[] @relation("OsSolicitante")
   tarefasDaPessoa    Task[]      @relation("TarefaPessoa")
   handoffsQueEnviou  Handoff[]   @relation("HandoffEmissor")

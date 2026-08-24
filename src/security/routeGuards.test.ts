@@ -89,7 +89,14 @@ const TENANT_HELPER =
 // `ADMIN_SECRET`. Sem esta entrada, cumprir o ADR reprovaria neste portão, e o
 // caminho de menor esforço para o próximo engenheiro seria voltar a usar a senha
 // velha — que é exatamente o que o ADR existe para impedir.
-const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno)\b/;
+//
+// `guardarSalaDeVendas` entrou em 25/08/2026. Ele NÃO é uma guarda paralela: é
+// um invólucro fino em cima de `autorizarInterno` que já traz a lista de papéis
+// da Sala de Vendas e escreve a negativa na trilha. Rotas que o usam não
+// mencionam `autorizarInterno` diretamente, e sem esta entrada o portão as
+// acusaria de estarem sem guarda — empurrando o próximo engenheiro a duplicar a
+// checagem em cada rota, que é como uma delas acaba ficando de fora.
+const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno|guardarSalaDeVendas)\b/;
 
 // …unless it is one of these vetted exceptions. Each does its OWN auth and cannot
 // use the shared helper. Adding to this list is a conscious, reviewed act — a NEW

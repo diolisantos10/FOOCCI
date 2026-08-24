@@ -32,6 +32,9 @@ export function AdminSidebar() {
         // Item PRÓPRIO, não dentro de Configurações — ordem do CEO (doutrina 20
         // do kit): "quem trabalha aqui?" é pergunta de primeira ordem.
         { href: "/admin/sala-dos-agentes",  label: "Sala dos Agentes", icon: "🏛️" },
+        // A estrutura da empresa (v3): quem responde por quê. Item próprio pelo
+        // mesmo motivo da Sala dos Agentes.
+        { href: "/admin/departamentos",    label: "Departamentos",   icon: "🗂️" },
         { href: "/admin/agents",           label: "Agentes",         icon: "🤖" },
         { href: "/admin/agentes/training", label: "Treinamento IA",  icon: "🧠" },
         { href: "/admin/quality",          label: "Qualidade",       icon: "🛡️" },
@@ -43,6 +46,10 @@ export function AdminSidebar() {
     {
       title: "Operação",
       items: [
+        // A Sala de Vendas vem ANTES do CRM: ela é a tela de trabalho do dia, e
+        // o CRM é a base inteira. Quem entra para trabalhar procura a fila, não
+        // a listagem.
+        { href: "/admin/sala-de-vendas",     label: "Sala de Vendas",   icon: "🎯" },
         { href: "/admin/foocci-crm",         label: "CRM da Foocci",    icon: "📨" },
         { href: "/admin/demo-videos",        label: "Vídeos do site",   icon: "🎬" },
         { href: "/admin/padaria-vitrine",    label: "Padaria de vitrine", icon: "🥐" },
