@@ -2,7 +2,7 @@
 
 **Status:** especificação canônica do projeto completo  
 **Escopo:** construir a infraestrutura operacional interna dos 9 departamentos do Foocci, com agentes humanos, IA e híbridos, hierarquia, ordens de serviço, projetos, tarefas, aprovações, decisões, handoffs e indicadores.  
-**Prioridade operacional inicial:** Vendas e Receita/Sala de Vendas, sem encerrar o programa nos limites desse departamento.  
+**Prioridade 0:** Sala de Vendas premium e QA de conversão, construída imediatamente após o mínimo indispensável de identidade/RBAC; o programa continua depois pelos demais departamentos.  
 **Branch de planejamento:** `claude/sala-de-vendas-levantamento`
 
 ## Resultado esperado
@@ -16,13 +16,14 @@ A Sala de Vendas é uma área interna do admin dedicada aos leads interessados e
 1. `01-DEPARTAMENTOS-E-AGENTES.md`
 2. `09-PLANO-MESTRE-DO-PROJETO-INTEIRO.md`
 3. `10-PLATAFORMA-SDR-E-CONTROLE-DE-ACESSO.md`
-4. `02-VENDAS-E-RECEITA-SDR.md`
-5. `03-FUNIL-E-HANDOFFS.md`
-6. `04-SALA-DE-VENDAS-UX.md`
-7. `05-DADOS-APIS-E-PERMISSOES.md`
-8. `06-PLANO-DE-CONSTRUCAO.md`
-9. `07-TESTES-E-ACEITE.md`
-10. `08-COMANDO-PARA-O-ARQUITETO.md`
+4. `11-SALA-DE-VENDAS-PREMIUM-E-QA.md`
+5. `02-VENDAS-E-RECEITA-SDR.md`
+6. `03-FUNIL-E-HANDOFFS.md`
+7. `04-SALA-DE-VENDAS-UX.md`
+8. `05-DADOS-APIS-E-PERMISSOES.md`
+9. `06-PLANO-DE-CONSTRUCAO.md`
+10. `07-TESTES-E-ACEITE.md`
+11. `08-COMANDO-PARA-O-ARQUITETO.md`
 
 ## Princípios que não podem ser quebrados
 
