@@ -104,13 +104,11 @@ describe("a porta do WhatsApp é uma só", () => {
     expect(layout).toContain("chamada.ativo && <BotaoAgenteFlutuante />");
   });
 
-  it("o layout resolve a chamada no servidor e a passa para o cabeçalho e a barra fixa", () => {
+  it("o layout resolve o estado do canal no servidor — o botão do canto depende disso", () => {
     const layout = fs.readFileSync(
       path.join(RAIZ, "src/app/site/(gated)/layout.tsx"),
       "utf8",
     );
     expect(layout).toContain("chamadaComercial()");
-    expect(layout).toContain("<MarketingHeader chamada={chamada} />");
-    expect(layout).toContain("<StickyMobileCta chamada={chamada} />");
   });
 });

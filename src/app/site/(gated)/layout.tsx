@@ -54,14 +54,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       {/* Atalho explícito para quem tem sessão ativa — a raiz não teleporta mais
           ninguém para o painel (ver src/app/page.tsx). */}
       <PainelAtalho />
-      <MarketingHeader chamada={chamada} />
+      <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />
       {/* breathing room so the mobile sticky CTA never covers footer content */}
       <div aria-hidden className="h-16 lg:hidden" />
       {/* O botãozinho do canto só existe quando há alguém do outro lado. */}
       {chamada.ativo && <BotaoAgenteFlutuante />}
-      <StickyMobileCta chamada={chamada} />
+      <StickyMobileCta />
     </div>
   );
 }
