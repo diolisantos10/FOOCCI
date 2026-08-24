@@ -21,6 +21,13 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // ── Mock prisma BEFORE importing the service ──────────────────────────────────
 const prismaMock = vi.hoisted(() => ({
+  // Portão de qualidade VERDE (LiveStageGuard): sem isto a trava da escada
+  // derruba o degrau alto por falha fechada e estes casos nunca chegariam a
+  // exercitar o que querem exercitar. O teste da TRAVA em si vive em
+  // src/services/brain/runtime/escadaDeIa.class.test.ts.
+  qualityAuditRun: {
+    findFirst: async () => ({ id: "run_verde", finishedAt: new Date(), findings: [{ severity: "P2", status: "PASS" }] }),
+  },
   whatsAppTextOrderingConfig: {
     findUnique: vi.fn(),
     upsert:     vi.fn(),
@@ -253,9 +260,12 @@ describe("K — config save performs no WhatsApp send, order, or Pix", () => {
   it("only whatsAppTextOrderingConfig.upsert is called", async () => {
     prismaMock.whatsAppTextOrderingConfig.upsert.mockResolvedValue(dbRow({ enabled: true }));
     await upsertRestaurantConfig(REST, { enabled: true, mode: "ALLOWLIST_FULL_TEST" });
-    // The mock only exposes the config table — proves the service touches nothing else.
+    // O mock só expõe a tabela de config e a de veredito de qualidade — prova que
+    // o serviço não encosta em mais nada. quality_audit_run entra como LEITURA da
+    // trava da escada (LiveStageGuard): tabela standalone, só read, nenhum envio,
+    // nenhum pedido, nenhum Pix.
     expect(prismaMock.whatsAppTextOrderingConfig.upsert).toHaveBeenCalledTimes(1);
-    expect(Object.keys(prismaMock)).toEqual(["whatsAppTextOrderingConfig"]);
+    expect(Object.keys(prismaMock).sort()).toEqual(["qualityAuditRun", "whatsAppTextOrderingConfig"]);
   });
 });
 

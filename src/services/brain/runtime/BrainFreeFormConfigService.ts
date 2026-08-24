@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isPhoneInList } from "@/lib/wa-text-ordering-flag";
+import { guardStoredStage } from "./LiveStageGuard";
 
 export type FreeFormMode = "SHADOW_ONLY" | "ALLOWLIST" | "RESTAURANT_WIDE";
 
@@ -67,10 +68,30 @@ export async function resolveFreeFormAccess(restaurantId: string, phone: string)
     const row = await prisma.brainFreeFormConfig.findUnique({ where: { restaurantId } });
     if (!row) return { allowed: false, mode: "SHADOW_ONLY", paused: false, minConfidence: DEFAULT_MIN_CONFIDENCE, reason: "sem config — shadow (default seguro)" };
 
-    const mode = asMode(row.mode);
+    const storedMode = asMode(row.mode);
     const minConfidence = row.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
-    if (row.paused) return { allowed: false, mode, paused: true, minConfidence, reason: "pausado (rollback ativo)" };
-    if (mode === "SHADOW_ONLY") return { allowed: false, mode, paused: false, minConfidence, reason: "modo shadow — só observa" };
+    if (row.paused) return { allowed: false, mode: storedMode, paused: true, minConfidence, reason: "pausado (rollback ativo)" };
+
+    // TRAVA: o degrau gravado só vale se o portão de qualidade do recepcionista
+    // estiver VERDE agora. Vermelho/vencido/ausente ⇒ SHADOW_ONLY na hora, sem
+    // humano no meio. Ninguém fica sem resposta: em sombra o recepcionista
+    // determinístico continua atendendo, com a régua apertada.
+    const guard = await guardStoredStage({
+      agentId: "whatsapp",
+      stored: storedMode,
+      safe: "SHADOW_ONLY" as FreeFormMode,
+      isElevated: (m) => m !== "SHADOW_ONLY",
+    });
+    const mode = guard.effective;
+    if (mode === "SHADOW_ONLY") {
+      return {
+        allowed: false,
+        mode,
+        paused: false,
+        minConfidence,
+        reason: guard.demoted ? guard.reason : "modo shadow — só observa",
+      };
+    }
 
     if (mode === "ALLOWLIST") {
       const phones = Array.isArray(row.allowlistedPhones) ? (row.allowlistedPhones as string[]) : [];

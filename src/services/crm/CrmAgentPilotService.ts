@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import { isPhoneInList } from "@/lib/wa-text-ordering-flag";
 import { detectSpamLanguage, impliesDiscount } from "@/services/crm/MessageVariationService";
+import { guardStoredStage } from "@/services/brain/runtime/LiveStageGuard";
 
 export type CrmPilotMode = "SHADOW_ONLY" | "ALLOWLIST" | "RESTAURANT_WIDE";
 
@@ -74,6 +75,24 @@ export async function getCrmPilotConfig(restaurantId: string): Promise<CrmPilotC
   } catch {
     return DEFAULT_CONFIG(restaurantId);
   }
+}
+
+/**
+ * TRAVA da escada do CRM — o degrau que VALE AGORA.
+ *
+ * `getCrmPilotConfig` devolve o degrau GRAVADO (é a verdade que a governança e o
+ * painel precisam ver). Quem vai DISPARAR usa esta função: se o portão do CRM
+ * não estiver verde neste instante, o piloto cai para SHADOW_ONLY e o cliente
+ * recebe o SORTEIO — a mensagem sai do mesmo jeito, só que sem IA solta.
+ */
+export async function resolveLiveCrmPilotMode(config: CrmPilotConfig): Promise<{ mode: CrmPilotMode; demoted: boolean; reason: string }> {
+  const guard = await guardStoredStage({
+    agentId: "crm",
+    stored: config.mode,
+    safe: "SHADOW_ONLY" as CrmPilotMode,
+    isElevated: (m) => m !== "SHADOW_ONLY",
+  });
+  return { mode: guard.effective, demoted: guard.demoted, reason: guard.reason };
 }
 
 /** Este telefone é elegível para receber a mensagem do agente AO VIVO? Nunca lança. */
