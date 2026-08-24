@@ -20,12 +20,7 @@ interface PageProps {
 }
 
 export default function SalaDosAgentesPage({ searchParams }: PageProps) {
-  const aba: Aba =
-    searchParams.aba === "configuracoes"
-      ? "configuracoes"
-      : searchParams.aba === "empresa"
-        ? "empresa"
-        : "agentes";
+  const aba: Aba = searchParams.aba === "configuracoes" ? "configuracoes" : "agentes";
 
   return (
     <Suspense

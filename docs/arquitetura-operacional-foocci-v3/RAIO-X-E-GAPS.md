@@ -60,6 +60,7 @@ Auditoria do repositório antes de escrever qualquer linha nova: o que existe, o
 | A-02 | Dois arquivos de teste diferem só na caixa da letra | em Mac ou Windows um sobrescreve o outro no clone, e um teste some sem avisar |
 | A-03 | ~750 erros de tipo em ~150 arquivos de teste antigos | o `type-check` da casa exclui teste. O código deste programa é conferido à parte |
 | A-04 | O agente de suporte escala para humano — e **não existe humano** | a escalada abre chamado e manda e-mail para um endereço configurado. Se estiver vazio, o chamado é salvo e ninguém é avisado. **Só o CEO consegue verificar** |
+| A-05 | Banco criado por `db push` ou `migrate diff` sai **sem o gatilho** de append-only | o Prisma não representa gatilho. O banco parece completo, a aplicação sobe, e `domain_events` aceita UPDATE numa tabela cuja documentação inteira diz que a história não se reescreve. **Fechado**: `npm run db:travas` aplica e confere; o teste da trava reprova quando ela falta |
 
 ## Baseline medido antes de mexer
 

@@ -27,6 +27,9 @@
     "type-check": "tsc --noEmit",
     "type-check:tests": "tsc -p tsconfig.tests.json --noEmit",
     "type-check:scripts": "tsc -p tsconfig.scripts.json --noEmit",
+    "db:travas": "tsx scripts/aplicar-travas.ts",
+    "db:seed-organizacao": "tsx scripts/seed-organizacao.ts",
+    "db:seed-fichas": "tsx scripts/seed-fichas.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
   },
