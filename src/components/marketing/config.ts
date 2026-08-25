@@ -5,11 +5,20 @@
  * off, the CTAs invite a real demo request, and `DemoForm` posts to a real
  * lead-capture endpoint (`/api/site/leads`).
  *
- * Prices are NOT published yet — the CEO had not closed the three plan values by
- * launch day, and guardrail 7 ("nunca vender como pronto o que está em piloto")
- * plus decision D3 forbid inventing one. `/site/precos` therefore presents the
- * plans qualitatively and routes to the demo form. Publishing values later is a
- * content change on that page; nothing else here depends on it.
+ * PREÇO: PUBLICADO desde 04/08/2026. Este cabeçalho dizia o contrário — "prices
+ * are NOT published yet", "presents the plans qualitatively" — e continuou
+ * dizendo por três semanas depois de os três valores serem fechados e o checkout
+ * self-service entrar no ar. Em 25/08/2026 o CEO corrigiu um relatório que eu
+ * havia montado em cima deste comentário: *"o já tem o preço no site."*
+ *
+ * Os valores mensais vigentes são Essencial R$ 179, Crescimento R$ 429 e
+ * Performance R$ 899 — e ESTA LINHA É INFORMATIVA, não fonte. A fonte única é
+ * `PLAN_CYCLE_CENTS` em `@/lib/billing/pricing`, a mesma função que decide o que
+ * sai do cartão. Se os números acima divergirem de lá, quem está errado é este
+ * comentário; foi assim que o erro anterior nasceu.
+ *
+ * A decisão D3 continua valendo e não é sobre isto: ela proíbe **inventar** preço
+ * que o CEO não fechou. Preço fechado e publicado, o site mostra.
  *
  * History of the pre-launch posture: docs/foocci-site/pre-launch-mode-v1.md.
  */
@@ -30,9 +39,30 @@ export const LOGIN_URL = "/login";
  * consentimento fica evidente e o risco de banimento cai a quase zero
  * (`docs/sdr-foocci-desenho.md`).
  *
+ * ── ACESO EM 25/08/2026, POR DECISÃO DO CEO ─────────────────────────────────
+ *
+ * O número existe: **11 94372-3316**, o WhatsApp comercial do Foocci, informado
+ * pelo CEO ao ser perguntado qual era. Ele fica FIXO NO REPOSITÓRIO, e não como
+ * variável no Railway, por um motivo prático: `NEXT_PUBLIC_*` é congelada no
+ * build (ver a armadilha logo abaixo), então a variável exigiria dois atos — salvar
+ * e refazer o deploy — e o segundo é justamente o que se esquece. Fixo aqui, o
+ * número sobe junto com o código que o usa.
+ *
+ * Não é segredo: é o número que vai ficar ESTAMPADO no site público, para
+ * estranhos ligarem. Segredo do canal (token e `phone_number_id` da Meta) continua
+ * fora do repositório, onde sempre esteve.
+ *
+ * ⚠️ **ISTO NÃO LIGA A RECEPÇÃO.** Aceso, o site leva a pessoa ao WhatsApp com a
+ * mensagem pronta — e a conversa cai no aparelho, para uma pessoa ler e responder
+ * à mão. Para o "oi" ser reconhecido, ligado ao lead pelo `#código` e registrado
+ * na Sala de Vendas, faltam as chaves da Meta (`FOOCCI_SALES_PHONE_NUMBER_ID` e
+ * `FOOCCI_SALES_ACCESS_TOKEN`) — ver `FoocciSalesChannel.ts`. São coisas separadas
+ * de propósito, e confundir as duas seria dar por automático o que hoje é manual.
+ *
  * Duas formas de acender, nesta ordem de precedência:
- *   1. `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` no Railway — não exige mudar código.
- *   2. `HARDCODED_SALES_NUMBER` abaixo — para quem preferir fixar no repositório.
+ *   1. `NEXT_PUBLIC_WHATSAPP_SALES_NUMBER` no Railway — troca o número sem mexer
+ *      no código, e vence o valor fixo abaixo. É o caminho para TROCAR de número.
+ *   2. `HARDCODED_SALES_NUMBER` abaixo — o valor de hoje.
  *
  * ⚠️ ARMADILHA REAL, e ela já mordeu neste projeto: variável `NEXT_PUBLIC_*` é
  * **congelada no BUILD**, não lida em tempo de execução. Este arquivo é importado
@@ -42,9 +72,9 @@ export const LOGIN_URL = "/login";
  * quebrado. Depois de salvar, **Redeploy**. O mesmo aviso já existe em
  * `docs/setup-meta-passo-a-passo.md` para `NEXT_PUBLIC_META_APP_ID`.
  *
- * Formato: só dígitos, com DDI. Ex.: `5511999998888`.
+ * Formato: só dígitos, com DDI. `55` + `11` + `94372-3316`.
  */
-const HARDCODED_SALES_NUMBER: string | null = null;
+const HARDCODED_SALES_NUMBER: string | null = "5511943723316";
 
 /** Tira tudo que não é dígito; devolve null se não sobrar número de verdade. */
 function onlyDigits(v: string | null | undefined): string | null {
@@ -245,19 +275,29 @@ export const PRELAUNCH_BADGE = "Para restaurantes que querem ser donos dos próp
  *
  * ANTES ela dizia **"Fale com a gente e veja o Foocci no seu restaurante."** — e a
  * varredura de percurso de 05/08 mostrou o tamanho do problema: essa frase aparecia
- * em quatro páginas, sempre como TEXTO MORTO, sem link. E não existe telefone,
- * WhatsApp nem e-mail em lugar nenhum do site (`WHATSAPP_SALES_NUMBER` está
- * desligado em produção). O visitante que JÁ tinha decidido falar com a gente lia
- * "fale com a gente" e não tinha com quem falar.
+ * em quatro páginas, sempre como TEXTO MORTO, sem link. E não existia telefone,
+ * WhatsApp nem e-mail em lugar nenhum do site (`WHATSAPP_SALES_NUMBER` estava
+ * desligado). O visitante que JÁ tinha decidido falar com a gente lia "fale com a
+ * gente" e não tinha com quem falar.
  *
  * Convite sem porta é a forma mais barata de perder quem já estava convencido. O
  * texto novo não convida: DESCREVE o que acontece depois do clique no botão que
  * está logo acima dele. É a mesma informação, no tempo verbal certo.
  *
- * Quando `WHATSAPP_SALES_NUMBER` for ligado, o convite direto volta a fazer sentido
- * — e aí ele nasce com link de verdade, não como frase.
+ * ── 25/08/2026: A FRASE PASSOU A DEPENDER DO NÚMERO ─────────────────────────
+ *
+ * Com o número aceso, o percurso INVERTEU de direção: a pessoa não espera ser
+ * chamada, ela é levada ao WhatsApp para mandar o "oi". "Uma pessoa do Foocci
+ * chama você" virou promessa errada — e errada do jeito pior, porque o visitante
+ * fecha a aba e fica esperando um telefonema que não vai acontecer.
+ *
+ * Por isso a frase é derivada do número, e não escrita duas vezes: `DemoForm` já
+ * troca a microcopy dele pelo mesmo critério, e duas frases sobre o mesmo percurso
+ * que mudam por critérios diferentes é como uma delas fica para trás.
  */
-export const CONTATO_NOTE = "Você deixa nome e WhatsApp; uma pessoa do Foocci chama você.";
+export const CONTATO_NOTE = WHATSAPP_SALES_NUMBER
+  ? "Você deixa nome e WhatsApp, e a gente abre a conversa com a mensagem já escrita."
+  : "Você deixa nome e WhatsApp; uma pessoa do Foocci chama você.";
 
 /**
  * @deprecated Use `CONTATO_NOTE`. O nome antigo sobrevive só como apelido porque o

@@ -53,6 +53,34 @@ pendência técnica no relatório dele é ruído que ele não tem como agir, e t
 ele a não ler o relatório inteiro. O aberto vive em `docs/pendencias.md`, que é
 memória de trabalho do Diretor, não pauta de reunião.
 
+### ⭐ O CEO não lê arquivo `.md` — ordem dele, 25/08/2026
+
+> *"Eu não leio arquivo MD."* · e antes, em 24/08: *"eu não consigo ler três
+> linhas de texto, então você tem que resumir tudo, deixar muito sucinto e claro."*
+
+**Entrega para o CEO é PÁGINA, não arquivo.** Markdown é formato de engenheiro:
+ele abre como texto corrido no celular, sem hierarquia, sem cor, sem nada que
+diga onde olhar primeiro. Mandar `.md` para o CEO é entregar matéria-prima e
+chamar de entrega.
+
+**A regra, em três linhas:**
+
+1. **O que sobe para o CEO vira página publicada** (artifact), com link. Ele
+   abre, olha e decide — sem baixar, sem rolar, sem procurar.
+2. **O `.md` continua existindo**, no repositório, para o Diretor e para os
+   agentes. Ele é a fonte; a página é a entrega. Nunca o contrário — página que
+   não tem `.md` por trás é decisão que morre quando o link some.
+3. **A página segue o `DESIGN.md`**: laranja `#f97316` em ~10% da tela, o resto
+   neutro; Inter só nos pesos 400 e 600; cartão com raio 2xl. Entrega ao dono da
+   marca não é lugar de inventar identidade nova.
+
+**Como escrever a página:** a informação que mais muda o que ele faz vem
+primeiro e ganha a cor — nas outras, cor é decoração. No backlog de 25/08 essa
+informação era **de quem é o item**, então "Você" saiu em laranja e "Eu" em
+cinza; ele leu a página inteira em dez segundos porque só precisou procurar
+laranja. Cada item tem um título curto e **uma** linha dizendo o que acontece se
+ficar parado. Consequência é o que faz ele decidir; descrição de tarefa, não.
+
 ### ⭐ Problema nunca sobe sozinho — ordem do CEO, 14/08/2026
 
 > *"Sempre que me trouxer um problema, traga junto, no mínimo, duas soluções.

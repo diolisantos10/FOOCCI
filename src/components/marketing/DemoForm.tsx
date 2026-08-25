@@ -17,9 +17,11 @@
  * que **só existe na resposta do servidor**. Sem gravação não há código, sem
  * código não há tela de WhatsApp. O cliente não consegue pular a etapa.
  *
- * SEM NÚMERO DE VENDAS configurado (`WHATSAPP_SALES_NUMBER === null`, que é o caso
- * hoje) nada disso aparece: o comportamento é exatamente o de antes — "recebemos,
- * entramos em contato". O caminho novo acende sozinho quando o número existir.
+ * SEM NÚMERO DE VENDAS configurado (`WHATSAPP_SALES_NUMBER === null`) nada disso
+ * aparece: o comportamento é o antigo — "recebemos, entramos em contato". Esse era
+ * o estado até 25/08/2026; desde então o número existe (11 94372-3316) e é o
+ * caminho acima que a pessoa vê. O antigo continua no código e testado, porque é o
+ * que qualquer ambiente sem a chave faz.
  *
  * POR QUE NÃO REDIRECIONAMOS SOZINHOS: abrir o WhatsApp depois de um `fetch`
  * exige `window.open` fora do gesto do usuário (bloqueado por padrão em celular)

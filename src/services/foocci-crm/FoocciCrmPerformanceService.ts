@@ -23,6 +23,7 @@ import { computePeriodRange, type Period } from "@/lib/dashboard-periods";
 import {
   computeFunnel,
   montaDegrau,
+  indiceEtapa,
   MIN_LEADS_PARA_TAXA,
   type FoocciLeadStage,
   type ResultadoFunil,
@@ -172,7 +173,7 @@ export function montaPerformance(
   );
 
   const chegaram = leads.length;
-  const fechados = leads.filter((l) => l.stage === "FECHADO").length;
+  const fechados = leads.filter((l) => l.stage === "GANHO").length;
   const perdidos = leads.filter((l) => l.stage === "PERDIDO").length;
   const naoAbordados = leads.filter((l) => l.lastContactedAt === null).length;
 
@@ -193,16 +194,22 @@ export function montaPerformance(
     .map(([rotulo, grupo]) => {
       const primeiro = grupo[0]!;
       const canal = canalDoContato(primeiro);
-      const gFechados = grupo.filter((l) => l.stage === "FECHADO").length;
+      const gFechados = grupo.filter((l) => l.stage === "GANHO").length;
       const gPerdidos = grupo.filter((l) => l.stage === "PERDIDO").length;
+      // "Chegou pelo menos a QUALIFICADO" — medido por POSIÇÃO na régua, não por
+      // uma lista de etapas escrita à mão. A lista antiga citava três etapas; o
+      // funil passou a ter nove, e ela teria continuado somando só as três
+      // antigas, calada, subnotificando toda origem que fecha bem.
+      const minimo = indiceEtapa("QUALIFICADO");
       const gQualificados = grupo.filter((l) => {
         const topo = maisAvancadaAlcancada(l.stage, l.historicoToStages);
-        return topo === "QUALIFICADO" || topo === "PROPOSTA" || topo === "FECHADO";
+        const i = indiceEtapa(topo);
+        return i >= 0 && i >= minimo;
       }).length;
 
       // MESMA trava do funil: sem amostra, sem taxa. Uma origem com 2 contatos e
       // 1 fechamento não vale "50% de conversão" numa decisão de orçamento.
-      const degrau = montaDegrau("NOVO", "FECHADO", grupo.length, gFechados);
+      const degrau = montaDegrau("NOVO", "GANHO", grupo.length, gFechados);
 
       return {
         rotulo,

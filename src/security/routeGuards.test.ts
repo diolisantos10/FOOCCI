@@ -79,7 +79,24 @@ const TENANT_HELPER =
   /\b(getTenantContext|getTenantId|assertTenant|getTenantIdFromRequest)\b/;
 
 // Known admin guards. A route under /api/admin/** must reference one of these…
-const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest)\b/;
+//
+// `autorizarInterno` entrou na lista em 24/08/2026, com a identidade interna
+// (`src/lib/internal-auth.ts`). Ele NÃO é uma exceção que "faz auth própria": é
+// uma guarda de verdade, e mais forte que a senha compartilhada — exige sessão
+// assinada, papel e escopo departamental, e escreve toda negativa na trilha.
+//
+// ADR-003 manda que rota NOVA nasça exigindo sessão interna e não aceite
+// `ADMIN_SECRET`. Sem esta entrada, cumprir o ADR reprovaria neste portão, e o
+// caminho de menor esforço para o próximo engenheiro seria voltar a usar a senha
+// velha — que é exatamente o que o ADR existe para impedir.
+//
+// `guardarSalaDeVendas` entrou em 25/08/2026. Ele NÃO é uma guarda paralela: é
+// um invólucro fino em cima de `autorizarInterno` que já traz a lista de papéis
+// da Sala de Vendas e escreve a negativa na trilha. Rotas que o usam não
+// mencionam `autorizarInterno` diretamente, e sem esta entrada o portão as
+// acusaria de estarem sem guarda — empurrando o próximo engenheiro a duplicar a
+// checagem em cada rota, que é como uma delas acaba ficando de fora.
+const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno|guardarSalaDeVendas)\b/;
 
 // …unless it is one of these vetted exceptions. Each does its OWN auth and cannot
 // use the shared helper. Adding to this list is a conscious, reviewed act — a NEW
@@ -88,6 +105,12 @@ const ADMIN_GUARD_EXEMPT = new Map<string, string>([
   [
     "admin/session/route.ts",
     "login de admin: valida o ADMIN_SECRET cru e EMITE o cookie; não pode exigir a sessão que ela mesma cria.",
+  ],
+  [
+    "admin/session/interna/route.ts",
+    "login por e-mail e senha: valida a credencial com bcrypt e EMITE o cookie de " +
+      "sessão interna; não pode exigir a sessão que ela mesma cria. Recusa com uma " +
+      "mensagem única para e-mail inexistente, senha errada e conta desativada.",
   ],
   [
     "admin/reset-owner/route.ts",

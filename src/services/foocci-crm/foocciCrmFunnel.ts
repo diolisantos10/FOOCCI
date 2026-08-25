@@ -18,41 +18,82 @@
  * Espelha a régua que o CRM do produto já usa em `CrmPhraseConfidence`.
  */
 
-/** As etapas, exatamente como no enum do Prisma. */
+/**
+ * As etapas, exatamente como no enum do Prisma.
+ *
+ * ── DE 6 PARA 11, EM 25/08/2026 ──────────────────────────────────────────────
+ * O comando da Sala de Vendas abriu o meio do funil, que era o trecho cego:
+ * "CONTATADO" cobria desde o primeiro oi até a véspera da proposta, e a
+ * demonstração — o degrau onde a venda de fato acontece ou morre — não existia.
+ * Sem DEMO_AGENDADA e DEMO_REALIZADA separadas não há como responder a única
+ * pergunta que interessa depois de marcar: **quantos aparecem?**
+ *
+ * O mapeamento do que já estava gravado está na migração, com `CASE` explícito.
+ */
 export type FoocciLeadStage =
-  | "NOVO" | "CONTATADO" | "QUALIFICADO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
+  | "NOVO" | "PRIMEIRO_CONTATO" | "EM_QUALIFICACAO" | "QUALIFICADO"
+  | "DEMO_AGENDADA" | "DEMO_REALIZADA" | "PROPOSTA_ENVIADA" | "EM_NEGOCIACAO"
+  | "GANHO" | "PERDIDO" | "NUTRICAO";
 
 /**
- * A sequência do funil. PERDIDO NÃO está aqui de propósito: quem se perdeu
- * SAIU do funil, não avançou nele. Contá-lo como etapa faria a conversão mentir
- * para cima (todo mundo "avança" para perdido).
+ * A sequência do funil.
+ *
+ * PERDIDO não está aqui de propósito: quem se perdeu SAIU do funil, não avançou
+ * nele — contá-lo como etapa faria a conversão mentir para cima (todo mundo
+ * "avança" para perdido).
+ *
+ * NUTRICAO ficou de fora pelo motivo oposto, e é a distinção que o comando de
+ * 25/08 obrigou a existir: **"não é agora" não é "não"**. Somá-lo à conversão
+ * inflaria o resultado; somá-lo à perda apagaria a lista de quem voltaria a
+ * conversar daqui a três meses. É estado de espera, e espera não é degrau.
  */
 export const SEQUENCIA_FUNIL = [
-  "NOVO", "CONTATADO", "QUALIFICADO", "PROPOSTA", "FECHADO",
+  "NOVO", "PRIMEIRO_CONTATO", "EM_QUALIFICACAO", "QUALIFICADO",
+  "DEMO_AGENDADA", "DEMO_REALIZADA", "PROPOSTA_ENVIADA", "EM_NEGOCIACAO",
+  "GANHO",
 ] as const;
 
 export type FoocciFunnelStage = (typeof SEQUENCIA_FUNIL)[number];
 
 export const ROTULO_ETAPA: Record<FoocciLeadStage, string> = {
-  NOVO:        "Novo",
-  CONTATADO:   "Contatado",
-  QUALIFICADO: "Qualificado",
-  PROPOSTA:    "Proposta",
-  FECHADO:     "Fechado",
-  PERDIDO:     "Perdido",
+  NOVO:             "Novo lead",
+  PRIMEIRO_CONTATO: "Primeiro contato",
+  EM_QUALIFICACAO:  "Em qualificação",
+  QUALIFICADO:      "Qualificado",
+  DEMO_AGENDADA:    "Demonstração agendada",
+  DEMO_REALIZADA:   "Demonstração realizada",
+  PROPOSTA_ENVIADA: "Proposta enviada",
+  EM_NEGOCIACAO:    "Em negociação",
+  GANHO:            "Fechado — ganho",
+  PERDIDO:          "Fechado — perdido",
+  NUTRICAO:         "Nutrição futura",
 };
 
 /** O que cada etapa significa comercialmente — vai na tela, para não virar folclore. */
 export const DESCRICAO_ETAPA: Record<FoocciLeadStage, string> = {
-  NOVO:        "Chegou na base. Ninguém falou com ele ainda.",
-  CONTATADO:   "Recebeu a primeira mensagem nossa.",
-  QUALIFICADO: "Respondeu e tem perfil: é restaurante, tem a dor, tem interesse.",
-  PROPOSTA:    "Recebeu preço/proposta ou agendou a demonstração.",
-  FECHADO:     "Virou cliente da Foocci.",
-  PERDIDO:     "Saiu do funil. O motivo fica na nota da interação.",
+  NOVO:             "Chegou na base. Ninguém falou com ele ainda.",
+  PRIMEIRO_CONTATO: "Recebeu a primeira mensagem nossa e ainda não disse nada que qualifique.",
+  EM_QUALIFICACAO:  "Está respondendo. A descoberta está em andamento.",
+  QUALIFICADO:      "Tem perfil, tem a dor e tem interesse. Vale tempo de gente.",
+  DEMO_AGENDADA:    "Marcou a demonstração. Ainda não aconteceu.",
+  DEMO_REALIZADA:   "Viu o produto funcionando.",
+  PROPOSTA_ENVIADA: "Recebeu preço e condições por escrito.",
+  EM_NEGOCIACAO:    "Está discutindo condição, prazo ou desconto.",
+  GANHO:            "Virou cliente assinante da Foocci.",
+  PERDIDO:          "Saiu do funil. O motivo é estruturado e obrigatório.",
+  NUTRICAO:         "Não é agora — mas pode ser depois. NÃO é perda.",
 };
 
-export const TODAS_AS_ETAPAS: FoocciLeadStage[] = [...SEQUENCIA_FUNIL, "PERDIDO"];
+/**
+ * Etapas terminais, fora da régua de conversão. As duas encerram o ciclo; só
+ * uma é má notícia.
+ */
+export const ETAPAS_FORA_DO_FUNIL = ["PERDIDO", "NUTRICAO"] as const;
+
+export const TODAS_AS_ETAPAS: FoocciLeadStage[] = [
+  ...SEQUENCIA_FUNIL,
+  ...ETAPAS_FORA_DO_FUNIL,
+];
 
 export function isEtapaValida(v: unknown): v is FoocciLeadStage {
   return typeof v === "string" && (TODAS_AS_ETAPAS as string[]).includes(v);
@@ -181,8 +222,13 @@ export function computeFunnel(
   }
 
   const total = leads.length;
+  // Derivado da sequência, e não escrito à mão: quando o funil ganhou cinco
+  // etapas em 25/08, este literal era "FECHADO" e apontava para uma etapa que
+  // tinha deixado de existir. Extremidade calculada não erra de novo.
+  const primeira = SEQUENCIA_FUNIL[0]!;
+  const ultima = SEQUENCIA_FUNIL[SEQUENCIA_FUNIL.length - 1]!;
   const pontaAPonta = total > 0
-    ? montaDegrau("NOVO", "FECHADO", etapas[0]!.alcancaram, etapas[SEQUENCIA_FUNIL.length - 1]!.alcancaram)
+    ? montaDegrau(primeira, ultima, etapas[0]!.alcancaram, etapas[SEQUENCIA_FUNIL.length - 1]!.alcancaram)
     : null;
 
   return { etapas, degraus, perdidos, total, pontaAPonta, minimoParaTaxa: MIN_LEADS_PARA_TAXA };

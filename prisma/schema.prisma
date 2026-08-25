@@ -3085,13 +3085,65 @@ model AgentProfile {
   createdBy String?
   updatedBy String?
 
+  // ── Organização interna (ADR-002 + ADR-006) ────────────────────────────────
+  //
+  // Campos aditivos. Toda linha que já existia continua significando o mesmo:
+  // `population` nasce PRODUTO e `executionMode` nasce AI, que é o que os
+  // quatro agentes de produto sempre foram.
+
+  /// A qual das três populações esta ficha pertence. Ver ADR-006.
+  ///
+  /// Em 07/08/2026 quatro fichas foram apagadas por confundir DUAS populações.
+  /// Este campo existe para que a terceira não repita o acidente — e para que a
+  /// tela de produto nunca liste, sem querer, o Closer da empresa.
+  population AgentPopulation @default(PRODUTO)
+
+  /// IA executa sozinha · HUMAN é pessoa · HYBRID é IA com humano no comando.
+  executionMode AgentExecutionMode @default(AI)
+
+  /// Nulo para agente de produto, que não pertence a departamento da empresa.
+  departmentId String?
+
+  /// O CARGO responsável pela ficha, e o CARGO que a gerencia — não a pessoa.
+  ownerPositionId   String?
+  managerPositionId String?
+
+  /// Numeração do catálogo aprovado ("2.2"). É como o proprietário chama a ficha.
+  catalogNumber String?
+
   versions  AgentProfileVersion[]
   overrides RestaurantAgentProfileOverride[]
+
+  naoConformidades NaoConformidade[]
+  department       Department?       @relation(fields: [departmentId], references: [id])
+  ownerPosition    Position?         @relation("DonoDaFicha", fields: [ownerPositionId], references: [id])
+  managerPosition  Position?         @relation("GestorDaFicha", fields: [managerPositionId], references: [id])
 
   @@index([area])
   @@index([status])
   @@index([visibility])
+  @@index([population])
+  @@index([departmentId])
   @@map("agent_profiles")
+}
+
+/// As três populações de agente. Elas NÃO se medem igual, e somá-las produz um
+/// total sem significado — por isso o campo é enum e não booleano.
+///
+/// `PRODUTO`         roda dentro do sistema, para o lojista ou o cliente final.
+/// `DESENVOLVIMENTO` constrói o Foocci (vive em `.claude/agents/`).
+/// `EMPRESA`         quem trabalha NA Foocci: SDR, Closer, Gerente Financeiro.
+enum AgentPopulation {
+  PRODUTO
+  DESENVOLVIMENTO
+  EMPRESA
+}
+
+/// Como a ficha executa. `HUMAN` com dono preenchido é ficha de gente, não de IA.
+enum AgentExecutionMode {
+  AI
+  HUMAN
+  HYBRID
 }
 
 /// Immutable snapshot of an AgentProfile at a specific version.
@@ -5007,21 +5059,114 @@ model SiteLead {
   /// Guardrail 6: quem auditar precisa saber de onde veio, não só que existe.
   optOutCanal          String?
 
+  // ── QUEM ATENDE AGORA (v3, Sala de Vendas) ─────────────────────────────────
+  //
+  // A pergunta que a base não sabia responder: "de quem é este lead NESTE
+  // momento?". Sem ela não existe fila "sem responsável", não existe "meus
+  // leads", e não existe handoff — dois atendentes podem responder o mesmo lead
+  // sem nenhum dos dois saber do outro.
+  //
+  /// Estado da responsabilidade. Muda por escrita CONDICIONAL, nunca por
+  /// leitura-seguida-de-escrita: ver `src/services/salaDeVendas/responsavel.ts`.
+  atendidoPor     LeadAtendidoPor @default(NINGUEM)
+  /// A pessoa que assumiu, quando `atendidoPor = HUMANO`.
+  atendenteUserId String?
+  /// Desde quando o responsável atual responde. É o relógio do SLA de handoff.
+  atendenteDesde  DateTime?
+  /// Por que a IA pediu gente. Sem motivo, quem pega não sabe o que fazer.
+  motivoDoPedido  String?
+
   /// Última vez que a FOOCCI falou com esta pessoa (interação de saída).
   /// null = ninguém abordou ainda. É o filtro "quem falta abordar" do SDR.
   lastContactedAt   DateTime?
   /// Última interação de qualquer tipo — para ordenar a base por movimento.
   lastInteractionAt DateTime?
 
-  interactions SiteLeadInteraction[]
+  // ── SALA DE VENDAS: o que a LISTA precisa filtrar e ordenar ────────────────
+  //
+  // Estes campos moram aqui, e não na ficha, por um motivo só: a coluna do meio
+  // da Sala ordena e filtra por eles a cada carregamento. Buscá-los numa tabela
+  // ligada obrigaria um `join` por lead em toda listagem — e a lista é a tela
+  // que mais abre no dia de quem trabalha aqui.
+  //
+  /// E-mail, quando a pessoa deu. O WhatsApp continua sendo a chave.
+  email String?
+
+  /// A nota de qualificação. **`null` significa "ninguém mediu"**, e é diferente
+  /// de zero, que significa "medido e não qualifica". Escrever zero no lugar de
+  /// null aqui esconderia a fila inteira de quem nunca foi avaliado.
+  score       Int?
+  scoreAt     DateTime?
+  /// A leitura do número. `null` = não classificado — nunca FRIO por omissão.
+  temperatura LeadTemperatura?
+
+  /// O compromisso mais próximo com esta pessoa. É o que sustenta a regra
+  /// "nenhum lead em aberto sem próxima ação" — e a fila de follow-up vencido
+  /// é literalmente `proximaAcaoEm < agora`.
+  proximaAcaoEm   DateTime?
+  proximaAcaoNota String?
+
+  /// Marcado à mão pelo gerente. Fila "Prioritários".
+  prioritario Boolean @default(false)
+
+  /// Etiquetas livres do time comercial.
+  tags String[] @default([])
+
+  /// Quando a pessoa respondeu pela primeira vez. Congela o tempo de primeira
+  /// resposta: sem ele o indicador teria de ser recalculado varrendo mensagens.
+  primeiraRespostaEm DateTime?
+  /// Prazo do SLA vigente. Vencido e sem resposta = fila de SLA estourado.
+  slaVenceEm         DateTime?
+
+  /// Espelho da última mensagem, para a lista não precisar buscar a conversa.
+  /// É CACHE: a verdade são as linhas de `LeadMensagem`.
+  ultimaMensagemEm     DateTime?
+  ultimaMensagemTexto  String?
+  ultimaMensagemDeQuem DirecaoDaMensagem?
+  /// Quantas mensagens do lead ainda não foram lidas por gente.
+  naoLidas             Int                @default(0)
+
+  /// Só preenchido em PERDIDO. O motivo é ESTRUTURADO de propósito: motivo em
+  /// texto livre não vira relatório, e "o que mais nos faz perder" é a pergunta
+  /// que paga a próxima decisão de produto.
+  motivoPerdaId String?
+
+  interactions   SiteLeadInteraction[]
+  mensagens      LeadMensagem[]
+  tarefas        LeadTarefa[]
+  compromissos   LeadCompromisso[]
+  propostas      LeadProposta[]
+  handoffs       LeadHandoff[]
+  fatoresDoScore LeadScoreFator[]
+  avaliacoes     LeadAvaliacaoQA[]
+  cadencias      LeadCadencia[]
+  qualificacao   LeadQualificacao?
+  motivoPerda    MotivoDePerda?        @relation(fields: [motivoPerdaId], references: [id])
+  atendente      InternalUser?         @relation("LeadAtendente", fields: [atendenteUserId], references: [id])
 
   @@index([createdAt])
+  @@index([atendidoPor, stage])
+  @@index([atendenteUserId])
   @@index([notifiedAt])
   @@index([stage, createdAt])
   @@index([utmCampaign])
   @@index([whatsappDigits])
   @@index([lastContactedAt])
   @@index([optOutAt])
+  // ── Índices da Sala de Vendas ──────────────────────────────────────────────
+  /// A ordenação padrão da lista de conversas: quem falou por último, no topo.
+  @@index([ultimaMensagemEm])
+  /// A fila de follow-up vencido, e o alerta de "sem próxima ação".
+  @@index([proximaAcaoEm])
+  /// A fila de SLA estourado, do painel do gerente.
+  @@index([slaVenceEm])
+  /// O Kanban: cada coluna é uma etapa, ordenada por movimento.
+  @@index([stage, ultimaMensagemEm])
+  /// "Meus atendimentos", ordenado — o SDR abre esta lista o dia inteiro.
+  @@index([atendenteUserId, ultimaMensagemEm])
+  @@index([temperatura])
+  @@index([prioritario])
+  @@index([motivoPerdaId])
 }
 
 /// As etapas do funil comercial da Foocci. ORDEM IMPORTA: a taxa de conversão
@@ -5029,13 +5174,39 @@ model SiteLead {
 ///
 /// PERDIDO é terminal e fica FORA da sequência — um contato perdido SAIU do
 /// funil, não avançou nele. Contá-lo como etapa faria a conversão mentir.
+///
+/// NUTRICAO também fica fora da sequência, e é uma distinção que custa dinheiro
+/// quando não existe: "não é agora" não é "não". Jogar os dois no mesmo balde
+/// apaga a lista de quem voltaria a conversar em três meses.
 enum SiteLeadStage {
   NOVO // chegou, ninguém falou com ele ainda
-  CONTATADO // alguém (ou o SDR) mandou a primeira mensagem
-  QUALIFICADO // respondeu e tem perfil: é restaurante, tem dor, tem interesse
-  PROPOSTA // recebeu preço/proposta ou agendou a demonstração
-  FECHADO // virou cliente
-  PERDIDO // terminal — não virou cliente (motivo na nota da interação)
+  PRIMEIRO_CONTATO // alguém (ou o TA) mandou a primeira mensagem
+  EM_QUALIFICACAO // respondeu e a descoberta está em andamento
+  QUALIFICADO // tem perfil, dor e interesse — vale tempo humano
+  DEMO_AGENDADA // marcou a demonstração
+  DEMO_REALIZADA // a demonstração aconteceu
+  PROPOSTA_ENVIADA // recebeu preço e condições por escrito
+  EM_NEGOCIACAO // está discutindo condição, prazo ou desconto
+  GANHO // virou cliente assinante
+  PERDIDO // terminal — motivo estruturado é obrigatório
+  NUTRICAO // não é agora, mas pode ser depois. NÃO é perda
+}
+
+/// Quão quente está o lead. Separado do `score` de propósito: o número é o
+/// cálculo, a temperatura é a leitura. Quem opera decide pela leitura; quem
+/// ajusta a régua mexe no número.
+///
+/// **Não existe valor "frio" por omissão.** Lead sem classificação tem
+/// `temperatura = null`, e a tela escreve "não classificado". Chutar FRIO em
+/// quem ninguém avaliou é o mesmo erro de escrever zero quando a resposta é
+/// "não sei" — e este erra para o lado caro: arquiva quem ninguém olhou.
+enum LeadTemperatura {
+  PRIORIDADE_MAXIMA
+  QUENTE
+  MORNO
+  FRIO
+  DESQUALIFICADO
+  NUTRICAO
 }
 
 /// Por onde o contato entrou na base da Foocci.
@@ -5068,6 +5239,9 @@ model SiteLeadInteraction {
   actor     String
   /// Texto curto: motivo da perda, resumo da conversa, o que foi dito.
   nota      String?
+  /// `true` = o lead NUNCA vê. Nota interna que vaza para o canal externo é o
+  /// pior defeito possível nesta tela, e a trava é aqui, não na cor do campo.
+  interna   Boolean                 @default(false)
   createdAt DateTime                @default(now())
 
   @@index([leadId, createdAt])
@@ -5077,6 +5251,27 @@ model SiteLeadInteraction {
 
 /// Tipos de interação. `direcaoDeSaida` em `foocciCrmFunnel.ts` diz quais contam
 /// como "a Foocci falou com a pessoa" (e portanto mexem em `lastContactedAt`).
+/// Quem está atendendo o lead AGORA.
+///
+/// Não é "quem já falou com ele" — é quem responde pela próxima mensagem. Essa
+/// distinção é a que sustenta as filas da Sala de Vendas: "aguardando humano" é
+/// um lead que a IA devolveu e que ninguém pegou, e ele é invisível em qualquer
+/// lista organizada por etapa do funil.
+enum LeadAtendidoPor {
+  /// Ninguém assumiu. Cai na fila "Sem responsável", que é visível e cobrada.
+  NINGUEM
+
+  /// O Agente SDR IA está conduzindo.
+  IA
+
+  /// Uma pessoa assumiu. A IA silencia ANTES do próximo envio.
+  HUMANO
+
+  /// A IA devolveu e pediu gente. Fila mais importante da tela: uma venda em
+  /// queda livre que não aparece em nenhuma outra lista.
+  AGUARDANDO_HUMANO
+}
+
 enum SiteLeadInteractionType {
   CAPTURA // entrou na base
   REENVIO_FORMULARIO // a mesma pessoa preencheu de novo
@@ -5086,6 +5281,10 @@ enum SiteLeadInteractionType {
   LIGACAO // saída: telefonema
   REUNIAO // saída: demonstração/reunião realizada
   NOTA // observação livre, sem contato
+  ASSUMIU_HUMANO // uma pessoa pegou a conversa; a IA silencia
+  DEVOLVEU_PARA_IA // a pessoa devolveu, com objetivo escrito
+  PEDIU_HUMANO // a IA parou e pediu gente
+  NOTA_INTERNA // nota que o lead NUNCA vê
 }
 
 // ═══════════════════════════════════════════
@@ -5412,4 +5611,1448 @@ model RaioXFinding {
   @@index([runId])
   @@index([probeId, severity])
   @@map("raiox_findings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORGANIZAÇÃO INTERNA DA FOOCCI
+//
+// Fase 1 do programa `docs/arquitetura-operacional-foocci-v1/`.
+//
+// Até aqui o repositório descrevia muito bem o PRODUTO e quase nada a EMPRESA:
+// 143 models e nenhum dizia quem trabalha aqui. O admin inteiro era uma senha
+// só (`ADMIN_SECRET`), e o model `User` pertence ao RESTAURANTE — tem
+// `restaurantId` obrigatório. Sem identidade interna não existe responsável por
+// tarefa, autor de decisão, nem "quem assumiu a conversa".
+//
+// Estes models são a fundação que os 9 departamentos compartilham. São
+// aditivos: nada existente foi alterado.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Papel de quem trabalha NA Foocci — não confundir com `Role`, que é o papel
+/// de quem trabalha NO RESTAURANTE cliente.
+/// Os seis perfis oficiais da v3 (`05-RBAC-E-PERMISSOES.md`).
+///
+/// A v1 tinha sete, com outros nomes. O CEO fixou estes seis em 25/08/2026, e a
+/// migração mapeia cada valor antigo para o novo — nenhuma linha existente muda
+/// de sentido.
+enum InternalRole {
+  /// O CEO. Acesso integral, em toda parte.
+  MASTER_CEO
+
+  /// Acesso integral à operação Foocci.
+  DIRETOR_FOOCCI
+
+  /// Um por departamento. Enxerga o próprio departamento: equipe, backlog,
+  /// indicadores e delegações — e nada dos outros.
+  GERENTE_DEPARTAMENTO
+
+  /// Pessoa que executa. Enxerga só as ferramentas e os dados da função dela.
+  /// O SDR humano é este perfil: Sala de Vendas e nada mais do Admin.
+  AGENTE_HUMANO
+
+  /// Ator técnico. NUNCA é uma credencial humana e nunca faz login interativo —
+  /// existe para que uma ação executada por IA tenha autor na trilha em vez de
+  /// aparecer como "sistema", que não responde por nada.
+  AGENTE_IA
+
+  /// Lê, audita, avalia e registra não conformidade. Não corrige o que auditou.
+  AUDITOR_QA
+}
+
+/// Altura na hierarquia. Separada de `InternalRole` porque cargo e papel não são
+/// a mesma coisa: uma pessoa pode ocupar o cargo de Gerente de Vendas e ter
+/// papel CEO enquanto a empresa é pequena.
+/// Níveis do organograma. Sem `GERENTE_GERAL`: o Diretor da Foocci já ocupa
+/// essa camada, e o cargo criaria um degrau a mais sem ninguém para ocupá-lo
+/// (regra 10 da hierarquia v3).
+enum PositionLevel {
+  CEO
+  DIRETOR
+  GERENTE
+  OPERACAO
+}
+
+/// Um dos 9 departamentos canônicos.
+model Department {
+  id     String @id @default(cuid())
+  /// Ordem canônica do plano mestre (1 = Marketing … 9 = Financeiro).
+  numero Int    @unique
+  slug   String @unique
+  nome   String
+  missao String @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  positions   Position[]
+  memberships DepartmentMembership[]
+  fichas      AgentProfile[]
+
+  delegacoes        Delegacao[]
+  naoConformidades  NaoConformidade[]
+  ordensDeServico   WorkOrder[]
+  projetos          Project[]
+  tarefas           Task[]
+  handoffsEnviados  Handoff[]         @relation("HandoffOrigem")
+  handoffsRecebidos Handoff[]         @relation("HandoffDestino")
+
+  @@map("departments")
+}
+
+/// Um cargo no organograma. Existe INDEPENDENTE de ter gente nele.
+///
+/// Isto é de propósito: o plano mestre manda preservar a posição organizacional
+/// "para permitir crescimento sem reconstrução". Cargo vago é informação — dizer
+/// que o Gerente de Produto não existe é diferente de dizer que ninguém o ocupa.
+model Position {
+  id     String        @id @default(cuid())
+  slug   String        @unique
+  titulo String
+  nivel  PositionLevel
+
+  /// Nulo para CEO, Diretor e Gerente Geral, que estão acima dos departamentos.
+  departmentId String?
+
+  /// A quem este cargo se reporta. Auto-relação: é o organograma.
+  reportsToPositionId String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department  Department? @relation(fields: [departmentId], references: [id])
+  reportsTo   Position?   @relation("Organograma", fields: [reportsToPositionId], references: [id])
+  subordinate Position[]  @relation("Organograma")
+
+  ocupantes   InternalUser[]
+  memberships DepartmentMembership[]
+
+  /// Fichas cujo DONO é este cargo, e fichas cujo GESTOR é este cargo.
+  ///
+  /// O dono é cargo, não pessoa, pelo mesmo motivo do organograma: os cargos
+  /// nascem vagos e uma ficha precisa ter responsável desde o primeiro dia.
+  /// "Dono: Gerente de Vendas (vago)" é verdade e é acionável; dono nulo até
+  /// alguém ser contratado seria uma ficha sem responsável — que é o mesmo que
+  /// IA sem responsável.
+  fichasQueDono     AgentProfile[] @relation("DonoDaFicha")
+  fichasQueGerencia AgentProfile[] @relation("GestorDaFicha")
+
+  delegouDe           Delegacao[] @relation("DelegouDe")
+  delegouPara         Delegacao[] @relation("DelegouPara")
+  osQuePatrocina      WorkOrder[] @relation("OsSponsor")
+  osQueResponde       WorkOrder[] @relation("OsOwner")
+  projetosQueDono     Project[]   @relation("ProjetoOwner")
+  tarefasDoCargo      Task[]      @relation("TarefaCargo")
+  handoffsQueResponde Handoff[]   @relation("HandoffResponsavel")
+
+  @@index([departmentId])
+  @@index([reportsToPositionId])
+  @@map("positions")
+}
+
+/// Quem trabalha na Foocci.
+///
+/// `passwordHash` é opcional porque `SYSTEM_AI` não tem senha — e um campo
+/// obrigatório forçaria alguém a inventar uma para o ator técnico, que é
+/// exatamente como uma credencial de sistema vira credencial de gente.
+model InternalUser {
+  id    String @id @default(cuid())
+  email String @unique
+  nome  String
+
+  /// bcrypt, como o resto da casa (`src/lib/auth.ts`). Nulo = não faz login.
+  passwordHash String?
+
+  role       InternalRole @default(AGENTE_HUMANO)
+  positionId String?
+
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  position    Position?              @relation(fields: [positionId], references: [id])
+  memberships DepartmentMembership[]
+
+  leadsQueAtende     SiteLead[]        @relation("LeadAtendente")
+  falhasQueAchou     NaoConformidade[] @relation("FalhaEncontradaPor")
+  falhasQueAceitou   NaoConformidade[] @relation("FalhaAceitaPor")
+  osQueSolicitou     WorkOrder[]       @relation("OsSolicitante")
+  tarefasDaPessoa    Task[]            @relation("TarefaPessoa")
+  handoffsQueEnviou  Handoff[]         @relation("HandoffEmissor")
+  handoffsQueAceitou Handoff[]         @relation("HandoffReceptor")
+
+  // ── Sala de Vendas ─────────────────────────────────────────────────────────
+  mensagensQueEscreveu LeadMensagem[]      @relation("MensagemAutor")
+  fichasQueAtualizou   LeadQualificacao[]  @relation("FichaAtualizadaPor")
+  tarefasDeLead        LeadTarefa[]        @relation("TarefaDoLead")
+  compromissos         LeadCompromisso[]   @relation("CompromissoDoLead")
+  propostasQueCriou    LeadProposta[]      @relation("PropostaCriadaPor")
+  handoffsDeLeadDe     LeadHandoff[]       @relation("HandoffLeadDe")
+  handoffsDeLeadPara   LeadHandoff[]       @relation("HandoffLeadPara")
+  disponibilidade      SdrDisponibilidade?
+  versoesQuePublicou   SdrIaConfigVersao[] @relation("VersaoPublicadaPor")
+  avaliacoesRecebidas  LeadAvaliacaoQA[]   @relation("QAAvaliado")
+  avaliacoesQueFez     LeadAvaliacaoQA[]   @relation("QAAvaliador")
+
+  @@index([role])
+  @@index([positionId])
+  @@map("internal_users")
+}
+
+/// A que departamentos a pessoa pertence. Uma pessoa pode acumular — o plano
+/// mestre prevê acúmulo enquanto a empresa é pequena.
+model DepartmentMembership {
+  id             String  @id @default(cuid())
+  internalUserId String
+  departmentId   String
+  positionId     String?
+
+  /// Gerente do departamento. É o que decide quem administra a área — não o
+  /// `InternalRole`, que é a altura na empresa.
+  isManager Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  internalUser InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  position     Position?    @relation(fields: [positionId], references: [id])
+
+  @@unique([internalUserId, departmentId])
+  @@index([departmentId, isManager])
+  @@map("department_memberships")
+}
+
+/// Quem é o ator de uma ação interna.
+enum InternalActorType {
+  INTERNAL_USER
+
+  /// A senha compartilhada antiga. Continua válida durante a transição (ADR-003),
+  /// mas SEMPRE deixa rastro — é assim que a convivência vira número medido em
+  /// vez de suposição, e é esse número que sustenta a decisão de desligá-la.
+  LEGACY_ADMIN_SECRET
+
+  /// Nenhuma sessão: a tentativa chegou sem identidade.
+  ANONIMO
+
+  SYSTEM
+}
+
+enum InternalActionResult {
+  PERMITIDO
+  NEGADO
+}
+
+/// Trilha append-only de ação interna sensível.
+///
+/// Guarda TAMBÉM o que foi negado. Uma trilha que só registra sucesso não
+/// responde "alguém tentou entrar onde não devia?", que é a pergunta que uma
+/// trilha existe para responder.
+model InternalAuditEvent {
+  id String @id @default(cuid())
+
+  actorType  InternalActorType
+  actorId    String?
+  /// Nome legível de quem agiu. Guardado no evento de propósito: se a pessoa
+  /// for desativada depois, o histórico continua dizendo quem foi.
+  actorLabel String
+
+  acao      String
+  recurso   String
+  resultado InternalActionResult
+  /// Obrigatório quando NEGADO — achado sem motivo é ruído.
+  motivo    String?
+
+  departmentId String?
+  origemIp     String?
+  detalhe      Json     @default("{}")
+  ocorridoEm   DateTime @default(now())
+
+  @@index([ocorridoEm])
+  @@index([actorType, ocorridoEm])
+  @@index([resultado, ocorridoEm])
+  @@map("internal_audit_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// O TRABALHO — ordem de serviço, projeto, tarefa e handoff (Fase 1, PR 1.3)
+//
+// O plano mestre (documento 09, seções 3.2 e 3.4) descreve o trabalho da empresa
+// em quatro objetos e uma regra dura:
+//
+//   "O item permanece com o emissor até o aceite do destino ou regra explícita."
+//
+// Essa frase é o coração deste bloco. Ela NÃO é cumprida por um campo `status`
+// que alguém lembra de atualizar: é cumprida por uma escrita condicional, dentro
+// de transação, que só um dos dois lados consegue vencer. Ver
+// `src/services/trabalho/handoff.ts`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Situação de uma OS, projeto ou tarefa. Exatamente os quatro do documento 09.
+///
+/// Repare que NÃO existe `BLOQUEADO`. É ordem explícita do plano mestre: "não
+/// usar bloqueado como lista principal" — impedimento vive dentro do item, como
+/// dependência ou pendência, e não vira uma coluna onde o trabalho se acumula
+/// sem dono.
+enum WorkStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum WorkPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+/// Estado de um handoff.
+///
+/// `ENVIADO` é o único estado em que o item ainda pertence ao EMISSOR. Sair dele
+/// é a transição que precisa ser atômica.
+enum HandoffStatus {
+  ENVIADO
+  ACEITO
+  RECUSADO
+  DEVOLVIDO
+}
+
+/// Ordem de serviço: nasce de uma solicitação executiva ou departamental.
+model WorkOrder {
+  id     String @id @default(cuid())
+  /// Número humano, sequencial. É como as pessoas se referem à OS.
+  numero Int    @unique @default(autoincrement())
+
+  objetivo          String @db.Text
+  resultadoEsperado String @db.Text
+  criterioDeAceite  String @db.Text
+
+  /// Contexto, riscos e restrições — texto livre, porque é isso que eles são.
+  contexto   String? @db.Text
+  riscos     String? @db.Text
+  restricoes String? @db.Text
+
+  prioridade WorkPriority @default(MEDIA)
+  status     WorkStatus   @default(NOT_STARTED)
+  prazo      DateTime?
+
+  /// Quem pediu. Pessoa, porque pedido tem autor.
+  solicitanteId     String?
+  /// Quem patrocina e quem responde — CARGOS, que existem mesmo vagos.
+  sponsorPositionId String?
+  ownerPositionId   String?
+  departmentId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solicitante InternalUser? @relation("OsSolicitante", fields: [solicitanteId], references: [id])
+  sponsor     Position?     @relation("OsSponsor", fields: [sponsorPositionId], references: [id])
+  owner       Position?     @relation("OsOwner", fields: [ownerPositionId], references: [id])
+  department  Department?   @relation(fields: [departmentId], references: [id])
+
+  projects   Project[]
+  tasks      Task[]
+  handoffs   Handoff[]
+  delegacoes Delegacao[]
+
+  @@index([status])
+  @@index([departmentId])
+  @@index([ownerPositionId])
+  @@map("work_orders")
+}
+
+model Project {
+  id       String @id @default(cuid())
+  nome     String
+  objetivo String @db.Text
+
+  status     WorkStatus   @default(NOT_STARTED)
+  prioridade WorkPriority @default(MEDIA)
+  prazo      DateTime?
+
+  workOrderId     String?
+  departmentId    String?
+  ownerPositionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workOrder  WorkOrder?  @relation(fields: [workOrderId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  owner      Position?   @relation("ProjetoOwner", fields: [ownerPositionId], references: [id])
+
+  tasks    Task[]
+  handoffs Handoff[]
+
+  @@index([status])
+  @@index([workOrderId])
+  @@index([departmentId])
+  @@map("projects_internos")
+}
+
+model Task {
+  id        String  @id @default(cuid())
+  titulo    String
+  descricao String? @db.Text
+
+  status     WorkStatus   @default(NOT_STARTED)
+  prioridade WorkPriority @default(MEDIA)
+  prazo      DateTime?
+
+  /// Responsável em duas camadas: o CARGO responde sempre; a PESSOA, quando
+  /// houver uma. Tarefa cujo cargo está vago tem responsável — vago — e não
+  /// desaparece do radar por falta de gente.
+  assigneePositionId String?
+  assigneeUserId     String?
+
+  projectId    String?
+  workOrderId  String?
+  departmentId String?
+
+  concluidaEm DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project          Project?      @relation(fields: [projectId], references: [id])
+  workOrder        WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  department       Department?   @relation(fields: [departmentId], references: [id])
+  assigneePosition Position?     @relation("TarefaCargo", fields: [assigneePositionId], references: [id])
+  assigneeUser     InternalUser? @relation("TarefaPessoa", fields: [assigneeUserId], references: [id])
+
+  dependeDe  TaskDependency[] @relation("TarefaQueDepende")
+  bloqueia   TaskDependency[] @relation("TarefaDaQualDepende")
+  handoffs   Handoff[]
+  delegacoes Delegacao[]
+
+  @@index([status])
+  @@index([projectId])
+  @@index([assigneePositionId])
+  @@index([assigneeUserId])
+  @@map("tasks_internas")
+}
+
+/// "A depende de B". Duas linhas iguais não podem existir, e uma tarefa não pode
+/// depender de si mesma — a segunda regra vive no serviço, porque o Postgres não
+/// tem CHECK declarativo no Prisma.
+model TaskDependency {
+  id              String @id @default(cuid())
+  taskId          String
+  dependsOnTaskId String
+
+  createdAt DateTime @default(now())
+
+  task      Task @relation("TarefaQueDepende", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TarefaDaQualDepende", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+/// A passagem de bastão entre departamentos.
+///
+/// Campos exigidos pelo documento 09, seção 3.4: origem, destino, responsável,
+/// resumo, evidências, entregáveis, pendências, SLA e confirmação do
+/// recebimento. Nenhum deles é decorativo — um handoff sem entregáveis e sem
+/// pendências é uma conversa, não uma passagem de trabalho.
+model Handoff {
+  id String @id @default(cuid())
+
+  origemDepartmentId    String
+  destinoDepartmentId   String
+  /// Quem responde pelo handoff no destino. Cargo, não pessoa.
+  responsavelPositionId String?
+
+  resumo      String @db.Text
+  evidencias  Json   @default("[]")
+  entregaveis Json   @default("[]")
+  pendencias  Json   @default("[]")
+
+  /// Prazo de aceite. `null` = sem SLA acordado, que é diferente de SLA zero.
+  slaHoras Int?
+
+  status HandoffStatus @default(ENVIADO)
+
+  /// O item que está sendo passado. Exatamente um destes é preenchido — a regra
+  /// vive no serviço, que recusa handoff sem item e handoff com dois.
+  workOrderId String?
+  projectId   String?
+  taskId      String?
+
+  enviadoPorId String?
+  enviadoEm    DateTime  @default(now())
+  /// Confirmação do recebimento. Enquanto for nulo, o item é do emissor.
+  aceitoPorId  String?
+  aceitoEm     DateTime?
+  recusadoEm   DateTime?
+  /// Recusa e devolução exigem motivo. "Não aceito" sem motivo não é informação.
+  motivo       String?   @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  origem      Department    @relation("HandoffOrigem", fields: [origemDepartmentId], references: [id])
+  destino     Department    @relation("HandoffDestino", fields: [destinoDepartmentId], references: [id])
+  responsavel Position?     @relation("HandoffResponsavel", fields: [responsavelPositionId], references: [id])
+  workOrder   WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  project     Project?      @relation(fields: [projectId], references: [id])
+  task        Task?         @relation(fields: [taskId], references: [id])
+  enviadoPor  InternalUser? @relation("HandoffEmissor", fields: [enviadoPorId], references: [id])
+  aceitoPor   InternalUser? @relation("HandoffReceptor", fields: [aceitoPorId], references: [id])
+
+  @@index([status])
+  @@index([destinoDepartmentId, status])
+  @@index([taskId])
+  @@map("handoffs")
+}
+
+/// A linha do tempo imutável do documento 09.
+///
+/// Append-only de verdade: gravar é permitido, alterar e apagar não. A trava é
+/// gatilho no banco, não convenção — ver a migração. Prompt é aviso; código é
+/// trava.
+///
+/// O PR 1.4 estende esta mesma tabela para aprovações e decisões. Duas tabelas
+/// de evento produziriam duas linhas do tempo, e a pergunta "o que aconteceu com
+/// este item?" passaria a ter duas respostas.
+model DomainEvent {
+  id String @id @default(cuid())
+
+  /// Que tipo de coisa aconteceu: "handoff.aceito", "tarefa.concluida".
+  tipo       String
+  /// A que objeto. `entidade` + `entidadeId` em vez de FK porque um evento
+  /// sobrevive ao objeto que o gerou — e uma FK o apagaria junto.
+  entidade   String
+  entidadeId String
+
+  /// Quem causou. Texto, pelo mesmo motivo: o evento não pode sumir com a pessoa.
+  atorTipo   String
+  atorRotulo String?
+
+  dados Json @default("{}")
+
+  ocorridoEm DateTime @default(now())
+
+  @@index([entidade, entidadeId, ocorridoEm])
+  @@index([tipo, ocorridoEm])
+  @@index([ocorridoEm])
+  @@map("domain_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOVERNANÇA DO DEPARTAMENTO (v3, Fase 4)
+//
+// O documento 01 exige que cada departamento tenha dono, fila, entradas, saídas,
+// SLA, métricas e regras de escalonamento. Dono e fila já existem (cargo e
+// backlog). Falta o que registra o COMANDO e a QUALIDADE.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Uma ordem descendo a hierarquia.
+///
+/// ── POR QUE ISTO É UMA TABELA, E NÃO UM CAMPO NA TAREFA ──
+///
+/// A regra 7 da hierarquia diz que "o Diretor não opera rotineiramente delegando
+/// direto aos agentes subordinados". É um HÁBITO, e hábito não se implementa com
+/// `if`.
+///
+/// Bloquear seria errado: numa urgência, o Diretor PRECISA poder falar direto
+/// com quem executa. O que não pode é isso virar rotina sem ninguém perceber.
+///
+/// Então a delegação registra o caminho, e o caminho vira número: quantas vezes,
+/// no período, uma ordem pulou o Agente Gerente. Um pulo é exceção. Trinta pulos
+/// por mês é uma estrutura que não está funcionando — e aí a conversa é sobre a
+/// estrutura, não sobre a regra.
+model Delegacao {
+  id String @id @default(cuid())
+
+  /// Cargo de quem delegou e de quem recebeu.
+  dePositionId   String
+  paraPositionId String
+
+  departmentId String?
+
+  /// O que foi pedido, e como se sabe que terminou.
+  objetivo         String    @db.Text
+  criterioDeAceite String?   @db.Text
+  prazo            DateTime?
+
+  /// O item gerado, quando houver.
+  workOrderId String?
+  taskId      String?
+
+  /// `true` quando a ordem pulou o Agente Gerente do departamento.
+  ///
+  /// Calculado na escrita e GRAVADO, não deduzido na leitura: o organograma
+  /// muda, e um relatório de junho precisa dizer o que era verdade em junho.
+  pulouGerente Boolean @default(false)
+
+  /// Quem registrou. Pessoa, porque ordem tem autor.
+  criadoPorId String?
+  criadoEm    DateTime @default(now())
+
+  de         Position    @relation("DelegouDe", fields: [dePositionId], references: [id])
+  para       Position    @relation("DelegouPara", fields: [paraPositionId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  workOrder  WorkOrder?  @relation(fields: [workOrderId], references: [id])
+  task       Task?       @relation(fields: [taskId], references: [id])
+
+  @@index([departmentId, criadoEm])
+  @@index([pulouGerente, criadoEm])
+  @@index([paraPositionId])
+  @@map("delegacoes")
+}
+
+/// Gravidade de uma não conformidade.
+enum GravidadeDaFalha {
+  /// Não impede a operação, mas precisa entrar na fila.
+  BAIXA
+  /// Atrapalha e tem prazo.
+  MEDIA
+  /// Para a operação até resolver.
+  ALTA
+  /// Risco a cliente, dado ou dinheiro: bloqueia agora.
+  BLOQUEANTE
+}
+
+enum SituacaoDaFalha {
+  ABERTA
+  EM_TRATAMENTO
+  RESOLVIDA
+  /// Aceita conscientemente, com quem aceitou registrado.
+  ACEITA
+}
+
+/// Uma não conformidade encontrada por auditoria ou avaliação.
+///
+/// ── A REGRA QUE ESTE MODELO IMPÕE ──
+///
+/// **Ausência de evidência não é aprovação.** Toda falha nasce com evidência
+/// anexada, e uma falha sem evidência não pode ser aberta — senão a auditoria
+/// vira opinião, e opinião não sustenta bloqueio de mudança crítica.
+///
+/// **Quem audita não assina a liberação do que auditou.** `aceitaPorId` nunca
+/// pode ser igual a `encontradaPorId`. A trava está no serviço, com teste.
+model NaoConformidade {
+  id String @id @default(cuid())
+
+  titulo    String
+  descricao String @db.Text
+
+  gravidade GravidadeDaFalha
+  situacao  SituacaoDaFalha  @default(ABERTA)
+
+  /// Onde foi encontrada: departamento e, quando couber, o agente avaliado.
+  departmentId   String?
+  agentProfileId String?
+
+  /// A prova. Sem ela a falha não existe — o serviço recusa criar sem evidência.
+  evidencia Json @default("[]")
+
+  /// O que se vai fazer, e até quando.
+  planoDeAcao String?   @db.Text
+  prazo       DateTime?
+
+  encontradaPorId String?
+  /// Quem aceitou o risco, quando `situacao = ACEITA`. NUNCA quem encontrou.
+  aceitaPorId     String?
+  motivoDaAceite  String? @db.Text
+
+  criadaEm    DateTime  @default(now())
+  resolvidaEm DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  agentProfile  AgentProfile? @relation(fields: [agentProfileId], references: [id])
+  encontradaPor InternalUser? @relation("FalhaEncontradaPor", fields: [encontradaPorId], references: [id])
+  aceitaPor     InternalUser? @relation("FalhaAceitaPor", fields: [aceitaPorId], references: [id])
+
+  @@index([situacao, gravidade])
+  @@index([departmentId, criadaEm])
+  @@index([agentProfileId])
+  @@map("nao_conformidades")
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  SALA DE VENDAS E SDRs — o comando de 25/08/2026                          ║
+// ║                                                                           ║
+// ║  Tudo aqui é sobre QUEM QUER CONTRATAR a Foocci. Nada aqui toca em         ║
+// ║  `Customer`, `Conversation` ou `Message`, que são o consumidor do          ║
+// ║  restaurante. As duas bases nunca se encostam — é a regra número um do     ║
+// ║  produto, e a razão de existir uma conversa própria para o lead.           ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+/// Direção de uma mensagem, do ponto de vista da Foocci.
+enum DirecaoDaMensagem {
+  ENTRADA // o lead escreveu
+  SAIDA // a Foocci escreveu
+}
+
+/// O que a mensagem carrega. Espelha os tipos que a Meta entrega.
+enum TipoDaMensagem {
+  TEXTO
+  AUDIO
+  IMAGEM
+  DOCUMENTO
+  VIDEO
+  TEMPLATE
+  /// Chegou algo que este sistema não sabe representar (localização, contato,
+  /// figurinha…). É registrado como NAO_SUPORTADO **com o tipo cru guardado** —
+  /// jamais descartado. Mensagem que some é conversa que mente.
+  NAO_SUPORTADO
+}
+
+/// O que aconteceu com uma mensagem que a Foocci mandou.
+///
+/// `FALHOU` é um estado de primeira classe, e não um log: uma mensagem que não
+/// chegou e aparece na tela como se tivesse chegado faz o vendedor esperar uma
+/// resposta que nunca vem.
+enum StatusDaMensagem {
+  PENDENTE // aceita por nós, ainda não confirmada pelo provedor
+  ENVIADA
+  ENTREGUE
+  LIDA
+  FALHOU
+  /// Só para ENTRADA: mensagem recebida não tem status de entrega.
+  RECEBIDA
+}
+
+/// Quem redigiu uma mensagem de saída.
+enum AutorDaMensagem {
+  IA // o Agente SDR IA (TA)
+  HUMANO // uma pessoa da Sala
+  SISTEMA // automação: cadência, confirmação, template operacional
+}
+
+/// A conversa de WhatsApp de um lead da Foocci.
+///
+/// ── POR QUE NÃO REUSAR `Message` ─────────────────────────────────────────────
+/// `Message` pende de `Conversation`, que exige `restaurantId` obrigatório. O
+/// prospecto da Foocci não tem restaurante. Usá-la exigiria inventar um tenant
+/// falso dentro do sistema cuja regra número um é não misturar as bases — e o
+/// preço seria prospecto aparecendo na Central de Conversas de algum lojista.
+///
+/// ── IDEMPOTÊNCIA ────────────────────────────────────────────────────────────
+/// `waMessageId` é ÚNICO. A Meta reentrega webhook em falha de rede, e sem esta
+/// restrição a mesma mensagem entraria duas vezes na conversa — o defeito mais
+/// constrangedor possível numa tela de atendimento. A unicidade é a trava; a
+/// verificação em código é a conveniência (guardrail 4).
+model LeadMensagem {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  direcao DirecaoDaMensagem
+  tipo    TipoDaMensagem    @default(TEXTO)
+  status  StatusDaMensagem  @default(PENDENTE)
+
+  /// O id da mensagem no provedor. Único e opcional: opcional porque uma
+  /// mensagem de saída existe (PENDENTE) antes de o provedor devolver o id.
+  waMessageId String? @unique
+  /// Tipo cru do provedor quando `tipo = NAO_SUPORTADO`, para não perder o quê.
+  tipoCru     String?
+
+  texto         String? @db.Text
+  /// Endereço da mídia no provedor + o que dá para saber sem baixar o arquivo.
+  midiaId       String?
+  midiaMimeType String?
+  midiaNome     String?
+  /// Legenda de imagem/vídeo/documento. Vem separada do texto na Meta.
+  legenda       String? @db.Text
+  /// Duração em segundos, para áudio e vídeo.
+  duracaoSeg    Int?
+
+  /// Nome do template, quando `tipo = TEMPLATE`. Sem ele não há como auditar o
+  /// que foi disparado depois que a janela de 24h fechou.
+  templateNome String?
+
+  autor       AutorDaMensagem?
+  /// Quem apertou enviar, quando `autor = HUMANO`. Item 19 do comando: toda
+  /// mensagem tem responsável, e IA e humano não se confundem.
+  autorUserId String?
+  autorUser   InternalUser?    @relation("MensagemAutor", fields: [autorUserId], references: [id])
+
+  /// Motivo da falha, do provedor. Nunca guarda token nem credencial.
+  erro       String? @db.Text
+  /// Quantas vezes já se tentou reenviar. Retentativa sem contador é laço.
+  tentativas Int     @default(0)
+
+  /// Quando o provedor carimbou. Pode ser anterior a `createdAt` — a Meta
+  /// reentrega, e ordenar pela hora de gravação embaralharia a conversa.
+  ocorreuEm DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Quando uma pessoa marcou como lida. Alimenta `SiteLead.naoLidas`.
+  lidaEm DateTime?
+
+  /// Avaliações de QA que citam esta mensagem como evidência.
+  citadaEmQA LeadAvaliacaoCriterio[]
+
+  @@index([leadId, ocorreuEm])
+  @@index([leadId, direcao, ocorreuEm])
+  @@index([status])
+  @@index([ocorreuEm])
+  @@map("lead_mensagens")
+}
+
+/// A ficha 360º do lead — o painel direito da tela de atendimento.
+///
+/// Separada de `SiteLead` de propósito: são ~15 campos que a LISTA nunca lê e a
+/// FICHA sempre lê. Deixá-los na tabela principal engordaria cada linha de toda
+/// consulta de fila para servir uma tela por vez.
+///
+/// **Todo campo é opcional, e isso é a regra, não descuido.** A ficha se
+/// preenche ao longo da conversa; obrigar campo aqui obrigaria o vendedor a
+/// inventar resposta para poder salvar o que ele já descobriu.
+model LeadQualificacao {
+  id     String   @id @default(cuid())
+  leadId String   @unique
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  segmento         String?
+  /// Quantas casas o restaurante tem. Muda plano e muda quem decide.
+  unidades         Int?
+  /// Pedidos por mês, como a pessoa informou (estimativa dela, não medição).
+  volumeMensal     Int?
+  /// Canais que ele usa hoje: iFood, WhatsApp, Instagram, salão…
+  canaisAtuais     String[] @default([])
+  sistemaAtual     String?
+  dorPrincipal     String?  @db.Text
+  objetivo         String?  @db.Text
+  planoDeInteresse String?
+  /// Quando ele quer resolver. Urgência declarada, não deduzida.
+  urgencia         String?
+  /// Se quem está falando decide, decide com outro, ou não decide.
+  poderDeDecisao   String?
+  faixaDeOrcamento String?
+
+  /// O que a IA entendeu, com a fonte colada. Preenchido pelo TA; editável por
+  /// gente. A fonte importa: "informado no formulário" e "deduzido da conversa"
+  /// não valem a mesma coisa numa proposta.
+  observacoes String? @db.Text
+
+  atualizadoPorId String?
+  atualizadoPor   InternalUser? @relation("FichaAtualizadaPor", fields: [atualizadoPorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("lead_qualificacoes")
+}
+
+/// Um fator que entrou no cálculo do score, com o peso que ele teve.
+///
+/// ── POR QUE ISTO É UMA TABELA E NÃO UM NÚMERO ───────────────────────────────
+/// Item 10 do comando: *"Mostrar os fatores que formaram o score. Não utilizar
+/// uma pontuação opaca sem explicação."*
+///
+/// Score sem explicação não é discutível — e um número que ninguém consegue
+/// contestar é um número que o time aprende a ignorar. Guardando cada fator, a
+/// tela mostra POR QUE o lead é 82, e o gerente consegue dizer "este peso está
+/// errado" em vez de "não confio nesse número".
+model LeadScoreFator {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  /// Chave estável da regra (`unidades`, `volume`, `urgencia`…).
+  fator       String
+  /// O que foi observado, em texto legível ("3 unidades", "usa só iFood").
+  observado   String
+  /// Quanto este fator somou — pode ser negativo.
+  pontos      Int
+  /// A versão da régua que gerou este ponto. Sem isso, mudar os pesos
+  /// reescreveria retroativamente a explicação de scores antigos.
+  reguaVersao Int
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([fator])
+  @@map("lead_score_fatores")
+}
+
+/// Motivo estruturado de perda. Catálogo administrável.
+///
+/// Existe para que "por que a gente perde" seja uma consulta, e não uma leitura
+/// de trezentas notas em texto livre.
+model MotivoDePerda {
+  id           String  @id @default(cuid())
+  slug         String  @unique
+  rotulo       String
+  /// Agrupa para o relatório: preço, produto, tempo, concorrente, perfil…
+  grupo        String?
+  /// Exige que quem marcar escreva um detalhe. Para "Outro", é obrigatório —
+  /// senão "Outro" vira o maior motivo de perda da empresa e não explica nada.
+  exigeDetalhe Boolean @default(false)
+  ativo        Boolean @default(true)
+  ordem        Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  leads SiteLead[]
+
+  @@index([ativo, ordem])
+  @@map("motivos_de_perda")
+}
+
+/// Tipo de compromisso que alguém assumiu com o lead.
+enum TipoDeTarefa {
+  FOLLOW_UP
+  LIGACAO
+  MENSAGEM
+  PROPOSTA
+  CONFIRMACAO_DE_REUNIAO
+  REENGAJAMENTO
+  OUTRO
+}
+
+enum SituacaoDaTarefa {
+  ABERTA
+  CONCLUIDA
+  CANCELADA
+}
+
+/// Tarefa e follow-up de um lead.
+///
+/// ── POR QUE NÃO REUSAR `Task` ───────────────────────────────────────────────
+/// `Task` pertence a `Project`/`WorkOrder` — é o trabalho interno da empresa,
+/// com dependências, estimativa e ordem de serviço. Um follow-up comercial é
+/// outra coisa: pende de um LEAD, some quando o lead fecha, e sua pergunta
+/// central é "venceu?". Forçar as duas na mesma tabela faria o quadro de
+/// trabalho interno encher de follow-up e o funil encher de tarefa de
+/// engenharia.
+model LeadTarefa {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  tipo     TipoDeTarefa     @default(FOLLOW_UP)
+  situacao SituacaoDaTarefa @default(ABERTA)
+  titulo   String
+  nota     String?          @db.Text
+
+  /// Quando vence. É o coração da fila "follow-up vencido".
+  venceEm     DateTime
+  concluidaEm DateTime?
+
+  responsavelId String?
+  responsavel   InternalUser? @relation("TarefaDoLead", fields: [responsavelId], references: [id])
+
+  /// Quem criou: pessoa, TA ou cadência.
+  criadaPor  AutorDaMensagem @default(HUMANO)
+  /// Preenchido quando a tarefa nasceu de um passo de cadência.
+  cadenciaId String?
+  cadencia   LeadCadencia?   @relation(fields: [cadenciaId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId, situacao])
+  @@index([responsavelId, situacao, venceEm])
+  @@index([situacao, venceEm])
+  @@map("lead_tarefas")
+}
+
+enum SituacaoDoCompromisso {
+  AGENDADO
+  CONFIRMADO
+  REALIZADO
+  NAO_COMPARECEU
+  REAGENDADO
+  CANCELADO
+}
+
+/// Demonstração, ligação ou reunião marcada com o lead.
+///
+/// `MeetingSlot` continua existindo e serve a outra coisa: são as janelas que o
+/// CEO abre no site para o visitante escolher. Este modelo é o compromisso em
+/// si, que também nasce de conversa e de telefone — não só do site.
+///
+/// `NAO_COMPARECEU` é estado próprio, e não um cancelamento: quem não apareceu
+/// é uma fila de reengajamento, quem cancelou é outra conversa.
+model LeadCompromisso {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  titulo     String
+  situacao   SituacaoDoCompromisso @default(AGENDADO)
+  comecaEm   DateTime
+  duracaoMin Int                   @default(30)
+  local      String?
+  nota       String?               @db.Text
+
+  responsavelId String?
+  responsavel   InternalUser? @relation("CompromissoDoLead", fields: [responsavelId], references: [id])
+
+  /// Quando o lead confirmou presença.
+  confirmadoEm    DateTime?
+  /// Aponta para o compromisso que substituiu este, quando remarcado. Preserva
+  /// a cadeia: remarcar três vezes é um sinal, e apagar o anterior o esconde.
+  remarcadoParaId String?          @unique
+  remarcadoPara   LeadCompromisso? @relation("Remarcacao", fields: [remarcadoParaId], references: [id])
+  remarcadoDe     LeadCompromisso? @relation("Remarcacao")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId, comecaEm])
+  @@index([responsavelId, comecaEm])
+  @@index([situacao, comecaEm])
+  @@map("lead_compromissos")
+}
+
+enum SituacaoDaProposta {
+  RASCUNHO
+  ENVIADA
+  EM_NEGOCIACAO
+  ACEITA
+  RECUSADA
+  EXPIRADA
+}
+
+/// Proposta comercial enviada a um lead.
+///
+/// ⚠️ **Não inventa preço.** `valorMensal` é opcional e nasce vazio: enquanto o
+/// CEO não fechar os valores dos planos, a proposta registra o que foi
+/// combinado, não um número que o sistema arbitrou. Guardrail 7.
+model LeadProposta {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  situacao        SituacaoDaProposta @default(RASCUNHO)
+  plano           String?
+  /// Em centavos, como o resto da casa. `null` = não há valor definido ainda.
+  valorMensalCent Int?
+  /// Desconto pedido/concedido, em pontos percentuais. Fora da alçada, escala.
+  descontoPct     Int?
+  condicoes       String?            @db.Text
+
+  enviadaEm    DateTime?
+  respondidaEm DateTime?
+  validaAte    DateTime?
+
+  criadaPorId String?
+  criadaPor   InternalUser? @relation("PropostaCriadaPor", fields: [criadaPorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId, createdAt])
+  @@index([situacao])
+  @@map("lead_propostas")
+}
+
+/// Por que a conversa mudou de mão. São os gatilhos do item 8 do comando.
+///
+/// É enum e não texto porque a pergunta "o que mais faz a IA desistir" é a que
+/// diz onde melhorar o TA — e ela não se responde lendo trezentas frases soltas.
+enum MotivoDoHandoff {
+  PEDIU_HUMANO // o lead pediu gente
+  INTENCAO_DE_COMPRA // sinal forte de compra
+  PEDIU_PROPOSTA
+  PEDIU_DESCONTO // negociação: fora da alçada da IA, sempre
+  OBJECAO_NAO_RESOLVIDA
+  IA_INSEGURA // o próprio modelo declarou baixa confiança
+  SENTIMENTO_NEGATIVO
+  RISCO // jurídico, financeiro ou reputacional
+  INFORMACAO_NAO_CONFIRMADA // a resposta exigiria afirmar o que não se sabe
+  SCORE_ATINGIU_LIMITE
+  IA_FALHOU // repetiu, travou ou errou
+  DEVOLUCAO_PARA_IA // humano → IA (o caminho inverso)
+  DISTRIBUICAO // reatribuição operacional, sem falha nenhuma
+}
+
+/// Uma passagem de bastão, com o dossiê que foi junto.
+///
+/// ── POR QUE O RESUMO É GRAVADO, E NÃO GERADO NA HORA DE LER ─────────────────
+/// O dossiê é o estado da conversa NAQUELE momento. Recalculá-lo depois
+/// mostraria o que se sabe hoje, e não o que quem pegou o lead tinha em mãos —
+/// o que torna impossível avaliar se a decisão dele foi boa com o que ele tinha.
+model LeadHandoff {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  de     LeadAtendidoPor
+  para   LeadAtendidoPor
+  motivo MotivoDoHandoff
+
+  /// Quem entregou e quem recebeu, quando é gente.
+  deUserId   String?
+  paraUserId String?
+  deUser     InternalUser? @relation("HandoffLeadDe", fields: [deUserId], references: [id])
+  paraUser   InternalUser? @relation("HandoffLeadPara", fields: [paraUserId], references: [id])
+
+  // ── O dossiê, congelado ────────────────────────────────────────────────────
+  resumo          String?        @db.Text
+  dorIdentificada String?        @db.Text
+  objecoes        String?        @db.Text
+  proximaAcao     String?        @db.Text
+  /// Cópia do score e da etapa no instante da passagem.
+  scoreNoMomento  Int?
+  etapaNoMomento  SiteLeadStage?
+  /// Objetivo escrito de quem devolve para a IA. Obrigatório nesse sentido:
+  /// devolver sem dizer para quê é abandonar o lead com passo extra.
+  objetivo        String?        @db.Text
+
+  createdAt DateTime  @default(now())
+  /// Quando alguém efetivamente pegou. Nulo enquanto ninguém pegou — e é isso
+  /// que mede a espera por gente.
+  aceitoEm  DateTime?
+
+  @@index([leadId, createdAt])
+  @@index([motivo, createdAt])
+  @@index([aceitoEm])
+  @@map("lead_handoffs")
+}
+
+/// Em que estado um SDR está agora.
+enum EstadoDoSdr {
+  DISPONIVEL
+  OCUPADO // no limite de atendimentos simultâneos
+  PAUSADO // almoço, reunião — não recebe distribuição
+  OFFLINE
+}
+
+/// Disponibilidade e capacidade de quem atende.
+///
+/// Existe para que a distribuição automática não jogue lead em quem saiu para
+/// almoçar — que é como um lead quente vira um lead esquecido.
+model SdrDisponibilidade {
+  id             String       @id @default(cuid())
+  internalUserId String       @unique
+  internalUser   InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+
+  estado EstadoDoSdr @default(OFFLINE)
+
+  /// Quantos atendimentos simultâneos esta pessoa aceita. O limite existe para
+  /// impedir que o round-robin encha o mesmo SDR de vinte conversas abertas.
+  capacidade Int @default(15)
+
+  /// Especialidade e região, quando o time usar distribuição direcionada.
+  especialidades String[] @default([])
+  regioes        String[] @default([])
+
+  /// Motivo da pausa, quando pausado. Sem motivo, "pausado" vira permanente.
+  motivoDaPausa String?
+  pausadoAte    DateTime?
+
+  /// Último sinal de vida — o painel do gerente mostra "online há 3 min".
+  vistoEm   DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@index([estado])
+  @@map("sdr_disponibilidade")
+}
+
+/// Como um lead sem responsável é distribuído.
+enum ModoDeDistribuicao {
+  MANUAL // ninguém distribui sozinho; a fila fica visível e é puxada
+  RODIZIO // round-robin entre quem está disponível
+  DISPONIBILIDADE // quem tem menos conversas abertas leva
+  ESPECIALIDADE // por especialidade/região, com rodízio dentro do grupo
+}
+
+/// A configuração do Agente SDR IA — o TA.
+///
+/// ── SINGLETON, E DE PROPÓSITO ───────────────────────────────────────────────
+/// Existe UMA configuração ativa por vez (`slug` único, hoje sempre "ta"). O
+/// versionamento fica em `SdrIaConfigVersao`: publicar é apontar para outra
+/// versão, e voltar atrás é apontar de volta. Um registro por versão "ativo ao
+/// mesmo tempo" produziria duas IAs falando com o mesmo lead.
+///
+/// ⚠️ **Nasce DESLIGADO.** `ligado = false` por padrão, e nenhuma migração o
+/// liga. Ligar é ato humano, uma vez, com evidência — a escada de liberação do
+/// Cérebro vale aqui igual a todo o resto.
+model SdrIaConfig {
+  id   String @id @default(cuid())
+  slug String @unique @default("ta")
+  nome String @default("TA")
+
+  /// A chave mestra. Desligado, o TA não responde nada — e a Sala funciona
+  /// inteira com gente, que é como ela nasce.
+  ligado Boolean @default(false)
+
+  /// Versão publicada agora. Nula = nunca publicou; o TA fica calado.
+  versaoAtivaId String?             @unique
+  versaoAtiva   SdrIaConfigVersao?  @relation("VersaoAtiva", fields: [versaoAtivaId], references: [id])
+  versoes       SdrIaConfigVersao[] @relation("VersoesDaConfig")
+
+  // ── Limites operacionais, fora da versão do prompt ─────────────────────────
+  // Ficam aqui porque são trava, não redação: mudar o texto do prompt não pode
+  // acidentalmente ampliar o horário de disparo nem soltar o desconto.
+  //
+  /// Janela em que o TA pode iniciar contato (0–23, hora de São Paulo).
+  horaInicio      Int @default(9)
+  horaFim         Int @default(20)
+  /// Máximo de mensagens que o TA manda sem resposta antes de parar sozinho.
+  maxSemResposta  Int @default(3)
+  /// Score a partir do qual o lead vai para gente automaticamente.
+  scoreParaHumano Int @default(70)
+
+  distribuicao           ModoDeDistribuicao @default(MANUAL)
+  /// Minutos até o SLA de primeira resposta estourar.
+  slaPrimeiraRespostaMin Int                @default(15)
+  /// Minutos que um lead pode ficar em AGUARDANDO_HUMANO antes do alerta.
+  slaEsperaPorGenteMin   Int                @default(10)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sdr_ia_config")
+}
+
+enum SituacaoDaVersao {
+  RASCUNHO
+  EM_TESTE
+  PUBLICADA
+  APOSENTADA
+}
+
+/// Uma versão do comportamento do TA. Publicável e reversível.
+model SdrIaConfigVersao {
+  id       String      @id @default(cuid())
+  configId String
+  config   SdrIaConfig @relation("VersoesDaConfig", fields: [configId], references: [id], onDelete: Cascade)
+
+  numero   Int
+  situacao SituacaoDaVersao @default(RASCUNHO)
+
+  /// Identidade e tom.
+  identidade String  @db.Text
+  tomDeVoz   String? @db.Text
+  objetivos  String? @db.Text
+
+  /// As perguntas de descoberta, na ordem em que o TA deve fazê-las.
+  perguntas String[]          @default([])
+  /// O que ele NÃO pode responder nem prometer. É a lista que impede promessa
+  /// de recurso inexistente — e ela vive na versão porque muda com o produto.
+  proibidos String[]          @default([])
+  /// Gatilhos de handoff ligados nesta versão.
+  gatilhos  MotivoDoHandoff[] @default([])
+
+  /// A régua de score, como JSON: fator → peso. Versionada junto com o resto,
+  /// porque mudar peso é mudar comportamento tanto quanto mudar texto.
+  reguaDeScore Json?
+
+  notaDaVersao String? @db.Text
+
+  publicadaEm    DateTime?
+  publicadaPorId String?
+  publicadaPor   InternalUser? @relation("VersaoPublicadaPor", fields: [publicadaPorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ativaEm SdrIaConfig? @relation("VersaoAtiva")
+
+  @@unique([configId, numero])
+  @@index([situacao])
+  @@map("sdr_ia_config_versoes")
+}
+
+/// Uma sequência de toques programada (cadência).
+model Cadencia {
+  id     String  @id @default(cuid())
+  slug   String  @unique
+  nome   String
+  ativa  Boolean @default(false)
+  /// A quem ela se aplica, em texto — o filtro fino fica no serviço.
+  quando String?
+
+  passos CadenciaPasso[]
+  em     LeadCadencia[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cadencias")
+}
+
+/// Um passo de cadência: espere N horas, faça isto.
+model CadenciaPasso {
+  id         String   @id @default(cuid())
+  cadenciaId String
+  cadencia   Cadencia @relation(fields: [cadenciaId], references: [id], onDelete: Cascade)
+
+  ordem        Int
+  /// Horas depois do passo anterior (ou da entrada, no primeiro).
+  esperaHoras  Int
+  tipo         TipoDeTarefa    @default(FOLLOW_UP)
+  /// Quem executa: IA, humano ou sistema.
+  executor     AutorDaMensagem @default(HUMANO)
+  titulo       String
+  /// Template aprovado, quando o passo dispara mensagem fora da janela de 24h.
+  templateNome String?
+  roteiro      String?         @db.Text
+
+  @@unique([cadenciaId, ordem])
+  @@map("cadencia_passos")
+}
+
+enum SituacaoDaCadencia {
+  ATIVA
+  PAUSADA
+  CONCLUIDA
+  CANCELADA
+}
+
+/// A inscrição de um lead numa cadência.
+model LeadCadencia {
+  id         String   @id @default(cuid())
+  leadId     String
+  lead       SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  cadenciaId String
+  cadencia   Cadencia @relation(fields: [cadenciaId], references: [id])
+
+  situacao      SituacaoDaCadencia @default(ATIVA)
+  passoAtual    Int                @default(0)
+  proximoEm     DateTime?
+  /// Por que parou. Cadência que some sem motivo vira lead abandonado.
+  motivoDaSaida String?
+
+  tarefas LeadTarefa[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, cadenciaId])
+  @@index([situacao, proximoEm])
+  @@map("lead_cadencias")
+}
+
+/// Os quinze critérios do scorecard de vendas (item 13 do comando).
+///
+/// É enum, e não texto, porque a pergunta que o QA existe para responder é
+/// comparativa: *este SDR é pior em objeção do que a média?* Critério em texto
+/// livre nunca agrega — cada avaliador escreve "objeções", "objeção" e
+/// "tratamento de objeção", e o relatório mostra três colunas de uma coisa só.
+enum CriterioDeQA {
+  VELOCIDADE // tempo até a primeira resposta
+  ABERTURA
+  CLAREZA
+  ESCUTA // escuta e descoberta
+  QUALIFICACAO
+  DOR // identificou a dor real
+  VALOR // apresentou valor, não recurso
+  PERSONALIZACAO
+  OBJECOES
+  SEGURANCA_DA_INFORMACAO // não afirmou o que não sabe
+  EMPATIA
+  PROXIMO_PASSO
+  FECHAMENTO // tentou fechar
+  CONFORMIDADE // script, política, LGPD
+  REGISTRO_NO_CRM // deixou a ficha utilizável para o próximo
+}
+
+enum OrigemDaAvaliacao {
+  AUTOMATICA // gerada por avaliador automático
+  HUMANA // um gerente ou auditor avaliou
+}
+
+enum SituacaoDaAvaliacao {
+  RASCUNHO
+  PUBLICADA
+  /// O avaliado contestou e o gerente ainda não respondeu. Existe porque
+  /// avaliação sem direito de resposta vira ruído que o time aprende a ignorar.
+  CONTESTADA
+  REVISADA // contestação analisada; a nota pode ter mudado
+}
+
+/// A avaliação de qualidade de UMA conversa.
+///
+/// ── O QUE ESTE MODELO SE RECUSA A FAZER ─────────────────────────────────────
+/// Item 13: *"Não avaliar apenas quantidade de mensagens. Avaliar qualidade e
+/// capacidade de conversão."* Não há contador de mensagens aqui. Uma conversa de
+/// quatro linhas que marcou a demonstração é melhor do que trinta que não foram
+/// a lugar nenhum, e um scorecard que contasse volume diria o contrário.
+model LeadAvaliacaoQA {
+  id     String   @id @default(cuid())
+  leadId String
+  lead   SiteLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  origem   OrigemDaAvaliacao   @default(HUMANA)
+  situacao SituacaoDaAvaliacao @default(RASCUNHO)
+
+  /// Quem estava atendendo no trecho avaliado — é isto que permite comparar IA
+  /// com humano na mesma régua.
+  avaliado       AutorDaMensagem
+  avaliadoUserId String?
+  avaliadoUser   InternalUser?   @relation("QAAvaliado", fields: [avaliadoUserId], references: [id])
+
+  avaliadorId String?
+  avaliador   InternalUser? @relation("QAAvaliador", fields: [avaliadorId], references: [id])
+
+  /// Nota final 0–100. `null` enquanto rascunho: nota vazia é honesta, nota
+  /// zero seria uma acusação que ninguém fez.
+  nota Int?
+
+  /// A etapa do funil no momento da avaliação — desempenho em qualificação e em
+  /// negociação não se comparam.
+  etapa SiteLeadStage?
+
+  pontosFortes  String? @db.Text
+  falhas        String? @db.Text
+  oportunidades String? @db.Text
+  coaching      String? @db.Text
+
+  /// Sinal de que esta conversa está prestes a ser perdida por conduta, e não
+  /// por preço. É o que faz a fila de revisão valer a pena.
+  riscoDePerda  Boolean @default(false)
+  /// Algo grave: promessa inventada, dado pessoal exposto, desconto fora da
+  /// alçada. Alerta crítico interrompe a fila e vai para o gerente na hora.
+  alertaCritico Boolean @default(false)
+
+  /// O texto da contestação de quem foi avaliado.
+  contestacao       String?   @db.Text
+  contestadaEm      DateTime?
+  respostaDaRevisao String?   @db.Text
+  revisadaEm        DateTime?
+
+  criterios LeadAvaliacaoCriterio[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId, createdAt])
+  @@index([avaliadoUserId, createdAt])
+  @@index([situacao, alertaCritico])
+  @@index([avaliado, etapa])
+  @@map("lead_avaliacoes_qa")
+}
+
+/// A nota de UM critério, com a evidência colada.
+///
+/// ── A EVIDÊNCIA É UMA CHAVE ESTRANGEIRA, NÃO UM TEXTO ───────────────────────
+/// Item 13: *"Evidências ligadas às mensagens."* Apontar para a mensagem, e não
+/// copiá-la, é o que permite abrir a conversa no ponto exato onde a nota caiu.
+/// Uma citação copiada envelhece e não leva a lugar nenhum — e é justamente o
+/// que quem foi mal avaliado precisa ver para aceitar a nota.
+model LeadAvaliacaoCriterio {
+  id          String          @id @default(cuid())
+  avaliacaoId String
+  avaliacao   LeadAvaliacaoQA @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
+
+  criterio   CriterioDeQA
+  /// 0 a 5. `null` = **não se aplica a esta conversa**, que é diferente de zero.
+  /// Uma conversa que nunca chegou em preço não pode levar nota baixa em
+  /// "tentativa de fechamento" — isso puniria o vendedor por seguir o processo.
+  nota       Int?
+  /// Por que esta nota. Obrigatório em nota baixa, pela regra do serviço.
+  comentario String?      @db.Text
+
+  /// A mensagem que sustenta a nota.
+  mensagemId String?
+  mensagem   LeadMensagem? @relation(fields: [mensagemId], references: [id], onDelete: SetNull)
+
+  @@unique([avaliacaoId, criterio])
+  @@index([criterio, nota])
+  @@map("lead_avaliacao_criterios")
 }

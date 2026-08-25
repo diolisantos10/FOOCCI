@@ -92,6 +92,17 @@ export async function getAgentProfile(
 /**
  * All ACTIVE agent profiles. Falls back to the code registry when the DB flag is
  * OFF or the DB is unavailable.
+ *
+ * ── POR QUE O FILTRO DE POPULAÇÃO ENTROU AQUI ──
+ *
+ * Desde a Fase 1 a tabela `agent_profiles` guarda TRÊS populações (ADR-006).
+ * Esta função alimenta o runtime do PRODUTO. Sem o filtro, no dia em que o
+ * proprietário ativasse uma ficha da empresa, o Closer da Foocci entraria calado
+ * na lista de agentes que rodam dentro do restaurante do cliente.
+ *
+ * Não era risco teórico: até a Fase 1 o filtro era só `status: ACTIVE`, e a
+ * tabela só tinha uma população — a condição que sustentava isso deixou de
+ * valer no mesmo commit que criou as outras duas.
  */
 export async function getActiveAgentProfiles(): Promise<AgentProfileDefinition[]> {
   if (!isAgentProfileDbEnabled()) {
@@ -99,7 +110,7 @@ export async function getActiveAgentProfiles(): Promise<AgentProfileDefinition[]
   }
   try {
     const rows = await prisma.agentProfile.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", population: "PRODUTO" },
       orderBy: { area: "asc" },
     });
     if (rows.length === 0) {
@@ -124,16 +135,24 @@ function defaultToAdminView(def: AgentProfileDefinition): AdminAgentProfileView 
 }
 
 /**
- * Every agent profile for the internal admin overview. DB-aware: when the flag
- * is ON and rows exist, returns DB rows (with updatedAt); otherwise falls back
- * to the full code registry. Never throws.
+ * Every agent profile OF THE PRODUCT for the internal admin overview. DB-aware:
+ * when the flag is ON and rows exist, returns DB rows (with updatedAt);
+ * otherwise falls back to the full code registry. Never throws.
+ *
+ * As fichas da EMPRESA (SDR, Closer, Gerente Financeiro) NÃO saem por aqui —
+ * elas têm população própria e leitura própria, `getFichasDaEmpresa`. Misturar
+ * as duas nesta função faria a Sala dos Agentes contar 30 funções da empresa
+ * como agentes de produto, e o cartão de custo de IA passaria a somar gente.
  */
 export async function getAdminAgentProfiles(): Promise<AdminAgentProfileView[]> {
   if (!isAgentProfileDbEnabled()) {
     return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
   }
   try {
-    const rows = await prisma.agentProfile.findMany({ orderBy: { area: "asc" } });
+    const rows = await prisma.agentProfile.findMany({
+      where: { population: "PRODUTO" },
+      orderBy: { area: "asc" },
+    });
     if (rows.length === 0) return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
     return rows.map((row) => ({
       ...rowToDefinition(row),
@@ -142,6 +161,78 @@ export async function getAdminAgentProfiles(): Promise<AdminAgentProfileView[]> 
     }));
   } catch {
     return DEFAULT_AGENT_PROFILES.map(defaultToAdminView);
+  }
+}
+
+/** Uma ficha da empresa, como a tela de departamento precisa dela. */
+export interface FichaDaEmpresaView {
+  slug: string;
+  nome: string;
+  catalogNumber: string | null;
+  executionMode: "AI" | "HUMAN" | "HYBRID";
+  departamento: { numero: number; slug: string; nome: string } | null;
+  /** Cargo dono. `ocupante` nulo significa VAGO — que é informação, não defeito. */
+  dono: { slug: string; titulo: string; ocupante: string | null } | null;
+  status: string;
+  isRuntimeEnabled: boolean;
+  pode: string[];
+  naoPode: string[];
+  escalaQuando: string[];
+}
+
+/**
+ * As fichas da empresa, por departamento.
+ *
+ * Devolve lista vazia quando a leitura falha — e quem chama distingue "vazio" de
+ * "não deu para ler" pelo segundo campo. A Sala dos Agentes não escreve zero
+ * quando a resposta é "não sei" (`salaDosAgentes.types.ts`), e esta função não
+ * pode ser a que quebra essa regra.
+ */
+export async function getFichasDaEmpresa(): Promise<{
+  fichas: FichaDaEmpresaView[];
+  leituraOk: boolean;
+  motivo?: string;
+}> {
+  try {
+    const rows = await prisma.agentProfile.findMany({
+      where: { population: "EMPRESA" },
+      orderBy: [{ catalogNumber: "asc" }],
+      include: {
+        department: true,
+        ownerPosition: { include: { ocupantes: { where: { isActive: true }, take: 1 } } },
+      },
+    });
+
+    return {
+      leituraOk: true,
+      fichas: rows.map((row) => ({
+        slug: row.slug,
+        nome: row.name,
+        catalogNumber: row.catalogNumber,
+        executionMode: row.executionMode,
+        departamento: row.department
+          ? { numero: row.department.numero, slug: row.department.slug, nome: row.department.nome }
+          : null,
+        dono: row.ownerPosition
+          ? {
+              slug: row.ownerPosition.slug,
+              titulo: row.ownerPosition.titulo,
+              ocupante: row.ownerPosition.ocupantes[0]?.nome ?? null,
+            }
+          : null,
+        status: row.status,
+        isRuntimeEnabled: row.isRuntimeEnabled,
+        pode: Array.isArray(row.allowedActions) ? (row.allowedActions as string[]) : [],
+        naoPode: Array.isArray(row.forbiddenActions) ? (row.forbiddenActions as string[]) : [],
+        escalaQuando: Array.isArray(row.escalationRules) ? (row.escalationRules as string[]) : [],
+      })),
+    };
+  } catch (erro) {
+    return {
+      fichas: [],
+      leituraOk: false,
+      motivo: erro instanceof Error ? erro.message : "erro desconhecido ao ler as fichas",
+    };
   }
 }
 

@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.stubEnv("ADMIN_SECRET", SEGREDO);
   servico.listarContatos.mockResolvedValue([]);
   servico.getDossie.mockResolvedValue({ id: "l1", nome: "Ana" });
-  servico.moverEtapa.mockResolvedValue({ ok: true, de: "NOVO", para: "CONTATADO", em: new Date() });
+  servico.moverEtapa.mockResolvedValue({ ok: true, de: "NOVO", para: "PRIMEIRO_CONTATO", em: new Date() });
   servico.registrarInteracao.mockResolvedValue({ ok: true, em: new Date() });
   servico.excluirContato.mockResolvedValue({ ok: true });
   performance.getPerformance.mockResolvedValue({ resumo: { chegaram: 0 } });
@@ -87,7 +87,7 @@ const ROTAS: Array<{
     nome: "PATCH /contatos/[id]/etapa",
     chamar: (admin) => patchEtapa(
       req("/api/admin/foocci-crm/contatos/l1/etapa", {
-        method: "PATCH", body: JSON.stringify({ para: "CONTATADO" }), admin,
+        method: "PATCH", body: JSON.stringify({ para: "PRIMEIRO_CONTATO" }), admin,
       }),
       params,
     ),
@@ -157,13 +157,13 @@ describe("a etapa é DADO, não texto livre", () => {
     await patchEtapa(
       req("/api/admin/foocci-crm/contatos/l1/etapa", {
         method: "PATCH",
-        body: JSON.stringify({ para: "FECHADO", actor: "outra-pessoa" }),
+        body: JSON.stringify({ para: "GANHO", actor: "outra-pessoa" }),
         admin: true,
       }),
       params,
     );
     expect(servico.moverEtapa).toHaveBeenCalledWith(
-      expect.objectContaining({ actor: "admin", para: "FECHADO" }),
+      expect.objectContaining({ actor: "admin", para: "GANHO" }),
     );
   });
 

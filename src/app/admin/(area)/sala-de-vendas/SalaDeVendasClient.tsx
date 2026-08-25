@@ -1,0 +1,289 @@
+"use client";
+
+/**
+ * A SALA DE VENDAS.
+ *
+ * Sete filas à esquerda, a lista à direita. Cada fila responde a uma pergunta
+ * que o SDR faz de verdade durante o dia — a pergunta aparece na tela, porque
+ * filtro sem pergunta é filtro que ninguém sabe para que serve.
+ *
+ * ── O QUE ESTA TELA NÃO FAZ, E POR QUÊ ──
+ *
+ * Não envia mensagem. O canal de WhatsApp de vendas existe no código mas está
+ * desligado, e um botão "responder" que não responde é controle que mente — o
+ * pior defeito desta casa não é feiura, é o controle que finge.
+ *
+ * O que ela faz é o que sustenta tudo: mostrar de quem é cada lead agora, e
+ * deixar assumir e devolver sem perder contexto.
+ */
+
+import { useState } from "react";
+import { useSalaDeVendas, mudarResponsavel, desdeQuando } from "./_dados";
+import type { LeadNaFila, NomeDaFila } from "@/services/salaDeVendas/filas";
+
+function cx(...p: Array<string | false | null | undefined>): string {
+  return p.filter(Boolean).join(" ");
+}
+
+export function SalaDeVendasClient() {
+  const [fila, setFila] = useState<NomeDaFila>("aguardandoHumano");
+  const [aviso, setAviso] = useState<string | null>(null);
+  const { estado, recarregar } = useSalaDeVendas(fila);
+
+  async function agir(
+    acao: "assumir" | "devolver" | "pedirHumano",
+    leadId: string,
+    extra?: { objetivo?: string; motivo?: string },
+  ) {
+    const r = await mudarResponsavel({ acao, leadId, ...extra });
+    if (r.ok) {
+      setAviso(null);
+      recarregar();
+      return;
+    }
+    // Conflito não é falha do sistema: é outra pessoa tendo chegado antes.
+    setAviso(r.conflito ? `${r.mensagem} — a lista foi atualizada.` : r.mensagem);
+    if (r.conflito) recarregar();
+  }
+
+  return (
+    <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-[-.02em] text-ink">Sala de Vendas</h1>
+          <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+            Os restaurantes interessados em contratar a Foocci, e de quem é cada conversa agora.
+          </p>
+        </header>
+
+        {estado.fase === "carregando" && <p className="mt-8 text-[13px] text-muted">Carregando…</p>}
+
+        {estado.fase === "semAcesso" && <SemAcesso />}
+
+        {estado.fase === "erro" && (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-5">
+            <h3 className="text-[14.5px] font-semibold text-red-800">
+              Não consegui carregar a fila
+            </h3>
+            <p className="mt-1 text-[13px] text-red-700">{estado.detalhe ?? "sem detalhe"}</p>
+            <button
+              type="button"
+              onClick={recarregar}
+              className="mt-3 rounded-xl border border-red-300 bg-white px-3.5 py-1.5 text-[13px] font-medium text-red-800 hover:bg-red-100"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+
+        {estado.fase === "pronto" && (
+          <>
+            {aviso && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-800">
+                {aviso}
+              </div>
+            )}
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
+              <nav aria-label="Filas da Sala de Vendas">
+                <ul className="space-y-1">
+                  {estado.dados.filas.map((f) => {
+                    const n = estado.dados.contagens[f.nome] ?? 0;
+                    const ativa = f.nome === fila;
+                    return (
+                      <li key={f.nome}>
+                        <button
+                          type="button"
+                          onClick={() => setFila(f.nome)}
+                          aria-current={ativa ? "page" : undefined}
+                          className={cx(
+                            "flex w-full items-baseline justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-colors",
+                            ativa
+                              ? "border-brand-500 bg-paper"
+                              : "border-transparent hover:border-line2 hover:bg-paper",
+                          )}
+                        >
+                          <span>
+                            <span
+                              className={cx(
+                                "block text-[13.5px]",
+                                ativa ? "font-semibold text-ink" : "text-ink2",
+                              )}
+                            >
+                              {f.titulo}
+                            </span>
+                            <span className="block text-[11.5px] leading-snug text-muted">
+                              {f.pergunta}
+                            </span>
+                          </span>
+                          <span
+                            className={cx(
+                              "shrink-0 rounded-full px-1.5 py-0.5 text-[11.5px] font-medium",
+                              n > 0 && f.nome === "aguardandoHumano"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-canvas text-muted",
+                            )}
+                          >
+                            {n}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+
+              <section>
+                {estado.dados.leads.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-line2 bg-paper px-4 py-8 text-center text-[13px] text-muted">
+                    Nenhum lead nesta fila.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {estado.dados.leads.map((l) => (
+                      <CartaoLead key={l.id} lead={l} onAgir={agir} />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SemAcesso() {
+  return (
+    <div className="mt-6 rounded-2xl border border-line2 bg-paper px-5 py-6">
+      <h3 className="text-[15px] font-semibold text-ink">Esta área pede login próprio</h3>
+      <p className="mt-1.5 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+        A Sala de Vendas não abre com a senha compartilhada do admin. Cada lead tem um responsável,
+        e responsável sem nome não responde por nada.
+      </p>
+      <p className="mt-3 text-[13px] text-muted">Para criar um acesso de SDR:</p>
+      <pre className="mt-1.5 overflow-x-auto rounded-xl bg-canvas px-3.5 py-2.5 text-[12.5px] text-ink2">
+        npx tsx scripts/criar-usuario-interno.ts --email sdr@foocci.com --nome &quot;Nome&quot;
+        --papel AGENTE_HUMANO --departamentos vendas
+      </pre>
+    </div>
+  );
+}
+
+function CartaoLead({
+  lead: l,
+  onAgir,
+}: {
+  lead: LeadNaFila;
+  onAgir: (
+    acao: "assumir" | "devolver" | "pedirHumano",
+    leadId: string,
+    extra?: { objetivo?: string },
+  ) => void;
+}) {
+  const [devolvendo, setDevolvendo] = useState(false);
+  const [objetivo, setObjetivo] = useState("");
+
+  const espera = desdeQuando(l.atendenteDesde);
+
+  return (
+    <li className="rounded-2xl border border-line2 bg-paper px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-[14.5px] font-semibold text-ink">{l.nome}</span>
+        {l.restaurante && <span className="text-[13px] text-muted">· {l.restaurante}</span>}
+        {l.cidade && <span className="text-[12.5px] text-muted">· {l.cidade}</span>}
+        <span className="rounded-full bg-canvas px-1.5 py-0.5 text-[11.5px] text-ink2">
+          {l.stage}
+        </span>
+      </div>
+
+      <p className="mt-1 text-[12.5px] text-muted">
+        {l.atendidoPor === "HUMANO" && (
+          <>Com {l.atendenteNome ?? "alguém"}{espera && ` há ${espera}`}</>
+        )}
+        {l.atendidoPor === "IA" && <>Com a IA{espera && ` há ${espera}`}</>}
+        {l.atendidoPor === "NINGUEM" && <em>Sem responsável</em>}
+        {l.atendidoPor === "AGUARDANDO_HUMANO" && (
+          <span className="text-amber-700">
+            A IA pediu gente{espera ? ` há ${espera}` : " — sem carimbo de quando"}
+          </span>
+        )}
+        {l.origem.utmCampaign && (
+          <span className="text-muted"> · veio de {l.origem.utmCampaign}</span>
+        )}
+      </p>
+
+      {l.motivoDoPedido && (
+        <p className="mt-1.5 rounded-xl bg-canvas px-3 py-1.5 text-[12.5px] text-ink2">
+          <span className="font-medium">Por que parou:</span> {l.motivoDoPedido}
+        </p>
+      )}
+
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {l.atendidoPor !== "HUMANO" && (
+          <button
+            type="button"
+            onClick={() => onAgir("assumir", l.id)}
+            className="rounded-xl border border-brand-500 bg-brand-50 px-3 py-1.5 text-[12.5px] font-medium text-brand-700 hover:bg-brand-100"
+          >
+            Assumir
+          </button>
+        )}
+
+        {l.atendidoPor === "HUMANO" && !devolvendo && (
+          <button
+            type="button"
+            onClick={() => setDevolvendo(true)}
+            className="rounded-xl border border-line2 px-3 py-1.5 text-[12.5px] font-medium text-ink2 hover:bg-canvas"
+          >
+            Devolver para a IA
+          </button>
+        )}
+      </div>
+
+      {devolvendo && (
+        <div className="mt-2.5 rounded-xl border border-line2 bg-canvas px-3 py-2.5">
+          <label className="block text-[12.5px] font-medium text-ink2" htmlFor={`obj-${l.id}`}>
+            O que a IA deve fazer a partir daqui?
+          </label>
+          <p className="mt-0.5 text-[11.5px] text-muted">
+            Sem isso a IA retoma sem saber o que se espera dela — e pode contradizer o que você
+            prometeu.
+          </p>
+          <input
+            id={`obj-${l.id}`}
+            value={objetivo}
+            onChange={(e) => setObjetivo(e.target.value)}
+            placeholder="ex.: confirmar o endereço e agendar a demonstração"
+            className="mt-1.5 w-full rounded-lg border border-line2 bg-paper px-2.5 py-1.5 text-[12.5px] text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={!objetivo.trim()}
+              onClick={() => {
+                onAgir("devolver", l.id, { objetivo });
+                setDevolvendo(false);
+                setObjetivo("");
+              }}
+              className="rounded-lg border border-brand-500 bg-brand-50 px-3 py-1 text-[12.5px] font-medium text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Devolver
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDevolvendo(false);
+                setObjetivo("");
+              }}
+              className="rounded-lg border border-line2 px-3 py-1 text-[12.5px] text-muted hover:bg-paper"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}

@@ -84,13 +84,22 @@ const PERIODOS = [
   { chave: "last_month",    rotulo: "Mês passado" },
 ] as const;
 
+// A cor sobe de temperatura conforme o lead avança, e as três terminais fogem
+// da escala de propósito: verde para ganho, cinza para perda, azul para espera.
+// Quem bate o olho na lista precisa distinguir "acabou bem", "acabou mal" e
+// "ainda não acabou" sem ler o rótulo.
 const COR_ETAPA: Record<FoocciLeadStage, string> = {
-  NOVO:        "bg-sky-500/15 text-sky-300 border-sky-500/30",
-  CONTATADO:   "bg-brand-500/15 text-brand-300 border-brand-500/30",
-  QUALIFICADO: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-  PROPOSTA:    "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  FECHADO:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  PERDIDO:     "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  NOVO:             "bg-sky-500/15 text-sky-300 border-sky-500/30",
+  PRIMEIRO_CONTATO: "bg-brand-500/15 text-brand-300 border-brand-500/30",
+  EM_QUALIFICACAO:  "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+  QUALIFICADO:      "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  DEMO_AGENDADA:    "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",
+  DEMO_REALIZADA:   "bg-pink-500/15 text-pink-300 border-pink-500/30",
+  PROPOSTA_ENVIADA: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  EM_NEGOCIACAO:    "bg-orange-500/15 text-orange-300 border-orange-500/30",
+  GANHO:            "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  PERDIDO:          "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  NUTRICAO:         "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
 };
 
 const TIPOS_INTERACAO: FoocciInteractionType[] = [

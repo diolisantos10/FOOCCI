@@ -36,6 +36,17 @@ import {
 
 export type Aba = "agentes" | "configuracoes";
 
+/**
+ * ── ONDE FOI PARAR A ABA "A EMPRESA" ──
+ *
+ * Ela existiu aqui por um dia, na estrutura de 9 departamentos. Com a v3, a
+ * estrutura da empresa ganhou área própria: `/admin/departamentos`.
+ *
+ * A aba não sobreviveu de propósito. Manter as duas deixaria dois lugares para
+ * responder "quem responde por quê?" — e a pergunta "qual dos dois está
+ * atualizado?" passaria a ter duas respostas. Esta Sala volta a ser o que era:
+ * os agentes do PRODUTO e as IAs contratadas.
+ */
 export function SalaDosAgentesClient({ aba }: { aba: Aba }) {
   const { estado, recarregar } = useSalaDosAgentes();
 
