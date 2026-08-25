@@ -232,6 +232,80 @@ const main = async () => {
       (medidos.length ? `  [${medidos.map((c) => meta.get(c.restaurantId)?.slug ?? "?").join(", ")}]` : ""));
   }
   p();
+
+  /* ── E. O NÚMERO QUE DECIDE: quantos turnos CHEGAM ao Brain ────────────── */
+  //
+  // A seção B mede turnos de cliente. Mas nem todo turno vira amostra do topo:
+  // a maior parte é resolvida pelo recepcionista determinístico (menu numerado,
+  // intents conhecidos) e volta ANTES do Brain raciocinar. Amostra do topo só
+  // nasce quando o turno chega ao raciocínio livre.
+  //
+  // Duas fontes, medidas de propósito:
+  //   • sombra histórica (stage nulo/SHADOW) — cada linha é UM turno que chegou
+  //     ao Brain enquanto o restaurante estava embaixo. É a mesma porta.
+  //   • respostas realmente enviadas pelo Brain (metadata.source='WHATSAPP_BRAIN').
+  p("═".repeat(78));
+  p("E. QUANTOS TURNOS CHEGAM AO BRAIN — a porta que produz amostra do topo");
+  p("═".repeat(78));
+
+  const sombra = await prisma.brainShadowLog.findMany({
+    where: {
+      createdAt: { gte: corte },
+      OR: [{ agentId: "whatsapp" }, { agentId: null }],
+      AND: [{ OR: [{ stage: null }, { stage: "SHADOW" }] }],
+    },
+    select: { restaurantId: true, createdAt: true, sampleOrigin: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const sombraPorRest = new Map();
+  for (const s of sombra) {
+    if (!sombraPorRest.has(s.restaurantId)) sombraPorRest.set(s.restaurantId, []);
+    sombraPorRest.get(s.restaurantId).push(s);
+  }
+  p("   sombra do recepcionista (cada linha = 1 turno que chegou ao Brain):");
+  for (const [rid, arr] of sombraPorRest) {
+    const slug = meta.get(rid)?.slug ?? rid.slice(0, 8);
+    const prod = arr.filter((a) => a.sampleOrigin === "PRODUCTION").length;
+    const dias = new Set(arr.map((a) => local(a.createdAt).toISOString().slice(0, 10)));
+    const janela = Math.max(1, (arr.at(-1).createdAt - arr[0].createdAt) / 86_400_000);
+    p(`   ${slug.padEnd(24)} ${String(arr.length).padStart(5)} linhas  PRODUCTION=${prod}  ` +
+      `dias distintos=${dias.size}  de ${String(arr[0].createdAt).slice(4, 10)} a ${String(arr.at(-1).createdAt).slice(4, 10)}  ` +
+      `≈${(arr.length / janela).toFixed(1)}/dia`);
+  }
+  if (!sombra.length) p("   (nenhuma linha de sombra do recepcionista na janela)");
+  p();
+
+  p("   respostas ENVIADAS pelo Brain ao vivo (messages.metadata->>'source'):");
+  const enviadas = await prisma.$queryRawUnsafe(`
+    SELECT r.slug,
+           COALESCE(m.metadata->>'source', '(sem source)') AS fonte,
+           count(*)::int AS total,
+           min(m."sentAt") AS primeira,
+           max(m."sentAt") AS ultima,
+           count(DISTINCT date_trunc('day', m."sentAt")) ::int AS dias
+    FROM messages m
+    JOIN conversations c ON c.id = m."conversationId"
+    JOIN restaurants  r ON r.id = c."restaurantId"
+    WHERE m.direction = 'OUTBOUND' AND m."senderType" = 'AI'
+      AND c.channel = 'WHATSAPP' AND m."sentAt" >= now() - interval '${DIAS} days'
+    GROUP BY 1, 2 ORDER BY 1, 3 DESC
+  `);
+  for (const e of enviadas) {
+    const janela = Math.max(1, (new Date(e.ultima) - new Date(e.primeira)) / 86_400_000);
+    p(`   ${String(e.slug).padEnd(24)} ${String(e.fonte).padEnd(18)} ${String(e.total).padStart(5)}  ` +
+      `dias=${e.dias}  ≈${(e.total / janela).toFixed(1)}/dia  (${String(e.primeira).slice(4, 10)} → ${String(e.ultima).slice(4, 10)})`);
+  }
+  if (!enviadas.length) p("   (nenhuma resposta de IA no período)");
+  p();
+
+  p("   ⇒ RITMO DE AMOSTRA DO TOPO por janela candidata (base: sombra/dia acima):");
+  for (const [rid, arr] of sombraPorRest) {
+    const slug = meta.get(rid)?.slug ?? rid.slice(0, 8);
+    const janela = Math.max(1, (arr.at(-1).createdAt - arr[0].createdAt) / 86_400_000);
+    const porDia = arr.length / janela;
+    p(`   ${slug.padEnd(24)} ` + CANDIDATAS.map((d) => `${d}d=${(porDia * d).toFixed(0)}${porDia * d >= MINIMO ? "✅" : "❌"}`).join("  "));
+  }
+  p();
   p("Somente leitura. Nada foi escrito, enviado ou promovido.");
   await prisma.$disconnect().catch(() => {});
 };
