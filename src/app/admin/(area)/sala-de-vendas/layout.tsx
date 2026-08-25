@@ -41,6 +41,9 @@ const PAPEIS_DO_PAINEL = new Set([
   "AUDITOR_QA",
 ]);
 
+/** Criar gente é do dono. O gerente distribui a fila; ele não cria acesso. */
+const PAPEIS_DOS_ACESSOS = new Set(["MASTER_CEO", "DIRETOR_FOOCCI"]);
+
 export default function SalaDeVendasLayout({ children }: { children: React.ReactNode }) {
   const sessao = lerSessaoInterna();
 
@@ -48,10 +51,13 @@ export default function SalaDeVendasLayout({ children }: { children: React.React
   // recusa fina fica nas rotas, e esconder itens de quem entrou pela porta de
   // administração esconderia o produto de quem o está montando.
   const veOPainel = !sessao || PAPEIS_DO_PAINEL.has(sessao.role);
+  const criaAcesso = !sessao || PAPEIS_DOS_ACESSOS.has(sessao.role);
 
-  const itens = veOPainel
-    ? [...PARA_TODOS, { href: "/admin/sala-de-vendas/painel", rotulo: "Painel" }]
-    : PARA_TODOS;
+  const itens = [
+    ...PARA_TODOS,
+    ...(veOPainel ? [{ href: "/admin/sala-de-vendas/painel", rotulo: "Painel" }] : []),
+    ...(criaAcesso ? [{ href: "/admin/sala-de-vendas/acessos", rotulo: "Criar acesso" }] : []),
+  ];
 
   return (
     <div className="flex min-h-full flex-col">

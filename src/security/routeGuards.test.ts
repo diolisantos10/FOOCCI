@@ -113,6 +113,16 @@ const ADMIN_GUARD_EXEMPT = new Map<string, string>([
       "mensagem única para e-mail inexistente, senha errada e conta desativada.",
   ],
   [
+    "admin/sala-de-vendas/primeiro-acesso/route.ts",
+    "criação da PRIMEIRA pessoa da Foocci, sem terminal. Faz autorização própria e " +
+      "MAIS ESTREITA que a guarda comum: exige `ADMIN_SECRET` ou sessão de " +
+      "MASTER_CEO/DIRETOR_FOOCCI. A guarda genérica aceitaria qualquer sessão de " +
+      "admin — e aqui isso seria escalada de privilégio pela porta dos fundos: um " +
+      "AGENTE_HUMANO criaria um MASTER_CEO e viraria dono da casa. " +
+      "Não abre superfície nova: quem tem o `ADMIN_SECRET` já abre a empresa inteira; " +
+      "o que muda é trocar 'abrir um terminal em produção' por preencher um formulário.",
+  ],
+  [
     "admin/reset-owner/route.ts",
     "recuperação de emergência (isento no early-exit do middleware); auth inline por x-admin-secret === ADMIN_SECRET.",
   ],
