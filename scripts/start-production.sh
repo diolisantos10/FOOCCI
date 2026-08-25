@@ -59,5 +59,35 @@ else
   echo "[bakery-sync] ADMIN_SECRET not set — skipping bakery self-seed."
 fi
 
-echo "Step 5: starting Next.js..."
+echo "Step 5: scheduling Sala de Vendas self-seed (background)..."
+# A Sala precisa do catálogo de motivos de perda para funcionar: sem ele
+# NENHUM lead pode ser marcado como perdido, porque a regra do funil exige
+# motivo estruturado — e o catálogo nasce vazio. Até 25/08/2026 a única forma
+# de semear era `npm run db:seed-sala`, ou seja, terminal no ambiente.
+#
+# Idempotente, e deliberadamente conservadora: NÃO cria lead nenhum (base
+# comercial não recebe dado falso) e NÃO liga o TA — ele nasce desligado e a
+# semeadura não o religa. Ligar é ato humano, das duas direções.
+#
+# Mesmo molde dos dois passos acima, e pelo mesmo motivo: roda depois do boot,
+# em subshell, para não poder bloquear nem derrubar a subida.
+if [ -n "${ADMIN_SECRET:-}" ]; then
+  (
+    for delay in 35 50 70; do
+      sleep "$delay"
+      STATUS=$(curl --max-time 30 -s -o /tmp/seed-sala.json -w "%{http_code}" \
+        -X POST "http://localhost:${PORT:-3000}/api/admin/sala-de-vendas/seed" \
+        -H "x-admin-secret: ${ADMIN_SECRET}" || echo "000")
+      echo "[sala-sync] seed attempt → HTTP ${STATUS}"
+      if [ "$STATUS" = "200" ]; then
+        echo "[sala-sync] Sala semeada: $(cat /tmp/seed-sala.json 2>/dev/null)"
+        break
+      fi
+    done
+  ) &
+else
+  echo "[sala-sync] ADMIN_SECRET not set — skipping Sala self-seed."
+fi
+
+echo "Step 6: starting Next.js..."
 npx next start

@@ -162,11 +162,26 @@ function SemAcesso() {
         A Sala de Vendas não abre com a senha compartilhada do admin. Cada lead tem um responsável,
         e responsável sem nome não responde por nada.
       </p>
-      <p className="mt-3 text-[13px] text-muted">Para criar um acesso de SDR:</p>
-      <pre className="mt-1.5 overflow-x-auto rounded-xl bg-canvas px-3.5 py-2.5 text-[12.5px] text-ink2">
-        npx tsx scripts/criar-usuario-interno.ts --email sdr@foocci.com --nome &quot;Nome&quot;
-        --papel AGENTE_HUMANO --departamentos vendas
-      </pre>
+      {/* ── ISTO ERA UM COMANDO DE TERMINAL, E ERA O DEFEITO ────────────────
+          Até 25/08/2026 esta tela imprimia `npx tsx scripts/...`. Foi a
+          primeira coisa que o CEO viu ao abrir a Sala em produção — e um
+          comando de terminal é, para ele, uma parede.
+
+          A regra da casa já dizia o que fazer: "CEO não faz setup nenhum".
+          Configuração que sobe de andar é trabalho de execução que o Diretor
+          não achou como resolver. O comando continua certo para quem tem
+          terminal; só deixou de ser a única porta. */}
+      <a
+        href="/admin/sala-de-vendas/acessos"
+        className="mt-4 inline-block rounded-xl bg-brand-500 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-600"
+      >
+        Criar o primeiro acesso
+      </a>
+
+      <p className="mt-2.5 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
+        Leva trinta segundos: nome, e-mail e o que a pessoa é. A senha aparece
+        uma vez na tela.
+      </p>
     </div>
   );
 }
