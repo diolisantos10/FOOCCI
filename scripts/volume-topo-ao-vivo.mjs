@@ -306,6 +306,45 @@ const main = async () => {
     p(`   ${slug.padEnd(24)} ` + CANDIDATAS.map((d) => `${d}d=${(porDia * d).toFixed(0)}${porDia * d >= MINIMO ? "✅" : "❌"}`).join("  "));
   }
   p();
+
+  /* ── F. QUEM MUDA DE COMPORTAMENTO COM A RÉGUA NOVA ────────────────────── */
+  //
+  // A pergunta que precede qualquer subida: com a janela nova, quantos
+  // restaurantes passam a ser tratados DIFERENTE? Não é autorização — é saber
+  // o que acontece com cliente faturando. A conta roda a régua velha (7 dias)
+  // e a nova (28 dias) sobre as MESMAS linhas de produção.
+  p("═".repeat(78));
+  p("F. MUDANÇA DE COMPORTAMENTO — régua velha (7d) × régua nova (28d)");
+  p("═".repeat(78));
+  const PISO = 0.9, TETO = 50;
+  const veredito = (linhas) => {
+    const j = linhas.slice(0, TETO);
+    if (j.length < MINIMO) return { saude: "SEM_AMOSTRA", derruba: false, n: j.length };
+    const taxa = j.filter((l) => l.coherence === "PASS").length / j.length;
+    return { saude: taxa < PISO ? "DEGRADADO" : "SAUDAVEL", derruba: taxa < PISO, n: j.length, taxa };
+  };
+  let mudam = 0;
+  for (const c of elevados) {
+    const slug = meta.get(c.restaurantId)?.slug ?? c.restaurantId.slice(0, 8);
+    const ler = async (dias) =>
+      prisma.brainShadowLog.findMany({
+        where: {
+          restaurantId: c.restaurantId, stage: "LIVE", agentId: "whatsapp",
+          createdAt: { gte: new Date(agora.getTime() - dias * 86_400_000) },
+        },
+        select: { coherence: true }, orderBy: { createdAt: "desc" }, take: TETO,
+      });
+    const velha = veredito(await ler(7));
+    const nova = veredito(await ler(28));
+    const mudou = velha.derruba !== nova.derruba || velha.saude !== nova.saude;
+    if (mudou) mudam += 1;
+    p(`   ${slug.padEnd(24)} 7d: ${velha.saude}(${velha.n}) derruba=${velha.derruba}  →  ` +
+      `28d: ${nova.saude}(${nova.n}) derruba=${nova.derruba}   ${mudou ? "⚠️ MUDA" : "= igual"}`);
+  }
+  p();
+  p(`   ⇒ RESTAURANTES QUE MUDAM DE COMPORTAMENTO: ${mudam} de ${elevados.length} em degrau elevado.`);
+  if (!mudam) p("   Nenhum. A janela maior só PODE acrescentar amostra, nunca tirar.");
+  p();
   p("Somente leitura. Nada foi escrito, enviado ou promovido.");
   await prisma.$disconnect().catch(() => {});
 };
