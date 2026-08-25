@@ -329,13 +329,29 @@ export function InstagramIntegrationClient({ userRole }: { userRole: string }) {
               Diagnóstico, que é preciso lembrar de rodar. Enquanto houver erro, ele
               aparece aqui, junto do botão que o resolve. */}
           {view?.lastError && (
+            /* ESTE é o lugar do aviso inteiro. Em 24/08/2026 ele também ocupava um
+               terço da tela de Atendimento, com o texto literal da Meta por cima da
+               fila de conversas — e foi de lá que saiu, não do sistema. Aqui ele
+               fica completo: o efeito em português, o que fazer, e a resposta crua
+               da Meta guardada num detalhe fechado, para o suporte. */
             <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-left">
-              <p className="text-sm font-semibold text-red-800">A conexão está com problema — as mensagens não estão chegando.</p>
-              <p className="mt-1 text-xs text-red-700">{view.lastError}</p>
+              <p className="text-sm font-semibold text-red-800">Instagram fora do ar — as mensagens do Instagram não estão chegando.</p>
+              <p className="mt-1 text-sm text-red-700">
+                Enquanto isto durar, nenhum Direct entra na Central de Atendimento. Clique em
+                <b> Reconectar agora</b> e autorize a conta de novo. Se o problema voltar logo
+                depois de reconectar, não é a sua conta: é a autorização do aplicativo Foocci
+                na Meta, e quem resolve é o suporte — mande este texto para a gente.
+              </p>
               <a href="/api/integrations/instagram/login/start"
                 className="mt-2 inline-block rounded-md bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
                 Reconectar agora
               </a>
+              {/* A evidência não pode se perder — mas também não precisa gritar.
+                  Fechado por padrão, aberto por quem for consertar. */}
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-semibold text-red-800">Detalhes técnicos (para o suporte)</summary>
+                <p className="mt-1 whitespace-pre-wrap break-words text-xs text-red-700">{view.lastError}</p>
+              </details>
             </div>
           )}
 

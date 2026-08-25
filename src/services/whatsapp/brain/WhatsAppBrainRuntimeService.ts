@@ -128,6 +128,53 @@ async function runShadowReasoning(
   });
 }
 
+/**
+ * AMOSTRA DO TOPO — o turno que o agente atendeu NO DEGRAU ALTO.
+ *
+ * Gravada em TODO desfecho do caminho ao vivo, e nao so quando o agente
+ * responde. Se so os turnos respondidos contassem, a taxa seria 100% por
+ * construcao — o critico so deixa passar o que ja e PASS — e a regua do topo
+ * viraria enfeite aceso. O que se mede aqui e: das vezes em que ele esteve no
+ * topo, quantas resolveu por si, e quantas precisaram de trava ou do
+ * recepcionista deterministico.
+ *
+ * `coherence` e o veredito do TURNO INTEIRO, nao o do checador de coerencia:
+ * PASS so quando a resposta do agente chegou ao cliente sem nenhuma trava ter
+ * disparado.
+ *
+ * Best-effort e fire-and-forget: medir nunca atrasa nem quebra o atendimento.
+ */
+function registrarAmostraDoTopo(input: {
+  restaurantId: string;
+  conversationId: string;
+  outcome: { result: { primaryIntent: string; confidence: number; shouldEscalate: boolean; idealResponse?: string }; reasoningMode: string; engine: { provider: string; model: string } };
+  passou: boolean;
+  motivo: string;
+}): void {
+  void (async () => {
+    try {
+      const { recordShadowOutcome } = await import("@/services/brain/runtime/BrainShadowEvidenceService");
+      await recordShadowOutcome({
+        restaurantId: input.restaurantId,
+        conversationId: input.conversationId,
+        agentId: "whatsapp",
+        // Vida real dos dois lados: o cliente escreveu e foi atendido no topo.
+        sampleOrigin: "PRODUCTION",
+        stage: "LIVE",
+        intent: input.outcome.result.primaryIntent,
+        reasoningMode: input.outcome.reasoningMode,
+        engine: `${input.outcome.engine.provider}:${input.outcome.engine.model}`,
+        confidence: input.outcome.result.confidence,
+        coherence: input.passou ? "PASS" : "FAIL",
+        wouldEscalate: input.outcome.result.shouldEscalate,
+        wouldReply: input.passou ? (input.outcome.result.idealResponse ?? "") : `[${input.motivo}]`,
+      });
+    } catch (err) {
+      console.error("[BrainTopo] amostra do topo falhou:", err instanceof Error ? err.message : err);
+    }
+  })();
+}
+
 export const WhatsAppBrainRuntimeService = {
   /** Mirror of the Receptionist entry point — never throws into the webhook. */
   async respond(conversationId: string): Promise<BrainReplyOutcome> {
@@ -305,6 +352,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
       snapshotSources: Object.keys(outcome.snapshot?.truthSources ?? {}),
       candidate: (outcome.result.idealResponse ?? "").slice(0, 80),
     }));
+    registrarAmostraDoTopo({ restaurantId, conversationId, outcome, passou: false, motivo: "critic gate" });
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return {
       status: "REPLIED",
@@ -324,6 +372,7 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   });
   if (!verdict.approved) {
     console.warn("[BrainDecision]", JSON.stringify({ gate: "judge", text: inboundText.slice(0, 60), reason: verdict.reason, candidate: reply.slice(0, 80) }));
+    registrarAmostraDoTopo({ restaurantId, conversationId, outcome, passou: false, motivo: "judge gate" });
     await recep.WhatsAppReceptionistService.respond(conversationId);
     return { status: "REPLIED", reason: `judge gate (${verdict.reason}) → receptionist` };
   }
@@ -348,7 +397,20 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   const sent = await WhatsAppMessagingService.sendConversationReply({
     restaurantId, conversationId, toPhone: resolvedPhone, text: anchoredReply, senderType: "AI", metadata,
   });
+  // Falha de REDE nao vira amostra: mede a Meta, nao o agente. Contar isso como
+  // erro de qualidade derrubaria o degrau por problema de operadora.
   if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
+
+  // Chegou ao cliente. PASS so se nenhuma trava precisou entrar no meio — a
+  // promessa de pedido substituiu a resposta do agente, entao ela conta como
+  // falha do topo mesmo tendo havido resposta.
+  registrarAmostraDoTopo({
+    restaurantId,
+    conversationId,
+    outcome,
+    passou: !promessa.prometeu,
+    motivo: "promessa de pedido (resposta substituida)",
+  });
 
   // Escalate AFTER the reply is sent, so the customer still gets the Brain's
   // message and the next turn goes to a human.

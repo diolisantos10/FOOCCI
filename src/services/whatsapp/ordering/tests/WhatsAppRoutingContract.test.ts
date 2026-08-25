@@ -26,6 +26,13 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // ── Mock prisma BEFORE importing the service ──────────────────────────────────
 const prismaMock = vi.hoisted(() => ({
+  // Portão de qualidade VERDE (LiveStageGuard): sem isto a trava da escada
+  // derruba o degrau alto por falha fechada e estes casos nunca chegariam a
+  // exercitar o que querem exercitar. O teste da TRAVA em si vive em
+  // src/services/brain/runtime/escadaDeIa.class.test.ts.
+  qualityAuditRun: {
+    findFirst: async () => ({ id: "run_verde", finishedAt: new Date(), findings: [{ severity: "P2", status: "PASS" }] }),
+  },
   whatsAppTextOrderingConfig: {
     findUnique: vi.fn(),
   },

@@ -28,6 +28,12 @@ import { buildWhatsAppUrl, buildInstagramUrl, buildTikTokUrl } from "@/lib/socia
 import { ImageCarousel, menuItemPhotos, COR_PADRAO_DA_LOJA } from "@/components/menu";
 import { phoneCandidates } from "@/lib/phone";
 import {
+  CHAVE_PROVA,
+  EXPLICACAO_SEM_PROVA,
+  acessoDaAreaDoCliente,
+  promessaDaFaixa,
+} from "./areaDoCliente";
+import {
   telefoneEfetivoDoCliente,
   precisaPedirWhatsAppParaFechar,
 } from "@/lib/identidadeCheckout";
@@ -2032,9 +2038,12 @@ function CustomerIdentityStrip({
   const firstName   = (name || displayName).split(/\s+/)[0] || "Cliente";
   const defaultAddr = profile?.addresses.find((a) => a.isDefault) ?? profile?.addresses[0] ?? null;
   const otherAddrs  = profile ? profile.addresses.filter((a) => a.id !== defaultAddr?.id) : [];
-  const couponHint  = coupons.length > 0
-    ? `🎟️ ${coupons.length} ${coupons.length === 1 ? "cupom disponível" : "cupons disponíveis"}`
-    : "Meus dados, endereços e cupons";
+  /* Sem prova de posse do telefone (waToken), as rotas de perfil/cupons devolvem
+   * vazio por RECUSA, não por ausência — então a faixa não pode prometer
+   * endereços nem cupons. Ver `areaDoCliente.ts`. */
+  const acesso      = acessoDaAreaDoCliente(authToken);
+  const semProva    = acesso === "sem-prova";
+  const couponHint  = promessaDaFaixa(acesso, coupons.length);
 
   return (
     <div className="shrink-0 border-b border-gray-100 bg-white">
@@ -2131,7 +2140,7 @@ function CustomerIdentityStrip({
                 <section>
                   <div className="mb-1.5 flex items-center justify-between">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Meus endereços</p>
-                    {profile && profile.addresses.length > 0 && (
+                    {!semProva && profile && profile.addresses.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setAddrForm(EMPTY_ADDRESS(false))}
@@ -2141,7 +2150,12 @@ function CustomerIdentityStrip({
                       </button>
                     )}
                   </div>
-                  {defaultAddr ? (
+                  {semProva ? (
+                    /* Nunca "você não tem endereço": a tela não perguntou. */
+                    <p className="rounded-2xl border border-dashed border-gray-200 bg-white px-3.5 py-3 text-[11px] leading-relaxed text-gray-500">
+                      {EXPLICACAO_SEM_PROVA}
+                    </p>
+                  ) : defaultAddr ? (
                     <>
                       {/* Endereço padrão em destaque */}
                       <div className="rounded-2xl border border-brand-200 bg-brand-50/60 px-3.5 py-2.5 text-xs shadow-sm">
@@ -2208,7 +2222,13 @@ function CustomerIdentityStrip({
             ) : (
               /* Aba: Meus cupons */
               <section>
-                {coupons.length > 0 ? (
+                {semProva ? (
+                  /* Nunca "você ainda não tem cupons": a carteira não foi lida. */
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-6 text-center">
+                    <p className="text-2xl">🔒</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">{EXPLICACAO_SEM_PROVA}</p>
+                  </div>
+                ) : coupons.length > 0 ? (
                   <ul className="space-y-2">
                     {coupons.map((w) => (
                       <li key={w.id} className="overflow-hidden rounded-2xl border border-brand-200 bg-white shadow-sm">
@@ -2773,12 +2793,29 @@ export function PedidoClient({
   // URL. Without it, profile/address/coupons reveal nothing — so the returning
   // WhatsApp customer (who has it) keeps the full experience; a bare-web visitor who
   // only typed a phone does not silently inherit a stranger's saved data.
-  const [authToken, setAuthToken] = useState<string | null>(pedidoToken ?? null);
+  /* A prova é guardada NA SESSÃO, ao lado da identidade.
+   *
+   * Antes ela vivia só na URL (`?waToken=`) e no prop do SSR. Mas a identidade
+   * (nome, customerId) ia para o sessionStorage e sobrevivia ao recarregamento —
+   * a prova, não. Resultado: quem entrava pelo link do WhatsApp continuava sendo
+   * chamado pelo nome na recarga e PERDIA dados, endereços e cupons. Guardar as
+   * duas juntas não afrouxa o portão: quem recebeu o token no WhatsApp já o
+   * possuía; o que muda é ele não evaporar entre uma tela e outra.
+   * Ver `areaDoCliente.ts`. */
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    if (pedidoToken) return pedidoToken;
+    if (typeof window === "undefined") return null;
+    try { return sessionStorage.getItem(CHAVE_PROVA(slug)); } catch { return null; }
+  });
   useEffect(() => {
-    if (authToken || typeof window === "undefined") return;
-    const t = new URLSearchParams(window.location.search).get("waToken");
-    if (t) setAuthToken(t);
-  }, [authToken]);
+    if (typeof window === "undefined") return;
+    if (!authToken) {
+      const t = new URLSearchParams(window.location.search).get("waToken");
+      if (t) setAuthToken(t);
+      return;
+    }
+    try { sessionStorage.setItem(CHAVE_PROVA(slug), authToken); } catch { /* ignore */ }
+  }, [authToken, slug]);
   const authTokenHeaders: Record<string, string> = authToken ? { "x-pedido-token": authToken } : {};
 
   // customerName declared early so enterBrowsing / handlePhoneIdentified can reference its setter
@@ -2853,6 +2890,11 @@ export function PedidoClient({
   function handleResetIdentity() {
     try { sessionStorage.removeItem(`foocci-customer-${slug}`); } catch { /* ignore */ }
     try { sessionStorage.removeItem(`foocci-entry-${slug}`); } catch { /* ignore */ }
+    /* A prova de posse do telefone é de QUEM SAIU. Guardá-la na sessão só é
+     * seguro se "Trocar" a apagar junto — senão o próximo a usar o aparelho
+     * herdaria os dados, os endereços e os cupons do anterior. */
+    try { sessionStorage.removeItem(CHAVE_PROVA(slug)); } catch { /* ignore */ }
+    setAuthToken(null);
     setIdentifiedName(null);
     setCustomerName("");
     setIdentifiedPhone(null);

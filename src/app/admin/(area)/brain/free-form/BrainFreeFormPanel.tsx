@@ -42,6 +42,12 @@ interface ShadowSample {
 }
 interface PanelData {
   config: FreeFormConfig; gates: FreeFormGates; shadowStats: ShadowStats; recentSamples: ShadowSample[];
+  /** Saude do TOPO — a medicao de quem ja subiu (null quando nao deu para ler). */
+  topo?: {
+    saude: "SAUDAVEL" | "DEGRADADO" | "SEM_AMOSTRA";
+    derruba: boolean; amostras: number; acertos: number; taxa: number | null;
+    piso: number; minimoAmostras: number; motivo: string;
+  } | null;
 }
 interface TransitionResult {
   success: boolean; previousMode: string; newMode: string;
@@ -170,6 +176,7 @@ export function BrainFreeFormPanel() {
   const config = data?.config ?? null;
   const gates = data?.gates ?? null;
   const stats = data?.shadowStats ?? null;
+  const topo = data?.topo ?? null;
 
   return (
     <section className="rounded-xl border-2 border-indigo-200 bg-white p-4">
@@ -242,6 +249,38 @@ export function BrainFreeFormPanel() {
               <p className="mt-0.5"><Pill tone="violet">{config.minConfidence.toFixed(2)}</Pill></p>
             </div>
           </div>
+
+          {/*
+            SAUDE DO TOPO — a medicao que a escada nao tinha.
+
+            Os gates abaixo dizem se o agente PODE subir, e medem isso com
+            sombra, que so existe embaixo: quem sobe para o topo para de
+            produzi-la e fica marcando zero para sempre. Este bloco responde a
+            outra pergunta — ele esta se sustentando ONDE ESTA?
+
+            SEM_AMOSTRA aparece em AMBAR, nunca em verde: restaurante pequeno
+            nao cai por ser pequeno, mas "nao medi" jamais e exibido como "ok".
+          */}
+          {topo && (
+            <div className={`mt-3 rounded-lg border p-3 ${
+              topo.saude === "DEGRADADO" ? "border-red-300 bg-red-50"
+              : topo.saude === "SEM_AMOSTRA" ? "border-amber-300 bg-amber-50"
+              : "border-green-300 bg-green-50"}`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Saúde do topo (atendimento ao vivo)</h3>
+                <Pill tone={topo.saude === "DEGRADADO" ? "red" : topo.saude === "SEM_AMOSTRA" ? "amber" : "green"}>
+                  {topo.saude === "DEGRADADO" ? "Degradado — cai sozinho"
+                    : topo.saude === "SEM_AMOSTRA" ? "Sem amostra suficiente para medir o topo"
+                    : "Saudável"}
+                </Pill>
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-700">{topo.motivo}</p>
+              <p className="mt-1 text-[10px] text-gray-500">
+                Régua: coerência ao vivo ≥ {Math.round(topo.piso * 100)}% nas últimas {topo.amostras || 0} de até 50 amostras,
+                a partir de {topo.minimoAmostras} atendimentos. Abaixo disso a taxa não derruba ninguém — e também não aprova.
+              </p>
+            </div>
+          )}
 
           {/* Gates */}
           <div className="mt-3 rounded-lg border border-gray-200 p-3">

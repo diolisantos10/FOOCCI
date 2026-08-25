@@ -8,7 +8,14 @@
  *     mode≠LIBRARY_ASSISTED                       → enabled:false, mode:CURRENT
  *  3. No ACTIVE + runtimeEnabled techniques       → enabled:false, mode:CURRENT
  *  4. Any DB/error                                → enabled:false + warning (fallback)
- *  5. Otherwise                                   → enabled:true, mode:LIBRARY_ASSISTED
+ *  5. Quality gate not GREEN right now            → enabled:false, mode:CURRENT
+ *     (LiveStageGuard — a trava da escada; ver o item abaixo)
+ *  6. Otherwise                                   → enabled:true, mode:LIBRARY_ASSISTED
+ *
+ * A TRAVA (05/2026): `isActive` só prova que ALGUÉM SUBIU um dia. O degrau alto
+ * (LIBRARY_ASSISTED) é reconferido contra o veredito de qualidade A CADA CHAMADA
+ * — portão vermelho, vencido ou ausente derruba para CURRENT sozinho. O Garçom
+ * NÃO cala: CURRENT é o runtime que já atende hoje.
  *
  * A technique reaches the prompt ONLY when ALL hold:
  *   technique.status === ACTIVE
@@ -18,6 +25,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { guardStoredStage } from "@/services/brain/runtime/LiveStageGuard";
 import { assembleLibraryPromptBlock } from "./promptAssembler";
 import type {
   GetWaiterRuntimeKnowledgeInput,
@@ -59,6 +67,20 @@ export async function getWaiterRuntimeKnowledge(
     // 2. Library must be explicitly enabled AND the version must be assisted.
     if (!version.libraryEnabled || version.mode !== "LIBRARY_ASSISTED") {
       return safeFallback();
+    }
+
+    // 2b. TRAVA: o degrau alto vale AGORA? O gate de ativação auditou o passado;
+    //     este pergunta pelo presente. `agentSlug` é a chave — um agente NOVO
+    //     nasce sem veredito, logo nasce no degrau seguro por construção.
+    const guard = await guardStoredStage({
+      agentId: agentSlug,
+      stored: "LIBRARY_ASSISTED" as const,
+      safe: "CURRENT" as const,
+      isElevated: (m) => m === "LIBRARY_ASSISTED",
+    });
+    if (guard.demoted) {
+      // Cai para CURRENT — o Garçom segue atendendo, só que sem a Biblioteca.
+      return safeFallback([guard.reason]);
     }
 
     // 3. Load frozen techniques for this version, keep only ACTIVE + runtimeEnabled.

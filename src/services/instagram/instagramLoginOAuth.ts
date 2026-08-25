@@ -147,7 +147,12 @@ export interface InstagramProfile {
    * "a chamada está errada" e "o usuário não concedeu / o App Review não saiu" deixa
    * de ser adivinhação.
    */
-  grantedPermissions: string[];
+  /**
+   * `null` = a Meta NÃO devolveu o campo (não sei — guardrail 1).
+   * `[]`   = a Meta devolveu o campo VAZIO: fato positivo de que nada foi concedido.
+   * Confundir os dois custou o diagnóstico de 24/08 (ver `missingInstagramPermissions`).
+   */
+  grantedPermissions: string[] | null;
   /**
    * Erro do `GET /me`, quando houve. Antes ele era engolido: `fetch` não lança em
    * HTTP 400, então uma resposta de erro virava `username: null` + `igUserId` caindo
@@ -211,12 +216,22 @@ export const realInstagramLoginGraph: InstagramLoginGraph = {
     // array). Sem ela, "Unsupported request" nos passos seguintes é indistinguível
     // de um erro de endpoint — e foi por isso que se investigou host e verbo por
     // quatro tentativas, quando a resposta estava no primeiro passo o tempo todo.
+    //
+    // ⚠️ AUSENTE ≠ VAZIO. Até 24/08 as duas situações viravam `[]`, e `[]` era lido
+    // como "não sei" (guardrail 1). Resultado: quando a Meta devolveu o campo VAZIO
+    // — o fato positivo de que NADA foi concedido, que explica sozinho os três
+    // `Unsupported request` — o código calou e o lojista recebeu, no lugar do
+    // motivo, três frases técnicas que apontavam para o lado errado.
+    const permsPresent =
+      shortBody.permissions !== undefined || shortBody.data?.[0]?.permissions !== undefined;
     const permsRaw = shortBody.permissions ?? shortBody.data?.[0]?.permissions;
-    const grantedPermissions = Array.isArray(permsRaw)
-      ? permsRaw.filter((s): s is string => typeof s === "string")
-      : typeof permsRaw === "string"
-        ? permsRaw.split(",").map((s) => s.trim()).filter(Boolean)
-        : [];
+    const grantedPermissions: string[] | null = !permsPresent
+      ? null
+      : Array.isArray(permsRaw)
+        ? permsRaw.filter((s): s is string => typeof s === "string")
+        : typeof permsRaw === "string"
+          ? permsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+          : [];
 
     // 2) short-lived → long-lived (60-day) token. RETRY: a transient failure here
     //    silently falls back to the 1h short token, which then dies in ~1h and kills
@@ -413,9 +428,18 @@ export const INSTAGRAM_REQUIRED_PERMISSIONS = [
   "instagram_business_manage_messages",
 ] as const;
 
-/** Quais das permissões obrigatórias faltam. Lista vazia de entrada = "não sei" → []. */
-export function missingInstagramPermissions(granted: string[]): string[] {
-  if (!granted || granted.length === 0) return []; // guardrail 1: silêncio não vira acusação
+/**
+ * Quais das permissões obrigatórias faltam.
+ *
+ * `null` (a Meta não disse nada) → `[]`: silêncio não vira acusação (guardrail 1).
+ * `[]` (a Meta disse "nenhuma") → **todas faltam**. É um fato positivo, e é o
+ * único que explica `Unsupported request` nos três passos ao mesmo tempo.
+ *
+ * Antes de 24/08 as duas entradas colapsavam em `[]` e a segunda — a informativa —
+ * era tratada como a primeira. Era o silêncio comendo a evidência.
+ */
+export function missingInstagramPermissions(granted: string[] | null | undefined): string[] {
+  if (granted === null || granted === undefined) return []; // não sei
   return INSTAGRAM_REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
 }
 
@@ -482,12 +506,22 @@ export async function handleInstagramLoginCallback(
     }
     // A CAUSA, quando é ela. Vem por último no texto mas é a primeira coisa a checar:
     // faltando permissão, os erros acima são consequência e enganam.
-    const faltando = missingInstagramPermissions(profile.grantedPermissions ?? []);
+    const faltando = missingInstagramPermissions(profile.grantedPermissions);
     if (faltando.length > 0) {
-      problemas.push(
-        `a Meta concedeu apenas [${profile.grantedPermissions.join(", ")}] e faltam [${faltando.join(", ")}].`
-        + " Enquanto faltar, a Meta recusa a troca do token de 60 dias e a inscrição no webhook com"
-        + " \"Unsupported request\" — que PARECE endpoint errado e não é. Isso se resolve no App Review, não no código.",
+      const concedidas = profile.grantedPermissions ?? [];
+      // `unshift`, não `push`: esta é A CAUSA. Vinha por último e o leitor parava
+      // nas consequências — que apontam para endpoint errado e mandaram esta casa
+      // investigar host e versão por quatro tentativas.
+      problemas.unshift(
+        (concedidas.length === 0
+          ? "a Meta não concedeu NENHUMA permissão a esta conexão"
+          : `a Meta concedeu apenas [${concedidas.join(", ")}]`)
+        + ` e faltam [${faltando.join(", ")}].`
+        + " Enquanto faltar, a Meta recusa a troca do token de 60 dias, a leitura do perfil e a"
+        + " inscrição no webhook com \"Unsupported request\" — que PARECE endpoint errado e NÃO é:"
+        + " em 24/08/2026 os três endpoints foram medidos contra a Meta com um token propositalmente"
+        + " inválido e todos responderam code 190 (token), nunca code 100 — ou seja, host, versão e"
+        + " verbo estão certos. Isso se resolve no App Review / na autorização da conta, não no código.\n",
       );
     }
     if (profile.profileError) {
@@ -525,7 +559,10 @@ export async function handleInstagramLoginCallback(
         webhookSubscribeError: subscribeError,
         longLivedExchangeError: profile.longLivedError ?? null,
         // A evidência que decide o diagnóstico, gravada para sobreviver ao deploy.
-        grantedPermissions: profile.grantedPermissions ?? [],
+        // `null` (a Meta não reportou) é diferente de `[]` (não concedeu nada) e a
+        // diferença tem que sobreviver ao banco — foi ela que decidiu o diagnóstico.
+        grantedPermissions: profile.grantedPermissions,
+        permissionsReported: profile.grantedPermissions !== null,
         missingPermissions: faltando,
         profileError: profile.profileError ?? null,
       },

@@ -75,3 +75,34 @@ export async function getRunWithFindings(id: string) {
     include: { findings: { orderBy: { createdAt: "asc" } } },
   });
 }
+
+/**
+ * O veredito PERSISTIDO mais recente de UM agente (auditorId), com a prova.
+ *
+ * Lê a run mais recente que CONTÉM pelo menos um achado daquele auditor — é a
+ * única evidência de que o auditor realmente rodou. Uma run sem achado nenhum
+ * do agente NÃO é veredito dele: "não estourou" não é verde.
+ *
+ * Devolve o dado cru (sem política). Quem decide se isso libera degrau é o
+ * LiveStageGuard — aqui só se lê.
+ */
+export interface AgentVerdictRow {
+  runId: string;
+  finishedAt: Date;
+  /** Achados DAQUELE auditor nesta run (severidade + status), sanitizados. */
+  findings: { severity: string; status: string }[];
+}
+
+export async function getLatestAgentVerdictRow(auditorId: string): Promise<AgentVerdictRow | null> {
+  const run = await prisma.qualityAuditRun.findFirst({
+    where: { findings: { some: { auditorId } } },
+    orderBy: { finishedAt: "desc" },
+    select: {
+      id: true,
+      finishedAt: true,
+      findings: { where: { auditorId }, select: { severity: true, status: true } },
+    },
+  });
+  if (!run) return null;
+  return { runId: run.id, finishedAt: run.finishedAt, findings: run.findings };
+}

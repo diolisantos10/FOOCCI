@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+/** Um medidor vigiado (ver MeasurementFreshnessAlarm, no servidor). */
+interface Medidor {
+  id: string;
+  nome: string;
+  workflow: string;
+  fresco: boolean;
+  idadeHoras: number | null;
+  limiteHoras: number;
+  motivo: string;
+}
 import { QualityTabs } from "../QualityTabs";
 import { AUDITOR_META_LIST } from "@/services/quality/registryMeta";
 import {
@@ -132,14 +143,17 @@ export default function QualityControlPage() {
   const [latestRun, setLatestRun] = useState<LatestRun | null>(null);
   const [selectedRun, setSelectedRun] = useState<LatestRun | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Estado dos MEDIDORES — se o cron parou, o veredito da tela e velho. */
+  const [medidores, setMedidores] = useState<Medidor[]>([]);
 
   const refreshHistory = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/quality/history?limit=20");
-      const data = (await res.json()) as { ok: boolean; runs?: HistoryRun[]; latest?: LatestRun | null };
+      const data = (await res.json()) as { ok: boolean; runs?: HistoryRun[]; latest?: LatestRun | null; medidores?: Medidor[] };
       if (data.ok) {
         setHistory(data.runs ?? []);
         setLatestRun(data.latest ?? null);
+        setMedidores(data.medidores ?? []);
       }
     } catch {
       /* history is best-effort; ignore */
@@ -241,6 +255,30 @@ export default function QualityControlPage() {
           )}
         </div>
       </div>
+
+      {/*
+        ALARME DE MEDIDOR PARADO.
+
+        Em agosto de 2026 esta tela mostrou por dez dias um veredito de 248 horas
+        atras com cara de veredito de hoje, porque o cron falhava em silencio. A
+        lista de auditorias fica IDENTICA com o cron vivo ou morto — so a idade
+        denuncia. Por isso o aviso vem antes de tudo: enquanto ele estiver aceso,
+        nada abaixo dele pode ser lido como "o estado de agora".
+      */}
+      {medidores.filter((m) => !m.fresco).map((m) => (
+        <div
+          key={m.id}
+          className="mb-4 rounded-lg border-2 border-red-500 bg-red-950/60 px-4 py-3 text-sm text-red-100"
+          role="alert"
+        >
+          <p className="font-bold">⚠️ MEDIDOR PARADO — o que está nesta tela é VELHO</p>
+          <p className="mt-1 text-[13px] text-red-200">{m.motivo}</p>
+          <p className="mt-1 text-[11px] text-red-300/80">
+            Enquanto isso, a escada de liberação de IA derruba os agentes para o degrau seguro sozinha
+            (veredito vencido não libera degrau alto). Consertar o medidor devolve os agentes ao lugar.
+          </p>
+        </div>
+      ))}
 
       {/* Read-only banner */}
       <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-1.5 text-[11px] text-gray-400">

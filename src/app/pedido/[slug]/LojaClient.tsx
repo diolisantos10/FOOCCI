@@ -44,6 +44,7 @@ import {
 import { buildInstagramUrl, buildTikTokUrl, buildWhatsAppUrl } from "@/lib/social";
 import { StoreHeader } from "./StoreHeader";
 import { StoreAccountDrawer } from "./StoreAccountDrawer";
+import { CHAVE_PROVA } from "./areaDoCliente";
 import {
   LOCKED_WALLET,
   fetchWallet,
@@ -208,13 +209,24 @@ export function LojaClient({
 
   /* ── Minha conta: carteira (cupons + endereços) — rotas gated por waToken ── */
   const [accountOpen, setAccountOpen] = useState(false);
-  const [authToken, setAuthToken] = useState<string | null>(() => pedidoToken ?? null);
+  /* A prova vive na SESSÃO, não só na URL: sem isso, recarregar a Loja trancava a
+   * carteira de quem tinha direito a ela. Mesmo conserto do chat — ver
+   * `areaDoCliente.ts`. Seguro porque `handleResetIdentity` a apaga junto. */
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    if (pedidoToken) return pedidoToken;
+    if (typeof window === "undefined") return null;
+    try { return sessionStorage.getItem(CHAVE_PROVA(slug)); } catch { return null; }
+  });
   useEffect(() => {
-    // SSR não resolveu o token mas ele pode estar na URL (link do WhatsApp).
-    if (authToken || typeof window === "undefined") return;
-    const t = new URLSearchParams(window.location.search).get("waToken");
-    if (t) setAuthToken(t);
-  }, [authToken]);
+    if (typeof window === "undefined") return;
+    if (!authToken) {
+      // SSR não resolveu o token mas ele pode estar na URL (link do WhatsApp).
+      const t = new URLSearchParams(window.location.search).get("waToken");
+      if (t) setAuthToken(t);
+      return;
+    }
+    try { sessionStorage.setItem(CHAVE_PROVA(slug), authToken); } catch { /* ignore */ }
+  }, [authToken, slug]);
 
   const [wallet, setWallet] = useState<WalletState>(LOCKED_WALLET);
   const [appliedCoupon, setAppliedCoupon] = useState<WalletCoupon | null>(null);
@@ -291,6 +303,7 @@ export function LojaClient({
   function handleResetIdentity() {
     try { sessionStorage.removeItem(`foocci-customer-${slug}`); } catch { /* ignore */ }
     try { sessionStorage.removeItem(`qr-welcome-seen-${slug}`);  } catch { /* ignore */ }
+    try { sessionStorage.removeItem(CHAVE_PROVA(slug)); } catch { /* ignore */ }
     setIdentifiedName(null);
     setIdentifiedPhone(null);
     setPhone("");

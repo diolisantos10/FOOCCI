@@ -12,7 +12,7 @@ import {
   EXPERIMENTE_URL,
   PRECOS_URL,
   COMO_FUNCIONA_URL,
-  DEMO_URL,
+  AGENTE_URL,
 } from "./config";
 
 // Espelha o menu (config.NAV_LINKS), sem âncoras órfãs. "Como funciona" segue como
@@ -32,7 +32,7 @@ const PRODUTO = [
 
 const EMPRESA = [
   { href: "/site/sobre", label: "Sobre" },
-  { href: DEMO_URL, label: "Contato" },
+  { href: AGENTE_URL, label: "Contato" },
 ];
 
 const LEGAL = [

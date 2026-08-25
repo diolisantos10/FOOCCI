@@ -28,6 +28,7 @@ import {
   type WaOrderingScope,
   type WaRoutingDecision,
 } from "@/lib/wa-text-ordering-flag";
+import { guardStoredStage } from "@/services/brain/runtime/LiveStageGuard";
 import { detectIntent } from "./parser";
 import { WhatsAppOrderingSessionService } from "./WhatsAppOrderingSessionService";
 import type { WaDetectedIntent } from "./types";
@@ -145,7 +146,7 @@ export async function resolveWaConfig(restaurantId: string): Promise<ResolvedWaC
       source:            "db",
       enabled:           db.enabled,
       mode:              db.mode,
-      scope:             db.scope,
+      scope:             await guardedScope(db.scope),
       allowlistedPhones: db.allowlistedPhones,
       paused:            db.paused,
     };
@@ -156,10 +157,28 @@ export async function resolveWaConfig(restaurantId: string): Promise<ResolvedWaC
     source:            "env",
     enabled:           envDecision.enabledForRestaurant,
     mode:              envDecision.mode,
-    scope:             envDecision.scope,
+    scope:             await guardedScope(envDecision.scope),
     allowlistedPhones: parseEnvPhones(),
     paused:            envDecision.paused,
   };
+}
+
+/**
+ * TRAVA da escada do Pedido por Texto. RESTAURANT_WIDE (todo telefone elegível,
+ * cliente final de verdade) só vale enquanto o portão de qualidade do WhatsApp
+ * estiver VERDE agora. Vermelho/vencido/ausente ⇒ volta para PHONE_ALLOWLIST:
+ * o time segue testando e o cliente de fora continua sendo atendido pelo
+ * recepcionista — a régua aperta, ninguém fica sem resposta.
+ */
+async function guardedScope(scope: WaOrderingScope): Promise<WaOrderingScope> {
+  const guard = await guardStoredStage({
+    agentId: "whatsapp",
+    stored: scope,
+    safe: "PHONE_ALLOWLIST" as WaOrderingScope,
+    isElevated: (s) => s === "RESTAURANT_WIDE",
+  });
+  if (guard.demoted) console.warn("[wa-text-ordering]", guard.reason);
+  return guard.effective;
 }
 
 /**

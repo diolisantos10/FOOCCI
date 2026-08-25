@@ -122,7 +122,7 @@ export default function CrmPage() {
       <CrmRealShowcase />
 
       {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
-      <CtaBand title="Veja o CRM trabalhando com a base do seu restaurante." />
+      <CtaBand title="Ficou com dúvida sobre o CRM? Fale com os nossos agentes." />
     </>
   );
 }

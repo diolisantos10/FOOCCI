@@ -22,7 +22,8 @@ import {
   type CycleCode,
 } from "@/lib/billing/pricing";
 import { CheckoutClient } from "./CheckoutClient";
-import { DEMO_URL, DEMO_CTA_LABEL } from "@/components/marketing/config";
+import { FoocciWordmarkLink } from "@/components/brand/FoocciWordmark";
+import { chamadaComercial } from "@/lib/site/canalDeVendas";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default function NovoCheckoutPage({
 }: {
   searchParams: { plano?: string; ciclo?: string };
 }) {
+  const chamada = chamadaComercial();
   const plan: PlanCode = normalizePlanCode(searchParams.plano) ?? "GROWTH";
   const cycle: CycleCode = normalizeCycleCode(searchParams.ciclo) ?? "MENSAL";
 
@@ -44,9 +46,10 @@ export default function NovoCheckoutPage({
     <main className="min-h-screen bg-canvas px-4 py-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 text-center">
-          <a href="/site/precos" className="inline-block text-2xl font-semibold tracking-tight text-ink">
-            f<span className="text-brand-500">oo</span>cci
-          </a>
+          {/* A MARCA VEM DO ARQUIVO OFICIAL. Aqui havia a marca desenhada com
+              texto e CSS — foi o que o CEO viu e chamou de "mudaram a logo".
+              Ver `FoocciWordmark`. */}
+          <FoocciWordmarkLink href="/site/precos" className="mx-auto h-7 w-auto" />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Contrate e comece a rodar hoje.
           </h1>
@@ -66,8 +69,8 @@ export default function NovoCheckoutPage({
           Foocci · CNPJ 59.120.811/0001-79 · foocci.com.br ·{" "}
           {/* Rótulo único do site (`DEMO_CTA_LABEL`) também aqui: esta página fica
               fora de `/site`, mas a porta é a mesma — e era o décimo nome dela. */}
-          <a href={DEMO_URL} className="underline decoration-line2 underline-offset-2 hover:text-ink2">
-            Prefere ver antes? {DEMO_CTA_LABEL}
+          <a href={chamada.href} className="underline decoration-line2 underline-offset-2 hover:text-ink2">
+            Prefere ver antes? {chamada.label}
           </a>
         </p>
       </div>
