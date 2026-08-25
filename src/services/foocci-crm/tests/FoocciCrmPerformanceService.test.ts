@@ -45,7 +45,7 @@ describe("resumo", () => {
       [
         lead(),
         lead({ lastContactedAt: new Date() }),
-        lead({ stage: "FECHADO", lastContactedAt: new Date() }),
+        lead({ stage: "GANHO", lastContactedAt: new Date() }),
         lead({ stage: "PERDIDO", lastContactedAt: new Date() }),
       ],
       PERIODO, 0, 10,
@@ -74,7 +74,7 @@ describe("por origem — a trava de amostra vale por LINHA", () => {
   it("origem com 2 contatos e 1 fechamento NÃO vira 50%", () => {
     const campanha = { utmSource: "facebook", utmCampaign: "Restaurantes-SP" };
     const r = montaPerformance(
-      [lead({ ...campanha, stage: "FECHADO" }), lead(campanha)],
+      [lead({ ...campanha, stage: "GANHO" }), lead(campanha)],
       PERIODO, 0, 2,
     );
 
@@ -90,8 +90,8 @@ describe("por origem — a trava de amostra vale por LINHA", () => {
     const r = montaPerformance(
       [
         ...muitos(MIN_LEADS_PARA_TAXA - 2, campanha),
-        lead({ ...campanha, stage: "FECHADO" }),
-        lead({ ...campanha, stage: "FECHADO" }),
+        lead({ ...campanha, stage: "GANHO" }),
+        lead({ ...campanha, stage: "GANHO" }),
       ],
       PERIODO, 0, MIN_LEADS_PARA_TAXA,
     );
@@ -138,10 +138,10 @@ describe("por origem — a trava de amostra vale por LINHA", () => {
 
 describe("funil por coorte de chegada", () => {
   it("quem foi perdido depois de virar proposta ainda conta no degrau da proposta", () => {
-    const historico: FoocciLeadStage[] = ["CONTATADO", "QUALIFICADO", "PROPOSTA", "PERDIDO"];
+    const historico: FoocciLeadStage[] = ["PRIMEIRO_CONTATO", "QUALIFICADO", "PROPOSTA_ENVIADA", "PERDIDO"];
     const r = montaPerformance([lead({ stage: "PERDIDO", historicoToStages: historico })], PERIODO, 0, 1);
 
-    const proposta = r.funil.etapas.find((e) => e.stage === "PROPOSTA")!;
+    const proposta = r.funil.etapas.find((e) => e.stage === "PROPOSTA_ENVIADA")!;
     expect(proposta.alcancaram).toBe(1);
     expect(r.funil.perdidos).toBe(1);
   });

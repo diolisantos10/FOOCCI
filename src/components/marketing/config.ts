@@ -5,11 +5,20 @@
  * off, the CTAs invite a real demo request, and `DemoForm` posts to a real
  * lead-capture endpoint (`/api/site/leads`).
  *
- * Prices are NOT published yet — the CEO had not closed the three plan values by
- * launch day, and guardrail 7 ("nunca vender como pronto o que está em piloto")
- * plus decision D3 forbid inventing one. `/site/precos` therefore presents the
- * plans qualitatively and routes to the demo form. Publishing values later is a
- * content change on that page; nothing else here depends on it.
+ * PREÇO: PUBLICADO desde 04/08/2026. Este cabeçalho dizia o contrário — "prices
+ * are NOT published yet", "presents the plans qualitatively" — e continuou
+ * dizendo por três semanas depois de os três valores serem fechados e o checkout
+ * self-service entrar no ar. Em 25/08/2026 o CEO corrigiu um relatório que eu
+ * havia montado em cima deste comentário: *"o já tem o preço no site."*
+ *
+ * Os valores mensais vigentes são Essencial R$ 179, Crescimento R$ 429 e
+ * Performance R$ 899 — e ESTA LINHA É INFORMATIVA, não fonte. A fonte única é
+ * `PLAN_CYCLE_CENTS` em `@/lib/billing/pricing`, a mesma função que decide o que
+ * sai do cartão. Se os números acima divergirem de lá, quem está errado é este
+ * comentário; foi assim que o erro anterior nasceu.
+ *
+ * A decisão D3 continua valendo e não é sobre isto: ela proíbe **inventar** preço
+ * que o CEO não fechou. Preço fechado e publicado, o site mostra.
  *
  * History of the pre-launch posture: docs/foocci-site/pre-launch-mode-v1.md.
  */

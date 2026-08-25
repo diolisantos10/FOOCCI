@@ -107,6 +107,12 @@ const ADMIN_GUARD_EXEMPT = new Map<string, string>([
     "login de admin: valida o ADMIN_SECRET cru e EMITE o cookie; não pode exigir a sessão que ela mesma cria.",
   ],
   [
+    "admin/session/interna/route.ts",
+    "login por e-mail e senha: valida a credencial com bcrypt e EMITE o cookie de " +
+      "sessão interna; não pode exigir a sessão que ela mesma cria. Recusa com uma " +
+      "mensagem única para e-mail inexistente, senha errada e conta desativada.",
+  ],
+  [
     "admin/reset-owner/route.ts",
     "recuperação de emergência (isento no early-exit do middleware); auth inline por x-admin-secret === ADMIN_SECRET.",
   ],

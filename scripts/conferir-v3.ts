@@ -193,6 +193,44 @@ async function main() {
     `${gatilhos.length} gatilho(s) — esperado 2. Se faltar: npm run db:travas`,
   );
 
+  // ── A trava de autorização NO BANCO ──
+  //
+  // RLS é invisível: um banco criado por `db push` ou por `migrate diff` sai sem
+  // as políticas, a aplicação sobe igual, as telas abrem — e a quarta camada de
+  // autorização simplesmente não existe. Mesma armadilha do gatilho de
+  // append-only, que já custou uma rodada.
+  const semRLS = await prisma.$queryRawUnsafe<Array<{ relname: string }>>(
+    `SELECT c.relname
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind = 'r'
+        AND c.relname LIKE 'lead_%'
+        AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity);`,
+  );
+
+  const comRLS = await prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+    `SELECT count(*) AS total
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind = 'r'
+        AND c.relname LIKE 'lead_%'
+        AND c.relrowsecurity AND c.relforcerowsecurity;`,
+  );
+
+  const quantasComRLS = Number(comRLS[0]?.total ?? 0);
+
+  conferir(
+    "autorização no banco (RLS) nas tabelas da Sala",
+    quantasComRLS > 0 && semRLS.length === 0,
+    quantasComRLS === 0
+      ? "nenhuma tabela da Sala tem RLS — rode a migração 20260825200000"
+      : semRLS.length
+        ? `sem trava: ${semRLS.map((t) => t.relname).join(", ")}`
+        : `${quantasComRLS} tabela(s) com RLS ligado e forçado`,
+  );
+
   // ── Quem ocupa os cargos ──
   const pessoas = await prisma.internalUser.count({ where: { isActive: true } });
   if (pessoas === 0) {

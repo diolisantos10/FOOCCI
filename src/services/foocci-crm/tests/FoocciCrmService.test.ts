@@ -39,17 +39,17 @@ beforeEach(() => {
 describe("moverEtapa — o registro é obrigatório, não opcional", () => {
   it("grava a interação com quem mudou, de onde para onde e quando", async () => {
     const antes = Date.now();
-    const r = await moverEtapa({ leadId: "l1", para: "CONTATADO", actor: "admin", nota: "mandei o primeiro oi" });
+    const r = await moverEtapa({ leadId: "l1", para: "PRIMEIRO_CONTATO", actor: "admin", nota: "mandei o primeiro oi" });
     const depois = Date.now();
 
     expect(r.ok).toBe(true);
     expect(r.de).toBe("NOVO");
-    expect(r.para).toBe("CONTATADO");
+    expect(r.para).toBe("PRIMEIRO_CONTATO");
 
     const interacao = db.siteLeadInteraction.create.mock.calls[0]![0].data;
     expect(interacao.tipo).toBe("MUDANCA_ETAPA");
     expect(interacao.fromStage).toBe("NOVO");
-    expect(interacao.toStage).toBe("CONTATADO");
+    expect(interacao.toStage).toBe("PRIMEIRO_CONTATO");
     expect(interacao.actor).toBe("admin");           // ← QUEM mudou
     expect(interacao.nota).toBe("mandei o primeiro oi");
     expect(interacao.createdAt).toBeInstanceOf(Date); // ← QUANDO mudou
@@ -70,16 +70,16 @@ describe("moverEtapa — o registro é obrigatório, não opcional", () => {
   });
 
   it("o contato guarda o autor e a data da etapa atual", async () => {
-    await moverEtapa({ leadId: "l1", para: "PROPOSTA", actor: "sdr-agent" });
+    await moverEtapa({ leadId: "l1", para: "PROPOSTA_ENVIADA", actor: "sdr-agent" });
 
     const dados = db.siteLead.update.mock.calls[0]![0].data;
-    expect(dados.stage).toBe("PROPOSTA");
+    expect(dados.stage).toBe("PROPOSTA_ENVIADA");
     expect(dados.stageChangedBy).toBe("sdr-agent");
     expect(dados.stageChangedAt).toBeInstanceOf(Date);
   });
 
   it("a data do contato e a da interação são a MESMA", async () => {
-    await moverEtapa({ leadId: "l1", para: "FECHADO", actor: "admin" });
+    await moverEtapa({ leadId: "l1", para: "GANHO", actor: "admin" });
 
     const noContato = db.siteLead.update.mock.calls[0]![0].data.stageChangedAt as Date;
     const naInteracao = db.siteLeadInteraction.create.mock.calls[0]![0].data.createdAt as Date;
@@ -89,9 +89,9 @@ describe("moverEtapa — o registro é obrigatório, não opcional", () => {
   });
 
   it("recusa mover para a etapa em que já está — sem escrever nada", async () => {
-    db.siteLead.findUnique.mockResolvedValue({ id: "l1", stage: "PROPOSTA" });
+    db.siteLead.findUnique.mockResolvedValue({ id: "l1", stage: "PROPOSTA_ENVIADA" });
 
-    const r = await moverEtapa({ leadId: "l1", para: "PROPOSTA", actor: "admin" });
+    const r = await moverEtapa({ leadId: "l1", para: "PROPOSTA_ENVIADA", actor: "admin" });
 
     expect(r.ok).toBe(false);
     expect(db.$transaction).not.toHaveBeenCalled();
@@ -106,17 +106,17 @@ describe("moverEtapa — o registro é obrigatório, não opcional", () => {
 
   it("contato inexistente não vira registro fantasma", async () => {
     db.siteLead.findUnique.mockResolvedValue(null);
-    const r = await moverEtapa({ leadId: "sumiu", para: "CONTATADO", actor: "admin" });
+    const r = await moverEtapa({ leadId: "sumiu", para: "PRIMEIRO_CONTATO", actor: "admin" });
     expect(r.ok).toBe(false);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it("aceita pular etapas — e o pulo fica registrado", async () => {
-    const r = await moverEtapa({ leadId: "l1", para: "FECHADO", actor: "admin" });
+    const r = await moverEtapa({ leadId: "l1", para: "GANHO", actor: "admin" });
     expect(r.ok).toBe(true);
     const i = db.siteLeadInteraction.create.mock.calls[0]![0].data;
     expect(i.fromStage).toBe("NOVO");
-    expect(i.toStage).toBe("FECHADO");
+    expect(i.toStage).toBe("GANHO");
   });
 });
 
@@ -173,12 +173,12 @@ describe("excluirContato", () => {
 
 describe("maisAvancadaAlcancada", () => {
   it("usa o histórico, não o estado atual", () => {
-    expect(maisAvancadaAlcancada("PERDIDO", ["CONTATADO", "QUALIFICADO", "PROPOSTA", "PERDIDO"]))
-      .toBe("PROPOSTA");
+    expect(maisAvancadaAlcancada("PERDIDO", ["PRIMEIRO_CONTATO", "QUALIFICADO", "PROPOSTA_ENVIADA", "PERDIDO"]))
+      .toBe("PROPOSTA_ENVIADA");
   });
 
   it("sem histórico, é a etapa atual", () => {
-    expect(maisAvancadaAlcancada("CONTATADO", [])).toBe("CONTATADO");
+    expect(maisAvancadaAlcancada("PRIMEIRO_CONTATO", [])).toBe("PRIMEIRO_CONTATO");
   });
 
   it("um contato só perdido, sem histórico, ainda alcançou NOVO", () => {
@@ -186,6 +186,6 @@ describe("maisAvancadaAlcancada", () => {
   });
 
   it("voltar de etapa não apaga o topo alcançado", () => {
-    expect(maisAvancadaAlcancada("CONTATADO", ["PROPOSTA", "CONTATADO"])).toBe("PROPOSTA");
+    expect(maisAvancadaAlcancada("PRIMEIRO_CONTATO", ["PROPOSTA_ENVIADA", "PRIMEIRO_CONTATO"])).toBe("PROPOSTA_ENVIADA");
   });
 });

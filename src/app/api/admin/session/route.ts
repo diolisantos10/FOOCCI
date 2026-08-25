@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE, makeAdminToken } from "@/lib/admin-auth";
+import { cookieInternoDeSaida } from "@/lib/internal-auth";
 
 export async function POST(req: NextRequest) {
   const envSecret = process.env.ADMIN_SECRET;
@@ -38,8 +39,25 @@ export async function POST(req: NextRequest) {
   return res;
 }
 
+/**
+ * Sair — e sair das DUAS portas.
+ *
+ * ── O DEFEITO QUE ISTO EVITA ──
+ *
+ * Existem dois cookies de acesso: o do `ADMIN_SECRET` e o da sessão interna. Esta
+ * rota é a única chamada pelo botão "Sair", e limpava só o primeiro.
+ *
+ * Quem tivesse entrado com e-mail e senha clicaria em "Sair", veria a tela de
+ * login, e **continuaria dentro** — bastaria digitar qualquer endereço do Admin.
+ * Num computador compartilhado da operação, é a sessão do SDR anterior ainda
+ * aberta para o próximo que sentar.
+ *
+ * Limpar as duas é sempre correto: sair de uma porta em que não se entrou não
+ * faz nada.
+ */
 export async function DELETE() {
   const res = NextResponse.json({ success: true });
+
   res.cookies.set(ADMIN_COOKIE, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -47,5 +65,7 @@ export async function DELETE() {
     maxAge: 0,
     path: "/",
   });
+
+  res.headers.append("Set-Cookie", cookieInternoDeSaida());
   return res;
 }

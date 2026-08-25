@@ -30,6 +30,7 @@
     "db:travas": "tsx scripts/aplicar-travas.ts",
     "db:seed-organizacao": "tsx scripts/seed-organizacao.ts",
     "db:seed-fichas": "tsx scripts/seed-fichas.ts",
+    "db:seed-sala": "tsx scripts/seed-sala-de-vendas.ts",
     "db:conferir-v3": "tsx scripts/conferir-v3.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest"
