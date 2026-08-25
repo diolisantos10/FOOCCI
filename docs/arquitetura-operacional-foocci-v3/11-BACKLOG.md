@@ -98,13 +98,32 @@ grava, e é por isso que ficou para depois em vez de ser feito pela metade.
 | Pergunta | O que acontece enquanto não vier |
 |---|---|
 | **Aprovar o PR #150** (é o "pedido de aprovação" do trabalho) | tudo continua em rascunho, fora do ar |
-| **Até quanto o vendedor pode dar de desconto além da tabela, prazo de implantação, formas de pagamento aceitas, e quem assina condição fora do padrão** | o vendedor responde preço normalmente, e trava na primeira exceção |
-| **Cadastrar o número na Meta** (o dono do WhatsApp) | a mensagem continua caindo no aparelho e sendo respondida à mão |
+| **As duas chaves da Meta estão salvas no Railway?** O número já está cadastrado — você confirmou. Salvar as chaves é o ato seguinte, e é outro | sem elas o "oi" continua caindo no aparelho e sendo respondido à mão. **Eu não enxergo o Railway daqui** |
+| **Prazo de implantação** — em quanto tempo o restaurante entra no ar | é a **única** pergunta de venda que sobrou sem resposta. O vendedor trava só nela |
 | **Decidir o destino do chip** — atender à mão hoje **ou** automatizar depois | os dois não cabem no mesmo número ao mesmo tempo. Decidir depois custa o histórico de conversa daquele aparelho |
 | **O e-mail que recebe pedido de ajuda está configurado?** | o cliente pede ajuda, o chamado é salvo e **ninguém é avisado** |
 | **Data para desligar a senha única do sistema** | senha que dá acesso a tudo e não identifica quem entrou. Sem data, fica para sempre |
-| **Quando soltar o vendedor de IA para falar com cliente** | é a última chave, e só depois de ver resultado |
+| **Ligar o vendedor de IA para responder sozinho** | hoje toda conversa é respondida por gente. Ligar é o CEO quem decide, e só depois de ver resultado |
 | **Uma conta de teste separada** | sem ela não dá para testar do começo ao fim sem mexer em dado de gente de verdade |
+
+### 🟢 Respondido em 25/08 — e a resposta apagou três perguntas
+
+> *"Quem fecha é o SDR que dá o link do site pra ele fechar por lá. Quem fecha é
+> o checkout, o cliente no próprio checkout."*
+
+Ninguém do time fecha. O vendedor manda o link; o cliente contrata sozinho. E daí
+saem três respostas que **não são política, são mecânica** — vêm do que o sistema
+faz, não de uma opinião que ainda faltasse:
+
+| Pergunta que sumiu | Por que sumiu |
+|---|---|
+| Até quanto dar de desconto | **não existe caminho para conceder.** O checkout cobra a tabela; o único abatimento (metade do primeiro mês) já vem embutido |
+| Formas de pagamento aceitas | **cartão de crédito**, na recorrência do Mercado Pago. Assinatura recorrente não aceita boleto nem PIX |
+| Quem assina condição fora do padrão | não existe condição fora do padrão quando o cliente contrata sozinho na tabela publicada |
+
+⚠️ **Se um dia aparecer cupom, contrato manual ou cobrança fora do checkout**, as
+três voltam a ser perguntas no mesmo dia. Elas sumiram porque a máquina não tem a
+alavanca — não porque foram respondidas com um número.
 
 ---
 

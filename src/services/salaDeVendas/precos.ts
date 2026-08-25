@@ -177,29 +177,54 @@ export function descontoPublicado(): Politica<DescontoPublicado> {
  * ou um vendedor apressado preencha o silêncio com algo plausível.
  */
 const EM_ABERTO = {
-  descontoAlemDaTabela: {
-    motivo:
-      "não existe alçada de desconto registrada. O único desconto fechado é o " +
-      "de 50% do primeiro mês; qualquer coisa além disso nunca foi decidida.",
-    decideQuem: "CEO",
-  },
   prazoDeImplantacao: {
     motivo:
       "não há prazo de implantação publicado. A página de preços trata " +
       "configuração como item sob consulta, e prometer data aqui seria inventar.",
     decideQuem: "CEO, com o Gerente de Operações do Cliente",
   },
-  formaDePagamento: {
-    motivo:
-      "as formas de pagamento aceitas não estão declaradas em lugar nenhum que " +
-      "a Sala possa ler, e o gateway pode nem estar configurado no ambiente.",
-    decideQuem: "CEO, com o Financeiro",
-  },
-  quemPodeFechar: {
-    motivo:
-      "não existe alçada registrada dizendo quem assina condição fora do padrão.",
-    decideQuem: "CEO",
-  },
+} as const;
+
+/**
+ * ── TRÊS PERGUNTAS QUE DEIXARAM DE EXISTIR (decisão do CEO, 25/08/2026) ──────
+ *
+ * Esta lista tinha quatro itens. O CEO respondeu **quem fecha** e a resposta
+ * apagou três de uma vez:
+ *
+ *   *"quem fecha é o SDR que dá o link do site pra ele fechar por lá. Quem
+ *    fecha é o checkout, o cliente no próprio checkout."*
+ *
+ * Ninguém do time fecha. O vendedor manda o link; o cliente contrata sozinho.
+ * E daí saem três respostas que **não são política, são mecânica** — vêm do que
+ * o sistema faz, não de uma opinião que alguém ainda precisasse ter:
+ *
+ * **Desconto além da tabela deixou de ser uma pergunta.** O checkout cobra
+ * `PLAN_CYCLE_CENTS`. Não existe campo, tela ou rota por onde um vendedor
+ * conceda outra coisa — o único abatimento é o meio mês do primeiro ciclo, e ele
+ * já está embutido. Não é que a alçada seja zero: é que não há caminho.
+ *
+ * **Forma de pagamento idem.** `MercadoPagoPlatformBilling` cria um
+ * `preapproval`, que é assinatura recorrente — cartão de crédito, e só. Não há
+ * boleto nem PIX a oferecer, porque recorrência no Mercado Pago não os aceita.
+ *
+ * **Alçada para condição fora do padrão idem.** Não existe condição fora do
+ * padrão a assinar quando o cliente contrata sozinho na tabela publicada.
+ *
+ * ⚠️ **Se um dia alguém abrir um caminho de exceção** — cupom, contrato manual,
+ * cobrança fora do checkout — estas três voltam a ser perguntas em aberto no
+ * mesmo dia. Elas sumiram porque a máquina não tem a alavanca, não porque a
+ * pergunta foi respondida com um número.
+ */
+export const RESPONDIDO_PELO_CHECKOUT = {
+  quemFecha:
+    "o próprio cliente, no checkout. O vendedor manda o link do site; ninguém " +
+    "do time assina nada por ele.",
+  descontoAlemDaTabela:
+    "não existe caminho para conceder. O checkout cobra a tabela publicada, e o " +
+    "único abatimento — metade do primeiro mês — já vem embutido na primeira cobrança.",
+  formaDePagamento:
+    "cartão de crédito, na recorrência do Mercado Pago. Não há boleto nem PIX: " +
+    "assinatura recorrente não os aceita.",
 } as const;
 
 export type AssuntoEmAberto = keyof typeof EM_ABERTO;
@@ -228,10 +253,10 @@ export function naoSei<T>(assunto: AssuntoEmAberto): Politica<T> {
 export type AssuntoDePreco =
   | "tabela"
   | "descontoPublicado"
+  | "comoFecha"
   | "descontoAlemDaTabela"
-  | "prazoDeImplantacao"
   | "formaDePagamento"
-  | "quemPodeFechar";
+  | "prazoDeImplantacao";
 
 export interface RespostaSobrePreco {
   /** Pode falar? */
@@ -239,6 +264,8 @@ export interface RespostaSobrePreco {
   /** O que dizer, quando pode. */
   tabela?: PrecoDoPlano[];
   desconto?: DescontoPublicado;
+  /** A resposta pronta, quando ela vem do que o checkout faz. */
+  resposta?: string;
   /** Por que não, e para quem vai, quando não pode. */
   motivo?: string;
   decideQuem?: string;
@@ -270,6 +297,22 @@ export function responderSobrePreco(assunto: AssuntoDePreco): RespostaSobrePreco
         ? { podeResponder: true, desconto: d.valor }
         : { podeResponder: false, motivo: d.motivo, decideQuem: d.decideQuem };
     }
+
+    // As três que o checkout responde. NÃO são "pode negociar": são "a máquina
+    // faz assim, e não há outra alavanca". O vendedor informa, como informa o
+    // preço — e o portão continua sendo o único lugar por onde isso sai.
+    case "comoFecha":
+      return { podeResponder: true, resposta: RESPONDIDO_PELO_CHECKOUT.quemFecha };
+    case "descontoAlemDaTabela":
+      return {
+        podeResponder: true,
+        resposta: RESPONDIDO_PELO_CHECKOUT.descontoAlemDaTabela,
+      };
+    case "formaDePagamento":
+      return {
+        podeResponder: true,
+        resposta: RESPONDIDO_PELO_CHECKOUT.formaDePagamento,
+      };
 
     default: {
       const { motivo, decideQuem } = EM_ABERTO[assunto];

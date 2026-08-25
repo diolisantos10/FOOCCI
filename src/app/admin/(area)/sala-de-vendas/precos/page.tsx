@@ -34,6 +34,7 @@ import {
   tabelaPublicada,
   descontoPublicado,
   oQueAindaNaoSeSabe,
+  RESPONDIDO_PELO_CHECKOUT,
   type AssuntoEmAberto,
 } from "@/services/salaDeVendas/precos";
 
@@ -42,11 +43,31 @@ export const metadata = { title: "Preços · Sala de Vendas" };
 
 /** O nome da pergunta, do jeito que o lead faz. Não o nome da chave. */
 const COMO_O_LEAD_PERGUNTA: Record<AssuntoEmAberto, string> = {
-  descontoAlemDaTabela: "“Consegue fazer um preço melhor?”",
   prazoDeImplantacao: "“Em quanto tempo fica pronto?”",
-  formaDePagamento: "“Dá para pagar como?”",
-  quemPodeFechar: "“Quem me dá essa condição por escrito?”",
 };
+
+/**
+ * As três perguntas que o CHECKOUT responde.
+ *
+ * Estavam nesta tela como lacunas até 25/08/2026, quando o CEO respondeu quem
+ * fecha — e a resposta apagou as três de uma vez. O vendedor manda o link; o
+ * cliente contrata sozinho. Não sobra desconto a conceder, forma de pagamento a
+ * combinar, nem condição a assinar.
+ */
+const RESPONDE_A: Array<{ pergunta: string; resposta: string }> = [
+  {
+    pergunta: "“Quem fecha comigo?”",
+    resposta: RESPONDIDO_PELO_CHECKOUT.quemFecha,
+  },
+  {
+    pergunta: "“Consegue fazer um preço melhor?”",
+    resposta: RESPONDIDO_PELO_CHECKOUT.descontoAlemDaTabela,
+  },
+  {
+    pergunta: "“Dá para pagar como?”",
+    resposta: RESPONDIDO_PELO_CHECKOUT.formaDePagamento,
+  },
+];
 
 export default function PrecosDaSalaPage() {
   const planos = tabelaPublicada();
@@ -61,8 +82,9 @@ export default function PrecosDaSalaPage() {
           <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
             Isto é exatamente o que está publicado no site e o que o cartão cobra —
             a mesma fonte, não uma cópia. <strong className="text-ink2">Você pode
-            informar estes valores.</strong> Negociar em cima deles é outra coisa,
-            e está na metade de baixo desta tela.
+            informar estes valores.</strong> E não há o que negociar em cima
+            deles: quem fecha é o cliente, sozinho, no checkout. A metade de baixo
+            explica.
           </p>
         </header>
 
@@ -186,6 +208,37 @@ export default function PrecosDaSalaPage() {
           </section>
         )}
 
+        {/* ── AS TRÊS QUE O CHECKOUT RESPONDE ──────────────────────────────── */}
+        <section aria-labelledby="fecha-titulo" className="mb-6">
+          <h2
+            id="fecha-titulo"
+            className="text-[13px] font-semibold uppercase tracking-wide text-ink2"
+          >
+            Como se fecha — e por que não há o que negociar
+          </h2>
+          <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
+            <strong className="text-ink2">Quem fecha é o cliente, sozinho, no
+            checkout.</strong> Você manda o link do site. Isso não é só uma regra
+            de processo: é o que faz as três perguntas abaixo deixarem de existir
+            — a máquina não tem a alavanca, então não há o que conceder, combinar
+            ou assinar.
+          </p>
+
+          <ul className="mt-3 space-y-2">
+            {RESPONDE_A.map((r) => (
+              <li
+                key={r.pergunta}
+                className="rounded-xl border border-line bg-paper p-3.5"
+              >
+                <p className="text-[13.5px] font-semibold text-ink">{r.pergunta}</p>
+                <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-ink2">
+                  {r.resposta}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         {/* ── O QUE A EMPRESA AINDA NÃO DECIDIU ────────────────────────────── */}
         <section aria-labelledby="abertos-titulo">
           <h2
@@ -195,11 +248,10 @@ export default function PrecosDaSalaPage() {
             O que você NÃO pode responder — e não é falha sua
           </h2>
           <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
-            Estas quatro perguntas aparecem em quase toda negociação e{" "}
-            <strong className="text-ink2">a empresa ainda não decidiu</strong>. Não
-            existe resposta certa guardada em algum lugar que você não achou.
-            Responder “vou confirmar e te trago hoje” é a saída profissional;
-            improvisar um número é o que vira problema na assinatura.
+            Sobrou <strong className="text-ink2">uma</strong>. Não existe resposta
+            certa guardada em algum lugar que você não achou. Responder “vou
+            confirmar e te trago hoje” é a saída profissional; improvisar uma data
+            é o que vira problema na implantação.
           </p>
 
           <ul className="mt-3 space-y-2">
