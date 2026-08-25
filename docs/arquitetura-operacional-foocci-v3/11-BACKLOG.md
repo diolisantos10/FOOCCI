@@ -47,12 +47,26 @@ item F3 abaixo.
 
 Em ordem do que mais muda a vida de quem usa. Nenhum depende de decisão do CEO.
 
-### F1 · Trazer os contatos antigos para a Sala
+### F1 · A ficha vazia de quem chegou antes da Sala
 **Tamanho:** pequeno.
-A Sala abre **vazia** hoje. Todo mundo que já pediu demonstração está na base
-antiga e não aparece na tela nova. Quem entrar pela primeira vez vai achar que o
-sistema não tem nada dentro — e essa é a primeira impressão que o time comercial
-vai ter dele.
+
+> ⚠️ **Corrigido em 25/08, depois de o CEO perguntar "que contato antigo?".**
+> Este item dizia *"a Sala abre vazia; quem já pediu demonstração não aparece na
+> tela nova"*. **Está errado, e eu escrevi.** A Sala lê a mesma lista onde o
+> formulário do site sempre salvou — todo contato antigo **aparece**, na fila
+> "Sem responsável", porque é esse o estado com que ele nasce. Bastava ler o
+> filtro da fila para ver, e eu não li antes de escrever.
+
+O que é verdade é menor, e é isto: eles aparecem **sem conversa e sem nota**.
+Não havia nem uma coisa nem outra quando entraram. O vendedor abre o cartão e vê
+nome, cidade e mais nada — não sabe se aquela pessoa já foi procurada, nem por
+quem.
+
+**E não deve existir script que preencha isso.** Dar nota a um contato cuja ficha
+ninguém respondeu é calcular sobre o vazio, e o número sairia com a mesma cara de
+um número real. O que dá para fazer sem inventar nada é mostrar na tela **o que
+se sabe de verdade** — data de entrada, origem, campanha — e dizer, escrito, que
+o resto é anterior à Sala.
 
 ### F2 · Deixar arrastar o cartão no quadro do funil
 **Tamanho:** médio.
