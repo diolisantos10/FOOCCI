@@ -22,24 +22,36 @@ pronta** — e o resto do trabalho continua andando sem ele.
 
 ## 🔨 Em execução
 
-### Duas correções que vieram de você em 25/08
+### ✅ Os dois pedidos de aprovação estão verdes e prontos
 
-**1. O preço já está no site — e eu tinha dito o contrário.** Você corrigiu, e
-estava certo: os três planos têm valor fechado e publicado desde 04/08
-(Essencial R$ 179, Crescimento R$ 429, Performance R$ 899 por mês), com checkout
-funcionando. Eu tinha montado um relatório em cima de um comentário velho no
-código que dizia "preço ainda não publicado". O comentário foi corrigido em
-três lugares, e o item de preço deste backlog foi reescrito para o que falta de
-verdade — que é desconto, prazo e alçada, não preço.
+Nada mais bloqueia do meu lado. Falta **você apertar merge**, nesta ordem:
 
-**2. Quem ocupa as funções são agentes, e a ficha é minha de fazer.** Também
-certo, e o item saiu de "depende de você". O que fiz: conferi **uma a uma** as 32
-fichas e **nenhuma** estava completa. Foram preenchidas, e existe agora um portão
-que reprova a próxima ficha que nascer torta.
+| Ordem | Pedido | Estado |
+|---|---|---|
+| 1º | **PR #150** — a Sala de Vendas | ✅ verde · fora do rascunho |
+| 2º | **PR #145** — a base (departamentos) | ✅ verde · fora do rascunho |
 
-⏳ **Falta ligar:** a base de preço da Sala foi construída e testada, e ainda não
-tem tela. Enquanto não tiver, é trabalho pronto parado — a mesma categoria do
-item F3 abaixo.
+**O que estava travando, e ninguém tinha visto:** o PR #145 estava com a
+conferência automática **vermelha há três dias**. Um teste só.
+
+E ele não estava pegando defeito nenhum — estava **travando a correção**. O teste
+exigia que o site dissesse *"uma pessoa do Foocci chama você"*. Com o número de
+WhatsApp aceso, quem manda o "oi" é o cliente, e **ninguém liga para ele**. Manter
+aquela frase era prometer um telefonema que nunca acontece — o visitante fecha a
+aba e fica esperando.
+
+O teste velho travava a frase antiga. Foi trocado por um que trava a regra de
+verdade: **a frase acompanha o número**, não o interruptor do robô.
+
+### ⚠️ Um comando depois do merge, ou a Sala responde "sem acesso" a todo mundo
+
+Inclusive a você. É o que cria o primeiro login:
+
+```
+npx tsx scripts/criar-usuario-interno.ts
+```
+
+**Eu rodo quando estiver no ar** — é só me avisar. Não é decisão, é execução.
 
 ---
 
@@ -97,8 +109,8 @@ grava, e é por isso que ficou para depois em vez de ser feito pela metade.
 
 | Pergunta | O que acontece enquanto não vier |
 |---|---|
-| **Aprovar o PR #150** (é o "pedido de aprovação" do trabalho) | tudo continua em rascunho, fora do ar |
-| **As duas chaves da Meta estão salvas no Railway?** O número já está cadastrado — você confirmou. Salvar as chaves é o ato seguinte, e é outro | sem elas o "oi" continua caindo no aparelho e sendo respondido à mão. **Eu não enxergo o Railway daqui** |
+| **Apertar merge nos PRs #150 e #145**, nesta ordem. Os dois estão verdes | a Sala não existe no site. Conferido: **zero arquivos dela** no que está publicado hoje |
+| **As duas chaves da Meta estão salvas no Railway?** O número já está cadastrado — você confirmou. Salvar as chaves é o ato seguinte, e é outro | sem elas o "oi" continua caindo no aparelho e sendo respondido à mão |
 | **Prazo de implantação** — em quanto tempo o restaurante entra no ar | é a **única** pergunta de venda que sobrou sem resposta. O vendedor trava só nela |
 | **Decidir o destino do chip** — atender à mão hoje **ou** automatizar depois | os dois não cabem no mesmo número ao mesmo tempo. Decidir depois custa o histórico de conversa daquele aparelho |
 | **O e-mail que recebe pedido de ajuda está configurado?** | o cliente pede ajuda, o chamado é salvo e **ninguém é avisado** |
@@ -162,6 +174,9 @@ Nenhuma quebra nada hoje. O que as torna caras é a característica comum:
 | Regra: entrega ao CEO é página com link, não arquivo | 25/08 |
 | **As 32 fichas conferidas uma a uma e completadas** — nenhuma estava inteira | 25/08 |
 | Portão que reprova ficha de agente sem trava, sem escalonamento ou sem medida | 25/08 |
+| **Tela de preços na Sala** — a tabela dentro do sistema, com o que não se responde | 25/08 |
+| **A passagem da IA para gente passou a deixar registro** — trocava de dono e não gravava nada; o indicador media uma tabela vazia | 25/08 |
+| **A conferência automática destravada** — estava vermelha há 3 dias por um teste que travava a correção | 25/08 |
 
 ---
 
