@@ -31,6 +31,18 @@ const MENU_POR_PAPEL: Readonly<Record<string, readonly string[] | null>> = {
   AUDITOR_QA: ["/admin/departamentos", "/admin/sala-de-vendas", "/admin/quality"],
 };
 
+/** O nome de cada papel em português de gente. */
+const NOME_DO_PAPEL: Readonly<Record<string, string>> = {
+  MASTER_CEO: "CEO",
+  DIRETOR_FOOCCI: "Diretor",
+  GERENTE_DEPARTAMENTO: "Gerente comercial",
+  AGENTE_HUMANO: "Vendedor (SDR)",
+  AUDITOR_QA: "Auditoria",
+};
+
+/** Quem pode espiar o menu dos outros. Não é permissão — é conferência. */
+const PODE_ESPIAR = new Set(["MASTER_CEO", "DIRETOR_FOOCCI"]);
+
 export function AdminSidebar({ papel }: { papel?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -38,6 +50,24 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
   // Mobile: o menu vira drawer. Sem isso o aside fixo de 208px deixava ~167px
   // úteis num celular de 375px e TODA página do admin estourava na horizontal.
   const [open, setOpen] = useState(false);
+
+  /**
+   * ── VER COMO ────────────────────────────────────────────────────────────
+   *
+   * O CEO abriu o Admin e viu o menu inteiro — e concluiu, com razão, que ele
+   * é escancarado para todo mundo. Não é: o filtro por papel existe e funciona.
+   * O que ele não conseguia era VER isso, porque entrou pela senha
+   * compartilhada, que não carrega papel nenhum e por desenho mostra tudo.
+   *
+   * Um controle que só o dono enxerga não vale nada se ele não puder conferir.
+   * Este seletor troca o menu para o de qualquer papel, na hora, sem sair.
+   *
+   * ⚠️ **Ele muda o que se VÊ, nunca o que se PODE.** As rotas continuam
+   * negando pela sessão de verdade — espiar o menu do vendedor não dá ao CEO
+   * menos poder, e espiar o do CEO não daria mais a ninguém. Se um dia isto
+   * virar autorização, vira escalada de privilégio com cara de conveniência.
+   */
+  const [espiando, setEspiando] = useState<string | null>(null);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -47,7 +77,11 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
     router.replace("/admin/login");
   }
 
-  const permitidos = papel ? MENU_POR_PAPEL[papel] : null;
+  const podeEspiar = !papel || PODE_ESPIAR.has(papel);
+  // Espiar só vale para quem pode; papel efetivo cai no real em qualquer outro
+  // caso, para que um `setEspiando` acidental nunca amplie o que alguém vê.
+  const papelDoMenu = podeEspiar && espiando ? espiando : papel;
+  const permitidos = papelDoMenu ? MENU_POR_PAPEL[papelDoMenu] : null;
 
   // Grupos com título. Nenhum link foi removido — apenas reorganizado.
   // Os itens de teste WhatsApp/labs ficam agrupados em TESTES por ora (faxina é outra fase).
@@ -163,6 +197,48 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
           ✕
         </button>
       </div>
+
+      {/* ── VER COMO ─────────────────────────────────────────────────────────
+          Só aparece para quem manda na casa. Muda o MENU; as rotas continuam
+          negando pela sessão de verdade. */}
+      {podeEspiar && (
+        <div className="border-b border-gray-800 px-3 py-2.5">
+          <label
+            htmlFor="ver-como"
+            className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-gray-500"
+          >
+            Ver o menu como
+          </label>
+          <select
+            id="ver-como"
+            value={espiando ?? ""}
+            onChange={(e) => setEspiando(e.target.value || null)}
+            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-[12.5px] text-gray-100"
+          >
+            <option value="">
+              {papel ? `${NOME_DO_PAPEL[papel] ?? papel} (você)` : "Tudo (senha do admin)"}
+            </option>
+            {Object.entries(NOME_DO_PAPEL).map(([valor, nome]) => (
+              <option key={valor} value={valor}>
+                {nome}
+              </option>
+            ))}
+          </select>
+
+          {/* O LIMITE, ESCRITO COM ESSE NOME: isto troca a BARRA LATERAL. As
+              abas de dentro de cada área (as da Sala de Vendas, por exemplo) são
+              desenhadas no servidor, pela sessão de verdade, e não seguem o
+              seletor. Deixar isso implícito faria alguém concluir que o vendedor
+              enxerga o Painel — quando ele não enxerga. */}
+          {espiando && (
+            <p className="mt-1.5 rounded-lg bg-amber-900/40 px-2 py-1.5 text-[11px] leading-snug text-amber-200">
+              Você está vendo o menu de <strong>{NOME_DO_PAPEL[espiando] ?? espiando}</strong>.
+              É só esta barra — o que você pode fazer não mudou, e as abas de
+              dentro de cada área continuam mostrando as suas.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
