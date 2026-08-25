@@ -5,6 +5,47 @@ Diário das atualizações automáticas do manual. Cada linha é uma noite.
 
 ---
 
+## 2026-08-25
+- **Arquivos que dispararam** (janela de 26h, telas do lojista — commit `16c2de2a`, "o aviso do
+  Instagram sai do Atendimento sem sair do sistema"):
+  - `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` — a tarja de canal fora do ar saiu da
+    Central. No lugar dela entrou `ChannelStatusSeal`, e a rota `/api/atendimento/channel-health`
+    passou a devolver `seals` em vez de `items`.
+  - `src/components/atendimento/ChannelStatusSeal.tsx` (novo) — substituiu o
+    `ChannelHealthBanner.tsx` (apagado). Agora é uma pílula clicável de **uma linha**: bolinha
+    colorida, o efeito e o próximo passo sublinhado, tudo linkado para `/integracoes/instagram`.
+    O texto vem sempre do seguro (`SAFE_SHORT`) e `sealShortText` recusa em execução qualquer
+    frase com jargão de provedor ou maior que 90 caracteres.
+  - `src/app/(dashboard)/integracoes/instagram/InstagramIntegrationClient.tsx` — o aviso vermelho
+    do cartão **Conectado** virou o aviso *inteiro*: título novo, um parágrafo dizendo o que fazer
+    e a dobra **Detalhes técnicos (para o suporte)** com a resposta crua da Meta, fechada por
+    padrão.
+- **Guias atualizados:**
+  - `guia-central-conversas` — a seção **"A faixa no topo"** virou **"O selo no topo"**, reescrita
+    do zero. Os três textos antigos (*"A conexão do Instagram está com problema…"*, *"Instagram sem
+    receber mensagem há X dias…"*, *"O Instagram está em somente recebimento…"*) **não existem mais
+    nesta tela**: o que aparece agora são as três frases curtas do selo — *"Instagram fora do ar —
+    as mensagens não estão chegando."*, *"Instagram sem receber mensagens — confira a conexão."* e
+    *"Instagram só recebe: ainda não dá para responder por aqui."* — com **Reconectar**, **Abrir
+    Integrações** e **Ativar resposta em Integrações**. Saíram os selos **Fora do ar / Atenção /
+    Aviso** e a menção ao "motivo embaixo", que não trafega mais até esta tela. Ficou dito com
+    todas as letras que o aviso **mudou de tela, não foi apagado**, e que **selo ausente não é
+    canal saudável**. Também trocada a `description`.
+  - `guia-integracoes` — a seção **"Quando o Instagram para de receber"** passou a trazer o texto
+    exato de hoje (**"Instagram fora do ar — as mensagens do Instagram não estão chegando."** mais
+    o parágrafo do que fazer), a dobra **Detalhes técnicos (para o suporte)** e a divisão de
+    trabalho entre as duas telas. Corrigida a linha que ainda mandava o lojista procurar "a faixa
+    de aviso no topo" da Central. `description` atualizada.
+- **Mapa do playbook:** a linha de `guia-central-conversas` passou a citar
+  `src/components/atendimento/ChannelStatusSeal.tsx`, e entrou uma linha explícita apontando
+  `integracoes/instagram/InstagramIntegrationClient.tsx` para `guia-integracoes` — era coberta só
+  pelo curinga `integracoes/**`.
+- **Fora de escopo, conferido e ignorado:** `src/app/pedido/**` (loja do cliente final),
+  `src/app/admin/**`, `src/app/site/**`, `src/app/contratar/**`, `src/services/**` e testes.
+- `npm run type-check` — passou.
+
+---
+
 ## 2026-08-15
 - **Arquivos que dispararam** (janela de 26h, telas do lojista — commit `75581697`):
   - `src/app/(dashboard)/integracoes/whatsapp/MetaProviderCard.tsx` — o botão **"Conectar número

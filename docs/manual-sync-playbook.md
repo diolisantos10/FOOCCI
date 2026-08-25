@@ -57,7 +57,7 @@ que faz upsert por `slug` como `isPublished=true` + `agentVisibility=true`.
 |---|---|---|
 | guia-painel-inicial | Início | `src/app/(dashboard)/dashboard/**` |
 | guia-acompanhar-pedidos | Pedidos | `src/app/(dashboard)/orders/OrdersClient.tsx` |
-| guia-central-conversas | Central de Conversas | `src/app/(dashboard)/atendimento/AtendimentoClient.tsx` |
+| guia-central-conversas | Central de Conversas | `src/app/(dashboard)/atendimento/AtendimentoClient.tsx`, `src/components/atendimento/ChannelStatusSeal.tsx` (o selo de canal fora do ar) |
 | guia-cadastrar-produto | Cardápio | `src/app/(dashboard)/menu/MenuManager.tsx` |
 | guia-cardapio-digital-qr | Cardápio (QR) | `src/app/(dashboard)/menu/MenuManager.tsx` (os 3 `QRCard`), `src/app/(dashboard)/menu/QRCard.tsx`, `src/app/(dashboard)/web-menu/**` |
 | guia-precificacao | CMV & Precificação | `src/app/(dashboard)/precificacao/PrecificacaoClient.tsx` |
@@ -73,6 +73,7 @@ que faz upsert por `slug` como `isPublished=true` + `agentVisibility=true`.
 | guia-whatsapp-oficial-meta | Integrações · WhatsApp (conexão Meta e Coexistência) | `src/app/(dashboard)/integracoes/whatsapp/MetaProviderCard.tsx` |
 | guia-modelos-mensagem-whatsapp | Integrações · WhatsApp (modelos) | `src/app/(dashboard)/integracoes/whatsapp/MetaTemplatesPanel.tsx` |
 | guia-integracoes | Integrações | `src/app/(dashboard)/integracoes/**` |
+| guia-integracoes | Integrações · Instagram (o aviso completo de canal fora do ar) | `src/app/(dashboard)/integracoes/instagram/InstagramIntegrationClient.tsx` |
 | guia-configurar-pagamentos | Configurações · Pagamentos | `src/app/(dashboard)/settings/payments/**` |
 | guia-area-entrega-taxas | Configurações · Delivery | `src/app/(dashboard)/settings/delivery/**` |
 | guia-horario-funcionamento | Configurações · Operação | `src/app/(dashboard)/settings/operation/**` |

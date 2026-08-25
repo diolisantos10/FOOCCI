@@ -611,25 +611,27 @@ Quantos dos clientes identificados compraram em cada porta de entrada — **What
     slug: "guia-central-conversas",
     title: "Como atender clientes na Central de Conversas",
     area: "WHATSAPP",
-    description: "Ler conversas, assumir da IA, responder (digitando ou falando), resolver e entender a faixa que avisa quando um canal para de receber.",
+    description: "Ler conversas, assumir da IA, responder (digitando ou falando), resolver e entender o selo que avisa quando um canal para de receber.",
     content: `# Como atender clientes na Central de Conversas
 
 No menu lateral, **Central de Conversas** reúne todas as conversas (WhatsApp, Cardápio, Instagram).
 
-## A faixa no topo: quando um canal para de receber
-Lista vazia nunca foi prova de que está tudo bem — um canal fora do ar e um dia parado davam exatamente a mesma tela. Por isso, quando o **Instagram** para, aparece uma **faixa colorida no topo da Central**, com o nome do canal, um selo e o botão do próximo passo:
+## O selo no topo: quando um canal para de receber
+Lista vazia nunca foi prova de que está tudo bem — um canal fora do ar e um dia parado davam exatamente a mesma tela. Por isso, quando o **Instagram** para, aparece **um selo de uma linha no topo da Central**: uma bolinha colorida, o que está acontecendo e, ao lado, o próximo passo sublinhado. O selo inteiro é clicável e leva para a tela do Instagram em Integrações:
 
-- **🔴 Fora do ar** — *"A conexão do Instagram está com problema e as mensagens não estão chegando."*, seguido do motivo. Botão **Reconectar**.
-- **🟡 Atenção** — *"Instagram sem receber mensagem há X dias. Pode ser movimento baixo — mas se você espera Directs, confira a conexão."* Se nunca chegou nada desde que você conectou: *"Instagram conectado há X dias e ainda não recebeu nenhuma mensagem. Confira a conexão."* Botão **Abrir Integrações**.
-- **ℹ️ Aviso** — *"O Instagram está em somente recebimento: você lê os Directs aqui, mas ainda não consegue responder por aqui."* Botão **Ativar resposta em Integrações**.
+- bolinha **vermelha** — *"Instagram fora do ar — as mensagens não estão chegando."* → **Reconectar**
+- bolinha **âmbar** — *"Instagram sem receber mensagens — confira a conexão."* → **Abrir Integrações**
+- bolinha **azul** — *"Instagram só recebe: ainda não dá para responder por aqui."* → **Ativar resposta em Integrações**
 
-O que essa faixa **não** faz, de propósito:
+**Aqui cabe uma linha, e isso é de propósito.** Quem está com cliente esperando não conserta conexão: o motivo técnico — a resposta literal da Meta — **não aparece nesta tela**. O aviso inteiro (o que fazer, o botão **Reconectar agora** e a dobra **Detalhes técnicos (para o suporte)**) mora em **Plataforma → Integrações → Instagram**, que é a tela de quem conserta. Até 24/08/2026 esse texto todo ficava aqui, numa tarja vermelha que comia um terço da tela do celular e empurrava a fila de conversas para baixo. O aviso **não foi apagado** — mudou de tela.
+
+O que esse selo **não** faz, de propósito:
 - não acende para canal que você nunca ligou, nem para canal que **você mesmo** pausou;
-- não fica vermelha só porque está quieto — vermelho só quando existe um **erro registrado**. Silêncio, por mais longo que seja, no máximo vira o amarelo de **Atenção**;
-- **faixa ausente não quer dizer "canal saudável"**: quando o painel não consegue ler o estado do canal, a faixa some calada em vez de dizer que está tudo bem;
-- o **WhatsApp** ainda não entra nessa faixa — não existe hoje registro de última mensagem recebida por provedor, e avisar sem esse dado seria chute.
+- não fica vermelho só porque está quieto — vermelho só quando existe um **erro registrado**. Silêncio, por mais longo que seja, no máximo fica âmbar;
+- **selo ausente não quer dizer "canal saudável"**: quando o painel não consegue ler o estado do canal, o selo some calado em vez de dizer que está tudo bem;
+- o **WhatsApp** ainda não entra nesse selo — não existe hoje registro de última mensagem recebida por provedor, e avisar sem esse dado seria chute.
 
-A faixa fica **acima** das duas colunas, então no celular ela continua à vista mesmo com a conversa aberta, e o painel reconfere o estado dos canais a cada 5 minutos.
+O selo fica **acima** das duas colunas, então no celular ele continua à vista mesmo com a conversa aberta, e o painel reconfere o estado dos canais a cada 5 minutos.
 
 ## Encontrar a conversa
 - Busque por **Nome, telefone ou mensagem…**. A busca é feita no servidor: ela alcança **toda** a sua base de conversas, inclusive as antigas que ainda não estão carregadas na lista.
@@ -846,7 +848,7 @@ No menu lateral, **Plataforma → Configurações**. Está dividido em dois grup
     slug: "guia-integracoes",
     title: "Quais integrações existem e como conectar",
     area: "INTEGRATIONS",
-    description: "Visão geral das integrações, o que cada selo quer dizer (inclusive o novo \"Sem receber\"), como conectar o Instagram e o que fazer quando ele para de receber mensagem.",
+    description: "Visão geral das integrações, o que cada selo quer dizer (inclusive o \"Sem receber\"), como conectar o Instagram e o que fazer quando ele para de receber — esta é a tela do aviso completo, com Reconectar agora e os detalhes técnicos.",
     content: `# Quais integrações existem e como conectar
 
 No menu lateral, **Plataforma → Integrações**. Cada cartão tem um selo de status:
@@ -881,13 +883,17 @@ As mensagens do Instagram Direct e os comentários passam a aparecer na **Centra
 ### Quando o Instagram para de receber
 Estar escrito **Conectado** não garante que está chegando mensagem. Se a conexão adoecer, o próprio cartão verde passa a mostrar, em vermelho:
 
-**"A conexão está com problema — as mensagens não estão chegando."**, o motivo embaixo e o botão **Reconectar agora**. Clique nele e refaça o login — é seguro, a configuração é regravada igual.
+**"Instagram fora do ar — as mensagens do Instagram não estão chegando."** e, embaixo: *"Enquanto isto durar, nenhum Direct entra na Central de Atendimento. Clique em **Reconectar agora** e autorize a conta de novo. Se o problema voltar logo depois de reconectar, não é a sua conta: é a autorização do aplicativo Foocci na Meta, e quem resolve é o suporte — mande este texto para a gente."*
+
+Clique em **Reconectar agora** e refaça o login — é seguro, a configuração é regravada igual.
+
+Embaixo do botão fica a dobra **Detalhes técnicos (para o suporte)**, fechada. Abra só se for falar com o suporte: ali dentro está a resposta crua da Meta, para copiar e mandar para a gente. **Esta é a tela do aviso inteiro** — na Central de Atendimento o mesmo problema aparece encolhido num selo de uma linha, sem o texto técnico, porque quem está atendendo cliente não conserta conexão.
 
 E quando **não há erro nenhum**, mas simplesmente parou de chegar, aparece um aviso amarelo logo abaixo do **Último Direct recebido**:
 
 **"Nenhuma mensagem chegou nas últimas 48 horas. Pode ser movimento baixo — mas se você espera Directs, rode o diagnóstico ou reconecte a conta."**
 
-Esse aviso existe porque a data sozinha não denuncia nada: um **"Último Direct recebido: 23/07"** do lado de um selo verde passa por normal — e já passou por treze dias. Pelo mesmo motivo, na lista de conferência do fim da tela o item **"Webhook configurado / mensagens chegando"** só fica marcado se a última mensagem for **recente**; carimbo velho não conta mais como "chegando". O selo do cartão em **Integrações** vira **Sem receber** ao mesmo tempo, e a **Central de Conversas** mostra a faixa de aviso no topo.
+Esse aviso existe porque a data sozinha não denuncia nada: um **"Último Direct recebido: 23/07"** do lado de um selo verde passa por normal — e já passou por treze dias. Pelo mesmo motivo, na lista de conferência do fim da tela o item **"Webhook configurado / mensagens chegando"** só fica marcado se a última mensagem for **recente**; carimbo velho não conta mais como "chegando". O selo do cartão em **Integrações** vira **Sem receber** ao mesmo tempo, e a **Central de Conversas** mostra, no topo, o selo *"Instagram sem receber mensagens — confira a conexão."* com o atalho **Abrir Integrações**.
 
 Há também o botão **Reconectar Instagram**, ao lado do **Rodar diagnóstico**: use quando quiser renovar o acesso **sem** passar pelo **Desconectar**.
 
