@@ -175,9 +175,19 @@ function MotivosDePerda({ motivos }: { motivos: Motivo[] }) {
           <strong>Nenhum motivo cadastrado ainda</strong> — e enquanto for assim,
           nenhum lead pode ser marcado como perdido. É deliberado: perda sem motivo
           estruturado não vira relatório, e a pergunta &quot;o que mais nos faz
-          perder&quot; fica sem resposta. Rode{" "}
-          <code className="rounded bg-chip px-1 py-0.5 text-[12px]">npm run db:seed-sala</code>{" "}
-          para criar o catálogo inicial.
+          perder&quot; fica sem resposta.
+          {/* ── ISTO PEDIA UM COMANDO DE TERMINAL ────────────────────────────
+              Dizia "rode `npm run db:seed-sala`" — a mesma parede que a tela de
+              acesso punha na frente do dono. Desde 25/08 a semeadura roda
+              sozinha a cada publicação (`start-production.sh`, passo 5), então
+              a lista vazia deixou de ser uma tarefa e virou um SINTOMA: ou a
+              publicação ainda não terminou, ou falta a senha de administração
+              no ambiente — que é a condição que a própria semeadura exige. */}
+          <span className="mt-1.5 block text-muted">
+            O catálogo é criado sozinho a cada publicação. Se continuar vazio
+            depois de alguns minutos, é sinal de que a publicação ainda não
+            terminou — ou de que falta a senha de administração no ambiente.
+          </span>
         </p>
       ) : (
         <ul className="mt-2 flex flex-wrap gap-1.5">
