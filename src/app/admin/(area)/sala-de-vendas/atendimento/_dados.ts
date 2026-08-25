@@ -68,6 +68,14 @@ export interface DadosDaConversa {
   fatoresDoScore: FatorDoScore[];
   janela: JanelaDe24h;
   podeEscrever: boolean;
+  /**
+   * Por que o cartão está vazio — `null` quando há conversa.
+   *
+   * Montado no servidor (`anterioresASala`), e não aqui: "ninguém falou com
+   * ele" e "chegou antes de a Sala existir" produzem o mesmo branco na tela, e
+   * a regra que separa os dois precisa viver perto do teste.
+   */
+  avisoDoSilencio: { titulo: string; texto: string; tom: "historico" | "alerta" } | null;
 }
 
 export type EstadoDaConversa =

@@ -419,7 +419,7 @@ function PainelDaConversa({
     );
   }
 
-  const { lead, mensagens, janela, podeEscrever } = estado.dados;
+  const { lead, mensagens, janela, podeEscrever, avisoDoSilencio } = estado.dados;
 
   async function mandar() {
     const t = texto.trim();
@@ -477,10 +477,44 @@ function PainelDaConversa({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {mensagens.length === 0 ? (
-          <p className="text-[13px] leading-relaxed text-muted">
-            Nenhuma mensagem ainda. Quando o lead escrever no WhatsApp de vendas, a
-            conversa aparece aqui.
-          </p>
+          /* ── DUAS TELAS VAZIAS QUE COBRAM COISAS OPOSTAS ────────────────────
+             "Ninguém falou com ele" e "ele chegou antes de a gente ter onde
+             falar" produzem exatamente o mesmo branco — e o primeiro é falha de
+             atendimento, o segundo é história. Sem a distinção o time trata os
+             dois igual, e trata pelo mais barato dos dois: ignorar.
+
+             Quem decide é o servidor (`anterioresASala`), não esta tela: a regra
+             do que é "anterior à Sala" precisa viver perto do teste, e não no
+             navegador, longe dele. */
+          avisoDoSilencio ? (
+            <div
+              className={`rounded-xl border px-3.5 py-3 ${
+                avisoDoSilencio.tom === "historico"
+                  ? "border-line bg-canvas"
+                  : "border-amber-200 bg-amber-50"
+              }`}
+            >
+              <p
+                className={`text-[13px] font-semibold ${
+                  avisoDoSilencio.tom === "historico" ? "text-ink" : "text-amber-900"
+                }`}
+              >
+                {avisoDoSilencio.titulo}
+              </p>
+              <p
+                className={`mt-1 max-w-[60ch] text-[12.5px] leading-relaxed ${
+                  avisoDoSilencio.tom === "historico" ? "text-muted" : "text-amber-900/85"
+                }`}
+              >
+                {avisoDoSilencio.texto}
+              </p>
+            </div>
+          ) : (
+            <p className="text-[13px] leading-relaxed text-muted">
+              Nenhuma mensagem ainda. Quando o lead escrever no WhatsApp de vendas, a
+              conversa aparece aqui.
+            </p>
+          )
         ) : (
           <ul className="flex flex-col gap-2">
             {mensagens.map((m) => (
