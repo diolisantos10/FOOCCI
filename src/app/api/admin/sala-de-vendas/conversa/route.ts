@@ -33,6 +33,7 @@ import {
 } from "@/services/salaDeVendas/conversa";
 import { explicacaoDoScore } from "@/services/salaDeVendas/score";
 import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
+import { lerOSilencio, avisoDoSilencio } from "@/services/salaDeVendas/anterioresASala";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,10 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, nome: true, whatsapp: true, email: true, restaurante: true,
       cidade: true, tipo: true, stage: true, score: true, temperatura: true,
+      // `createdAt` não vinha — e sem ela o vendedor não tem como saber se o
+      // contato é de ontem ou de três meses atrás. É essa data que separa
+      // "chegou antes de a Sala existir" de "ninguém falou com ele".
+      createdAt: true,
       atendidoPor: true, atendenteUserId: true, atendenteDesde: true,
       motivoDoPedido: true, tags: true, prioritario: true,
       utmSource: true, utmCampaign: true, origem: true, codigo: true,
@@ -82,14 +87,29 @@ export async function GET(req: NextRequest) {
     ]),
   );
 
+  // POR QUE O AVISO É MONTADO NO SERVIDOR: a tela receberia `createdAt` e
+  // `mensagens.length` e poderia decidir sozinha — e aí a regra do que é
+  // "anterior à Sala" viveria no navegador, longe do teste, e mudaria de
+  // definição no dia em que outra tela precisasse dela.
+  const agora = new Date();
+  const aviso = avisoDoSilencio(
+    lerOSilencio(
+      { criadoEm: lead.createdAt, mensagens: mensagens.length, score: lead.score },
+      agora,
+    ),
+  );
+
   return NextResponse.json({
     ok: true,
     data: {
       lead,
       mensagens,
       fatoresDoScore: fatores,
-      janela: janelaDe24h(ultimaEntrada?.ocorreuEm ?? null, new Date()),
+      janela: janelaDe24h(ultimaEntrada?.ocorreuEm ?? null, agora),
       podeEscrever: !somenteLeitura(portao.sessao) && !lead.optOutAt,
+      // `null` quando há conversa. Aviso que aparece sempre é aviso que
+      // ninguém lê.
+      avisoDoSilencio: aviso,
     },
   });
 }

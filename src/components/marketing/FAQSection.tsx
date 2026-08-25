@@ -6,45 +6,11 @@
 
 import { useState } from "react";
 import { PlusIcon } from "./icons";
+import { FAQS } from "@/lib/site/faq";
 
-const FAQS = [
-  {
-    q: "O Foocci já está disponível?",
-    a: "Sim. O Foocci está aberto para restaurantes. Tire suas dúvidas com os nossos agentes pelo botão de contato aqui do site.",
-  },
-  {
-    q: "Posso contratar agora?",
-    a: "Pode. A entrada é por conversa: você fala com os nossos agentes, a gente entende a sua operação e monta a proposta certa para o seu momento.",
-  },
-  {
-    q: "Quanto custa?",
-    a: "Os planos e os valores estão na página de preços. Se a sua operação não se encaixar nos três, fale com os nossos agentes e a gente monta a proposta certa.",
-  },
-  {
-    q: "O Foocci é um chatbot?",
-    a: "Não. O Foocci usa inteligência artificial, mas é um sistema de vendas, relacionamento e fidelização para restaurantes.",
-  },
-  {
-    q: "Preciso trocar meu sistema atual?",
-    a: "Não necessariamente. O Foocci pode atuar como uma camada comercial para melhorar pedido direto, atendimento e relacionamento.",
-  },
-  {
-    q: "O Foocci funciona com WhatsApp?",
-    a: "Sim, o WhatsApp é um dos canais centrais da experiência Foocci, principalmente para atendimento, relacionamento e retorno de clientes.",
-  },
-  {
-    q: "O Foocci substitui meu atendente?",
-    a: "Não. O assistente Foocci ajuda a equipe a atender melhor, vender com mais contexto e manter o restaurante no controle.",
-  },
-  {
-    q: "O Foocci serve para restaurante pequeno?",
-    a: "Sim. O Foocci foi pensado para simplificar vendas, relacionamento e recorrência sem exigir uma operação complexa.",
-  },
-  {
-    q: "Preciso entender de tecnologia?",
-    a: "Não. A tecnologia trabalha no bastidor. A experiência precisa ser simples para o dono, a equipe e o cliente.",
-  },
-];
+// O texto mora em `@/lib/site/faq` — o TA (o vendedor de IA) lê a MESMA
+// fonte do lado do servidor. Duas cópias fariam o site dizer uma coisa ao
+// visitante e o vendedor dizer outra ao mesmo visitante, no mesmo dia.
 
 export function FAQSection() {
   const [open, setOpen] = useState<number | null>(0);

@@ -71,9 +71,17 @@ describe("o site não promete demonstração personalizada", () => {
   }
 
   it("a FAQ manda tirar dúvidas com o agente, não pedir demonstração", () => {
-    const faq = fs.readFileSync(path.join(RAIZ, "src/components/marketing/FAQSection.tsx"), "utf8");
+    // O texto saiu de `FAQSection.tsx` em 25/08/2026 e passou a morar em
+    // `lib/site/faq.ts`: o TA (o vendedor de IA) precisa das MESMAS respostas do
+    // lado do servidor, e duas cópias fariam o site dizer uma coisa ao visitante
+    // e o vendedor dizer outra ao mesmo visitante, no mesmo dia.
+    //
+    // O portão continua sendo o mesmo e continua apontando para onde o texto
+    // está — apontar para o arquivo antigo faria ele passar lendo um componente
+    // que hoje só tem marcação.
+    const faq = fs.readFileSync(path.join(RAIZ, "src/lib/site/faq.ts"), "utf8");
     expect(semComentarios(faq)).not.toMatch(/[Pp]eça uma demonstração/);
-    expect(faq).toMatch(/nossos agentes/);
+    expect(semComentarios(faq)).toMatch(/nossos agentes/);
   });
 });
 

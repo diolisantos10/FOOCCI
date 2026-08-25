@@ -28,6 +28,10 @@ const PARA_TODOS = [
   // Esconder do próprio vendedor não protegeria nada — só o obrigaria a caçar o
   // número na página de marketing no meio da conversa, ou a chutar.
   { href: "/admin/sala-de-vendas/precos", rotulo: "Preços" },
+  // O ensaio do TA fica visível para a Sala inteira: quem vai trabalhar ao lado
+  // dele precisa saber como ele fala e onde ele para. E a tela não envia nada —
+  // não há o que proteger além do próprio Admin.
+  { href: "/admin/sala-de-vendas/ensaio", rotulo: "Ensaio do TA" },
 ];
 
 const PAPEIS_DO_PAINEL = new Set([
