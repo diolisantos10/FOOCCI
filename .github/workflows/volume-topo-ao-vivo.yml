@@ -16,6 +16,12 @@ on:
         description: 'Janela de histórico, em dias'
         required: false
         default: '90'
+  # A medição também roda quando o próprio medidor muda: é assim que ela alcança
+  # a produção a partir de um branch, antes de existir no branch padrão.
+  push:
+    paths:
+      - 'scripts/volume-topo-ao-vivo.mjs'
+      - '.github/workflows/volume-topo-ao-vivo.yml'
 
 permissions:
   contents: write
