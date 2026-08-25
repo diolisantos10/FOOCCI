@@ -320,7 +320,7 @@ export function BrainFreeFormPanel() {
                   {topo.coberturaDias == null
                     ? " não se sabe desde quando ele está no degrau alto."
                     : ` a medição do topo tem ${topo.coberturaDias.toFixed(1)} dia(s) de vida para ele; abaixo de 14 dias o ritmo ainda é palpite.`}
-                  {" "}Não é "ok": é uma resposta que ainda não existe.
+                  {" "}Não é &quot;ok&quot;: é uma resposta que ainda não existe.
                 </p>
               )}
               {topo.mensuravel !== "AINDA_NAO_SEI" && topo.ritmoPorDia != null && (
