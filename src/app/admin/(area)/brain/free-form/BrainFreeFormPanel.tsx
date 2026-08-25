@@ -39,6 +39,10 @@ interface ShadowStats {
 interface ShadowSample {
   createdAt: string; intent: string; reasoningMode: string; engine: string;
   confidence: number; coherence: string; wouldEscalate: boolean; wouldReply: string;
+  /** Nulo = recepcionista (linha anterior à escada por-agente). */
+  agentId?: string | null;
+  /** SHADOW | LIVE | null (histórico) — sombra e topo não são a mesma coisa. */
+  stage?: string | null;
 }
 interface PanelData {
   config: FreeFormConfig; gates: FreeFormGates; shadowStats: ShadowStats; recentSamples: ShadowSample[];
@@ -47,6 +51,10 @@ interface PanelData {
     saude: "SAUDAVEL" | "DEGRADADO" | "SEM_AMOSTRA";
     derruba: boolean; amostras: number; acertos: number; taxa: number | null;
     piso: number; minimoAmostras: number; motivo: string;
+    janelaDias: number; coberturaDias: number | null; ritmoPorDia: number | null;
+    projecaoNaJanela: number | null;
+    mensuravel: "SIM" | "NAO" | "AINDA_NAO_SEI";
+    riscoDeclarado: boolean; alerta: string | null; proximaAcao: string | null;
   } | null;
 }
 interface TransitionResult {
@@ -263,7 +271,7 @@ export function BrainFreeFormPanel() {
           */}
           {topo && (
             <div className={`mt-3 rounded-lg border p-3 ${
-              topo.saude === "DEGRADADO" ? "border-red-300 bg-red-50"
+              topo.saude === "DEGRADADO" || topo.riscoDeclarado ? "border-red-300 bg-red-50"
               : topo.saude === "SEM_AMOSTRA" ? "border-amber-300 bg-amber-50"
               : "border-green-300 bg-green-50"}`}>
               <div className="flex flex-wrap items-center gap-2">
@@ -276,9 +284,51 @@ export function BrainFreeFormPanel() {
               </div>
               <p className="mt-1.5 text-[11px] text-gray-700">{topo.motivo}</p>
               <p className="mt-1 text-[10px] text-gray-500">
-                Régua: coerência ao vivo ≥ {Math.round(topo.piso * 100)}% nas últimas {topo.amostras || 0} de até 50 amostras,
-                a partir de {topo.minimoAmostras} atendimentos. Abaixo disso a taxa não derruba ninguém — e também não aprova.
+                Régua: coerência ao vivo ≥ {Math.round(topo.piso * 100)}% nas últimas {topo.amostras || 0} de até 50 amostras
+                dos últimos {topo.janelaDias} dias, a partir de {topo.minimoAmostras} atendimentos. Abaixo disso a taxa não
+                derruba ninguém — e também não aprova.
               </p>
+
+              {/*
+                O GRITO — estar no topo sem conseguir ser medido.
+
+                Duas coisas verdadeiras ao mesmo tempo, e as duas aparecem: a
+                régua NÃO derruba quem tem pouca amostra (o piso protege o
+                pequeno), e estar aberto a cliente real sem régua que decida é,
+                por si, um risco. SEM_AMOSTRA que não passa nunca deixou de ser
+                estado de espera; aqui ele vira fato declarado, com motivo e
+                próxima ação — porque toda proibição precisa da instrução gêmea.
+              */}
+              {topo.riscoDeclarado && topo.alerta && (
+                <div className="mt-2 rounded-md border-2 border-red-400 bg-white p-2.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">
+                    ⚠️ Risco declarado: no topo e sem poder ser medido
+                  </p>
+                  <p className="mt-1 text-[11px] text-gray-800">{topo.alerta}</p>
+                  {topo.proximaAcao && (
+                    <p className="mt-1.5 text-[11px] text-gray-700">
+                      <span className="font-semibold">Próxima ação: </span>{topo.proximaAcao}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Ainda não dá para dizer — e isso se diz, não se cala. */}
+              {topo.mensuravel === "AINDA_NAO_SEI" && topo.saude === "SEM_AMOSTRA" && (
+                <p className="mt-2 text-[10px] text-gray-600">
+                  Dá para medir este agente aqui em cima? <span className="font-semibold">Ainda não dá para saber</span> —
+                  {topo.coberturaDias == null
+                    ? " não se sabe desde quando ele está no degrau alto."
+                    : ` a medição do topo tem ${topo.coberturaDias.toFixed(1)} dia(s) de vida para ele; abaixo de 14 dias o ritmo ainda é palpite.`}
+                  {" "}Não é "ok": é uma resposta que ainda não existe.
+                </p>
+              )}
+              {topo.mensuravel !== "AINDA_NAO_SEI" && topo.ritmoPorDia != null && (
+                <p className="mt-2 text-[10px] text-gray-500">
+                  Ritmo observado: {topo.ritmoPorDia.toFixed(2)} amostra(s)/dia
+                  {topo.projecaoNaJanela != null && ` ⇒ ~${Math.round(topo.projecaoNaJanela)} numa janela cheia de ${topo.janelaDias} dias`}.
+                </p>
+              )}
             </div>
           )}
 
@@ -374,8 +424,19 @@ export function BrainFreeFormPanel() {
 
           {/* Últimas amostras */}
           <details className="mt-3" open={data.recentSamples.length > 0}>
+            {/*
+              A LISTA MOSTRA O MESMO AGENTE QUE A RÉGUA MEDE.
+
+              Antes ela vinha sem filtro por agente e exibia linhas da esteira
+              de treino do CRM (engine `crm-agent`, intents `treino:*`) num
+              painel que fala do recepcionista — enquanto as estatísticas e a
+              régua ao lado filtravam certo. Régua certa com tela enganosa é
+              pior que tela nenhuma: quem olha sai com conclusão errada e
+              confiante. O selo de degrau em cada linha existe pelo mesmo
+              motivo: sombra e topo não são a mesma medição.
+            */}
             <summary className="cursor-pointer text-[11px] font-semibold text-gray-400">
-              Últimas amostras de sombra ({data.recentSamples.length})
+              Últimas amostras do recepcionista ({data.recentSamples.length})
             </summary>
             {data.recentSamples.length === 0 ? (
               <p className="mt-1.5 text-[12px] text-gray-500">Nenhuma amostra ainda — deixe o shadow colher tráfego real.</p>
@@ -385,6 +446,9 @@ export function BrainFreeFormPanel() {
                   <div key={`${s.createdAt}-${i}`} className="rounded border border-gray-100 px-2 py-1.5 text-[11px]">
                     <div className="flex flex-wrap items-center gap-2">
                       <Pill tone={s.coherence === "PASS" ? "green" : "red"}>{s.coherence}</Pill>
+                      <Pill tone={s.stage === "LIVE" ? "red" : "gray"}>
+                        {s.stage === "LIVE" ? "TOPO (ao vivo)" : s.stage === "SHADOW" ? "sombra" : "sombra (histórico)"}
+                      </Pill>
                       <Pill tone="blue">{s.intent}</Pill>
                       <Pill tone={s.reasoningMode === "LLM" ? "violet" : "gray"}>{s.reasoningMode}</Pill>
                       <span className="font-mono text-gray-400">{s.engine}</span>

@@ -48,7 +48,11 @@ export async function GET(req: NextRequest) {
       // de propósito: aqui o objetivo é MOSTRAR a composição inteira
       // (`byOrigin`), enquanto os gates contam só o que o degrau aceita.
       getShadowStats(restaurantId, { agentId: "whatsapp" }),
-      listRecentShadowSamples(restaurantId),
+      // MESMO ESCOPO DA RÉGUA. Sem `agentId` esta lista devolvia as amostras de
+      // todos os agentes e o painel do recepcionista exibia linhas da esteira de
+      // treino do CRM — enquanto as estatísticas e a régua ao lado filtravam
+      // certo. A régua estava correta; era a TELA que enganava quem olhava.
+      listRecentShadowSamples(restaurantId, 10, { agentId: "whatsapp" }),
       /**
        * A SAÚDE DO TOPO — a medição que faltava.
        *
@@ -59,16 +63,24 @@ export async function GET(req: NextRequest) {
        * medição" de "estou mal".
        */
       (async () => {
-        const [{ avaliarTopo, JANELA_AMOSTRAS_AO_VIVO, JANELA_DIAS_AO_VIVO }, { getLiveStageSamples }] = await Promise.all([
-          import("@/services/brain/runtime/LiveStageHealth"),
-          import("@/services/brain/runtime/BrainShadowEvidenceService"),
-        ]);
+        const [{ avaliarTopo, JANELA_AMOSTRAS_AO_VIVO, JANELA_DIAS_AO_VIVO }, { getLiveStageSamples }, { prisma }] =
+          await Promise.all([
+            import("@/services/brain/runtime/LiveStageHealth"),
+            import("@/services/brain/runtime/BrainShadowEvidenceService"),
+            import("@/lib/prisma"),
+          ]);
         const amostras = await getLiveStageSamples(restaurantId, {
           agentId: "whatsapp",
           sinceDays: JANELA_DIAS_AO_VIVO,
           limite: JANELA_AMOSTRAS_AO_VIVO,
         });
-        return avaliarTopo(amostras);
+        // Mesmo contexto que o caminho ao vivo usa — senão a tela mostraria uma
+        // avaliação diferente da que decide, que é o defeito que esta rodada veio
+        // consertar em outro lugar.
+        const row = await prisma.brainFreeFormConfig
+          .findUnique({ where: { restaurantId }, select: { updatedAt: true } })
+          .catch(() => null);
+        return avaliarTopo(amostras, { noTopoDesde: row?.updatedAt ?? null });
       })().catch(() => null),
     ]);
     return NextResponse.json({ ok: true, config, gates, shadowStats, recentSamples, topo, runtimeTouched: false });
