@@ -37,22 +37,30 @@
  * passa a sua, mas nenhuma página fica SEM a linha do meio por esquecimento.
  */
 
-import { DEMO_URL, DEMO_CTA_LABEL } from "./config";
 import { PrimaryCta } from "./Cta";
+import { chamadaComercial } from "@/lib/site/canalDeVendas";
 
 /**
- * O que a pessoa recebe ao clicar. Não promete prazo ("em 24h") porque não há
- * ninguém garantindo esse prazo hoje — prometer atendimento que a operação não
- * sustenta é o guardrail 7 aplicado ao comercial.
+ * ⚠️ O QUE ESTAVA ESCRITO AQUI ATÉ 24/08/2026, e por que saiu.
+ *
+ * O texto padrão desta faixa dizia: *"Uma pessoa do Foocci mostra o sistema
+ * rodando com o cardápio e os números do seu restaurante."* Ele aparecia no fim
+ * de SETE páginas — e prometia uma demonstração personalizada, montada com o
+ * cardápio do restaurante de quem clicou, que **ninguém nesta casa executa**.
+ * Não existe processo, não existe quem faça, não existe prazo.
+ *
+ * O CEO viu a frase e não reconheceu: *"isso não existe ainda, não sei nem quem
+ * criou, tem que tirar"*. Promessa que a operação não sustenta é o guardrail 7 na
+ * direção do exagero, e esta era a mais cara do site — ela vinha exatamente no
+ * momento em que o visitante decidia.
+ *
+ * O que ficou no lugar descreve o que de fato acontece, e muda junto com o canal.
  */
-const DEFAULT_SUBTITLE =
-  "Uma pessoa do Foocci mostra o sistema rodando com o cardápio e os números do seu restaurante. São dois campos: seu nome e seu WhatsApp.";
-
 export function CtaBand({
   title,
-  subtitle = DEFAULT_SUBTITLE,
-  label = DEMO_CTA_LABEL,
-  href = DEMO_URL,
+  subtitle,
+  label,
+  href,
 }: {
   title: string;
   /** Passe `null` para omitir de propósito — e só faça isso se o título já disser. */
@@ -60,6 +68,12 @@ export function CtaBand({
   label?: string;
   href?: string;
 }) {
+  // Resolvido no servidor, a cada requisição: rótulo, destino e a frase de baixo
+  // andam SEMPRE juntos. Botão dizendo "fale com nosso agente" que cai num
+  // formulário é promessa quebrada no primeiro clique.
+  const chamada = chamadaComercial();
+  const textoDeBaixo = subtitle === undefined ? chamada.note : subtitle;
+
   return (
     <section className="bg-paper py-14 lg:py-20">
       <div className="mx-auto max-w-4xl px-5 lg:px-8">
@@ -68,16 +82,21 @@ export function CtaBand({
             {title}
           </h2>
 
-          {subtitle && (
+          {textoDeBaixo && (
             <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-ink2">
-              {subtitle}
+              {textoDeBaixo}
             </p>
           )}
 
           <div className="mt-7 flex justify-center">
             {/* `demoCta`: é ele o CTA da página — a barra fixa do celular sai da
                 frente quando esta faixa entra na dobra. */}
-            <PrimaryCta className="w-full sm:w-auto" label={label} href={href} demoCta />
+            <PrimaryCta
+              className="w-full sm:w-auto"
+              label={label ?? chamada.label}
+              href={href ?? chamada.href}
+              demoCta
+            />
           </div>
         </div>
       </div>

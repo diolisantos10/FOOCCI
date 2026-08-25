@@ -31,8 +31,13 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { DEMO_URL, DEMO_PAGE_PATH, DEMO_CTA_LABEL } from "./config";
+import { DEMO_PAGE_PATH, ASSINAR_URL, ASSINAR_CTA_LABEL } from "./config";
 
+/**
+ * A barra fixa do celular é o TOPO do celular: ela carrega o mesmo convite do
+ * cabeçalho — **Assinar** — desde 24/08/2026. Quem tem dúvida usa o botão verde
+ * do canto, que no celular fica logo acima desta barra.
+ */
 export function StickyMobileCta() {
   const [show, setShow] = useState(false);
   /*
@@ -71,10 +76,10 @@ export function StickyMobileCta() {
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 p-3 backdrop-blur-md lg:hidden">
       <div className="mx-auto max-w-md">
         <a
-          href={DEMO_URL}
+          href={ASSINAR_URL}
           className="inline-flex w-full items-center justify-center rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
         >
-          {DEMO_CTA_LABEL}
+          {ASSINAR_CTA_LABEL}
         </a>
       </div>
     </div>

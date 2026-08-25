@@ -10,6 +10,61 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 📚 24/08 — Doutrina registrada: `docs/licoes-o-que-deriva.md`
+
+Do caso da marca: (1) existe defeito que não quebra, **deriva** — e some do radar
+por não gerar erro; (2) régua que só cobre a tela conhecida não impede a próxima,
+por isso o teste varre o repositório inteiro, **inclusive o arquivo que ainda não
+existe**; (3) imitação anda em bando — procure as irmãs, e comece onde tem
+dinheiro do outro lado; (4) quando o relato disser que algo *mudou*, **confirme
+que mudou** antes de procurar culpado.
+
+As três primeiras servem a mais de um produto (a casa irmã teve caso da mesma
+família) — **propostas ao Diretor Geral** em `docs/perguntas-ao-diretor-geral.md`,
+não escritas no kit por conta própria.
+
+## 🟢 24/08 (3) — A marca oficial no checkout, e o link para comparar planos
+
+Bloco `claude/checkout-marca-e-link`. Detalhe em `docs/marca-no-checkout.md`.
+
+O CEO viu "mudaram a logomarca" no checkout. **Ninguém mudou:** as três telas de
+contratação nasceram com a marca desenhada com texto e CSS (commit `16cf3b5`,
+05/08) e nunca passaram pelo arquivo oficial. Consertado com um componente único
+(`FoocciWordmark`) e teste de texto impedindo a volta do padrão.
+
+E entrou o link "Ainda em dúvida entre os planos? Compare os três aqui" acima da
+escolha do plano — em nova aba, para não apagar o cadastro já digitado.
+
+## 🟢 24/08 (2) — O topo vira Entrar + Assinar (ordem do CEO)
+
+Bloco `claude/topo-entrar-e-assinar`. Detalhe em `docs/topo-entrar-e-assinar.md`.
+
+O botão laranja de conversa saiu do topo; entraram **Entrar** e **Assinar**, este
+apontando para `/contratar/novo` — checkout self-service que **cobra de verdade**
+(conferido no código e medido de fora antes de escrever o botão). A dúvida foi
+para o botão verde do canto, que **passou a aparecer também no celular**, porque a
+barra fixa de baixo virou "Assinar".
+
+**Aberto:**
+- O painel de WhatsApp do formulário segue dormente — leitura e duas saídas no
+  documento do bloco. Recomendação: acender só depois da sala de vendas.
+
+## 🟢 24/08 — O site manda falar com o agente (ordem do CEO)
+
+Bloco `claude/site-fala-com-agente`. Detalhe em `docs/site-fala-com-agente.md`.
+
+Feito: todo botão comercial passa pela porta única `/site/falar-com-agente`, com
+interruptor no servidor (`FOOCCI_SALES_WHATSAPP_ATIVO`) — acender o WhatsApp deixa
+de exigir build novo. Botãozinho flutuante no canto (desktop, só com o canal no ar).
+E a promessa de demonstração personalizada — *"mostra o sistema rodando com o
+cardápio do seu restaurante"*, que aparecia no fim de sete páginas e que ninguém
+executa — saiu de nove lugares, com teste de texto impedindo a volta.
+
+**Aberto:**
+- Ativar quando a Meta verificar o número: `FOOCCI_SALES_WHATSAPP_ATIVO=true`.
+- O painel de WhatsApp do formulário segue dormente (lê a variável antiga).
+- A contradição do preço (tabela publicada × FAQ) segue com o CEO.
+
 ## 🟠 23/08 — SDR do Foocci: diário, cegueiras e o lead chegando à conversa
 
 Bloco `claude/sdr-foocci-liga`. Detalhe inteiro em `docs/sdr-foocci-liga.md`.

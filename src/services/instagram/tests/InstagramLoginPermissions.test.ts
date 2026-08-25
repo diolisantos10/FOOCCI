@@ -113,10 +113,18 @@ describe("missingInstagramPermissions", () => {
     expect(missingInstagramPermissions([...INSTAGRAM_REQUIRED_PERMISSIONS])).toEqual([]);
   });
 
-  it("lista VAZIA não vira acusação — é 'não sei' (guardrail 1)", () => {
-    // Conexões anteriores a 14/08 não gravaram permissões. Ausência de informação
-    // não pode ser lida como "nenhuma permissão concedida".
-    expect(missingInstagramPermissions([])).toEqual([]);
+  it("AUSENTE (null) não vira acusação — é 'não sei' (guardrail 1)", () => {
+    // Conexões anteriores a 14/08 não gravaram permissões, e a Meta pode
+    // simplesmente não devolver o campo. Ausência de informação não é informação.
+    expect(missingInstagramPermissions(null)).toEqual([]);
+    expect(missingInstagramPermissions(undefined)).toEqual([]);
+  });
+
+  it("VAZIO ([]) É informação: a Meta disse que não concedeu nada, então tudo falta", () => {
+    // 24/08/2026 — a correção que destravou o diagnóstico do Sushi Cazza. Antes,
+    // `[]` e "não sei" eram a mesma coisa, e o único fato que explicava os três
+    // `Unsupported request` de uma vez era engolido pelo guardrail 1.
+    expect(missingInstagramPermissions([])).toEqual([...INSTAGRAM_REQUIRED_PERMISSIONS]);
   });
 });
 

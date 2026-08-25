@@ -22,8 +22,8 @@ import type { KnowledgeCategory } from "@/services/knowledge/RestaurantKnowledge
 import { ManualOrderModal } from "@/components/orders/ManualOrderModal";
 import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { formatOrderNumber } from "@/lib/order-number";
-import { ChannelHealthBanner } from "@/components/atendimento/ChannelHealthBanner";
-import type { ChannelHealthItem } from "@/services/channels/channelHealth";
+import { ChannelStatusSeal } from "@/components/atendimento/ChannelStatusSeal";
+import type { ChannelSeal } from "@/services/channels/channelHealth";
 
 // ── Internal command detection (client-safe pure helper) ──────────────────────
 
@@ -418,7 +418,7 @@ export function AtendimentoClient({
 
   // Saúde dos canais de entrada. Começa e permanece VAZIO enquanto a leitura
   // não voltar — vazio significa "nada a dizer", nunca "o canal está bem".
-  const [channelHealth, setChannelHealth] = useState<ChannelHealthItem[]>([]);
+  const [channelSeals, setChannelSeals] = useState<ChannelSeal[]>([]);
 
   const [deleteConvOpen,    setDeleteConvOpen]    = useState(false);
   const [deleteConvLoading, setDeleteConvLoading] = useState(false);
@@ -552,12 +552,12 @@ export function AtendimentoClient({
       try {
         const res = await fetch("/api/atendimento/channel-health");
         if (!alive) return;
-        if (!res.ok) { setChannelHealth([]); return; }
+        if (!res.ok) { setChannelSeals([]); return; }
         const json = await res.json();
-        const items = json?.data?.items;
-        setChannelHealth(Array.isArray(items) ? (items as ChannelHealthItem[]) : []);
+        const seals = json?.data?.seals;
+        setChannelSeals(Array.isArray(seals) ? (seals as ChannelSeal[]) : []);
       } catch {
-        if (alive) setChannelHealth([]);
+        if (alive) setChannelSeals([]);
       }
     };
     void load();
@@ -1044,10 +1044,13 @@ export function AtendimentoClient({
       className="flex flex-col overflow-hidden"
       style={{ height: "calc(100vh - var(--topbar))" }}
     >
-      {/* Canal fora do ar. Fica ACIMA das duas colunas de propósito: no celular
-          a lista some quando a conversa abre, e o aviso não pode sumir junto.
-          Lista vazia → não renderiza nada (ver ChannelHealthBanner). */}
-      <ChannelHealthBanner items={channelHealth} />
+      {/* Canal fora do ar — UM SELO, não uma tarja. Fica acima das duas colunas
+          de propósito: no celular a lista some quando a conversa abre, e o aviso
+          não pode sumir junto. O texto inteiro (evidência da Meta + Reconectar)
+          mora em /integracoes/instagram; aqui cabe uma linha, porque esta tela é
+          de quem está com cliente esperando. Lista vazia → nada é renderizado, e
+          isso NÃO significa "canal saudável" (ver ChannelStatusSeal). */}
+      <ChannelStatusSeal seals={channelSeals} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* ── LEFT PANEL ───────────────────────────────────────────────────── */}

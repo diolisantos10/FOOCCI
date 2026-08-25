@@ -4638,6 +4638,16 @@ model BrainShadowLog {
   // contado como produção — ausência de informação não é informação.
   sampleOrigin String?
 
+  /// Em que DEGRAU a amostra foi colhida.
+  ///   SHADOW = o agente NÃO estava respondendo (a sombra clássica);
+  ///   LIVE   = o agente estava no degrau alto e este turno foi atendido por ele.
+  ///
+  /// NULO = linha anterior a 24/08/2026. Foram todas colhidas em sombra por
+  /// construção do código, mas a medição do topo não se apoia nisso: ela conta
+  /// SÓ o que está marcado 'LIVE'. Os gates de SUBIDA, por sua vez, excluem
+  /// 'LIVE' — amostra colhida no topo não pode virar prova para subir ao topo.
+  stage String?
+
   intent        String
   reasoningMode String // LLM | FALLBACK
   engine        String // "OPENAI:gpt-4o-mini" etc. (sem segredos)
@@ -4653,6 +4663,7 @@ model BrainShadowLog {
   @@index([restaurantId, createdAt])
   @@index([restaurantId, agentId, createdAt])
   @@index([restaurantId, agentId, sampleOrigin, createdAt])
+  @@index([restaurantId, agentId, stage, createdAt])
   @@map("brain_shadow_logs")
 }
 

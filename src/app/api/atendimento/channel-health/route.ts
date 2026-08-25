@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantContext } from "@/lib/tenant";
 import { getInstagramConfig } from "@/services/instagram/InstagramConfigService";
-import { evaluateInstagramHealth, sortChannelHealth } from "@/services/channels/channelHealth";
+import { evaluateInstagramHealth, sortChannelHealth, toAtendimentoSeals } from "@/services/channels/channelHealth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +45,11 @@ export async function GET(req: NextRequest) {
       }),
     );
 
-    return NextResponse.json({ data: { items } });
+    // SÓ SELOS. A rota da Central devolve o tipo pobre (`ChannelSeal`), sem
+    // `detail` e sem `headline`: a evidência técnica da Meta não trafega até a
+    // tela de quem está atendendo cliente — nem para ficar escondida no JSON.
+    // O texto inteiro vive em /integracoes/instagram, que lê a config direto.
+    return NextResponse.json({ data: { seals: toAtendimentoSeals(items) } });
   } catch (err) {
     console.error("[GET /api/atendimento/channel-health]", err);
     // Falhou a leitura → a Central não recebe item nenhum e, por contrato, não

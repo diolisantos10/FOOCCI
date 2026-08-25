@@ -201,7 +201,7 @@ describe("nenhum segredo vaza pelo item", () => {
   it("o item só carrega campos declarados — nada de token/config crua", () => {
     const item = health({ lastError: "OAuthException" })[0]!;
     expect(Object.keys(item).sort()).toEqual(
-      ["action", "actionHref", "channel", "headline", "label", "lastInboundAt", "level", "silentHours"].sort(),
+      ["action", "actionHref", "channel", "detail", "headline", "label", "lastInboundAt", "level", "silentHours"].sort(),
     );
   });
 });

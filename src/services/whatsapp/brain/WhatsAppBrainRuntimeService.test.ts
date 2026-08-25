@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
+  // Portão de qualidade VERDE (LiveStageGuard): sem isto a trava da escada
+  // derruba o degrau alto por falha fechada e estes casos nunca chegariam a
+  // exercitar o que querem exercitar. O teste da TRAVA em si vive em
+  // src/services/brain/runtime/escadaDeIa.class.test.ts.
+  qualityAuditRun: {
+    findFirst: async () => ({ id: "run_verde", finishedAt: new Date(), findings: [{ severity: "P2", status: "PASS" }] }),
+  },
   conversation: { findUnique: vi.fn(), update: vi.fn() },
   message: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
   brainFreeFormConfig: { findUnique: vi.fn() },

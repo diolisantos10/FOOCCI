@@ -277,7 +277,7 @@ export default function SolucoesPage() {
       </section>
 
       {/* O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
-      <CtaBand title="Veja todas as soluções rodando com o cardápio do seu restaurante." />
+      <CtaBand title="Quer saber qual solução serve para o seu restaurante? Fale com os nossos agentes." />
     </>
   );
 }

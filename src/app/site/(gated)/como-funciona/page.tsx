@@ -235,7 +235,7 @@ export default function ComoFuncionaPage() {
       </section>
 
       {/* 5. O único CTA comercial da página — rótulo e destino pelo padrão da `CtaBand`. */}
-      <CtaBand title="Veja o Foocci rodando com o cardápio do seu restaurante." />
+      <CtaBand title="Tire suas dúvidas sobre o Foocci com os nossos agentes." />
     </>
   );
 }

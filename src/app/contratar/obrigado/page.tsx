@@ -24,6 +24,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { PlanSubscriptionService } from "@/services/billing/PlanSubscriptionService";
 import { PLAN_LABEL, CYCLE_LABEL, formatBRL, type PlanCode, type CycleCode } from "@/lib/billing/pricing";
+import { FoocciWordmark } from "@/components/brand/FoocciWordmark";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,8 @@ function Shell({ children, refreshSeconds }: { children: React.ReactNode; refres
           muda sozinha. Nos demais, recarregar seria ruído. */}
       {refreshSeconds ? <meta httpEquiv="refresh" content={String(refreshSeconds)} /> : null}
       <div className="mx-auto max-w-xl">
-        <div className="mb-8 text-center text-2xl font-semibold tracking-tight text-ink">
-          f<span className="text-brand-500">oo</span>cci
+        <div className="mb-8 flex justify-center">
+          <FoocciWordmark className="h-7 w-auto" />
         </div>
         {children}
       </div>

@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { resumoDeFrescorParaHealth } from "@/services/brain/runtime/MeasurementFreshnessAlarm";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,30 @@ export async function GET() {
     }
   }
 
+  /**
+   * OS MEDIDORES ESTÃO MEDINDO?
+   *
+   * Em 08/2026 a auditoria de qualidade ficou 10 dias sem rodar e ninguém soube:
+   * o painel seguiu exibindo o veredito de 248 horas atrás com cara de veredito
+   * de hoje. Um vigia agendado não resolveria — morreria junto, no mesmo
+   * segredo e na mesma hora.
+   *
+   * Por isso o alarme mora AQUI: /api/health é lido por gente e por máquina a
+   * todo momento, não depende de agendador nenhum, e é o primeiro lugar onde se
+   * olha depois de um deploy. `false` significa "este medidor parou" — o número
+   * que estiver na tela é velho.
+   *
+   * Público, então só o booleano: nem idade, nem nome de tabela, nem detalhe de
+   * dentro de casa. O relatório completo fica na rota admin de qualidade.
+   */
+  let measurements: Record<string, boolean> = {};
+  try {
+    measurements = await resumoDeFrescorParaHealth();
+  } catch {
+    // O alarme nunca derruba o health — mas também não mente dizendo que está tudo bem.
+    measurements = { unavailable: false };
+  }
+
   return NextResponse.json(
     {
       ok: true,
@@ -78,6 +103,8 @@ export async function GET() {
       tables: {
         soundSettings: soundSettingsTableOk,
       },
+      // Medidor parado = número velho na tela. Ver MeasurementFreshnessAlarm.
+      measurements,
     },
     { status: 200 }
   );
