@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   TIME_DE_AGENTES,
@@ -45,29 +45,46 @@ function semComentarios(fonte: string): string {
 }
 
 /**
- * Acha a tela de acessos onde quer que ela esteja.
+ * Todas as telas que cadastram pessoa, onde quer que elas estejam.
  *
- * O arquivo já mudou de pasta uma vez e derrubou este teste com `ENOENT` — a
- * falha mais inútil que um teste pode dar, porque diz "não achei o arquivo" e
- * não diz nada sobre a regra que ele guarda. Quem lê conclui "teste quebrado" e
- * conserta o caminho sem olhar se a regra continua valendo.
+ * ── POR QUE VARRE EM VEZ DE APONTAR ─────────────────────────────────────────
  *
- * Falhar por ausência **ainda é falha** — se um dia o arquivo sumir de verdade,
- * a mensagem abaixo diz isso com todas as letras em vez de despejar um erro de
- * sistema de arquivos.
+ * A tela de cadastro mudou de pasta **duas vezes em um dia** — saiu de `(area)/`
+ * quando a moldura passou a exigir sessão, e saiu de `/comercial` inteiro quando
+ * virou área de RH no Admin. Nas duas, o caso que a vigiava quebrou por `ENOENT`.
+ *
+ * `ENOENT` é a falha mais inútil que um teste pode dar: diz "não achei o
+ * arquivo" e não diz nada sobre a regra que ele guarda. Quem lê conclui "teste
+ * quebrado", conserta o caminho, e não confere se a regra continua valendo.
+ *
+ * Varrer resolve os dois problemas de uma vez: mudar de pasta deixa de quebrar,
+ * e uma tela NOVA de cadastro nasce já vigiada — que era a brecha real do
+ * caminho fixo.
  */
-function acharAcessosClient(): string {
-  const candidatos = [
-    "src/app/comercial/acessos/AcessosClient.tsx",
-    "src/app/comercial/(area)/acessos/AcessosClient.tsx",
-  ];
-  for (const c of candidatos) {
-    const p = join(process.cwd(), c);
-    if (existsSync(p)) return p;
-  }
-  throw new Error(
-    `a tela de acessos sumiu — procurei em: ${candidatos.join(", ")}`,
-  );
+function telasDeCadastro(): string[] {
+  const achadas: string[] = [];
+
+  const varrer = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+      const caminho = join(dir, e.name);
+      if (e.isDirectory()) {
+        varrer(caminho);
+        continue;
+      }
+      if (!e.name.endsWith(".tsx")) continue;
+
+      // O que caracteriza uma tela de cadastro: ela manda para uma das rotas
+      // que criam pessoa. É melhor marca que o nome do arquivo, que muda.
+      const fonte = readFileSync(caminho, "utf8");
+      if (/\/api\/admin\/(pessoas|sala-de-vendas\/primeiro-acesso)/.test(fonte)) {
+        achadas.push(caminho);
+      }
+    }
+  };
+
+  varrer(join(process.cwd(), "src/app"));
+  return achadas;
 }
 
 function fonteDaRotaDoTime(): string {
@@ -222,17 +239,28 @@ describe("⭐ o agente já é parte do sistema — não se admite", () => {
     ).not.toMatch(/export\s+async\s+function\s+POST/);
   });
 
-  it("e a tela de acessos não fala mais em pôr agente no sistema", () => {
-    // A tela é de GENTE. Um botão de agente aqui traz de volta a ideia de que
-    // ele está do lado de fora esperando.
-    // ⚠️ Procura o arquivo em vez de fixar o caminho: ele já mudou de lugar uma
-    // vez — saiu de `(area)/` quando a moldura passou a exigir sessão de pessoa
-    // — e o teste quebrou por ENOENT, que é a falha mais inútil possível: diz
-    // "não achei", não diz "a regra foi violada".
-    const tela = semComentarios(readFileSync(acharAcessosClient(), "utf8"));
-    expect(tela, "a tela de acessos voltou a admitir agente").not.toMatch(
-      /P[oô]r no sistema|TIME_DE_AGENTES/,
-    );
+  it("nenhuma tela de cadastrar gente fala em pôr agente no sistema", () => {
+    // A tela de cadastro é de GENTE. Um botão de agente ali traz de volta a
+    // ideia de que ele está do lado de fora esperando.
+    //
+    // ⚠️ A tela já mudou de lugar DUAS vezes num dia — saiu de `(area)/` quando
+    // a moldura passou a exigir sessão, e depois saiu de `/comercial` inteiro
+    // quando virou área de RH no Admin. Nas duas o caso quebrou por ENOENT, que
+    // é a falha mais inútil possível: diz "não achei", não diz "a regra foi
+    // violada", e quem lê conserta o caminho sem conferir a regra.
+    //
+    // Por isso ele deixou de perseguir UM arquivo e passou a varrer TODAS as
+    // telas de cadastro que existirem. Mudar de pasta não quebra mais nada; e
+    // se um dia não houver tela nenhuma, o caso diz isso com todas as letras.
+    const telas = telasDeCadastro();
+    expect(telas.length, "não achei tela de cadastrar pessoa em lugar nenhum").toBeGreaterThan(0);
+
+    for (const caminho of telas) {
+      const tela = semComentarios(readFileSync(caminho, "utf8"));
+      expect(tela, `${caminho} voltou a admitir agente`).not.toMatch(
+        /P[oô]r no sistema|TIME_DE_AGENTES/,
+      );
+    }
   });
 
   it("⭐ mas o time continua existindo — quem garante é garantirTime", () => {
