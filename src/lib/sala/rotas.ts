@@ -48,6 +48,14 @@ export const ROTAS = {
   agentes: `${COMERCIAL}/agentes`,
   precos: `${COMERCIAL}/precos`,
   ensaio: `${COMERCIAL}/ensaio`,
+  /**
+   * Os números de quem está olhando — e **não** o painel do gerente.
+   *
+   * São duas telas porque são duas perguntas. O gerente pergunta "quem do time
+   * está afogado"; o vendedor pergunta "o que eu tenho para fazer agora".
+   * Encolher a primeira pelo próprio nome não produz a segunda.
+   */
+  meus: `${COMERCIAL}/meus-numeros`,
   painel: `${COMERCIAL}/painel`,
   agente: `${COMERCIAL}/agente`,
   whatsapp: `${COMERCIAL}/whatsapp`,
@@ -93,6 +101,10 @@ const PARA_TODOS: readonly Aba[] = [
   { href: ROTAS.filas, rotulo: "Filas" },
   { href: ROTAS.conversas, rotulo: "Conversas" },
   { href: ROTAS.funil, rotulo: "Funil" },
+  // Os números da própria pessoa. Fica em `PARA_TODOS` porque não há de quem
+  // esconder: são os dela. O CEO abre e vê os dele, que é o que faz sentido —
+  // os números do time inteiro ele tem no Painel, ao lado.
+  { href: ROTAS.meus, rotulo: "Meus números" },
   // As fichas ficam visíveis para TODO MUNDO da Sala, o SDR incluído: elas dizem
   // o que cada função pode e não pode, e o SDR precisa ler a dele para saber onde
   // ele para e onde o Closer começa. Esconder a alçada a transforma em folclore —
