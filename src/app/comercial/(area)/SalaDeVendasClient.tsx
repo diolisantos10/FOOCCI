@@ -19,7 +19,7 @@
 
 import { useState } from "react";
 import { useSalaDeVendas, mudarResponsavel, desdeQuando } from "./_dados";
-import { ROTAS } from "@/lib/sala/rotas";
+import { ROTAS, ENTRADA } from "@/lib/sala/rotas";
 import type { LeadNaFila, NomeDaFila } from "@/services/salaDeVendas/filas";
 
 function cx(...p: Array<string | false | null | undefined>): string {
@@ -158,31 +158,56 @@ export function SalaDeVendasClient() {
 function SemAcesso() {
   return (
     <div className="mt-6 rounded-2xl border border-line2 bg-paper px-5 py-6">
-      <h3 className="text-[15px] font-semibold text-ink">Esta área pede login próprio</h3>
+      <h3 className="text-[15px] font-semibold text-ink">Entre com o seu login</h3>
       <p className="mt-1.5 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
-        A Sala de Vendas não abre com a senha compartilhada do admin. Cada lead tem um responsável,
-        e responsável sem nome não responde por nada.
+        Você entrou com a senha da casa, e ela abre a porta mas{" "}
+        <strong className="text-ink2">não tem nome</strong>. Aqui cada conversa tem
+        um responsável, e responsável sem nome não responde por nada.
       </p>
-      {/* ── ISTO ERA UM COMANDO DE TERMINAL, E ERA O DEFEITO ────────────────
-          Até 25/08/2026 esta tela imprimia `npx tsx scripts/...`. Foi a
-          primeira coisa que o CEO viu ao abrir a Sala em produção — e um
-          comando de terminal é, para ele, uma parede.
 
-          A regra da casa já dizia o que fazer: "CEO não faz setup nenhum".
-          Configuração que sobe de andar é trabalho de execução que o Diretor
-          não achou como resolver. O comando continua certo para quem tem
-          terminal; só deixou de ser a única porta. */}
-      <a
-        href={ROTAS.acessos}
-        className="mt-4 inline-block rounded-xl bg-brand-500 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-600"
-      >
-        Criar o primeiro acesso
-      </a>
+      {/* ── POR QUE A TELA MUDA CONFORME QUEM ENTRA ─────────────────────────
+          Não é enfeite: é o desenho que o CEO descreveu em 26/08/2026 — *"a
+          plataforma é personalizável de acordo com o nível de autorização de
+          cada funcionário ou agente"*.
 
-      <p className="mt-2.5 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-        Leva trinta segundos: nome, e-mail e o que a pessoa é. A senha aparece
-        uma vez na tela.
+          E já está construído, no lugar certo: `escopoDaConsulta` entra no
+          `where` da consulta, então o vendedor não recebe do servidor o lead
+          que não é dele. Se estivesse no menu, seria fechadura na porta com a
+          janela aberta — bastaria a URL direta. */}
+      <p className="mt-2 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+        O que aparece depois depende de quem você é: o vendedor vê os clientes
+        dele e os números dele; o CEO e o diretor veem a operação inteira —
+        as pessoas, os agentes e todos os clientes.
       </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          href={ENTRADA}
+          className="inline-block rounded-xl bg-brand-500 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-600"
+        >
+          Entrar com meu login
+        </a>
+        {/* ── ISTO ERA UM COMANDO DE TERMINAL, E ERA O DEFEITO ──────────────
+            Até 25/08/2026 esta tela imprimia `npx tsx scripts/...`. Foi a
+            primeira coisa que o CEO viu ao abrir a Sala em produção — e um
+            comando de terminal é, para ele, uma parede.
+
+            A regra da casa já dizia o que fazer: "CEO não faz setup nenhum".
+            Configuração que sobe de andar é trabalho de execução que o Diretor
+            não achou como resolver. O comando continua certo para quem tem
+            terminal; só deixou de ser a única porta.
+
+            Virou o botão secundário porque a ordem estava invertida: quem
+            chega aqui na maioria das vezes JÁ tem login e só entrou pela porta
+            errada. Oferecer "criar" primeiro faz essa pessoa criar uma segunda
+            conta — e trocar a senha da primeira, que é o que o `upsert` faz. */}
+        <a
+          href={ROTAS.acessos}
+          className="inline-block rounded-xl border border-line bg-canvas px-4 py-2.5 text-[14px] font-semibold text-ink2 transition-colors hover:bg-paper"
+        >
+          Ainda não tenho login
+        </a>
+      </div>
     </div>
   );
 }
