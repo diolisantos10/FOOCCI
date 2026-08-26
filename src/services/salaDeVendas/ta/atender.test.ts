@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { atenderComOTA } from "./atender";
+import { atenderComOTA, type ResultadoDoTurno } from "./atender";
 
 /** Terça-feira, 09:00 em São Paulo. Dentro da janela, dia útil. */
 const AGORA = new Date("2026-08-25T12:00:00Z");
@@ -80,6 +80,25 @@ function banco(a: Ajustes = {}) {
 /** Uma pergunta comum, que a base de verdade responde e não chama gente. */
 const PERGUNTA = "quanto custa o plano crescimento?";
 
+/**
+ * "Ele falou" — e, quando não falou, DIZ POR QUÊ.
+ *
+ * Existe por causa de 26/08/2026: este arquivo reprovou no CI e passou aqui, e
+ * a mensagem foi `expected false to be true`. Levou uma investigação inteira
+ * para descobrir que a causa era a meia-noite virando hora 24 num ICU diferente.
+ *
+ * `atenderComOTA` nunca lança e sempre NOMEIA o motivo de calar — a asserção
+ * crua jogava fora exatamente a informação que o código se deu ao trabalho de
+ * produzir. Uma reprovação tem que caber na tela do CI.
+ */
+function falou(r: ResultadoDoTurno): boolean {
+  if (r.falou) return true;
+  const porque = r.chamouGente
+    ? `ele chamou gente (${r.motivo})`
+    : `ele calou: ${r.motivo} — ${r.detalhe}`;
+  throw new Error(`esperava que o TA respondesse, mas ${porque}`);
+}
+
 // ── O caso que carrega o arquivo ─────────────────────────────────────────────
 
 describe("⭐ o TA responde, e a resposta NÃO sai daqui", () => {
@@ -91,7 +110,7 @@ describe("⭐ o TA responde, e a resposta NÃO sai daqui", () => {
       agora: AGORA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
     if (!r.falou) return;
     expect(r.mensagemId).toBe("m1");
     expect(r.resposta.texto.length).toBeGreaterThan(10);
@@ -122,7 +141,7 @@ describe("⭐ o TA responde, e a resposta NÃO sai daqui", () => {
       agora: AGORA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
     if (!r.falou) return;
     expect(r.resposta.apoiadoEm.length).toBeGreaterThan(0);
   });
@@ -212,7 +231,7 @@ describe("portão 2 — o TA não fala por cima de quem assumiu", () => {
       agora: AGORA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
   });
 
   it("lead que não existe: cala com o id no motivo", async () => {
@@ -265,7 +284,7 @@ describe("portão 3 — quem pediu silêncio não recebe, nem se escrever", () =
       agora: AGORA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
   });
 });
 
@@ -307,7 +326,7 @@ describe("portão 4 — a janela, e ela é a CONFIGURADA", () => {
       agora: MADRUGADA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
   });
 
   it("e estreitar REALMENTE estreita", async () => {
@@ -347,7 +366,7 @@ describe("portão 5 — ele para sozinho de insistir", () => {
       agora: AGORA,
     });
 
-    expect(r.falou).toBe(true);
+    expect(falou(r)).toBe(true);
   });
 
   it("conta só o que saiu DEPOIS da última coisa que o cliente escreveu", async () => {
@@ -436,7 +455,7 @@ describe("ele não repete pergunta que já fez", () => {
       agora: AGORA,
     });
 
-    expect(primeira.falou).toBe(true);
+    expect(falou(primeira)).toBe(true);
     if (!primeira.falou) return;
     if (primeira.resposta.perguntouIndice === null) return; // não sondou, nada a guardar
 
@@ -447,7 +466,7 @@ describe("ele não repete pergunta que já fez", () => {
       agora: AGORA,
     });
 
-    expect(r2.falou).toBe(true);
+    expect(falou(r2)).toBe(true);
     if (!r2.falou) return;
     expect(r2.resposta.perguntouIndice).not.toBe(primeira.resposta.perguntouIndice);
   });
