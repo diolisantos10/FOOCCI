@@ -1,0 +1,67 @@
+🔑 Credenciais lidas do Railway (nenhuma impressa).
+
+══════════════════════════════════════════════════════════════════════════════
+A. QUEM ESTÁ EM QUE DEGRAU (config do raciocínio livre do recepcionista)
+══════════════════════════════════════════════════════════════════════════════
+   sushi-cazza              RESTAURANT_WIDE  pausado=não  allowlist=1  demo=não  últimaMudança=Sun Jul 12
+
+══════════════════════════════════════════════════════════════════════════════
+B. TURNOS DE CLIENTE AO VIVO — mensagens INBOUND de WhatsApp (CUSTOMER), 90 dias
+══════════════════════════════════════════════════════════════════════════════
+   Proxy e LIMITE SUPERIOR do que viraria amostra do topo. Ver cabeçalho.
+
+   conversas de WhatsApp (CUSTOMER) com atividade na janela: 709
+   mensagens INBOUND na janela: 5848
+
+──────────────────────────────────────────────────────────────────────────────
+   sushi-cazza   total=5848   dias com movimento=81   cobertura=89.6d   média=65.27/dia
+   por dia da semana:  dom1021  seg 502  ter 571  qua 466  qui 782  sex1492  sáb1014
+   por faixa de hora:  madrugada(0-6)   38  manhã(6-11)   67  almoço(11-15)  489  tarde(15-18)  259  jantar(18-24) 4995
+   hora a hora:        00h:19  01h:11  02h:8  07h:1  08h:7  09h:6  10h:53  11h:85  12h:155  13h:120  14h:129  15h:68  16h:55  17h:136  18h:820  19h:1077  20h:1173  21h:913  22h:737  23h:275
+   alcança 30 amostras em qual janela?  7d=457✅  14d=914✅  21d=1371✅  30d=1958✅  45d=2937✅  60d=3916✅
+──────────────────────────────────────────────────────────────────────────────
+
+══════════════════════════════════════════════════════════════════════════════
+C. AMOSTRAS DO TOPO JÁ MARCADAS (stage='LIVE', agentId='whatsapp')
+══════════════════════════════════════════════════════════════════════════════
+   total desde o deploy da marca: 3
+   sushi-cazza              3 amostras  PASS=2  primeira há 31.0h  ritmo≈2.3/dia
+
+══════════════════════════════════════════════════════════════════════════════
+D. SIMULAÇÃO — com janela de X dias, quem passaria a SER MEDIDO no topo
+══════════════════════════════════════════════════════════════════════════════
+   (usa o proxy de volume; só conta quem está em degrau elevado e não pausado)
+   janela  7d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+   janela 14d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+   janela 21d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+   janela 30d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+   janela 45d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+   janela 60d → 1/1 restaurantes elevados alcançam 30 amostras  [sushi-cazza]
+
+══════════════════════════════════════════════════════════════════════════════
+E. QUANTOS TURNOS CHEGAM AO BRAIN — a porta que produz amostra do topo
+══════════════════════════════════════════════════════════════════════════════
+   sombra do recepcionista (cada linha = 1 turno que chegou ao Brain):
+   sushi-cazza               1212 linhas  PRODUCTION=0  dias distintos=38  de Jul 10 a Aug 25  ≈26.7/dia
+   foocci-bakery                4 linhas  PRODUCTION=0  dias distintos=3  de Aug 05 a Aug 14  ≈0.4/dia
+
+   respostas ENVIADAS pelo Brain ao vivo (messages.metadata->>'source'):
+   sushi-cazza              (sem source)        7903  dias=80  ≈88.4/dia  (May 28 → Aug 26)
+   sushi-cazza              CARDAPIO            3955  dias=83  ≈45.4/dia  (May 29 → Aug 24)
+   sushi-cazza              WHATSAPP_BRAIN       275  dias=38  ≈4.2/dia  (Jun 20 → Aug 26)
+   sushi-cazza              CART_RECOVERY        115  dias=51  ≈1.6/dia  (May 28 → Aug 10)
+   sushi-cazza              PEDIDO_TEXTO          75  dias=6  ≈5.9/dia  (Jun 11 → Jun 23)
+
+   ⇒ RITMO DE AMOSTRA DO TOPO por janela candidata (base: sombra/dia acima):
+   sushi-cazza              7d=187✅  14d=374✅  21d=562✅  30d=802✅  45d=1204✅  60d=1605✅
+   foocci-bakery            7d=3❌  14d=6❌  21d=9❌  30d=13❌  45d=20❌  60d=27❌
+
+══════════════════════════════════════════════════════════════════════════════
+F. MUDANÇA DE COMPORTAMENTO — régua velha (7d) × régua nova (28d)
+══════════════════════════════════════════════════════════════════════════════
+   sushi-cazza              7d: SEM_AMOSTRA(3) derruba=false  →  28d: SEM_AMOSTRA(3) derruba=false   = igual
+
+   ⇒ RESTAURANTES QUE MUDAM DE COMPORTAMENTO: 0 de 1 em degrau elevado.
+   Nenhum. A janela maior só PODE acrescentar amostra, nunca tirar.
+
+Somente leitura. Nada foi escrito, enviado ou promovido.
