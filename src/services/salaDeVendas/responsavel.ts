@@ -284,3 +284,41 @@ export function esperaPorGente(
     horas: (agora.getTime() - lead.atendenteDesde.getTime()) / 3_600_000,
   };
 }
+
+/**
+ * A IA ASSUME um lead que não era de ninguém.
+ *
+ * ── O DEFEITO QUE ISTO FECHA ────────────────────────────────────────────────
+ *
+ * Todo lead nasce `NINGUEM` e cai na fila "Sem responsável", que é visível e
+ * cobrada. Correto — até o TA começar a responder.
+ *
+ * A partir daí o lead está sendo atendido, e continua aparecendo como
+ * abandonado. Um SDR humano olhando a fila vê um item que parece largado, entra
+ * para salvar, e o cliente recebe duas pessoas diferentes na mesma conversa. O
+ * gatilho de silêncio da IA até funciona — ela cala quando um humano assume —
+ * mas isso acontece DEPOIS de a segunda voz já ter falado.
+ *
+ * ── ⚠️ DE `NINGUEM`, E SÓ ───────────────────────────────────────────────────
+ *
+ * A condição está dentro do `updateMany`, e não numa leitura antes: entre ler e
+ * escrever, uma pessoa pode ter assumido. Escrita condicional é o que impede a
+ * IA de tomar de volta um lead que um humano acabou de pegar — o roubo mais
+ * fácil de escrever por acidente e o mais difícil de perceber depois.
+ *
+ * Devolve `false` quando não assumiu, e isso NÃO é falha: significa que o lead
+ * já tem dono. Quem chama segue em frente.
+ */
+export async function iaAssumeSeEstaLivre(
+  db: Cliente,
+  params: { leadId: string; agora?: Date },
+): Promise<boolean> {
+  const agora = params.agora ?? new Date();
+
+  const alterados = await db.siteLead.updateMany({
+    where: { id: params.leadId, atendidoPor: "NINGUEM" },
+    data: { atendidoPor: "IA", atendenteUserId: null, atendenteDesde: agora },
+  });
+
+  return alterados.count === 1;
+}

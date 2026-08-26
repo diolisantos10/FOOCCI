@@ -220,6 +220,23 @@ describe("portão 2 — o TA não fala por cima de quem assumiu", () => {
     expect(r).toMatchObject({ motivo: "leadNaoEDaIA" });
   });
 
+  it("⭐ ao atender um lead sem dono, a IA ASSUME — e ele sai da fila de abandonados", async () => {
+    // O defeito: o lead nascia `NINGUEM`, o TA respondia sem assumir, e ele
+    // continuava aparecendo na fila "Sem responsável" no exato momento em que
+    // estava sendo atendido. Um SDR humano entrava para salvar, e o cliente
+    // recebia duas vozes na mesma conversa.
+    const db = banco({ lead: { atendidoPor: "NINGUEM" } });
+    await atenderComOTA(db as never, { leadId: "l1", mensagem: PERGUNTA, agora: AGORA });
+
+    expect(db.siteLead.updateMany, "não assumiu o lead").toHaveBeenCalled();
+    const chamada = db.siteLead.updateMany.mock.calls[0]![0]!;
+    expect(chamada.data).toMatchObject({ atendidoPor: "IA" });
+    // ⭐ Condicional a NINGUEM, dentro da escrita. Entre ler e escrever, uma
+    // pessoa pode ter assumido — e a IA não pode tomar de volta.
+    expect(chamada.where, "assumiu sem condição — pode roubar de um humano")
+      .toMatchObject({ atendidoPor: "NINGUEM" });
+  });
+
   it("lead sem dono ainda: o TA PODE atender", async () => {
     // A metade que passa, e ela importa: `NINGUEM` é o estado em que quase todo
     // lead novo nasce. Um portão que barrasse `NINGUEM` deixaria o TA mudo para

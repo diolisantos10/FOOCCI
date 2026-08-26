@@ -62,6 +62,7 @@ import { VERSAO_1 } from "./ficha";
 import { registrarSaida } from "../conversa";
 import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
+import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 
 /**
@@ -233,6 +234,18 @@ async function executarTurno(
       `${semResposta} mensagens sem resposta, o limite é ${config.maxSemResposta}`,
     );
   }
+
+  // ── 5b. A IA assume o lead, se ele não era de ninguém ───────────────────
+  //
+  // Todo lead nasce `NINGUEM` e cai na fila "Sem responsável". Enquanto o TA
+  // respondia sem assumir, o lead aparecia como abandonado no exato momento em
+  // que estava sendo atendido — e um humano entrava para salvar, dando ao
+  // cliente duas vozes na mesma conversa.
+  //
+  // A escrita é condicional a `NINGUEM`: se alguém assumiu entre o portão 2 e
+  // aqui, a IA não toma de volta. Não assumir não é falha — só quer dizer que o
+  // lead já tem dono, e o portão 2 vai calar a IA no próximo turno.
+  await iaAssumeSeEstaLivre(db, { leadId: lead.id, agora });
 
   // ── 6. Compor ───────────────────────────────────────────────────────────
   //
