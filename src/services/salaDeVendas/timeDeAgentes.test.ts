@@ -44,6 +44,15 @@ function semComentarios(fonte: string): string {
   return fonte.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 }
 
+function fonteDaRotaDoTime(): string {
+  return semComentarios(
+    readFileSync(
+      join(process.cwd(), "src/app/api/admin/sala-de-vendas/time-de-agentes/route.ts"),
+      "utf8",
+    ),
+  );
+}
+
 describe("o time vem pronto", () => {
   it("⭐ tem cinco agentes já nomeados", () => {
     // O pedido do CEO, com estas letras: *"você já tem que nomear uns cinco,
@@ -135,13 +144,19 @@ describe("⭐ agente não faz login", () => {
     // ⚠️ Lê o CÓDIGO, não os comentários. A primeira versão deste caso falhou
     // contra a própria explicação do arquivo, que cita `randomBytes` para dizer
     // que ele não está lá. Um teste que lê prosa mede a prosa.
-    const codigo = semComentarios(
-      readFileSync(
-        join(process.cwd(), "src/app/api/admin/sala-de-vendas/time-de-agentes/route.ts"),
-        "utf8",
-      ),
+    expect(fonteDaRotaDoTime(), "a rota do time passou a gerar senha").not.toMatch(
+      /randomBytes|bcryptjs|passwordHash/,
     );
-    expect(codigo, "a rota do time passou a gerar senha").not.toMatch(
+  });
+
+  it("⭐ e nem quem garante o time no sistema escreve senha", () => {
+    // A rota ficou limpa, mas o trabalho mudou de arquivo: quem cria os
+    // registros agora é `garantirTime.ts`. Sem este caso, a trava anterior
+    // continuaria passando enquanto a senha voltava pela porta nova.
+    const codigo = semComentarios(
+      readFileSync(join(process.cwd(), "src/services/salaDeVendas/garantirTime.ts"), "utf8"),
+    );
+    expect(codigo, "garantirTime passou a gravar senha").not.toMatch(
       /randomBytes|bcryptjs|passwordHash/,
     );
   });
@@ -163,6 +178,53 @@ describe("⭐ agente não faz login", () => {
 
   it("trabalha em vendas, e só", () => {
     expect(DEPARTAMENTOS_DO_TIME).toEqual(["vendas"]);
+  });
+});
+
+describe("⭐ o agente já é parte do sistema — não se admite", () => {
+  it("a rota do time não tem POST", () => {
+    // A terceira correção do CEO no mesmo dia, e a que resolve a premissa:
+    // *"os agentes já são parte do sistema. Eles não são externos... os humanos
+    // é que vão ter que fazer login e entrar no sistema"*.
+    //
+    // Eu tinha corrigido o sintoma duas vezes — tirei a senha, mantive o botão
+    // — e continuei tratando o agente como quem chega de fora e precisa ser
+    // admitido. A ausência do POST é a premissa nova escrita em código.
+    expect(
+      fonteDaRotaDoTime(),
+      "a rota do time voltou a ter POST — agente virou coisa que se admite",
+    ).not.toMatch(/export\s+async\s+function\s+POST/);
+  });
+
+  it("e a tela de acessos não fala mais em pôr agente no sistema", () => {
+    // A tela é de GENTE. Um botão de agente aqui traz de volta a ideia de que
+    // ele está do lado de fora esperando.
+    const tela = semComentarios(
+      readFileSync(
+        join(process.cwd(), "src/app/comercial/(area)/acessos/AcessosClient.tsx"),
+        "utf8",
+      ),
+    );
+    expect(tela, "a tela de acessos voltou a admitir agente").not.toMatch(
+      /P[oô]r no sistema|TIME_DE_AGENTES/,
+    );
+  });
+
+  it("⭐ mas o time continua existindo — quem garante é garantirTime", () => {
+    // A outra metade, e a que impede a leitura errada desta mudança. Tirar o
+    // botão não pode virar "o time deixou de existir": um lead atribuído a um
+    // agente sem registro falha por chave estrangeira, em produção, no meio de
+    // um atendimento.
+    const rota = fonteDaRotaDoTime();
+
+    // ⚠️ Procura a CHAMADA, não o nome. A primeira versão usava
+    // `toContain("garantirTimeNoSistema")` e passava com a chamada arrancada,
+    // porque o `import` ainda carregava a palavra. Nome importado é intenção;
+    // chamada é o que roda.
+    expect(rota, "a rota não CHAMA mais quem garante o time").toMatch(
+      /await\s+garantirTimeNoSistema\s*\(/,
+    );
+    expect(rota, "a rota deixou de devolver o time").toMatch(/TIME_DE_AGENTES\s*\.map/);
   });
 });
 
