@@ -265,9 +265,18 @@ async function escrever(
       // vendedor que responde sempre com a mesma construção é reconhecido como
       // robô em três mensagens. Alta inventa.
       temperature: 0.6,
-      // Teto curto de propósito: no WhatsApp, resposta longa não é lida. É a
-      // trava mecânica da instrução "no máximo 3 frases".
-      maxTokens: 220,
+      // ── O TETO, E POR QUE ELE NÃO É MAIS APERTADO ────────────────────────
+      //
+      // Quem mantém a resposta curta é a instrução, não este número. O motor
+      // LANÇA quando o modelo bate no teto (`cortado_por_limite`), e aqui um
+      // lançamento vira queda para o chão determinístico — ou seja, um teto
+      // apertado não produz resposta curta: produz resposta SECA, e sem
+      // ninguém entender por quê.
+      //
+      // 220 era apertado para português, que gasta mais token que inglês na
+      // mesma frase. 400 continua sendo curto (umas 250 palavras) e deixa de
+      // transformar uma resposta um pouco mais longa em silêncio do modelo.
+      maxTokens: 400,
     });
 
     return raw.trim() || null;

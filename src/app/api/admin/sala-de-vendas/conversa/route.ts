@@ -23,6 +23,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { entregarMensagem } from "@/services/salaDeVendas/entrega";
 import { prisma } from "@/lib/prisma";
 import { guardarSalaDeVendas, somenteLeitura, podeVerOLead } from "../_guarda";
 import {
@@ -201,16 +202,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: r.causa }, { status: 400 });
   }
 
+  // ── A ENTREGA, tentada na hora ──────────────────────────────────────────
+  //
+  // Até 26/08/2026 esta rota parava na linha de cima: gravava PENDENTE e
+  // devolvia um aviso dizendo que nada tinha saído. Estava certo no aviso e
+  // errado no produto — a Sala inteira era um rascunho, e um vendedor humano
+  // digitando aqui achava que estava conversando com o cliente.
+  //
+  // `entregarMensagem` respeita a chave do dono: desligada, ela não faz nada e
+  // a mensagem continua PENDENTE, como antes.
+  const entrega = await entregarMensagem(prisma, r.mensagemId);
+
   return NextResponse.json({
     ok: true,
     data: {
       mensagemId: r.mensagemId,
-      // A tela precisa dizer a verdade sobre o que aconteceu: a mensagem foi
-      // REGISTRADA, e a entrega depende de uma chave que o CEO ainda não ligou.
-      entregue: false,
-      aviso:
-        "Mensagem registrada na conversa. O envio pelo WhatsApp está desligado " +
-        "(FOOCCI_SDR_SEND_ENABLED) — nada saiu para o cliente.",
+      // A tela precisa dizer a VERDADE sobre o que aconteceu com esta mensagem.
+      // "Enviada" quando não saiu é o defeito que faz o vendedor esperar uma
+      // resposta que nunca vem.
+      entregue: entrega.entregue,
+      aviso: entrega.entregue ? null : avisoDaEntrega(entrega),
     },
   });
+}
+
+/**
+ * O motivo, em frase de gente, para a tela de quem acabou de apertar enviar.
+ *
+ * Um código como `envioDesligado` não diz nada a quem está atendendo cliente — e
+ * essa pessoa precisa saber, agora, se o que ela escreveu chegou ou não.
+ */
+function avisoDaEntrega(e: Extract<Awaited<ReturnType<typeof entregarMensagem>>, { entregue: false }>): string {
+  switch (e.motivo) {
+    case "envioDesligado":
+      return "Mensagem registrada na conversa, mas o envio pelo WhatsApp ainda não foi ligado — nada saiu para o cliente.";
+    case "leadPediuSilencio":
+      return "Não enviado: este contato pediu para não receber mensagens.";
+    case "semTelefone":
+      return "Não enviado: este contato não tem WhatsApp cadastrado.";
+    default:
+      return `Mensagem registrada, mas o WhatsApp recusou o envio: ${e.detalhe}`;
+  }
 }

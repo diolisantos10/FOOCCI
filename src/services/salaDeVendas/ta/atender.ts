@@ -31,13 +31,14 @@
  *   6. **Compor.** `falar()` decide: gatilho de gente é resolvido em código,
  *      antes do modelo; o resto o modelo redige, ancorado no Manual, e passa
  *      pelo verificador antes de existir. Chão determinístico se ele falhar.
- *   7. **Gravar como PENDENTE.** Nunca entregar daqui.
+ *   7. **Gravar.** A mensagem nasce PENDENTE, sempre.
+ *   8. **Entregar, se o dono ligou a entrega.** Desligada, ela fica PENDENTE.
  *
- * ── POR QUE ELA NÃO ENVIA, E ISSO NÃO É PROVISÓRIO ──────────────────────────
+ * ── A ENTREGA É OUTRA CHAVE, E ISSO NÃO É PROVISÓRIO ────────────────────────
  *
- * O que sai desta função é uma linha em `lead_mensagens` com status PENDENTE.
- * Quem entrega é o canal, e o canal só entrega com `FOOCCI_SDR_SEND_ENABLED`
- * ligada — decisão do CEO, separada de "o TA está ligado".
+ * O que sai desta função é uma linha em `lead_mensagens`, que nasce PENDENTE.
+ * Ela só vira uma mensagem no telefone de alguém se `FOOCCI_SDR_SEND_ENABLED`
+ * estiver ligada — decisão do CEO, separada de "o TA está ligado".
  *
  * São duas chaves de propósito: **receber e pensar é seguro; falar com um
  * estranho em nome da empresa é outra coisa.** Uma mensagem PENDENTE que nunca
@@ -55,6 +56,7 @@ import type { PrismaClient, Prisma } from "@prisma/client";
 import { falar, type FalaFinal } from "./falar";
 import { VERSAO_1 } from "./ficha";
 import { registrarSaida } from "../conversa";
+import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 
@@ -81,8 +83,14 @@ export type MotivoDeCalar =
   | "quebrou";
 
 export type ResultadoDoTurno =
-  /** Ele respondeu. A mensagem está gravada como PENDENTE. */
-  | { falou: true; mensagemId: string; resposta: FalaFinal }
+  /**
+   * Ele respondeu, e a mensagem está gravada.
+   *
+   * `entregue` diz se ela chegou a SAIR. Falso é o estado normal enquanto o dono
+   * não ligar a entrega — e a distinção existe porque "o TA respondeu" e "o
+   * cliente recebeu" são coisas diferentes que pareciam a mesma.
+   */
+  | { falou: true; mensagemId: string; resposta: FalaFinal; entregue: boolean }
   /** Ele parou e chamou gente. Não há resposta de venda a enviar. */
   | { falou: false; chamouGente: true; handoffId: string; motivo: string }
   /** Ele calou, e o motivo é sempre nomeado. */
@@ -283,7 +291,18 @@ async function executarTurno(
     return calar("naoConseguiuGravar", `a mensagem não foi gravada: ${gravada.causa}`);
   }
 
-  return { falou: true, mensagemId: gravada.mensagemId, resposta: r };
+  // ── 8. Entregar, SE o dono ligou a entrega ──────────────────────────────
+  //
+  // Desligada, `entregarMensagem` não faz nada e a mensagem continua PENDENTE —
+  // que é o estado de hoje e continua sendo o padrão. A chave é do CEO.
+  //
+  // ⚠️ A falha de entrega NÃO derruba o turno. A mensagem já está gravada, e o
+  // que se perde é a saída — recuperável, visível na tela, e com o motivo
+  // guardado na própria linha. Transformar isso em erro faria a Meta reentregar
+  // o "oi" do cliente e o TA responder duas vezes.
+  const entrega = await entregarMensagem(db, gravada.mensagemId);
+
+  return { falou: true, mensagemId: gravada.mensagemId, resposta: r, entregue: entrega.entregue };
 }
 
 /** O instante da última coisa que o cliente escreveu. Epoch quando nunca. */
