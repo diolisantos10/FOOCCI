@@ -80,3 +80,26 @@ export const NOTA_FISCAL_A_PARTE = {
     "A integração já vem incluída e a gente não cobra nada por ela. " +
     "O certificado digital e o custo por documento você contrata direto com o emissor.",
 } as const;
+
+/**
+ * MAIS DE UMA LOJA — a decisão do CEO de 06/08/2026, agora legível por código.
+ *
+ * ── POR QUE ELA VIROU CONSTANTE EM 26/08 ────────────────────────────────────
+ *
+ * A decisão já estava registrada no cabeçalho deste arquivo, em comentário:
+ * *"Unidade adicional — SAI. Cada loja paga o valor que tem que pagar."* Ela
+ * matou um item de preço que o checkout nunca soube cobrar.
+ *
+ * Um comentário resolve para quem lê o arquivo e não resolve para quem responde
+ * ao cliente. Medindo a cobertura do SDR contra as perguntas que um dono de
+ * restaurante faz de verdade, **"tenho duas lojas, funciona?"** voltou sem
+ * material nenhum — e é das primeiras perguntas de quem tem duas lojas.
+ *
+ * Nada foi inventado aqui: a frase é a do CEO, e o que mudou foi o formato.
+ */
+export const MAIS_DE_UMA_LOJA = {
+  pergunta: "tenho duas lojas unidades filiais rede funciona multi loja",
+  resposta:
+    "Funciona com mais de uma loja. Não existe taxa de unidade adicional: " +
+    "cada loja paga o valor que tem que pagar, pelo plano dela.",
+} as const;

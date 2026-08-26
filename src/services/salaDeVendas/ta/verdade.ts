@@ -40,7 +40,7 @@
 import { FAQS } from "@/lib/site/faq";
 import { PLANS } from "@/lib/site/plans";
 import { COMMISSION_RATES, COMMISSION_SOURCE, MARKETPLACE_NAME } from "@/lib/site/commissionRates";
-import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE } from "@/lib/site/servicosAParte";
+import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE, MAIS_DE_UMA_LOJA } from "@/lib/site/servicosAParte";
 import { tabelaPublicada, descontoPublicado } from "../precos";
 
 /** De onde a frase veio. Vai junto na resposta, para a Sala poder auditar. */
@@ -208,6 +208,15 @@ export function baseDeVerdade(): ItemDeVerdade[] {
       texto: `${s.name}: ${s.desc} O preço é ${s.price.toLowerCase()}.`,
     });
   }
+
+  // Mais de uma loja — a pergunta que a medição de cobertura pegou vazia, e que
+  // é das primeiras de quem tem duas lojas.
+  itens.push({
+    id: "mais-de-uma-loja",
+    fonte: "servico-a-parte",
+    sobre: MAIS_DE_UMA_LOJA.pergunta,
+    texto: MAIS_DE_UMA_LOJA.resposta,
+  });
 
   itens.push({
     id: "a-parte-nota-fiscal",
