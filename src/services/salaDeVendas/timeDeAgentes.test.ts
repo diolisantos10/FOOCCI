@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   TIME_DE_AGENTES,
@@ -42,6 +42,32 @@ import { abasDoComercial } from "@/lib/sala/rotas";
  */
 function semComentarios(fonte: string): string {
   return fonte.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+/**
+ * Acha a tela de acessos onde quer que ela esteja.
+ *
+ * O arquivo já mudou de pasta uma vez e derrubou este teste com `ENOENT` — a
+ * falha mais inútil que um teste pode dar, porque diz "não achei o arquivo" e
+ * não diz nada sobre a regra que ele guarda. Quem lê conclui "teste quebrado" e
+ * conserta o caminho sem olhar se a regra continua valendo.
+ *
+ * Falhar por ausência **ainda é falha** — se um dia o arquivo sumir de verdade,
+ * a mensagem abaixo diz isso com todas as letras em vez de despejar um erro de
+ * sistema de arquivos.
+ */
+function acharAcessosClient(): string {
+  const candidatos = [
+    "src/app/comercial/acessos/AcessosClient.tsx",
+    "src/app/comercial/(area)/acessos/AcessosClient.tsx",
+  ];
+  for (const c of candidatos) {
+    const p = join(process.cwd(), c);
+    if (existsSync(p)) return p;
+  }
+  throw new Error(
+    `a tela de acessos sumiu — procurei em: ${candidatos.join(", ")}`,
+  );
 }
 
 function fonteDaRotaDoTime(): string {
@@ -199,12 +225,11 @@ describe("⭐ o agente já é parte do sistema — não se admite", () => {
   it("e a tela de acessos não fala mais em pôr agente no sistema", () => {
     // A tela é de GENTE. Um botão de agente aqui traz de volta a ideia de que
     // ele está do lado de fora esperando.
-    const tela = semComentarios(
-      readFileSync(
-        join(process.cwd(), "src/app/comercial/(area)/acessos/AcessosClient.tsx"),
-        "utf8",
-      ),
-    );
+    // ⚠️ Procura o arquivo em vez de fixar o caminho: ele já mudou de lugar uma
+    // vez — saiu de `(area)/` quando a moldura passou a exigir sessão de pessoa
+    // — e o teste quebrou por ENOENT, que é a falha mais inútil possível: diz
+    // "não achei", não diz "a regra foi violada".
+    const tela = semComentarios(readFileSync(acharAcessosClient(), "utf8"));
     expect(tela, "a tela de acessos voltou a admitir agente").not.toMatch(
       /P[oô]r no sistema|TIME_DE_AGENTES/,
     );

@@ -31,7 +31,6 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { lerSessaoInterna } from "@/lib/internal-auth";
 import { ENTRADA, abasDoComercial } from "@/lib/sala/rotas";
 import { SairDoComercial } from "./SairDoComercial";
@@ -43,13 +42,28 @@ export const metadata = {
 export default function ComercialLayout({ children }: { children: React.ReactNode }) {
   const sessao = lerSessaoInterna();
 
-  // As duas portas, como no Admin (ADR-003): a sessão da pessoa e a senha antiga
-  // da casa. Quem entra pela senha antiga não tem papel — e vê tudo, como sempre.
-  if (!isAdminAuthenticated() && !sessao) {
+  // ── ⚠️ UMA PORTA SÓ, E ELA TEM NOME ──────────────────────────────────────
+  //
+  // Antes eram duas: a sessão da pessoa **ou** a senha da casa. A senha da casa
+  // abria a moldura — todos os menus — e as rotas de dentro a recusavam. Meia
+  // porta.
+  //
+  // O CEO abriu e disse o que via: *"é uma tela sem nada, só com login e senha.
+  // Não tem que aparecer os menus, nada."* Ele estava certo, e o defeito era
+  // pior que estético: uma sala cheia de abas em que **nenhuma abre** ensina que
+  // o sistema está quebrado. E era o contrário — o sistema estava recusando
+  // corretamente alguém sem nome.
+  //
+  // Agora, sem sessão de pessoa, não há casa: há a tela de entrar.
+  //
+  // A porta de emergência não sumiu — ela mudou de lugar. `/comercial/acessos`
+  // vive FORA desta moldura e continua aceitando a senha da casa, senão o
+  // primeiro acesso da vida não teria por onde nascer.
+  if (!sessao) {
     redirect(ENTRADA);
   }
 
-  const abas = abasDoComercial(sessao?.role ?? null);
+  const abas = abasDoComercial(sessao.role);
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
@@ -67,7 +81,7 @@ export default function ComercialLayout({ children }: { children: React.ReactNod
                 onde assumir conversa é ato registrado, "quem sou eu agora" não
                 pode depender de memória — nem de abrir outra tela para conferir. */}
             <span className="hidden truncate text-[12.5px] text-ink2 sm:block">
-              {sessao?.nome ?? "acesso de administração"}
+              {sessao.nome}
             </span>
             <SairDoComercial />
           </div>
