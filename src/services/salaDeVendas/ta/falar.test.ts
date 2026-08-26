@@ -202,6 +202,44 @@ describe("o TA nunca fica mudo", () => {
   });
 });
 
+describe("⭐ a sondagem só anda quando ele REALMENTE perguntou", () => {
+  // O defeito: `responder()` calcula a próxima pergunta e a inclui no texto
+  // DELE. Com o modelo redigindo, o texto que sai é outro — e o índice
+  // continuava sendo devolvido como se a pergunta tivesse sido feita.
+  //
+  // Depois de cinco turnos a lista ficaria inteira marcada como "já perguntei", e
+  // o TA sem sondagem sem ter feito uma única pergunta. Ninguém notaria olhando a
+  // tela: a conversa simplesmente pararia de avançar, e pareceria falta de assunto.
+
+  it("modelo que NÃO perguntou nada não queima uma pergunta da lista", async () => {
+    modeloResponde("O Foocci monta o pedido junto com o cliente, no seu canal próprio.");
+
+    const r = await falar({ mensagem: "me explica melhor o que é o Foocci" });
+
+    expect(r.origem).toBe("modelo");
+    expect(r.perguntouIndice, "queimou uma pergunta sem ter perguntado").toBeNull();
+  });
+
+  it("modelo que perguntou marca a pergunta como feita", async () => {
+    // A metade que passa. Sem ela, uma regra que nunca marcasse faria o TA
+    // repetir a primeira pergunta para sempre.
+    modeloResponde("O pedido sai pelo seu canal. Quantas unidades você tem hoje?");
+
+    const r = await falar({ mensagem: "me explica melhor o que é o Foocci" });
+
+    expect(r.perguntouIndice).toBe(0);
+  });
+
+  it("o caminho determinístico continua marcando — o texto dele TEM a pergunta", async () => {
+    delete process.env.OPENAI_API_KEY;
+
+    const r = await falar({ mensagem: "oi, vi o site de vocês" });
+
+    expect(r.origem).toBe("chao-deterministico");
+    expect(r.perguntouIndice).toBe(0);
+  });
+});
+
 describe("o modelo lê o que a casa mandou ler", () => {
   it("⭐ o conhecimento do produto vai junto na pergunta", async () => {
     await falar({ mensagem: "como funciona o pagamento por pix?" });

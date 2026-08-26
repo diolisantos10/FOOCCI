@@ -106,16 +106,46 @@ export async function falar(
   return {
     texto: fala.texto,
     apoiadoEm: fala.apoiadoEm,
-    // A pergunta de sondagem que o TA fez continua vindo do caminho
-    // determinístico: é ela que a memória da conversa usa para não repetir. O
-    // modelo pode reformular a pergunta com as palavras dele — o índice diz
-    // QUAL pergunta foi feita, não com que palavras.
-    perguntouIndice: base.perguntouIndice,
+    perguntouIndice: indiceRealmentePerguntado(base, fala),
     handoff,
     porque: fala.porque,
     origem: fala.origem,
     reprovacoes: fala.reprovacoes,
   };
+}
+
+/**
+ * A sondagem só anda quando o TA REALMENTE perguntou alguma coisa.
+ *
+ * ── O DEFEITO QUE ISTO CORRIGE ──────────────────────────────────────────────
+ *
+ * `responder()` calcula a próxima pergunta da sondagem e a inclui no texto
+ * DELE. Quando o modelo passou a redigir, o texto que sai é outro — mas o
+ * índice continuava sendo devolvido como se a pergunta tivesse sido feita.
+ *
+ * O resultado é uma memória que se descola da conversa: depois de cinco turnos a
+ * lista está inteira marcada como "já perguntei", e o TA ficou sem sondagem sem
+ * ter feito uma única pergunta. Ninguém notaria olhando a tela — a conversa
+ * simplesmente pararia de avançar, e pareceria falta de assunto.
+ *
+ * ── A REGRA, E POR QUE ELA É ESTA ───────────────────────────────────────────
+ *
+ * Quando o texto veio do caminho determinístico, o índice vale: aquele texto
+ * contém a pergunta, palavra por palavra.
+ *
+ * Quando veio do modelo, não dá para saber QUAL pergunta ele fez — ele
+ * reformula, junta duas, ou nem pergunta. Dá para saber se ele perguntou
+ * ALGUMA: se o texto tem interrogação. Sem ela, nada é marcado.
+ *
+ * É aproximação, e assumida como tal. A alternativa — pedir ao modelo que
+ * devolva o índice — trocaria uma imprecisão pequena por uma dependência de
+ * ele obedecer ao formato, que é a parte dele em que menos se pode confiar.
+ * E o erro desta aproximação é o barato: na dúvida, não marca — o pior caso é
+ * o TA insistir num assunto, não é ele emudecer.
+ */
+function indiceRealmentePerguntado(base: Resposta, fala: FalaDoTA): number | null {
+  if (fala.origem === "chao-deterministico") return base.perguntouIndice;
+  return fala.texto.includes("?") ? base.perguntouIndice : null;
 }
 
 /**
