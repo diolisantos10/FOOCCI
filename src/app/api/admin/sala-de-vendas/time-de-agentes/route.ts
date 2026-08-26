@@ -1,144 +1,46 @@
 /**
- * O TIME DE AGENTES — pôr um agente no sistema. Sem senha, e sem como ganhar uma.
+ * GET /api/admin/sala-de-vendas/time-de-agentes
  *
- * ── POR QUE ESTA ROTA EXISTE, SE JÁ HÁ `primeiro-acesso` ────────────────────
+ * Quem é o time, e ele já está no sistema.
  *
- * Porque `primeiro-acesso` faz uma coisa que aqui seria defeito: **sorteia uma
- * senha e a devolve na resposta**. Ela existe para GENTE, que precisa digitar
- * algo depois.
+ * ── ⚠️ ESTA ROTA NÃO TEM POST, E A AUSÊNCIA É A DECISÃO ─────────────────────
  *
- * Agente não digita nada. O CEO foi direto em 26/08/2026: *"os agentes de IA,
- * eles não têm login, eles estão lá no sistema"*. Uma senha aqui seria uma
- * credencial que ninguém usa — e credencial que ninguém usa é credencial que
- * qualquer um pode usar, porque ninguém sente falta quando ela roda.
+ * Tinha. Era `POST { slug }`, e servia a um botão **"Pôr no sistema"**, um por
+ * agente. O CEO leu a tela e corrigiu, em 26/08/2026: *"os agentes já são parte
+ * do sistema. Eles não são externos, eles fazem parte do sistema. Os humanos é
+ * que vão ter que fazer login e entrar no sistema"*.
  *
- * Reaproveitar a outra rota com um `if` seria pior que duplicar: bastaria
- * alguém inverter a condição um dia para o agente voltar a ter senha, e nada
- * na tela mostraria isso. Rota separada torna o "sem senha" estrutural — este
- * arquivo não tem `randomBytes`, não tem `hash`, e não tem o que vazar.
+ * O botão era o resto de uma ideia errada que já tinha sido corrigida uma vez no
+ * mesmo dia: primeiro dei **senha** ao agente, supondo que ele usa tela; tirei a
+ * senha e mantive o botão — ou seja, continuei tratando-o como alguém que chega
+ * de fora e precisa ser admitido.
  *
- * ── AS DUAS TRAVAS ──────────────────────────────────────────────────────────
+ * Agora o GET **garante** o time e o devolve. Abrir a tela é o bastante; não há
+ * o que clicar, porque não há nada a decidir.
  *
- * 1. **`passwordHash` nunca é escrito.** Fica `null`, e `autenticarInterno`
- *    recusa quem não tem hash.
- * 2. **O papel é `AGENTE_IA`, fixo neste arquivo** — não vem do corpo do
- *    pedido. `autenticarInterno` recusa esse papel *mesmo com hash gravado*.
+ * ── O QUE CONTINUA VALENDO ──────────────────────────────────────────────────
  *
- * Duas travas para a mesma coisa é de propósito: a primeira cai sozinha no dia
- * em que alguém rodar um script de "resetar senha de todo mundo" em cima da
- * tabela. A segunda continua de pé nesse dia.
+ * Nenhuma senha, em lugar nenhum. Este arquivo não importa `bcryptjs`, não
+ * sorteia nada, e o papel `AGENTE_IA` é recusado por `autenticarInterno` mesmo
+ * com hash gravado no banco. Tirar o POST não afrouxou nada — tirou uma porta.
  *
  * ── O QUE ESTA ROTA NÃO FAZ ─────────────────────────────────────────────────
  *
  * Não liga o agente para atender. Quem responde ao cliente é o TA, e o
- * interruptor dele continua sendo do dono (`interruptor.ts`). Pôr o agente no
- * sistema é dar-lhe identidade para assumir lead e assinar a trilha — não é
- * soltá-lo na linha.
+ * interruptor dele continua sendo do dono (`interruptor.ts`). Existir no sistema
+ * é ter identidade para assumir lead e assinar a trilha — não é estar na linha.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { lerSessaoInterna } from "@/lib/internal-auth";
-import {
-  agentePorSlug,
-  PAPEL_DO_TIME,
-  DEPARTAMENTOS_DO_TIME,
-} from "@/services/salaDeVendas/timeDeAgentes";
+import { TIME_DE_AGENTES } from "@/services/salaDeVendas/timeDeAgentes";
+import { garantirTimeNoSistema } from "@/services/salaDeVendas/garantirTime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-interface Corpo {
-  slug?: unknown;
-}
-
-export async function POST(req: NextRequest) {
-  const sessao = lerSessaoInterna();
-  const eDono =
-    isAdminAuthenticated() ||
-    sessao?.role === "MASTER_CEO" ||
-    sessao?.role === "DIRETOR_FOOCCI";
-
-  if (!eDono) {
-    return NextResponse.json(
-      { ok: false, error: "Só o dono da casa põe agente no sistema." },
-      { status: 403 },
-    );
-  }
-
-  const corpo = (await req.json().catch(() => ({}))) as Corpo;
-  const slug = typeof corpo.slug === "string" ? corpo.slug : "";
-
-  // ⚠️ O nome e o e-mail vêm da LISTA, nunca do pedido. Aceitá-los do corpo
-  // deixaria qualquer chamada inventar um agente com o e-mail de uma pessoa de
-  // verdade — e o `upsert` abaixo cairia em cima do registro dela.
-  const agente = agentePorSlug(slug);
-  if (!agente) {
-    return NextResponse.json(
-      { ok: false, error: `Agente desconhecido: ${slug || "(vazio)"}` },
-      { status: 400 },
-    );
-  }
-
-  const jaExistia = await prisma.internalUser.findUnique({
-    where: { email: agente.email },
-    select: { id: true },
-  });
-
-  const user = await prisma.internalUser.upsert({
-    where: { email: agente.email },
-    // O update NÃO toca em `passwordHash`. Se um dia alguém gravar um hash aqui
-    // por fora, clicar de novo no botão não o apaga — mas o papel `AGENTE_IA`
-    // continua barrando o login. É a segunda trava fazendo o trabalho dela.
-    update: { nome: agente.nome, role: PAPEL_DO_TIME, isActive: true },
-    create: { email: agente.email, nome: agente.nome, role: PAPEL_DO_TIME },
-  });
-
-  for (const slugDep of DEPARTAMENTOS_DO_TIME) {
-    const dep = await prisma.department.findUnique({
-      where: { slug: slugDep },
-      select: { id: true },
-    });
-    if (!dep) continue; // departamento inexistente não derruba a entrada do agente
-    await prisma.departmentMembership.upsert({
-      where: { internalUserId_departmentId: { internalUserId: user.id, departmentId: dep.id } },
-      update: {},
-      create: { internalUserId: user.id, departmentId: dep.id, isManager: false },
-    });
-  }
-
-  await prisma.internalAuditEvent.create({
-    data: {
-      actorType: sessao ? "INTERNAL_USER" : "SYSTEM",
-      actorLabel: sessao ? `${sessao.nome} (${sessao.userId})` : "porta do ADMIN_SECRET",
-      acao: "por_agente_no_sistema",
-      recurso: `internal_users/${user.id}`,
-      resultado: "PERMITIDO",
-      detalhe: { slug: agente.slug, email: agente.email, jaExistia: Boolean(jaExistia) },
-    },
-  });
-
-  return NextResponse.json({
-    ok: true,
-    data: {
-      slug: agente.slug,
-      nome: agente.nome,
-      // Sem `senha` e sem `trocouSenha`: não há o que anotar. A tela lê a
-      // ausência destes campos como "está no sistema" — e é a verdade.
-      jaEstava: Boolean(jaExistia),
-    },
-  });
-}
-
-/**
- * GET — quem do time já está no sistema.
- *
- * A tela precisa disto para não oferecer "pôr no sistema" a quem já está. Sem
- * esta leitura, o botão seria um interruptor sem lâmpada: clicar de novo não
- * quebra nada (o upsert é idempotente), mas quem clica não tem como saber se
- * precisava.
- */
 export async function GET() {
   const sessao = lerSessaoInterna();
   const eDono =
@@ -150,13 +52,39 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Sem acesso." }, { status: 403 });
   }
 
-  const dentro = await prisma.internalUser.findMany({
-    where: { role: PAPEL_DO_TIME, isActive: true },
-    select: { email: true },
-  });
+  const r = await garantirTimeNoSistema(prisma);
+
+  // A trilha registra só quando algo mudou. Registrar a leitura toda vez encheria
+  // a auditoria de linhas que dizem "nada aconteceu", e a trilha existe para
+  // que o que aconteceu seja fácil de achar.
+  if (r.criados > 0) {
+    try {
+      await prisma.internalAuditEvent.create({
+        data: {
+          actorType: sessao ? "INTERNAL_USER" : "SYSTEM",
+          actorLabel: sessao ? `${sessao.nome} (${sessao.userId})` : "porta do ADMIN_SECRET",
+          acao: "time_de_agentes_materializado",
+          recurso: "sala-de-vendas/time-de-agentes",
+          resultado: "PERMITIDO",
+          detalhe: { criados: r.criados, jaEstavam: r.jaEstavam },
+        },
+      });
+    } catch {
+      // Trilha fora do ar não impede a tela de abrir.
+    }
+  }
 
   return NextResponse.json({
     ok: true,
-    data: { emails: dentro.map((u) => u.email) },
+    data: {
+      // A lista vem do código, não do banco: ela é a definição do time. O banco
+      // guarda o registro de cada um, e é conferido acima.
+      time: TIME_DE_AGENTES.map((a) => ({
+        slug: a.slug,
+        nome: a.nome,
+        funcao: a.funcao,
+      })),
+      noSistema: r.jaEstavam + r.criados,
+    },
   });
 }

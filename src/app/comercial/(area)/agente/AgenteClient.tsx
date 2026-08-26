@@ -113,6 +113,8 @@ export function AgenteClient() {
 
         <Botoes e={e} ocupado={ocupado} agir={agir} />
 
+        <OTime />
+
         <AsPecas e={e} />
 
         {e.identidade && (
@@ -296,6 +298,87 @@ function Cartao({
     <section className={`rounded-2xl border p-4 sm:p-5 ${borda}`}>
       <h2 className="text-[15px] font-semibold leading-snug tracking-[-.01em] text-ink">{titulo}</h2>
       <div className="mt-1.5 max-w-[64ch] text-[13.5px] leading-relaxed text-ink2">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * O TIME — quem está no sistema, e ele já está.
+ *
+ * ── POR QUE ISTO NÃO TEM BOTÃO ──────────────────────────────────────────────
+ *
+ * Teve. Ficava na tela de acessos, um "Pôr no sistema" por agente, e o CEO
+ * corrigiu em 26/08/2026: *"os agentes já são parte do sistema. Eles não são
+ * externos, eles fazem parte do sistema. Os humanos é que vão ter que fazer
+ * login e entrar no sistema"*.
+ *
+ * Ele está certo, e o botão era o resto de uma premissa errada que eu já tinha
+ * corrigido pela metade no mesmo dia — a de que o agente chega de fora e precisa
+ * ser admitido. Ele não chega: existe porque o sistema existe.
+ *
+ * Abrir esta tela é o que garante que eles estão lá (`garantirTime.ts`). Não há
+ * o que clicar porque não há o que decidir.
+ *
+ * ── E POR QUE ELE MORA AQUI, E NÃO EM "ACESSOS" ─────────────────────────────
+ *
+ * "Acessos" trata de **entrar**, e entrar é coisa de quem está do lado de fora.
+ * Esta é a tela do lado de dentro: o interruptor do TA, a ficha publicada e
+ * quem forma o time. É onde alguém que pergunta "quem está atendendo à noite?"
+ * vai procurar.
+ */
+function OTime() {
+  const [time, setTime] = useState<Array<{ slug: string; nome: string; funcao: string }>>([]);
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/sala-de-vendas/time-de-agentes", { cache: "no-store" });
+        const j = (await res.json()) as {
+          ok: boolean;
+          data?: { time: Array<{ slug: string; nome: string; funcao: string }> };
+        };
+        if (vivo && j.ok && j.data) setTime(j.data.time);
+      } catch {
+        // A lista não abrir não pode derrubar o interruptor do TA, que é o que
+        // esta tela existe para mostrar.
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  // Sem lista, sem seção. Uma caixa vazia dizendo "time de agentes" faria
+  // parecer que o time sumiu, quando o que houve foi uma leitura que falhou.
+  if (time.length === 0) return null;
+
+  return (
+    <section className="mt-5 rounded-2xl border border-line bg-paper p-4">
+      <h2 className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+        O time de agentes
+      </h2>
+      <p className="mt-2 max-w-[70ch] text-[13px] leading-relaxed text-muted">
+        Já fazem parte do sistema — não têm login e não precisam ser cadastrados.
+        Cada um assume lead e assina a conversa com o nome dele.
+      </p>
+
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {time.map((a) => (
+          <li
+            key={a.slug}
+            className="flex flex-wrap items-baseline gap-x-2 rounded-lg border border-line px-3 py-2"
+          >
+            <span className="text-[13.5px] font-semibold text-ink">{a.nome}</span>
+            <span className="text-[12.5px] text-muted">{a.funcao}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
+        ⚠️ Estar no sistema não é estar na linha. Quem responde ao cliente é o TA,
+        e o interruptor dele é o de cima.
+      </p>
     </section>
   );
 }
