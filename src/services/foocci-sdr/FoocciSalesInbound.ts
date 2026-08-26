@@ -15,10 +15,21 @@
  * telefone), cria o contato quando ele não existe, aplica pedido de silêncio e
  * registra a entrada na linha do tempo do lead.
  *
- * NÃO FAZ: **não redige e não envia nada**. Compor a resposta é do Cérebro, com
- * portão, verdade da Foocci e verificador de promessa — e a escada de liberação
- * ainda não autorizou a primeira mensagem. Este módulo devolve o que aconteceu e
- * cala a boca. Um recepcionista que anota o recado não é o vendedor.
+ * NÃO ENVIA NADA. Nunca enviou e continua não enviando: quem entrega é o canal,
+ * e o canal só entrega com `FOOCCI_SDR_SEND_ENABLED` ligada pelo CEO.
+ *
+ * ⚠️ MUDOU EM 25/08/2026 — antes este cabeçalho dizia "não redige". Passou a
+ * redigir. A recepção agora chama o TA (`salaDeVendas/ta/atender.ts`) depois de
+ * gravar a entrada, e o que ele compõe fica em `lead_mensagens` como PENDENTE.
+ *
+ * A separação que continua valendo — e é a que importa — não é entre "anotar" e
+ * "redigir": é entre **pensar** e **falar**. Receber, entender e compor não
+ * chegam a ninguém de fora. Entregar é outro ato, com outra chave, e essa chave
+ * não está aqui.
+ *
+ * O TA decide sozinho se pode falar: são sete portões dentro dele, e o primeiro
+ * é a chave mestra do CEO. Este módulo não repete nenhum deles — repetir portão
+ * é o jeito de acabar com duas versões da mesma regra e uma delas desatualizada.
  *
  * ⚠️ E NÃO TOCA em `Customer`, `Conversation` nem `Message`: quem escreve no
  * número de vendas é um dono de restaurante interessado no Foocci, não cliente de
@@ -33,6 +44,7 @@ import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { registrarEntrada } from "@/services/salaDeVendas/conversa";
 import { comIdentidade, comoSistema } from "@/services/salaDeVendas/identidadeNoBanco";
+import { atenderComOTA, type ResultadoDoTurno } from "@/services/salaDeVendas/ta/atender";
 import type { TipoDaMensagem } from "@prisma/client";
 
 // ─── A parte pura ───────────────────────────────────────────────────────────────
@@ -80,6 +92,15 @@ export interface EntradaDeVendas {
   codigo: string | null;
   /** Frase curta com o caso concreto, para o log (guardrail 6). */
   detalhe: string;
+  /**
+   * O que o TA fez com este "oi", quando chegou a ser chamado.
+   *
+   * Ausente = ele não foi consultado (pedido de silêncio, mensagem sem texto,
+   * ou falha antes disso). **Presente e calado é diferente de ausente**, e a
+   * diferença é o que permite responder "por que o TA não respondeu aquele
+   * cliente?" sem abrir o banco.
+   */
+  ta?: ResultadoDoTurno;
 }
 
 // ─── O recepcionista ────────────────────────────────────────────────────────────
@@ -176,6 +197,7 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
         leadId: novo.id,
         codigo: novo.codigo,
         detalhe: "primeiro contato pelo WhatsApp, sem formulário",
+        ta: await chamarOTA(novo.id, msg, leitura, agora),
       };
     }
 
@@ -192,6 +214,7 @@ export async function receberMensagemDeVendas(msg: MensagemDeVendas): Promise<En
       leadId: lead.id,
       codigo: lead.codigo,
       detalhe: leitura.codigo ? `código #${leitura.codigo}` : "reconhecido pelo telefone",
+      ta: await chamarOTA(lead.id, msg, leitura, agora),
     };
   } catch (e) {
     console.error("[foocci-sdr] falha ao receber mensagem de vendas:", e);
@@ -258,6 +281,50 @@ async function gravarNaConversa(
     }
   } catch (e) {
     console.error("[foocci-sdr] falha ao gravar mensagem na conversa:", e);
+  }
+}
+
+/**
+ * Chama o TA — depois de a entrada estar gravada, e nunca antes.
+ *
+ * ── A ORDEM É O DESENHO ─────────────────────────────────────────────────────
+ *
+ * O TA lê a conversa para saber o que já perguntou. Chamá-lo antes de gravar a
+ * mensagem que acabou de chegar o faria responder ao turno anterior — e repetir
+ * uma pergunta que a pessoa acabou de responder é a coisa que mais denuncia um
+ * robô numa conversa.
+ *
+ * ── E POR QUE ELE NUNCA DERRUBA A RECEPÇÃO ──────────────────────────────────
+ *
+ * Mesmo motivo de `gravarNaConversa`: o contato já foi reconhecido e a mensagem
+ * já está na conversa. Devolver erro ao webhook faria a Meta reentregar — e a
+ * reentrega passaria de novo pelos caminhos que criam contato. Perder uma
+ * resposta do TA é ruim; duplicar o contato do cliente é pior.
+ *
+ * `atenderComOTA` já não lança, e o `catch` aqui é o cinto do cinto.
+ */
+async function chamarOTA(
+  leadId: string,
+  msg: MensagemDeVendas,
+  leitura: LeituraDaMensagem,
+  agora: Date,
+): Promise<ResultadoDoTurno | undefined> {
+  // Sem texto não há o que responder: figurinha, áudio e anexo não passam pela
+  // base de verdade, e o TA não adivinha o que tem dentro de um áudio. Quem
+  // atende isso é gente — e o lead já está na fila com a mídia na conversa.
+  if (!leitura.temTexto || !msg.text) return undefined;
+
+  try {
+    // Dentro de `comIdentidade` pelo mesmo motivo da gravação da entrada: o RLS
+    // precisa do papel declarado, senão a escrita do TA não passa pela trava.
+    return await comIdentidade(
+      prisma,
+      comoSistema("webhook da Meta: o TA respondendo, sem usuário logado"),
+      (tx) => atenderComOTA(tx, { leadId, mensagem: msg.text!, agora }),
+    );
+  } catch (e) {
+    console.error(`[foocci-sdr] o TA não conseguiu atender o lead ${leadId}:`, e);
+    return undefined;
   }
 }
 

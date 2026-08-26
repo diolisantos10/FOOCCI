@@ -14,22 +14,37 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   siteLead: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   siteLeadInteraction: { create: vi.fn() },
+  // A recepção abre transação para declarar a identidade ao RLS antes de
+  // gravar a entrada e antes de chamar o TA. Aqui ela só repassa.
+  $transaction: vi.fn(async (trabalho: (tx: unknown) => unknown) =>
+    trabalho({ $executeRaw: vi.fn() }),
+  ),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/services/whatsapp/WhatsAppMessagingService", () => ({
   WhatsAppMessagingService: { getConnectionStatus: vi.fn() },
 }));
 
+// O TA é dublê aqui de propósito: os sete portões dele têm arquivo próprio
+// (`salaDeVendas/ta/atender.test.ts`). O que ESTES casos provam é a fiação —
+// que o "oi" chega até ele, com o texto certo, e só quando deve.
+const taMock = vi.hoisted(() => vi.fn());
+vi.mock("@/services/salaDeVendas/ta/atender", () => ({ atenderComOTA: taMock }));
+
 import { receberMensagemDeVendas, interpretarMensagemDeVendas } from "../FoocciSalesInbound";
 
 const AGORA = new Date("2026-08-14T15:00:00Z");
 
 beforeEach(() => {
-  Object.values(prismaMock).forEach((tabela) =>
+  // Só as TABELAS. `$transaction` é uma função no topo do objeto, e varrê-la
+  // como se fosse tabela quebra o laço nas propriedades internas do dublê.
+  [prismaMock.siteLead, prismaMock.siteLeadInteraction].forEach((tabela) =>
     Object.values(tabela).forEach((fn) => (fn as ReturnType<typeof vi.fn>).mockReset()),
   );
   prismaMock.siteLeadInteraction.create.mockResolvedValue({});
   prismaMock.siteLead.update.mockResolvedValue({});
+  taMock.mockReset();
+  taMock.mockResolvedValue({ falou: false, chamouGente: false, motivo: "taDesligado", detalhe: "desligado" });
 });
 
 // ── A leitura pura ────────────────────────────────────────────────────────────
@@ -157,5 +172,104 @@ describe("falha nunca vira sucesso silencioso", () => {
 
     expect(r.status).toBe("FALHOU");
     expect(r.detalhe).toContain("db down");
+  });
+});
+
+// ── A FIAÇÃO: o "oi" chega ao TA ─────────────────────────────────────────────
+//
+// Até 25/08/2026 esta ligação não existia. A recepção anotava o recado, o TA
+// sabia responder, e nada os apresentava: uma pessoa escrevia no número de
+// vendas e a conversa ficava esperando alguém abrir a tela. Os casos abaixo
+// guardam a ligação — e, principalmente, os dois lugares onde ela NÃO acontece.
+
+describe("a recepção entrega o turno ao TA", () => {
+  it("lead reconhecido: o TA é chamado com o texto que a pessoa escreveu", async () => {
+    prismaMock.siteLead.findUnique.mockResolvedValue({ id: "L1", codigo: "A7K2M", optOutAt: null });
+    taMock.mockResolvedValue({ falou: true, mensagemId: "m9", resposta: { texto: "oi" } });
+
+    const r = await receberMensagemDeVendas({
+      fromPhone: "5511999990000",
+      text: "quanto custa o plano crescimento? #A7K2M",
+      agora: AGORA,
+    });
+
+    expect(taMock).toHaveBeenCalledTimes(1);
+    expect(taMock.mock.calls[0]![1]).toMatchObject({
+      leadId: "L1",
+      mensagem: "quanto custa o plano crescimento? #A7K2M",
+      agora: AGORA,
+    });
+    // E o que ele decidiu volta no resultado: "calado" e "nem consultado"
+    // são estados diferentes, e a diferença responde por que o cliente ficou
+    // sem resposta sem precisar abrir o banco.
+    expect(r.ta).toMatchObject({ falou: true, mensagemId: "m9" });
+  });
+
+  it("contato novo também é atendido — quem escreve primeiro é quem mais espera", async () => {
+    prismaMock.siteLead.findFirst.mockResolvedValue(null);
+    prismaMock.siteLead.create.mockResolvedValue({ id: "L3", codigo: null, optOutAt: null });
+
+    await receberMensagemDeVendas({
+      fromPhone: "5511988887777",
+      text: "oi, vi o anúncio",
+      agora: AGORA,
+    });
+
+    expect(taMock).toHaveBeenCalledTimes(1);
+    expect(taMock.mock.calls[0]![1]).toMatchObject({ leadId: "L3" });
+  });
+
+  it("⭐ quem pediu silêncio NÃO é entregue ao TA", async () => {
+    // O caso que carrega este bloco. O TA barraria sozinho — ele tem o portão
+    // de opt-out —, mas depender disso seria pôr a única garantia de silêncio
+    // dentro do módulo que existe para falar. Aqui ele nem é chamado.
+    prismaMock.siteLead.findFirst.mockResolvedValue({ id: "L4", codigo: null, optOutAt: null });
+
+    const r = await receberMensagemDeVendas({
+      fromPhone: "5511977776666",
+      text: "PARAR",
+      agora: AGORA,
+    });
+
+    expect(r.status).toBe("PEDIU_SILENCIO");
+    expect(taMock).not.toHaveBeenCalled();
+    expect(r.ta).toBeUndefined();
+  });
+
+  it("figurinha e áudio não vão para o TA — ele não adivinha o que tem dentro", async () => {
+    prismaMock.siteLead.findFirst.mockResolvedValue({ id: "L5", codigo: null, optOutAt: null });
+
+    await receberMensagemDeVendas({ fromPhone: "5511966665555", text: null, agora: AGORA });
+
+    expect(taMock).not.toHaveBeenCalled();
+  });
+
+  it("mensagem só com espaços também não vai — texto vazio não é pergunta", async () => {
+    // Parece o mesmo caso do de cima e NÃO é: ali o texto vem nulo, aqui vem uma
+    // string de verdade que só não tem conteúdo. Sem este caso, a guarda podia
+    // ser reduzida a `if (!msg.text)` e passar em tudo — deixando o TA compor
+    // uma resposta de venda para alguém que apertou espaço sem querer.
+    prismaMock.siteLead.findFirst.mockResolvedValue({ id: "L5b", codigo: null, optOutAt: null });
+
+    await receberMensagemDeVendas({ fromPhone: "5511966665555", text: "   \n  ", agora: AGORA });
+
+    expect(taMock).not.toHaveBeenCalled();
+  });
+
+  it("TA quebrado não derruba a recepção — a mensagem continua registrada", async () => {
+    // A Meta reentrega o que falhou. Uma exceção aqui viraria a mesma mensagem
+    // batendo em laço — e passando de novo pelos caminhos que criam contato.
+    prismaMock.siteLead.findFirst.mockResolvedValue({ id: "L6", codigo: null, optOutAt: null });
+    taMock.mockRejectedValue(new Error("modelo fora do ar"));
+
+    const r = await receberMensagemDeVendas({
+      fromPhone: "5511955554444",
+      text: "vocês integram com iFood?",
+      agora: AGORA,
+    });
+
+    expect(r.status).toBe("RECONHECIDO_POR_TELEFONE");
+    expect(r.leadId).toBe("L6");
+    expect(r.ta).toBeUndefined();
   });
 });

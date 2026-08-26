@@ -135,25 +135,54 @@ export function telefonePlausivel(v: string | null | undefined): boolean {
  * Feito com `Intl` e não com `getHours()` de propósito: o servidor roda em UTC, e
  * `getHours()` daria 19h em Londres às 16h em São Paulo — três horas de invasão
  * na casa das pessoas, num robô que existe justamente para não incomodar.
+ *
+ * ── ⚠️ `hourCycle: "h23"`, E ELE NÃO É DECORAÇÃO ────────────────────────────
+ *
+ * Antes daqui a opção era `hour12: false`, que **não fixa o ciclo**: o motor
+ * escolhe entre h23 (00–23) e h24 (01–24) conforme a versão do ICU embutida no
+ * Node. Na mesma data e no mesmo código, `hour12: false` devolveu `00` na
+ * máquina de desenvolvimento e `24` no runner do CI.
+ *
+ * O estrago é silencioso e mora exatamente na meia-noite: com a janela indo até
+ * as 24, `24 >= 24` fecha o canal — ou seja, quem configura "24 horas por dia" é
+ * o único que fica sem atendimento, e só na virada do dia.
+ *
+ * O `% 24` depois é cinto do cinto: se algum motor voltar a devolver 24, ele
+ * vira 0 aqui em vez de virar um bloqueio em produção.
  */
 export function agendaLocal(agora: Date, tz: string = REGRA.fusoHorario): { dia: number; hora: number; minuto: number } {
   const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   });
   const p = fmt.formatToParts(agora);
   const mapa: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return {
     dia: mapa[p.find((x) => x.type === "weekday")?.value ?? "Sun"] ?? 0,
-    hora: parseInt(p.find((x) => x.type === "hour")?.value ?? "0", 10),
+    hora: parseInt(p.find((x) => x.type === "hour")?.value ?? "0", 10) % 24,
     minuto: parseInt(p.find((x) => x.type === "minute")?.value ?? "0", 10),
   };
 }
 
-/** true quando AGORA está fora da janela de abordagem. */
-export function foraDaJanela(agora: Date): boolean {
+/**
+ * true quando AGORA está fora da janela de abordagem.
+ *
+ * A janela entra por parâmetro porque ela é **ajustável pelo dono**: a
+ * configuração do TA guarda `horaInicio`/`horaFim`, e um botão na tela que o
+ * código ignora é pior que botão nenhum — ele ensina que a configuração vale, e
+ * ela não vale. O padrão continua sendo `REGRA`, que é o que o SDR de abordagem
+ * usa e não se negocia.
+ *
+ * O que **não** entra por parâmetro é o fim de semana. Sábado e domingo estão
+ * fora, e a linha acima do `REGRA.diasUteis` diz que não é negociável — deixar
+ * isso configurável seria abrir a regra pela porta dos fundos.
+ */
+export function foraDaJanela(
+  agora: Date,
+  janela: { inicioHora: number; fimHora: number } = REGRA.janela,
+): boolean {
   const { dia, hora } = agendaLocal(agora);
   if (!(REGRA.diasUteis as readonly number[]).includes(dia)) return true;
-  return hora < REGRA.janela.inicioHora || hora >= REGRA.janela.fimHora;
+  return hora < janela.inicioHora || hora >= janela.fimHora;
 }
 
 // ─── O portão ───────────────────────────────────────────────────────────────────
@@ -243,6 +272,30 @@ export function avaliarContatoDeLead(input: LeadSafetyInput): LeadSafetyDecision
   }
 
   return { sendable: true, reason: null, detail: "Liberado." };
+}
+
+/**
+ * A pessoa pediu silêncio?
+ *
+ * ── POR QUE ISTO EXISTE SEPARADO DO PORTÃO ───────────────────────────────────
+ *
+ * `avaliarContatoDeLead` governa **abordar um estranho**: ela conta tentativas,
+ * exige descanso, cobra consentimento fresco, checa se o canal está pronto.
+ * Está certo para o SDR que sai atrás de alguém que não pediu nada.
+ *
+ * **Responder a quem acabou de escrever é outro ato.** Recusar resposta a quem
+ * mandou "oi" porque "já foram 2 tentativas" ou "está fora da janela de
+ * abordagem" seria usar a proteção contra a pessoa que ela protege — o erro do
+ * guardrail 5, a proteção pior que o problema.
+ *
+ * Mas UMA das dez regras atravessa os dois atos: quem pediu para não receber
+ * mensagem não recebe, tenha escrito ou não. Ela mora aqui, e não copiada lá,
+ * porque a semântica do opt-out tem que ter **um** dono. Um `if (lead.optOutAt)`
+ * solto em outro arquivo é a segunda definição — e é a que ninguém lembra de
+ * mudar no dia em que a regra mudar.
+ */
+export function pediuSilencio(optOutAt: Date | null | undefined): boolean {
+  return Boolean(optOutAt);
 }
 
 /**

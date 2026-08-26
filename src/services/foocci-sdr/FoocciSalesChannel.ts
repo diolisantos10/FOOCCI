@@ -124,6 +124,108 @@ export function describeFoocciSalesChannel(): {
   };
 }
 
+// ─── A conferência ──────────────────────────────────────────────────────────────
+
+/**
+ * O token alcança o número real?
+ *
+ * ── POR QUE ISTO EXISTE ─────────────────────────────────────────────────────
+ *
+ * Em 26/08/2026 o token foi gerado na caixa do **número de teste** do painel da
+ * Meta — que é onde o botão fica mais à mão. Um token gerado no portfólio ou na
+ * conta errada **autentica normalmente** e só falha na hora de tocar no número
+ * de verdade, com um erro de permissão. Sem esta função, a descoberta viria no
+ * primeiro cliente real, com a mensagem já perdida.
+ *
+ * `describeFoocciSalesChannel()` responde "as variáveis estão preenchidas?".
+ * Esta responde a pergunta que importa: **"elas funcionam juntas?"**. Presença
+ * de credencial nunca foi prova de que ela serve (guardrail 1).
+ *
+ * ── O QUE ELA NÃO FAZ ───────────────────────────────────────────────────────
+ *
+ * Não envia mensagem. É um GET no próprio número — lê o cadastro dele e volta.
+ * Conferir o canal não pode custar uma mensagem a um estranho.
+ *
+ * 🔒 O token vai no cabeçalho e não sai em lugar nenhum do retorno.
+ */
+export type ConferenciaDoCanal =
+  | {
+      ok: true;
+      /** Como a Meta mostra o número — a prova de que é o número certo. */
+      numero: string | null;
+      nomeVerificado: string | null;
+      qualidade: string | null;
+    }
+  | {
+      ok: false;
+      causa: "semPhoneNumberId" | "semToken" | "provedorNaoSuportado" | "aMetaRecusou";
+      detalhe: string;
+    };
+
+export async function conferirCanalDeVendas(): Promise<ConferenciaDoCanal> {
+  if (resolverProvedorDeVendas() !== "META_CLOUD_API") {
+    return {
+      ok: false,
+      causa: "provedorNaoSuportado",
+      detalhe: `FOOCCI_SALES_PROVIDER=${process.env.FOOCCI_SALES_PROVIDER ?? "(vazio)"}`,
+    };
+  }
+
+  const phoneNumberId = foocciSalesPhoneNumberId();
+  if (!phoneNumberId) {
+    return {
+      ok: false,
+      causa: "semPhoneNumberId",
+      detalhe: "FOOCCI_SALES_PHONE_NUMBER_ID não está no ambiente",
+    };
+  }
+
+  const token = foocciSalesAccessToken();
+  if (!token) {
+    return {
+      ok: false,
+      causa: "semToken",
+      detalhe: "FOOCCI_SALES_ACCESS_TOKEN não está no ambiente",
+    };
+  }
+
+  try {
+    const res = await fetch(
+      metaGraphUrl(`${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`),
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+
+    const json: unknown = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = (json as { error?: { message?: string } }).error ?? {};
+      return {
+        ok: false,
+        causa: "aMetaRecusou",
+        detalhe: maskGraphResponse(err.message ?? `HTTP_${res.status}`),
+      };
+    }
+
+    const d = json as {
+      display_phone_number?: string;
+      verified_name?: string;
+      quality_rating?: string;
+    };
+    return {
+      ok: true,
+      numero: d.display_phone_number ?? null,
+      nomeVerificado: d.verified_name ?? null,
+      qualidade: d.quality_rating ?? null,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      causa: "aMetaRecusou",
+      detalhe: maskGraphResponse(e instanceof Error ? e.message : String(e)),
+    };
+  }
+}
+
 // ─── Envio ──────────────────────────────────────────────────────────────────────
 
 export interface EnvioDeVendasResult {

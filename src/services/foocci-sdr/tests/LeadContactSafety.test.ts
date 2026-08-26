@@ -161,3 +161,38 @@ describe("entregabilidade e canal", () => {
     expect(telefonePlausivel(null)).toBe(false);
   });
 });
+
+// ── A MEIA-NOITE, e o defeito que só o CI viu ────────────────────────────────
+//
+// 26/08/2026. Um teste da ponte do TA passou na máquina de desenvolvimento e
+// reprovou no CI, na mesma data e no mesmo código. A causa: `hour12: false` não
+// fixa o ciclo horário, e o motor escolhe entre 00–23 e 01–24 conforme a versão
+// do ICU que veio com o Node. À meia-noite, um devolve 0 e o outro devolve 24.
+//
+// O estrago mora justo em quem configura a janela até as 24: `24 >= 24` fecha o
+// canal, e só na virada do dia. Ninguém acharia isso lendo o código.
+
+describe("a meia-noite é hora ZERO, em qualquer motor", () => {
+  // 00:00 em São Paulo (UTC-3, sem horário de verão desde 2019).
+  const MEIA_NOITE = new Date("2026-08-25T03:00:00Z");
+
+  it("devolve 0, e nunca 24", () => {
+    expect(agendaLocal(MEIA_NOITE).hora).toBe(0);
+  });
+
+  it("uma janela de 24 horas cobre a meia-noite", () => {
+    // A metade que importa: era ESTE o caso que reprovava, e ele reprovava
+    // dizendo apenas "esperava true, recebeu false".
+    expect(foraDaJanela(MEIA_NOITE, { inicioHora: 0, fimHora: 24 })).toBe(false);
+  });
+
+  it("e a janela comercial continua excluindo a madrugada", () => {
+    // Sem esta, um `hora` sempre 0 passaria no caso acima e abriria a
+    // madrugada para o robô — a proteção que a janela existe para dar.
+    expect(foraDaJanela(MEIA_NOITE)).toBe(true);
+  });
+
+  it("as 23h continuam sendo 23 — o ciclo não deslocou nada", () => {
+    expect(agendaLocal(new Date("2026-08-26T02:00:00Z")).hora).toBe(23);
+  });
+});
