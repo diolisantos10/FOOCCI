@@ -360,7 +360,22 @@ function OTime() {
       </h2>
       <p className="mt-2 max-w-[70ch] text-[13px] leading-relaxed text-muted">
         Já fazem parte do sistema — não têm login e não precisam ser cadastrados.
-        Cada um assume lead e assina a conversa com o nome dele.
+      </p>
+
+      {/* ⚠️ A FRASE QUE ESTAVA AQUI ERA FALSA ─────────────────────────────
+          Dizia "cada um assume lead e assina a conversa com o nome dele". Não
+          é o que acontece: quando a IA atende, ela assume o lead como `IA`
+          com `atendenteUserId: null` (`responsavel.ts`). Genérica, sem nome.
+
+          O CEO perguntou "todos já estão dentro do projeto?" e foi conferir
+          isso que revelou a mentira. Ela é do tipo pior: descreve o plano no
+          presente, e quem lê conclui que já funciona.
+
+          Guardrail 5 — nunca vender como pronto o que está em piloto. */}
+      <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-amber-800">
+        <strong>Ainda não atendem com o nome deles.</strong> Hoje a IA assume o
+        cliente como “IA”, sem nome — os cinco existem e ainda não recebem
+        conversa. Ligar isso é trabalho separado, e não está feito.
       </p>
 
       <ul className="mt-3 flex flex-col gap-1.5">
@@ -376,8 +391,8 @@ function OTime() {
       </ul>
 
       <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-        ⚠️ Estar no sistema não é estar na linha. Quem responde ao cliente é o TA,
-        e o interruptor dele é o de cima.
+        ⚠️ E estar no sistema também não é estar na linha. Quem responde ao
+        cliente é o TA, e o interruptor dele é o de cima.
       </p>
     </section>
   );
