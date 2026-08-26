@@ -116,7 +116,34 @@ export async function resolveFreeFormAccess(restaurantId: string, phone: string)
       sinceDays: JANELA_DIAS_AO_VIVO,
       limite: JANELA_AMOSTRAS_AO_VIVO,
     });
-    const topo = avaliarTopo(amostras);
+    /**
+     * `noTopoDesde` — sem ele a régua não sabe distinguir "ainda não juntou" de
+     * "nunca vai juntar". `updatedAt` é a última escrita governada na config
+     * (promoção, rollback, pausa, mudança de piso). Ele ERRA PARA O LADO
+     * SEGURO: qualquer escrita reinicia a contagem e ADIA o alarme; nunca o
+     * antecipa. Alarme atrasado é ruim; alarme falso sobre cliente faturando é
+     * pior.
+     */
+    const topo = avaliarTopo(amostras, { noTopoDesde: row.updatedAt });
+    if (topo.riscoDeclarado) {
+      /**
+       * O GRITO. Estar no topo sem conseguir ser medido é um fato que alguém
+       * tem que ver — e a tela do admin só é vista quando alguém a abre. O log
+       * do servidor é o segundo lugar, o que não depende de ninguém lembrar.
+       * Não altera degrau, não cala o agente: só declara.
+       */
+      console.warn("[BrainTopo]", JSON.stringify({
+        risco: "TOPO_SEM_MEDICAO_POSSIVEL",
+        restaurantId,
+        mode,
+        amostras: topo.amostras,
+        coberturaDias: topo.coberturaDias == null ? null : Number(topo.coberturaDias.toFixed(1)),
+        ritmoPorDia: topo.ritmoPorDia == null ? null : Number(topo.ritmoPorDia.toFixed(2)),
+        projecaoNaJanela: topo.projecaoNaJanela == null ? null : Math.round(topo.projecaoNaJanela),
+        minimoAmostras: topo.minimoAmostras,
+        proximaAcao: topo.proximaAcao,
+      }));
+    }
     if (topo.derruba) {
       return {
         allowed: false,

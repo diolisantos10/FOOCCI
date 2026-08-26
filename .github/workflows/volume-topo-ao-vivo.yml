@@ -1,0 +1,73 @@
+name: Medição — volume de atendimento ao vivo do recepcionista
+
+# Somente leitura sobre a produção. Responde à pergunta que faltava quando a
+# régua do topo escolheu 30 amostras / 7 dias: quantos turnos de cliente o
+# recepcionista atende de verdade, por dia da semana e por faixa de hora.
+#
+# ⚠️ O log deste repositório é PÚBLICO. O script imprime apenas contagens, slug
+# de restaurante e hora do dia — nunca nome, telefone, e-mail ou texto.
+#
+# Este workflow NÃO envia mensagem, NÃO promove e NÃO derruba ninguém.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: 'Janela de histórico, em dias'
+        required: false
+        default: '90'
+  # A medição também roda quando o próprio medidor muda: é assim que ela alcança
+  # a produção a partir de um branch, antes de existir no branch padrão.
+  push:
+    paths:
+      - 'scripts/volume-topo-ao-vivo.mjs'
+      - '.github/workflows/volume-topo-ao-vivo.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  medir:
+    name: Perguntar à produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Instalar dependências e gerar o cliente do banco
+        run: |
+          npm ci --ignore-scripts
+          npx prisma generate
+      - name: Medir o volume ao vivo
+        env:
+          RAILWAY_TOKEN:      ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          DIAS:               ${{ github.event.inputs.dias || '90' }}
+        run: |
+          set -o pipefail
+          node scripts/volume-topo-ao-vivo.mjs 2>&1 | tee /tmp/volume.txt || true
+      - name: Publicar o resultado na branch de diagnóstico
+        if: always()
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf /tmp/pub && mkdir -p /tmp/pub
+          cp /tmp/volume.txt /tmp/pub/VOLUME-AO-VIVO.txt || echo "sem saída" > /tmp/pub/VOLUME-AO-VIVO.txt
+          {
+            echo "# Volume de atendimento ao vivo do recepcionista"
+            echo
+            echo "Rodada em: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "Commit examinado: ${GITHUB_SHA}"
+            echo
+            echo "Somente leitura. Nada foi promovido, derrubado ou enviado."
+          } > /tmp/pub/LEIA-ME.md
+          cd /tmp/pub
+          git init -q
+          git checkout -q -b diagnostico/volume-topo-resultado
+          git add -A
+          git commit -q -m "Volume ao vivo do topo (${GITHUB_SHA})"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -q --force origin diagnostico/volume-topo-resultado

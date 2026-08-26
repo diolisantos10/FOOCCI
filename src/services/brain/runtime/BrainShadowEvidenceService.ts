@@ -194,16 +194,44 @@ export async function getShadowStats(
   }
 }
 
-/** Últimas amostras para inspeção humana no painel (nunca contém PII crua). */
-export async function listRecentShadowSamples(restaurantId: string, limit = 10) {
+/**
+ * Ultimas amostras para inspecao humana no painel (nunca contem PII crua).
+ *
+ * O FILTRO POR AGENTE NAO E DETALHE — E O QUE FAZ A TELA NAO MENTIR.
+ * Sem `agentId`, esta leitura devolvia as amostras de TODOS os agentes do
+ * restaurante e o painel do recepcionista acabava exibindo linhas da esteira de
+ * treino do CRM (`engine: crm-agent`, intents `treino:*`). As estatisticas e a
+ * regua ao lado ja filtravam certo — entao a tela mostrava um agente e media
+ * outro. Regua certa com tela enganosa e pior que tela nenhuma: quem olha sai
+ * com uma conclusao errada e confiante.
+ *
+ * `stage` vai junto de proposito: sombra e topo sao coisas diferentes, e quem
+ * inspeciona precisa ver qual das duas esta lendo.
+ */
+export async function listRecentShadowSamples(
+  restaurantId: string,
+  limit = 10,
+  opts: { agentId?: string } = {},
+) {
   try {
     return await prisma.brainShadowLog.findMany({
-      where: { restaurantId },
+      // Mesma convencao de `getShadowStats`: para o recepcionista, linha antiga
+      // com `agentId` nulo TAMBEM e dele (o campo nasceu depois da escada
+      // por-agente). Para qualquer outro agente, casamento estrito.
+      where: {
+        restaurantId,
+        ...(opts.agentId
+          ? opts.agentId === "whatsapp"
+            ? { OR: [{ agentId: "whatsapp" }, { agentId: null }] }
+            : { agentId: opts.agentId }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 50),
       select: {
         createdAt: true, intent: true, reasoningMode: true, engine: true,
         confidence: true, coherence: true, wouldEscalate: true, wouldReply: true,
+        agentId: true, stage: true,
       },
     });
   } catch {
