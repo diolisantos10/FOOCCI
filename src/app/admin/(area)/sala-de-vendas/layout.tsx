@@ -44,6 +44,18 @@ const PAPEIS_DO_PAINEL = new Set([
 /** Criar gente é do dono. O gerente distribui a fila; ele não cria acesso. */
 const PAPEIS_DOS_ACESSOS = new Set(["MASTER_CEO", "DIRETOR_FOOCCI"]);
 
+/**
+ * A conferência do canal segue `vePelaOperacaoToda` na rota — e o menu copia a
+ * mesma lista. Ela não mostra segredo nenhum, mas dispara uma chamada à Meta a
+ * cada abertura: pôr esse botão na frente de toda a Sala é convidar um laço.
+ */
+const PAPEIS_DO_CANAL = new Set([
+  "MASTER_CEO",
+  "DIRETOR_FOOCCI",
+  "GERENTE_DEPARTAMENTO",
+  "AUDITOR_QA",
+]);
+
 export default function SalaDeVendasLayout({ children }: { children: React.ReactNode }) {
   const sessao = lerSessaoInterna();
 
@@ -52,10 +64,12 @@ export default function SalaDeVendasLayout({ children }: { children: React.React
   // administração esconderia o produto de quem o está montando.
   const veOPainel = !sessao || PAPEIS_DO_PAINEL.has(sessao.role);
   const criaAcesso = !sessao || PAPEIS_DOS_ACESSOS.has(sessao.role);
+  const confereOCanal = !sessao || PAPEIS_DO_CANAL.has(sessao.role);
 
   const itens = [
     ...PARA_TODOS,
     ...(veOPainel ? [{ href: "/admin/sala-de-vendas/painel", rotulo: "Painel" }] : []),
+    ...(confereOCanal ? [{ href: "/admin/sala-de-vendas/canal", rotulo: "WhatsApp" }] : []),
     ...(criaAcesso ? [{ href: "/admin/sala-de-vendas/acessos", rotulo: "Criar acesso" }] : []),
   ];
 
