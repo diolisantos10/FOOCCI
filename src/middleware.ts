@@ -72,6 +72,13 @@ const PUBLIC_PATHS: RegExp[] = [
   // Só o caminho exato: /api/sdr/entrevista e /api/sdr/plano continuam exigindo
   // tenant ou admin, como sempre exigiram.
   /^\/api\/sdr\/diario$/,             // Diário do SDR (GET) — fail-closed via SDR_DIARIO_SECRET
+  // Área de ATENDIMENTO — a sala saiu de dentro do /admin em 26/08/2026.
+  // "Público" aqui significa exatamente o mesmo que significa para o /admin: não
+  // exige sessão de LOJISTA. O portão é o layout de `/comercial/(area)`, que
+  // redireciona quem não tem sessão interna nem a senha da casa — e cada rota de
+  // API decide o resto no servidor. Sem esta linha o middleware do produto
+  // mandaria o vendedor para o login de restaurante, que não é dele.
+  /^\/comercial(\/.*)?$/,            // Área de atendimento (portão no layout)
   // Global admin area — auth handled by admin cookie + layout, NOT by NextAuth
   /^\/admin(\/.*)?$/,                  // Admin UI pages
   /^\/api\/admin(\/.*)?$/,             // Admin API routes (each verifies x-admin-secret or admin cookie)

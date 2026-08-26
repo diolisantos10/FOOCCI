@@ -19,6 +19,7 @@
 
 import { useState } from "react";
 import { useSalaDeVendas, mudarResponsavel, desdeQuando } from "./_dados";
+import { ROTAS } from "@/lib/sala/rotas";
 import type { LeadNaFila, NomeDaFila } from "@/services/salaDeVendas/filas";
 
 function cx(...p: Array<string | false | null | undefined>): string {
@@ -172,7 +173,7 @@ function SemAcesso() {
           não achou como resolver. O comando continua certo para quem tem
           terminal; só deixou de ser a única porta. */}
       <a
-        href="/admin/sala-de-vendas/acessos"
+        href={ROTAS.acessos}
         className="mt-4 inline-block rounded-xl bg-brand-500 px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-brand-600"
       >
         Criar o primeiro acesso

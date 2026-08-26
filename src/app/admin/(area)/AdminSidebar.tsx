@@ -25,10 +25,10 @@ const MENU_POR_PAPEL: Readonly<Record<string, readonly string[] | null>> = {
   DIRETOR_FOOCCI: null,
   // O gerente vê a estrutura e a área de trabalho do time dele. O resto do
   // Admin continua fora — crescer dentro do departamento, não para os lados.
-  GERENTE_DEPARTAMENTO: ["/admin/departamentos", "/admin/sala-de-vendas", "/admin/foocci-crm"],
+  GERENTE_DEPARTAMENTO: ["/admin/departamentos", "/comercial", "/admin/foocci-crm"],
   // Critério 6 do CEO: a Sala de Vendas e nada mais.
-  AGENTE_HUMANO: ["/admin/sala-de-vendas"],
-  AUDITOR_QA: ["/admin/departamentos", "/admin/sala-de-vendas", "/admin/quality"],
+  AGENTE_HUMANO: ["/comercial"],
+  AUDITOR_QA: ["/admin/departamentos", "/comercial", "/admin/quality"],
 };
 
 /** O nome de cada papel em português de gente. */
@@ -112,7 +112,7 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
         // A Sala de Vendas vem ANTES do CRM: ela é a tela de trabalho do dia, e
         // o CRM é a base inteira. Quem entra para trabalhar procura a fila, não
         // a listagem.
-        { href: "/admin/sala-de-vendas",     label: "Sala de Vendas",   icon: "🎯" },
+        { href: "/comercial",                label: "Comercial",        icon: "🎯" },
         { href: "/admin/foocci-crm",         label: "CRM da Foocci",    icon: "📨" },
         { href: "/admin/demo-videos",        label: "Vídeos do site",   icon: "🎬" },
         { href: "/admin/padaria-vitrine",    label: "Padaria de vitrine", icon: "🥐" },
