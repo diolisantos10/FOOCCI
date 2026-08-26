@@ -49,6 +49,7 @@ export const ROTAS = {
   precos: `${COMERCIAL}/precos`,
   ensaio: `${COMERCIAL}/ensaio`,
   painel: `${COMERCIAL}/painel`,
+  agente: `${COMERCIAL}/agente`,
   whatsapp: `${COMERCIAL}/whatsapp`,
   acessos: `${COMERCIAL}/acessos`,
 } as const;
@@ -136,6 +137,11 @@ export function abasDoComercial(papel: InternalRole | null): Aba[] {
   return [
     ...PARA_TODOS,
     ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.painel, rotulo: "Painel" }] : []),
+    // O agente segue a lista do painel para LER. Ligar continua sendo do dono,
+    // e quem recusa é a rota — a aba mostra o estado a quem trabalha ao lado
+    // dele, porque descobrir que o TA está desligado pela ausência de resposta
+    // é o pior jeito possível.
+    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.agente, rotulo: "O agente" }] : []),
     ...(tudo || PAPEIS_DO_WHATSAPP.has(papel) ? [{ href: ROTAS.whatsapp, rotulo: "WhatsApp" }] : []),
     ...(tudo || PAPEIS_DOS_ACESSOS.has(papel) ? [{ href: ROTAS.acessos, rotulo: "Criar acesso" }] : []),
   ];

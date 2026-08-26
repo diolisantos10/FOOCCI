@@ -34,6 +34,7 @@ import { buscarNoConhecimento, type PedacoDeConhecimento } from "./conhecimento"
 import { buscarNaVerdade, type Achado } from "./verdade";
 import { verificarResposta, type Veredito } from "./verificador";
 import { VERSAO_1, type TextoDaVersao } from "./ficha";
+import { blocoDoOficio } from "./oficio";
 
 /**
  * ⚠️ QUEM ESCOLHE O MODELO É O BRAIN, E NÃO ESTE ARQUIVO.
@@ -132,12 +133,9 @@ function instrucao(ficha: TextoDaVersao, ctx: ReturnType<typeof montarContexto>)
     "",
     `TOM: ${ficha.tomDeVoz}`,
     "",
-    "COMO VOCÊ ESCREVE — e isto vale mais que qualquer outra instrução:",
-    "- Você está no WhatsApp. Escreva como gente escreve no WhatsApp.",
-    "- No máximo 3 frases curtas. Quem recebe está trabalhando num restaurante.",
-    "- Uma pergunta por vez, no fim, e só quando ela leva a conversa adiante.",
-    "- Nada de lista com marcadores, nada de negrito, nada de emoji em excesso.",
-    "- Nunca repita o que a pessoa acabou de dizer para depois responder.",
+    // O ofício vem de `oficio.ts` e não digitado aqui: é texto que se revisa
+    // lendo, e enterrado no meio de uma função ninguém o lê inteiro nunca mais.
+    blocoDoOficio(),
     "",
     "O QUE VOCÊ PODE AFIRMAR — palavra por palavra, sem alterar número nenhum:",
     verdades || "(nada específico foi encontrado para esta pergunta)",
