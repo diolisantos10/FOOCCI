@@ -43,6 +43,15 @@ export interface Turno {
   nome?: string | null;
   /** Sinais que a Sala já apurou — score, confiança, risco. */
   sinais?: SinaisDaConversa;
+  /**
+   * Os turnos anteriores, do mais antigo para o mais novo.
+   *
+   * Ignorado pelo caminho determinístico — ele responde uma pergunta por vez, e
+   * sempre respondeu. Existe aqui porque `falar()` passa o mesmo `Turno` para o
+   * modelo, e é o histórico que separa uma conversa de uma sequência de
+   * respostas soltas: sem ele, o TA cumprimenta a mesma pessoa três vezes.
+   */
+  historico?: Array<{ deQuem: "cliente" | "ta"; texto: string }>;
 }
 
 export interface Resposta {

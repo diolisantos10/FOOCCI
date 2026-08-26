@@ -27,7 +27,7 @@ const FONTE = readFileSync(path.join(__dirname, "AdminSidebar.tsx"), "utf8");
 const SEM_COMENTARIOS = FONTE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 describe("o menu por papel", () => {
-  it("o vendedor alcança a Sala de Vendas e nada mais", () => {
+  it("o vendedor alcança a área comercial e nada mais", () => {
     // Critério 6 do CEO, e é o caso que mais importa: vinte portas que devolvem
     // 403 ensinam que o sistema é imprevisível, e a pessoa passa a não confiar
     // no que ela PODE clicar.
@@ -35,7 +35,10 @@ describe("o menu por papel", () => {
     expect(bloco, "AGENTE_HUMANO sumiu do mapa do menu").not.toBeNull();
 
     const rotas = bloco![1]!.match(/"[^"]+"/g) ?? [];
-    expect(rotas).toEqual(['"/admin/sala-de-vendas"']);
+    // Em 26/08/2026 a Sala saiu de dentro do Admin e virou `/comercial`. O
+    // escopo do vendedor continua sendo UM item — o endereço é que mudou.
+    // (Não `/atendimento`: aquele já é a caixa de conversas do restaurante.)
+    expect(rotas).toEqual(['"/comercial"']);
   });
 
   it("CEO e Diretor veem tudo — e isso é declarado, não esquecido", () => {
@@ -51,7 +54,7 @@ describe("o menu por papel", () => {
       expect(bloco, `${papel} sumiu do mapa`).not.toBeNull();
       const rotas = bloco![1]!.match(/"[^"]+"/g) ?? [];
       expect(rotas.length, `${papel} com escopo vazio`).toBeGreaterThan(1);
-      expect(rotas, `${papel} sem a Sala`).toContain('"/admin/sala-de-vendas"');
+      expect(rotas, `${papel} sem a Sala`).toContain('"/comercial"');
     }
   });
 });

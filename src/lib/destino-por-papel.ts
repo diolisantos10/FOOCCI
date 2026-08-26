@@ -11,6 +11,7 @@
  */
 
 import type { InternalRole } from "@prisma/client";
+import { ROTAS } from "@/lib/sala/rotas";
 
 /**
  * Para onde a pessoa vai depois de entrar.
@@ -26,10 +27,10 @@ import type { InternalRole } from "@prisma/client";
 export function destinoDe(papel: InternalRole): string {
   switch (papel) {
     case "AGENTE_HUMANO":
-      return "/admin/sala-de-vendas/atendimento";
+      return ROTAS.conversas;
     case "GERENTE_DEPARTAMENTO":
     case "AUDITOR_QA":
-      return "/admin/sala-de-vendas/painel";
+      return ROTAS.painel;
     default:
       return "/admin/departamentos";
   }

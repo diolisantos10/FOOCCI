@@ -39,10 +39,19 @@
 
 import { FAQS } from "@/lib/site/faq";
 import { PLANS } from "@/lib/site/plans";
+import { COMMISSION_RATES, COMMISSION_SOURCE, MARKETPLACE_NAME } from "@/lib/site/commissionRates";
+import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE } from "@/lib/site/servicosAParte";
 import { tabelaPublicada, descontoPublicado } from "../precos";
 
 /** De onde a frase veio. Vai junto na resposta, para a Sala poder auditar. */
-export type FonteDaVerdade = "faq-do-site" | "tabela-de-preco" | "posicionamento-do-plano";
+export type FonteDaVerdade =
+  | "faq-do-site"
+  | "tabela-de-preco"
+  | "posicionamento-do-plano"
+  /** A comissão do marketplace, com a fonte pública que o site já publica. */
+  | "comissao-do-marketplace"
+  /** O que é cobrado FORA da mensalidade. A pergunta que mais gera atrito. */
+  | "servico-a-parte";
 
 export interface ItemDeVerdade {
   /** Chave estável, para o teste e para a trilha. */
@@ -162,7 +171,61 @@ export function baseDeVerdade(): ItemDeVerdade[] {
     });
   }
 
+  // 4. A comissão do marketplace.
+  //
+  // ── POR QUE ISTO É AFIRMAÇÃO, E NÃO CONHECIMENTO DE FUNDO ─────────────────
+  //
+  // "Quanto o iFood leva?" é a pergunta que faz o dono parar para ouvir, e é
+  // também a que um modelo solto responde de cabeça — com um número que ele leu
+  // em algum blog. Aqui o número tem dono: é o mesmo que a calculadora do site
+  // publica, com a fonte e a data que a página mostra ao lado.
+  //
+  // ⚠️ O nome do marketplace vem de `MARKETPLACE_NAME` porque a decisão de
+  // nomeá-lo é do CEO e já mudou uma vez (não nomear em 03/08, nomear em 04/08).
+  // Digitado aqui, o TA continuaria dizendo o nome no dia em que a decisão
+  // voltasse atrás.
+  itens.push({
+    id: "comissao-marketplace",
+    fonte: "comissao-do-marketplace",
+    sobre: `quanto o ${MARKETPLACE_NAME} cobra de comissão marketplace taxa`,
+    texto:
+      `Com entrega própria, a comissão fica em torno de ${pct(COMMISSION_RATES.own.rate)} ` +
+      `(${COMMISSION_RATES.own.breakdown}). Com a entrega do marketplace, sobe para ` +
+      `cerca de ${pct(COMMISSION_RATES.marketplace.rate)}. ` +
+      `Esses números são de ${COMMISSION_SOURCE.label.toLowerCase()}.`,
+  });
+
+  // 5. O que é cobrado à parte.
+  //
+  // A pergunta "tem alguma taxa além da mensalidade?" é das que mais geram
+  // atrito quando a resposta aparece depois. O TA precisa poder respondê-la —
+  // e a resposta honesta inclui o "fazer você mesmo não custa nada".
+  for (const s of SERVICOS_A_PARTE) {
+    itens.push({
+      id: `a-parte-${normalizarId(s.name)}`,
+      fonte: "servico-a-parte",
+      sobre: `${s.name} custa taxa além da mensalidade cobrado à parte`,
+      texto: `${s.name}: ${s.desc} O preço é ${s.price.toLowerCase()}.`,
+    });
+  }
+
+  itens.push({
+    id: "a-parte-nota-fiscal",
+    fonte: "servico-a-parte",
+    sobre: "nota fiscal nfce quanto custa emitir",
+    texto: `${NOTA_FISCAL_A_PARTE.name}: ${NOTA_FISCAL_A_PARTE.desc}`,
+  });
+
   return itens;
+}
+
+/** 0.152 → "15,2%". O site mostra assim, e o TA fala como o site escreve. */
+function pct(fracao: number): string {
+  return `${(fracao * 100).toFixed(1).replace(".", ",").replace(",0", "")}%`;
+}
+
+function normalizarId(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-");
 }
 
 // ── A BUSCA ──────────────────────────────────────────────────────────────────

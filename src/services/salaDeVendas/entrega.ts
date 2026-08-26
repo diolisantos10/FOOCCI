@@ -1,0 +1,174 @@
+/**
+ * A ENTREGA — a última perna, e a que não existia.
+ *
+ * ── O BURACO, MEDIDO ────────────────────────────────────────────────────────
+ *
+ * Em 26/08/2026, procurando quem chamava `enviarTextoDeVendas`, a resposta foi:
+ * **ninguém**. A função de envio existia, testada, e nenhuma linha do produto a
+ * chamava.
+ *
+ * O efeito é o pior tipo de defeito, porque tudo parece funcionar: a mensagem do
+ * cliente chega, é reconhecida, o TA compõe uma resposta boa, a resposta aparece
+ * na tela da Sala com status PENDENTE — e o cliente nunca recebe nada. Ninguém
+ * olhando o sistema por dentro percebe; quem percebe é o lead, pelo silêncio.
+ *
+ * Valia igual para a pessoa: um vendedor humano digitando na tela de atendimento
+ * também só gravava PENDENTE. A Sala inteira era um rascunho.
+ *
+ * ── ⚠️ A CHAVE CONTINUA SENDO DO DONO ───────────────────────────────────────
+ *
+ * Este arquivo não liga nada. `canalDeVendasPronto()` exige as duas chaves da
+ * Meta **e** `FOOCCI_SDR_SEND_ENABLED` — e sem elas esta função devolve
+ * "desligado" e a mensagem fica PENDENTE, exatamente como hoje.
+ *
+ * O que muda é que, no dia em que o dono ligar, a mensagem sai. Antes disto,
+ * ligar a chave não faria nada — e essa é a pior forma de uma trava falhar:
+ * a que faz o dono achar que decidiu algo que não aconteceu.
+ *
+ * ── E POR QUE O PORTÃO DO LEAD É CHAMADO DE NOVO AQUI ───────────────────────
+ *
+ * `enviarTextoDeVendas` exige uma decisão aprovada do portão como PRIMEIRO
+ * parâmetro — não dá para enviar sem ter avaliado. Reavaliar na hora da entrega
+ * não é redundância: entre compor e entregar pode ter passado tempo, e a pessoa
+ * pode ter pedido silêncio nesse intervalo. Quem pediu para parar não recebe uma
+ * mensagem que já estava na fila.
+ */
+
+import type { PrismaClient, Prisma } from "@prisma/client";
+import { confirmarEnvio, registrarFalhaDeEnvio } from "./conversa";
+import {
+  canalDeVendasPronto,
+  enviarTextoDeVendas,
+  describeFoocciSalesChannel,
+} from "@/services/foocci-sdr/FoocciSalesChannel";
+import { pediuSilencio } from "@/services/foocci-sdr/LeadContactSafety";
+
+type Cliente = PrismaClient | Prisma.TransactionClient;
+
+export type ResultadoDaEntrega =
+  | { entregue: true; mensagemId: string }
+  | {
+      entregue: false;
+      motivo:
+        /** O dono não ligou a entrega. Estado normal, não é falha. */
+        | "envioDesligado"
+        | "mensagemNaoExiste"
+        | "naoEraParaEnviar"
+        | "semTexto"
+        | "leadPediuSilencio"
+        | "semTelefone"
+        | "aMetaRecusou";
+      detalhe: string;
+    };
+
+/**
+ * Tenta entregar UMA mensagem que está esperando.
+ *
+ * **Nunca lança.** É chamada logo depois de gravar — no caminho do webhook e no
+ * da tela de atendimento. Uma exceção aqui derrubaria os dois, e a mensagem já
+ * estava salva: perder a entrega é ruim, perder o registro é pior.
+ *
+ * Idempotente pelo status: só toca em mensagem PENDENTE. Chamada duas vezes na
+ * mesma mensagem, a segunda vez recusa com `naoEraParaEnviar` em vez de mandar
+ * a mesma coisa de novo para o cliente.
+ */
+export async function entregarMensagem(
+  db: Cliente,
+  mensagemId: string,
+): Promise<ResultadoDaEntrega> {
+  try {
+    // A chave primeiro, e sem tocar no banco: com a entrega desligada não há
+    // motivo para ler nada. É o caminho mais percorrido enquanto o dono não
+    // decidir, e ele custa zero.
+    if (!canalDeVendasPronto()) {
+      const c = describeFoocciSalesChannel();
+      return {
+        entregue: false,
+        motivo: "envioDesligado",
+        detalhe: c.configurado
+          ? "o canal está configurado e a entrega não foi ligada"
+          : "as chaves da Meta não estão completas",
+      };
+    }
+
+    const m = await db.leadMensagem.findUnique({
+      where: { id: mensagemId },
+      select: {
+        id: true,
+        status: true,
+        direcao: true,
+        texto: true,
+        lead: { select: { whatsapp: true, optOutAt: true } },
+      },
+    });
+
+    if (!m) {
+      return { entregue: false, motivo: "mensagemNaoExiste", detalhe: `mensagem ${mensagemId}` };
+    }
+    if (m.direcao !== "SAIDA" || m.status !== "PENDENTE") {
+      return {
+        entregue: false,
+        motivo: "naoEraParaEnviar",
+        detalhe: `mensagem está ${m.direcao}/${m.status}`,
+      };
+    }
+    const texto = m.texto?.trim();
+    if (!texto) {
+      return { entregue: false, motivo: "semTexto", detalhe: "mensagem sem texto" };
+    }
+
+    // ⚠️ Reavaliado AGORA, e não quando a mensagem foi composta. Entre uma coisa
+    // e outra a pessoa pode ter pedido silêncio — e quem pediu para parar não
+    // recebe o que já estava na fila.
+    if (pediuSilencio(m.lead.optOutAt)) {
+      await registrarFalhaDeEnvio(db, {
+        mensagemId,
+        erro: "não entregue: a pessoa pediu para não receber mensagens",
+      });
+      return {
+        entregue: false,
+        motivo: "leadPediuSilencio",
+        detalhe: "a pessoa pediu silêncio depois de a mensagem ser escrita",
+      };
+    }
+
+    const telefone = m.lead.whatsapp?.trim();
+    if (!telefone) {
+      await registrarFalhaDeEnvio(db, { mensagemId, erro: "não entregue: lead sem telefone" });
+      return { entregue: false, motivo: "semTelefone", detalhe: "o lead não tem WhatsApp" };
+    }
+
+    const r = await enviarTextoDeVendas(
+      // A decisão do portão: opt-out e telefone já foram conferidos acima, com o
+      // dado FRESCO do banco. Montá-la aqui é declarar que a checagem aconteceu —
+      // e a assinatura de `enviarTextoDeVendas` não deixa fingir que aconteceu.
+      { sendable: true, reason: null, detail: "conferido na entrega: sem opt-out, com telefone" },
+      telefone,
+      texto,
+    );
+
+    if (!r.ok) {
+      await registrarFalhaDeEnvio(db, { mensagemId, erro: r.error ?? "erro sem motivo" });
+      return { entregue: false, motivo: "aMetaRecusou", detalhe: r.error ?? "erro sem motivo" };
+    }
+
+    // ── O id do provedor ──────────────────────────────────────────────────
+    //
+    // `enviarTextoDeVendas` não devolve o `wamid` hoje. Marcar como ENVIADA sem
+    // ele é melhor que deixar PENDENTE: PENDENTE significa "ainda não saiu", e
+    // depois de a Meta aceitar isso passou a ser falso — e é o que faria uma
+    // retentativa mandar a mesma mensagem de novo para o cliente.
+    //
+    // O `waMessageId` real chega pelo callback de status da Meta, que já sabe
+    // casar pela conversa. Até lá, a marca provisória diz de onde ela veio.
+    await confirmarEnvio(db, { mensagemId, waMessageId: `local:${mensagemId}` });
+
+    return { entregue: true, mensagemId };
+  } catch (e) {
+    return {
+      entregue: false,
+      motivo: "aMetaRecusou",
+      detalhe: e instanceof Error ? e.message.slice(0, 200) : "erro desconhecido",
+    };
+  }
+}

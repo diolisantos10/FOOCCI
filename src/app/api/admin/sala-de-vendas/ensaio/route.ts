@@ -26,7 +26,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { guardarSalaDeVendas } from "../_guarda";
-import { responder } from "@/services/salaDeVendas/ta/responder";
+import { falar } from "@/services/salaDeVendas/ta/falar";
+import { cerebroDisponivel } from "@/services/salaDeVendas/ta/cerebro";
 import { VERSAO_1 } from "@/services/salaDeVendas/ta/ficha";
 
 export const runtime = "nodejs";
@@ -36,6 +37,21 @@ interface Corpo {
   mensagem?: unknown;
   nome?: unknown;
   jaPerguntou?: unknown;
+  /** Os turnos anteriores. É o que separa uma conversa de respostas soltas. */
+  historico?: unknown;
+}
+
+type TurnoDoHistorico = { deQuem: "cliente" | "ta"; texto: string };
+
+function lerHistorico(v: unknown): TurnoDoHistorico[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((t) => {
+    if (!t || typeof t !== "object") return [];
+    const { deQuem, texto } = t as Record<string, unknown>;
+    if (typeof texto !== "string" || !texto.trim()) return [];
+    if (deQuem !== "cliente" && deQuem !== "ta") return [];
+    return [{ deQuem, texto }];
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -59,12 +75,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const r = responder({ mensagem, nome, jaPerguntou });
+  const r = await falar({ mensagem, nome, jaPerguntou, historico: lerHistorico(corpo.historico) });
 
   return NextResponse.json({
     ok: true,
     data: {
       resposta: r,
+      // Se o cérebro está ligado. Sem isto, o ensaio de uma instalação sem chave
+      // pareceria "o TA ficou burro" em vez de "falta a chave do modelo".
+      cerebroLigado: await cerebroDisponivel(),
       // A ficha viaja junto para a tela poder mostrar CONTRA O QUE ele foi
       // conferido — sem isso o ensaio vira só um chat bonito.
       ficha: {

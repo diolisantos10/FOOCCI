@@ -54,10 +54,25 @@ describe("a base de verdade", () => {
   });
 
   it("NÃO acha nada quando a pergunta é de outro assunto", () => {
-    // A metade que sustenta o "não sei". Sem o piso de admissão, esta pergunta
-    // voltaria com o item mais parecido e o TA responderia com ele.
-    expect(buscarNaVerdade("vocês emitem nota fiscal eletrônica NFCe")).toEqual([]);
+    // A metade que sustenta o "não sei". Sem o piso de admissão, estas perguntas
+    // voltariam com o item mais parecido e o TA responderia com ele.
+    //
+    // ⚠️ Em 26/08/2026 este caso usava "vocês emitem nota fiscal eletrônica" e
+    // passou a REPROVAR — porque a base ganhou a resposta honesta sobre nota
+    // fiscal (integração incluída, custo do documento é com o emissor). O teste
+    // estava certo e envelheceu: o exemplo de "fora de escopo" virou escopo.
+    // Trocado por perguntas que continuam fora, e não afrouxado.
     expect(buscarNaVerdade("qual a cor do uniforme dos entregadores")).toEqual([]);
+    expect(buscarNaVerdade("vocês patrocinam campeonato de futebol amador")).toEqual([]);
+  });
+
+  it("mas ACHA a nota fiscal — o escopo cresceu, e de propósito", () => {
+    // O outro lado da mudança acima. Sem este caso, alguém poderia "consertar" o
+    // teste anterior removendo o item da base e ninguém notaria que o TA voltou
+    // a não saber responder uma pergunta que todo dono de restaurante faz.
+    const r = buscarNaVerdade("como funciona a nota fiscal de vocês");
+    expect(r.length).toBeGreaterThan(0);
+    expect(r[0]!.item.fonte).toBe("servico-a-parte");
   });
 
   it("o piso é uma fração da PERGUNTA, não do item", () => {
