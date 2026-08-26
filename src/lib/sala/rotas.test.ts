@@ -20,9 +20,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { globSync } from "node:fs";
 import {
   COMERCIAL,
   ENTRADA,
@@ -74,9 +73,30 @@ describe("ninguém digitou o endereço à mão em outro lugar", () => {
   // amanhã não existe — endereço vem daqui, e de lugar nenhum além.
   const RAIZ = path.resolve(__dirname, "../..");
 
+  /**
+   * Varredura recursiva com `readdirSync`, e não `fs.globSync`.
+   *
+   * ⚠️ `globSync` existe no Node da máquina de desenvolvimento e NÃO existe no
+   * Node do CI — o teste passou aqui e reprovou lá com "globSync is not a
+   * function". É o mesmo molde que `services/brain/architecture.test.ts` já
+   * usava; usar duas técnicas para a mesma varredura era a diferença entre
+   * verde local e vermelho no runner.
+   */
+  function listar(dir: string, acc: string[] = []): string[] {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      const completo = path.join(dir, entrada.name);
+      if (entrada.isDirectory()) {
+        if (entrada.name === "node_modules") continue;
+        listar(completo, acc);
+      } else if (/\.(ts|tsx)$/.test(entrada.name) && !/\.test\.tsx?$/.test(entrada.name)) {
+        acc.push(path.relative(RAIZ, completo).split(path.sep).join("/"));
+      }
+    }
+    return acc;
+  }
+
   function fontesDoProduto(): string[] {
-    return globSync("**/*.{ts,tsx}", { cwd: RAIZ })
-      .filter((f) => !f.includes(".test."))
+    return listar(RAIZ)
       // Este módulo é a fonte, e o redireciono existe justamente para citar o
       // endereço velho. Os dois são o lugar certo de a string aparecer.
       .filter((f) => !f.endsWith("lib/sala/rotas.ts"))
