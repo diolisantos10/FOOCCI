@@ -203,8 +203,19 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
     // ausentes, `isFoocciSalesPhoneNumberId` é sempre false e este webhook se
     // comporta exatamente como antes. Aditivo, risco zero.
     //
-    // ⚠️ NENHUMA RESPOSTA SAI DAQUI. O recepcionista anota; quem redige é o
-    // Cérebro, e a escada de liberação ainda não autorizou a primeira mensagem.
+    // ── ⚠️ O QUE ACONTECE DEPOIS DAQUI MUDOU EM 26/08/2026 ─────────────────
+    //
+    // Este comentário dizia "NENHUMA RESPOSTA SAI DAQUI", e deixou de ser
+    // verdade: a recepção agora chama o TA, que redige e grava a resposta.
+    //
+    // A frase certa é outra, e ela continua valendo: **nada é ENTREGUE sem a
+    // chave do dono**. A resposta nasce PENDENTE, e só vira mensagem no
+    // telefone de alguém com `FOOCCI_SDR_SEND_ENABLED` ligada.
+    //
+    // `void` de propósito: a Meta exige resposta rápida do webhook e reentrega
+    // o que demora. Compor com modelo leva segundos — segurar o 200 esperando
+    // por isso faria a Meta reenviar a mesma mensagem, e o cliente receberia a
+    // resposta duas vezes. A recepção não lança, então nada fica sem dono.
     if (isFoocciSalesPhoneNumberId(m.phoneNumberId)) {
       // Desde 25/08/2026 a mensagem é GRAVADA, e não só anotada: a Sala de
       // Vendas precisa abrir a conversa, e antes disto a linha do tempo dizia
