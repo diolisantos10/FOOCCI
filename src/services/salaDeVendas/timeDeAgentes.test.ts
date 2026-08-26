@@ -249,6 +249,60 @@ describe("⭐ e por isso ele não aparece nas telas", () => {
   });
 });
 
+describe("⭐ a tela não pode prometer o que o código não faz", () => {
+  /**
+   * ── O ERRO QUE ORIGINOU ESTE CASO ─────────────────────────────────────────
+   *
+   * A tela do agente dizia: *"cada um assume lead e assina a conversa com o
+   * nome dele"*. É falso. Quando a IA atende, `responsavel.ts` grava
+   * `atendidoPor: "IA"` com **`atendenteUserId: null`** — genérica, sem nome.
+   * Os cinco existem e nenhum recebe conversa.
+   *
+   * A frase só apareceu porque o CEO perguntou *"todos já estão dentro do
+   * projeto?"* e eu fui conferir. Ninguém teria notado olhando a tela: ela
+   * descreve o **plano no presente**, e quem lê conclui que já funciona.
+   *
+   * Guardrail 5 — nunca vender como pronto o que está em piloto.
+   *
+   * ── COMO ESTE CASO SE APOSENTA ────────────────────────────────────────────
+   *
+   * No dia em que a IA passar a assumir COM nome, a primeira metade deixa de
+   * valer e o caso falha — avisando que o aviso na tela virou mentira ao
+   * contrário. É de propósito: os dois lados têm de andar juntos.
+   */
+  it("enquanto a IA assumir sem nome, a tela precisa dizer isso", () => {
+    const responsavel = semComentarios(
+      readFileSync(join(process.cwd(), "src/services/salaDeVendas/responsavel.ts"), "utf8"),
+    );
+
+    // A IA ainda assume sem apontar para um agente do time?
+    const assumeSemNome = /atendidoPor:\s*"IA",\s*atendenteUserId:\s*null/.test(responsavel);
+
+    if (!assumeSemNome) {
+      // Mudou. Então o aviso na tela precisa SAIR, ou vira mentira ao contrário.
+      const tela = readFileSync(
+        join(process.cwd(), "src/app/comercial/(area)/agente/AgenteClient.tsx"),
+        "utf8",
+      );
+      expect(
+        tela.includes("Ainda não atendem com o nome deles"),
+        "a IA passou a assumir COM nome — o aviso na tela virou falso e precisa sair",
+      ).toBe(false);
+      return;
+    }
+
+    const tela = readFileSync(
+      join(process.cwd(), "src/app/comercial/(area)/agente/AgenteClient.tsx"),
+      "utf8",
+    );
+
+    expect(
+      tela.includes("Ainda não atendem com o nome deles"),
+      "a IA assume sem nome e a tela não avisa — o time parece estar atendendo",
+    ).toBe(true);
+  });
+});
+
 describe("agentePorSlug", () => {
   it("acha quem existe", () => {
     expect(agentePorSlug("agente-1")?.nome).toBe("Agente 1");
