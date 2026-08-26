@@ -27,7 +27,7 @@
  * isso o motivo é uma chave estrangeira para um catálogo, e não uma nota.
  */
 
-import type { Prisma, PrismaClient, SiteLeadStage } from "@prisma/client";
+import type { Prisma, PrismaClient, SiteLeadStage, LeadAtendidoPor } from "@prisma/client";
 import { SEQUENCIA_FUNIL, indiceEtapa, ROTULO_ETAPA } from "@/services/foocci-crm/foocciCrmFunnel";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
@@ -329,6 +329,97 @@ export async function colunasDoKanban(
     rotulo: ROTULO_ETAPA[etapa],
     total: por.get(etapa) ?? 0,
   }));
+}
+
+/**
+ * Os cartões de uma coluna.
+ *
+ * ── POR QUE O QUADRO PRECISA DELES ──────────────────────────────────────────
+ *
+ * Até 26/08/2026 o funil mostrava só a CONTAGEM. Um quadro de Kanban sem cartão
+ * é um relatório: informa e não deixa fazer nada. O vendedor via "3 em
+ * negociação", e para mover qualquer um deles tinha que sair do quadro, achar o
+ * lead na fila e abrir a ficha.
+ *
+ * O que não se registra no fluxo não se registra. Era exatamente por isso que a
+ * etapa envelhecia: o gesto certo custava quatro telas.
+ *
+ * ── O TETO POR COLUNA, E POR QUE ELE EXISTE ─────────────────────────────────
+ *
+ * Vinte. Não é paginação, é desenho: uma coluna com trezentos cartões não é um
+ * quadro que alguém trabalha — é uma lista, e lista tem tela própria (as Filas).
+ * O quadro serve para ver o que está EM MOVIMENTO e mexer nisso.
+ *
+ * A contagem cheia continua vindo à parte, e a tela diz quantos ficaram de fora.
+ * Truncar em silêncio faria o total parecer errado.
+ */
+export interface CartaoDoFunil {
+  id: string;
+  nome: string;
+  restaurante: string | null;
+  /** Quando alguém falou com ele pela última vez. Null = ninguém falou. */
+  ultimaInteracaoEm: Date | null;
+  /** Null quando ninguém pontuou ainda — e null NÃO é zero (guardrail 1). */
+  score: number | null;
+  /** Quem está com ele agora — o que impede duas pessoas na mesma conversa. */
+  atendidoPor: LeadAtendidoPor;
+}
+
+export const CARTOES_POR_COLUNA = 20;
+
+/**
+ * Os cartões de cada coluna, no escopo de quem pergunta.
+ *
+ * ⚠️ O `escopo` é o MESMO que governa a contagem. Um quadro que mostrasse
+ * cartões fora do escopo entregaria ao vendedor um lead que ele não pode abrir —
+ * e ele descobriria isso ao clicar, com um 403.
+ *
+ * Ordena pelo mais parado primeiro: numa coluna de funil, o cartão que mais
+ * precisa de atenção é o que está há mais tempo sem ninguém falar com ele. Por
+ * data de criação, o quadro premiaria o que acabou de chegar — que é justamente
+ * o que menos corre risco.
+ */
+export async function cartoesDoKanban(
+  db: Cliente,
+  escopo: Prisma.SiteLeadWhereInput,
+  porColuna = CARTOES_POR_COLUNA,
+): Promise<Record<string, CartaoDoFunil[]>> {
+  const ordem: SiteLeadStage[] = [...SEQUENCIA_FUNIL, "PERDIDO", "NUTRICAO"];
+
+  const listas = await Promise.all(
+    ordem.map((etapa) =>
+      db.siteLead.findMany({
+        where: { ...escopo, stage: etapa },
+        // `nulls: "first"` é o ponto: quem NUNCA foi atendido vem antes de quem
+        // foi atendido há muito tempo. Ausência de contato é mais urgente que
+        // contato velho, e um `null` jogado para o fim esconde exatamente isso.
+        orderBy: { lastInteractionAt: { sort: "asc", nulls: "first" } },
+        take: porColuna,
+        select: {
+          id: true,
+          nome: true,
+          restaurante: true,
+          lastInteractionAt: true,
+          score: true,
+          atendidoPor: true,
+        },
+      }),
+    ),
+  );
+
+  const por: Record<string, CartaoDoFunil[]> = {};
+  ordem.forEach((etapa, i) => {
+    por[etapa] = (listas[i] ?? []).map((l) => ({
+      id: l.id,
+      nome: l.nome,
+      restaurante: l.restaurante,
+      ultimaInteracaoEm: l.lastInteractionAt,
+      score: l.score,
+      atendidoPor: l.atendidoPor,
+    }));
+  });
+
+  return por;
 }
 
 /** Posição na régua, para a tela ordenar sem repetir a sequência. */

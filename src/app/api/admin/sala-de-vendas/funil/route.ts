@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { guardarSalaDeVendas, somenteLeitura, podeVerOLead, vePelaOperacaoToda } from "../_guarda";
-import { colunasDoKanban, moverNaSala } from "@/services/salaDeVendas/funil";
+import { colunasDoKanban, cartoesDoKanban, moverNaSala } from "@/services/salaDeVendas/funil";
 import { escopoDaConsulta } from "@/services/salaDeVendas/filas";
 import type { SiteLeadStage } from "@prisma/client";
 
@@ -25,8 +25,12 @@ export async function GET(req: NextRequest) {
 
   const escopo = escopoDaConsulta(portao.sessao);
 
-  const [colunas, motivos] = await Promise.all([
+  const [colunas, cartoes, motivos] = await Promise.all([
     colunasDoKanban(prisma, escopo),
+    // Os cartões usam o MESMO escopo da contagem. Um quadro que mostrasse
+    // cartões fora do escopo entregaria ao vendedor um lead que ele não pode
+    // abrir — e ele descobriria isso ao clicar, com um 403.
+    cartoesDoKanban(prisma, escopo),
     prisma.motivoDePerda.findMany({
       where: { ativo: true },
       orderBy: { ordem: "asc" },
@@ -34,7 +38,7 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json({ ok: true, data: { colunas, motivosDePerda: motivos } });
+  return NextResponse.json({ ok: true, data: { colunas, cartoes, motivosDePerda: motivos } });
 }
 
 interface CorpoDoMovimento {
