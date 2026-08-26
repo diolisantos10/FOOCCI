@@ -23,7 +23,7 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { COMERCIAL } from "@/lib/sala/rotas";
+import { COMERCIAL, ROTAS } from "@/lib/sala/rotas";
 
 export function EntrarClient() {
   const router = useRouter();
@@ -164,6 +164,20 @@ export function EntrarClient() {
             >
               Entrar com a senha de administração
             </button>
+            {/* ── A SAÍDA PARA O PRIMEIRO ACESSO ───────────────────────────
+                Desde que a moldura passou a exigir sessão de pessoa, quem
+                ainda não tem login não alcança tela nenhuma de `/comercial`
+                — e a de criar acesso é justamente a que ele precisa.
+
+                Sem este link o caminho existiria e ninguém acharia: a pessoa
+                teria de saber o endereço de cor. Porta que só abre para quem
+                já sabe onde ela fica é porta trancada. */}
+            <a
+              href={ROTAS.acessos}
+              className="block w-full text-center text-[12.5px] text-muted underline underline-offset-2 hover:text-ink2"
+            >
+              Ainda não tenho login
+            </a>
           </form>
         )}
       </div>

@@ -40,10 +40,21 @@
  *
  * Por isso o time saiu daqui inteiro. Esta tela trata de **entrar**, e entrar é
  * coisa de quem está do lado de fora. O time está dentro (`garantirTime.ts`).
+ *
+ * ── ⚠️ E POR ISSO ELA VIVE FORA DA MOLDURA ──────────────────────────────────
+ *
+ * Esta é a única tela de `/comercial` que a **senha da casa** ainda abre, e é de
+ * propósito: é por aqui que nasce o primeiro login da vida. Se ela exigisse
+ * sessão de pessoa, o primeiro acesso não teria por onde ser criado — a porta
+ * pediria a chave que só existe do outro lado dela.
+ *
+ * Ficar fora da moldura é o que permite isso sem furar a regra nova: a casa
+ * (`(area)/layout.tsx`) exige sessão de pessoa e **não aceita mais a senha da
+ * casa**. Aqui não há casa — há um formulário.
  */
 
 import { useState } from "react";
-import { ENTRADA, ROTAS } from "@/lib/sala/rotas";
+import { ENTRADA, ROTAS, COMERCIAL } from "@/lib/sala/rotas";
 
 const PAPEIS = [
   { valor: "AGENTE_HUMANO", rotulo: "Vendedor (SDR)", nota: "entra direto na Sala e não vê o resto do sistema" },
@@ -129,8 +140,19 @@ export function AcessosClient() {
   }
 
   return (
-    <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-canvas px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-2xl">
+        {/* Sem a moldura, não há menu — e sem menu, não há volta. Este link é a
+            volta. Quem chegou aqui pela tela de entrar segue para o login;
+            quem chegou de dentro da Sala volta para ela. Os dois cabem no
+            mesmo link porque a Sala manda para o login quem não tem sessão. */}
+        <a
+          href={COMERCIAL}
+          className="mb-4 inline-block text-[12.5px] text-muted underline underline-offset-2 hover:text-ink2"
+        >
+          ← Voltar para a Sala
+        </a>
+
         <header className="mb-5">
           <h1 className="text-2xl font-semibold tracking-[-.02em] text-ink">Quem entra na Sala</h1>
           <p className="mt-1 max-w-[62ch] text-[13.5px] leading-relaxed text-muted">
