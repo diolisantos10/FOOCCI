@@ -6,12 +6,23 @@
  * ── O QUE ESTA TELA MOSTRA QUE UM CHAT NÃO MOSTRARIA ────────────────────────
  *
  * Um chat bonito provaria que ele responde. O que precisa ser visto antes de
- * ligar é outra coisa: **em que ele se apoiou**. Por isso cada resposta vem com
- * a origem colada — qual item da base de verdade sustentou a frase — e com o
- * motivo pelo qual ela saiu assim.
+ * ligar é outra coisa: **em que material ele se baseou, e o que foi barrado no
+ * caminho**. Por isso cada resposta vem com a origem colada e com o motivo pelo
+ * qual ela saiu assim.
  *
- * Quando `apoiadoEm` está vazio e ele mesmo assim afirmou algo, isso é um
- * defeito visível na tela. É esse o exame.
+ * ── ⚠️ "APOIADO EM" E "LEU" NÃO SÃO A MESMA COISA ───────────────────────────
+ *
+ * Enquanto o TA respondia por correspondência, a etiqueta verde significava
+ * "esta frase saiu deste item" — apoio, literalmente.
+ *
+ * Desde que o modelo redige, ela significa "este material foi enviado junto com
+ * a pergunta". O modelo pode ter usado, resumido ou ignorado. Continuar
+ * escrevendo "apoiado em" seria vender uma garantia que a tela não dá — e quem
+ * lê isto está decidindo se solta um robô para falar com estranhos.
+ *
+ * Então a etiqueta muda de nome conforme a origem. Quem garante que ele não
+ * afirmou o que não podia é o verificador, e o que ELE barrou aparece em
+ * vermelho ao lado.
  *
  * ── ⛔ NADA AQUI SAI ────────────────────────────────────────────────────────
  *
@@ -144,9 +155,10 @@ export function EnsaioClient() {
           </div>
           <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
             Escreva como se você fosse o dono do restaurante. O TA responde aqui,
-            e ao lado de cada resposta aparece <strong className="text-ink2">em
-            que ele se apoiou</strong> — é isso que precisa ser examinado antes de
-            ligá-lo, não se ele fala bonito.
+            Ao lado de cada resposta aparece <strong className="text-ink2">o que
+            ele leu</strong> e <strong className="text-ink2">o que foi barrado</strong>
+            — é isso que precisa ser examinado antes de ligá-lo, não se ele fala
+            bonito.
           </p>
         </header>
 
@@ -213,18 +225,25 @@ export function EnsaioClient() {
                   ))}
 
                   {l.r.apoiadoEm.length > 0 ? (
-                    l.r.apoiadoEm.map((a) => (
-                      <span
-                        key={a.id}
-                        className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800"
-                        title={`fonte: ${a.fonte}`}
-                      >
-                        {a.id}
+                    <>
+                      <span className="text-[11px] text-muted">
+                        {l.r.origem === "chao-deterministico" || l.r.origem === "handoff-deterministico"
+                          ? "apoiado em:"
+                          : "leu:"}
                       </span>
-                    ))
+                      {l.r.apoiadoEm.map((a) => (
+                        <span
+                          key={a.id}
+                          className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800"
+                          title={`fonte: ${a.fonte}`}
+                        >
+                          {a.id}
+                        </span>
+                      ))}
+                    </>
                   ) : (
                     <span className="rounded border border-line bg-canvas px-1.5 py-0.5 text-[11px] text-muted">
-                      sem afirmação
+                      sem material
                     </span>
                   )}
 
