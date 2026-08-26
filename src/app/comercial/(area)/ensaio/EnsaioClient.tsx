@@ -22,12 +22,25 @@
 
 import { useState } from "react";
 
+/** Os turnos anteriores, no formato que o servidor entende. */
+function paraOServidor(linhas: Linha[]): Array<{ deQuem: "cliente" | "ta"; texto: string }> {
+  return linhas.map((l) =>
+    l.de === "lead"
+      ? { deQuem: "cliente" as const, texto: l.texto }
+      : { deQuem: "ta" as const, texto: l.r.texto },
+  );
+}
+
 interface RespostaDoTA {
   texto: string;
   apoiadoEm: Array<{ id: string; fonte: string }>;
   perguntouIndice: number | null;
   handoff: { deve: boolean; motivo: string | null };
   porque: string;
+  /** De onde veio o texto: o modelo, o modelo depois de corrigido, ou o chão. */
+  origem: "modelo" | "modelo-na-segunda" | "chao-deterministico" | "handoff-deterministico";
+  /** O que o verificador reprovou no caminho. Vazio no caminho feliz. */
+  reprovacoes: Array<{ motivos: string[]; detalhe: string }>;
 }
 
 interface Ficha {
@@ -40,10 +53,19 @@ type Linha =
   | { de: "lead"; texto: string }
   | { de: "ta"; r: RespostaDoTA };
 
+/**
+ * As perguntas que aparecem numa venda de verdade — e três armadilhas.
+ *
+ * "Vocês trabalham com iFood?" e "em quanto tempo fico no ar?" estão aqui de
+ * propósito: são as duas em que um modelo solto mente com mais naturalidade, e
+ * é nelas que o ensaio precisa ser olhado com mais atenção.
+ */
 const SUGESTOES = [
   "Oi, vi o site de vocês",
   "Quanto custa o plano Crescimento?",
-  "Vocês integram com o sistema Colibri?",
+  "Como funciona o pagamento por Pix?",
+  "Vocês trabalham com iFood?",
+  "Em quanto tempo eu fico no ar?",
   "Consegue fazer um desconto?",
   "Quero falar com uma pessoa",
 ];
@@ -55,6 +77,7 @@ export function EnsaioClient() {
   const [jaPerguntou, setJaPerguntou] = useState<number[]>([]);
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [pensando, setPensando] = useState(false);
+  const [cerebroLigado, setCerebroLigado] = useState<boolean | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   async function enviar(mensagem: string) {
@@ -69,11 +92,14 @@ export function EnsaioClient() {
       const res = await fetch("/api/admin/sala-de-vendas/ensaio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensagem, nome, jaPerguntou }),
+        // O histórico vai junto: sem ele o TA cumprimenta a mesma pessoa a cada
+        // turno e responde como se fosse a primeira mensagem do dia. É a
+        // diferença entre ensaiar uma CONVERSA e ensaiar respostas soltas.
+        body: JSON.stringify({ mensagem, nome, jaPerguntou, historico: paraOServidor(linhas) }),
       });
       const j = (await res.json()) as {
         ok: boolean;
-        data?: { resposta: RespostaDoTA; ficha: Ficha };
+        data?: { resposta: RespostaDoTA; ficha: Ficha; cerebroLigado?: boolean };
         error?: string;
       };
 
@@ -83,6 +109,7 @@ export function EnsaioClient() {
       }
 
       setFicha(j.data.ficha);
+      setCerebroLigado(j.data.cerebroLigado ?? null);
       setLinhas((L) => [...L, { de: "ta", r: j.data!.resposta }]);
 
       // A sondagem só anda quando ele de fato perguntou. Marcar antes faria a
@@ -165,6 +192,26 @@ export function EnsaioClient() {
                 </p>
 
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-1">
+                  {/* De onde veio o TEXTO. É a primeira coisa a olhar: uma sala
+                      inteira de respostas "chão" quer dizer que o modelo está
+                      fora do ar ou sendo reprovado, e a conversa está dura por
+                      um motivo que não é o prompt. */}
+                  <Origem origem={l.r.origem} />
+
+                  {/* ⭐ O que o verificador BARROU antes de a resposta existir.
+                      É a informação mais valiosa desta tela: mostra o que o
+                      modelo tentou dizer e não pôde. Um ensaio sem isto parece
+                      um chat bonito; com isto, é auditoria. */}
+                  {(l.r.reprovacoes ?? []).map((v, k) => (
+                    <span
+                      key={k}
+                      className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-medium text-rose-800"
+                      title={v.detalhe}
+                    >
+                      barrado: {v.motivos.join(", ")}
+                    </span>
+                  ))}
+
                   {l.r.apoiadoEm.length > 0 ? (
                     l.r.apoiadoEm.map((a) => (
                       <span
@@ -260,5 +307,38 @@ export function EnsaioClient() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * De onde veio o texto desta resposta.
+ *
+ * As quatro origens contam coisas diferentes, e a diferença é o que se examina
+ * num ensaio:
+ *
+ *   · **modelo** — o caminho normal: ele redigiu e o verificador aprovou.
+ *   · **corrigido** — ele errou, foi avisado do motivo e consertou. Saudável em
+ *     pequena quantidade; muitos seguidos é sinal de que o contexto está ruim.
+ *   · **chão** — o modelo falhou ou foi reprovado duas vezes, e saiu a resposta
+ *     determinística. O TA não mentiu e também não conversou.
+ *   · **chama gente** — nem foi ao modelo: o gatilho de handoff resolveu antes,
+ *     em código, e é assim que tem que ser.
+ */
+function Origem({ origem }: { origem: RespostaDoTA["origem"] }) {
+  const mapa = {
+    "modelo": { rotulo: "modelo", cor: "border-line2 bg-canvas text-muted" },
+    "modelo-na-segunda": { rotulo: "corrigido", cor: "border-amber-200 bg-amber-50 text-amber-800" },
+    "chao-deterministico": { rotulo: "chão", cor: "border-line2 bg-chip text-ink2" },
+    "handoff-deterministico": { rotulo: "chama gente", cor: "border-sky-200 bg-sky-50 text-sky-800" },
+  } as const;
+
+  // `origem` pode faltar numa resposta antiga em cache do navegador — e uma tela
+  // de auditoria que quebra por causa disso é pior que uma etiqueta a menos.
+  const e = mapa[origem] ?? { rotulo: String(origem ?? "?"), cor: "border-line2 bg-canvas text-muted" };
+
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${e.cor}`}>
+      {e.rotulo}
+    </span>
   );
 }

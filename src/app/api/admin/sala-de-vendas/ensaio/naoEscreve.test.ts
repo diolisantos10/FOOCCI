@@ -47,6 +47,10 @@ describe("a rota de ensaio", () => {
   });
 
   it("responde usando o TA, e não um texto fixo", () => {
-    expect(semComentarios).toMatch(/salaDeVendas\/ta\/responder/);
+    // Desde 26/08/2026 a rota chama `falar()`, que é onde o determinístico e o
+    // modelo se encontram — e não mais `responder()` direto. A asserção mudou de
+    // alvo, e não de propósito: o texto continua vindo do agente de verdade, e
+    // ensaiar continua sendo ver o TA, não um roteiro escrito para a demonstração.
+    expect(semComentarios).toMatch(/salaDeVendas\/ta\/falar/);
   });
 });
