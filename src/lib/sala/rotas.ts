@@ -132,6 +132,17 @@ const PAPEIS_DOS_ACESSOS = new Set<string>(["MASTER_CEO", "DIRETOR_FOOCCI"]);
  * esconderia o produto de quem o está montando.
  */
 export function abasDoComercial(papel: InternalRole | null): Aba[] {
+  // ── O PAPEL QUE NÃO ENTRA NÃO RECEBE MENU ───────────────────────────────
+  //
+  // `AGENTE_IA` é o time de agentes, e ele não faz login: `autenticarInterno`
+  // o recusa mesmo com senha gravada no banco. Uma sessão com este papel não
+  // deveria existir — e é exatamente por isso que a linha está aqui.
+  //
+  // Se um dia existir, terá sido por defeito, e não vai ser o menu que entrega
+  // a Sala a ela. Isto não substitui a trava do login; é a segunda porta
+  // fechada no mesmo corredor.
+  if (papel === "AGENTE_IA") return [];
+
   const tudo = papel === null;
 
   return [

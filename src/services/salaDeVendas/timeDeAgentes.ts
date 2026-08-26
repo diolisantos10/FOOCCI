@@ -16,13 +16,25 @@
  *   casa dormir vão ficar os cinco agentes, vinte e quatro horas. Quando tiver
  *   humanos, os agentes saem."*
  *
- * Ou seja: o time de agentes **não é uma demonstração**, é o turno da noite. Por
- * isso eles têm cadastro próprio, entram com o próprio login, assumem lead e
- * aparecem na trilha com nome — do mesmo jeito que a pessoa que chega de manhã.
+ * Ou seja: o time de agentes **não é uma demonstração**, é o turno da noite.
+ *
+ * ── ⚠️ MAS AGENTE NÃO FAZ LOGIN ─────────────────────────────────────────────
+ *
+ * Esta é a segunda correção do CEO no mesmo dia, e ela desfaz metade do que eu
+ * tinha escrito: *"os agentes de IA, eles não têm login, eles estão lá no
+ * sistema"*.
+ *
+ * Então o agente tem **presença**, não credencial. Ele tem nome, tem fila, tem
+ * cliente e aparece na trilha como quem atendeu — mas não existe senha dele,
+ * porque não existe ninguém para digitá-la. Quem o aciona é o serviço, quando
+ * uma mensagem chega.
+ *
+ * A diferença entre "presença" e "credencial" é o que separa um ator de um
+ * buraco: uma senha que ninguém usa é uma senha que qualquer um pode usar.
  *
  * ⚠️ O revezamento em si — agente sai quando humano entra — **não está
  * construído**, e não é afirmado aqui como se estivesse. O que existe hoje é o
- * time cadastrado e a trava que já governa isso lead a lead: quando um humano
+ * time no sistema e a trava que já governa isso lead a lead: quando um humano
  * assume, a IA silencia (`responsavel.ts`). O turno automático é trabalho
  * separado, e vive no backlog com esse nome.
  *
@@ -37,6 +49,16 @@
  * vale digitar. O time de agentes a operação já conhece: quantos são e como se
  * chamam. Pedir ao dono que invente o nome de cada um é trabalho de digitação
  * disfarçado de decisão.
+ *
+ * ── O E-MAIL, SE NINGUÉM ENTRA COM ELE ──────────────────────────────────────
+ *
+ * Continua existindo, e não é enfeite: `InternalUser.email` é a chave única da
+ * tabela, e é por ela que a criação é idempotente — clicar duas vezes no mesmo
+ * agente encontra o mesmo registro em vez de criar um sósia.
+ *
+ * O domínio `agentes.` é o que impede a colisão com gente de verdade: no dia em
+ * que um endereço de agente batesse com o de um funcionário, a criação do agente
+ * cairia em cima do registro da pessoa — e a pessoa perderia o acesso dela.
  *
  * ── POR QUE OS NOMES SÃO NUMERADOS ──────────────────────────────────────────
  *
@@ -108,18 +130,35 @@ export const TIME_DE_AGENTES: readonly AgenteDoTime[] = [
 ] as const;
 
 /**
- * O papel de todo agente do time.
+ * O papel de todo agente do time — e a correção de um erro meu.
  *
- * `AGENTE_HUMANO` e não `AGENTE_IA`, e a escolha merece explicação porque parece
- * errada: o papel governa **o que a conta alcança na Sala**, e o que estes
- * agentes fazem é o trabalho do vendedor — abrir conversa, assumir lead, mover
- * no funil. `AGENTE_IA` existe para o TA, que não usa tela nenhuma.
+ * ── O QUE EU TINHA ESCRITO AQUI, E POR QUE ESTAVA ERRADO ────────────────────
  *
- * Trocar por `AGENTE_IA` não os tornaria "mais bots": tiraria deles o acesso às
- * telas que eles precisam usar, e o sintoma seria "o agente não consegue abrir a
- * conversa".
+ * A primeira versão usava `AGENTE_HUMANO`, com este argumento: "o papel governa
+ * o que a conta alcança na Sala, e o que estes agentes fazem é o trabalho do
+ * vendedor — abrir conversa, assumir lead, mover no funil".
+ *
+ * A premissa estava errada. Eu supus que o agente **usa a tela**, e por isso lhe
+ * dei senha, login e um botão que mostrava a senha na hora. O CEO corrigiu em
+ * 26/08/2026, com estas letras: *"os agentes de IA, eles não têm login, eles
+ * estão lá no sistema"*.
+ *
+ * E ele está certo por um motivo que o próprio schema já dizia: agente não senta
+ * na frente de um navegador. Ele não "abre a conversa" — ele **é chamado pelo
+ * serviço** quando uma mensagem chega, e o que ele faz fica na trilha com o nome
+ * dele. Dar-lhe senha criava uma credencial que ninguém usa e que qualquer um
+ * pode usar: o pior tipo de conta.
+ *
+ * ── POR QUE `AGENTE_IA` É TRAVA, E NÃO ETIQUETA ─────────────────────────────
+ *
+ * `autenticarInterno` recusa este papel **mesmo com hash gravado no banco**
+ * (`internal-auth.ts`). Não é comentário pedindo boa vontade: é a linha que faz
+ * o login falhar. Guardrail 4 — prompt é aviso, código é trava.
+ *
+ * O efeito colateral é a razão de existir: como não há como este papel entrar,
+ * não há senha a vazar, a rodar por WhatsApp, ou a ficar anotada num papel.
  */
-export const PAPEL_DO_TIME = "AGENTE_HUMANO" as const;
+export const PAPEL_DO_TIME = "AGENTE_IA" as const;
 
 /** Onde eles trabalham. Um só departamento — a Sala é uma sala. */
 export const DEPARTAMENTOS_DO_TIME = ["vendas"] as const;

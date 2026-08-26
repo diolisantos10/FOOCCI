@@ -36,9 +36,12 @@
  * ele não sobra: é por onde entra GENTE.
  */
 
-import { useState } from "react";
-import { TIME_DE_AGENTES, PAPEL_DO_TIME, type AgenteDoTime } from "@/services/salaDeVendas/timeDeAgentes";
+import { useEffect, useState } from "react";
+import { TIME_DE_AGENTES, type AgenteDoTime } from "@/services/salaDeVendas/timeDeAgentes";
 import { ENTRADA } from "@/lib/sala/rotas";
+
+/** A porta do time. Separada da de gente porque não gera senha. */
+const ROTA_TIME = "/api/admin/sala-de-vendas/time-de-agentes";
 
 const PAPEIS = [
   { valor: "AGENTE_HUMANO", rotulo: "Vendedor (SDR)", nota: "entra direto na Sala e não vê o resto do sistema" },
@@ -64,11 +67,33 @@ export function AcessosClient() {
   const [erro, setErro] = useState<string | null>(null);
   const [criado, setCriado] = useState<Criado | null>(null);
   const [copiou, setCopiou] = useState(false);
-  /** Qual agente está sendo criado agora — para o botão dele dizer isso. */
-  const [criandoAgente, setCriandoAgente] = useState<string | null>(null);
+  /** Qual agente está entrando agora — para o botão dele dizer isso. */
+  const [pondoAgente, setPondoAgente] = useState<string | null>(null);
+  /** Os e-mails do time que já estão no sistema. `null` = ainda não sei. */
+  const [noSistema, setNoSistema] = useState<Set<string> | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
-  /** O caminho comum a todos: manda para a rota e mostra a senha. */
+  // Quem do time já está lá dentro. Sem isto o botão vira interruptor sem
+  // lâmpada: clicar de novo não quebra (a rota é idempotente), mas quem clica
+  // não tem como saber se precisava.
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const res = await fetch(ROTA_TIME, { cache: "no-store" });
+        const j = (await res.json()) as { ok: boolean; data?: { emails: string[] } };
+        if (vivo && j.ok && j.data) setNoSistema(new Set(j.data.emails));
+      } catch {
+        // Não saber quem já está é bem melhor que a tela não abrir. O botão
+        // continua clicável, e a rota é idempotente de qualquer jeito.
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /** O caminho de GENTE: cria a conta e devolve a senha, que aparece uma vez. */
   async function pedirAcesso(corpo: { nome: string; email: string; papel: string }) {
     setErro(null);
     setCriado(null);
@@ -94,14 +119,51 @@ export function AcessosClient() {
     }
   }
 
-  async function criarAgente(a: AgenteDoTime) {
-    if (criandoAgente) return;
-    setCriandoAgente(a.slug);
-    // Rolar para o topo: a senha aparece lá em cima e uma vez só. Sem isto, em
-    // tela pequena, o botão fica visível e a senha nasce fora do campo de visão.
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    await pedirAcesso({ nome: a.nome, email: a.email, papel: PAPEL_DO_TIME });
-    setCriandoAgente(null);
+  /**
+   * O caminho do AGENTE, e é outra rota de propósito.
+   *
+   * `primeiro-acesso` sorteia senha; agente não tem senha. A separação é a
+   * trava: este caminho não passa por nenhuma linha que gere credencial.
+   */
+  async function porNoSistema(a: AgenteDoTime) {
+    if (pondoAgente) return;
+    setPondoAgente(a.slug);
+    setErro(null);
+    setCriado(null);
+
+    try {
+      const res = await fetch(ROTA_TIME, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: a.slug }),
+      });
+      const j = (await res.json()) as { ok: boolean; error?: string };
+
+      if (j.ok) setNoSistema((s) => new Set(s ?? []).add(a.email));
+      else setErro(j.error ?? "Não foi possível pôr o agente no sistema.");
+    } catch {
+      setErro("Sem resposta do servidor.");
+    } finally {
+      setPondoAgente(null);
+    }
+  }
+
+  /**
+   * O atalho do dono.
+   *
+   * Ele não preenche nada por ele: abre o formulário já no papel de CEO e põe o
+   * cursor no e-mail. O e-mail continua sendo digitado — endereço pessoal não
+   * mora no código deste repositório.
+   */
+  function souODono() {
+    setPapel("MASTER_CEO");
+    setMostrarFormulario(true);
+    setErro(null);
+    // O `requestAnimationFrame` espera o formulário existir no DOM: chamar
+    // `focus` no mesmo tique acha `null` e não foca nada.
+    requestAnimationFrame(() => {
+      document.getElementById("email")?.focus();
+    });
   }
 
   async function criar(e: React.FormEvent) {
@@ -121,11 +183,11 @@ export function AcessosClient() {
     <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-2xl">
         <header className="mb-5">
-          <h1 className="text-2xl font-semibold tracking-[-.02em] text-ink">Criar acesso</h1>
+          <h1 className="text-2xl font-semibold tracking-[-.02em] text-ink">Quem trabalha aqui</h1>
           <p className="mt-1 max-w-[62ch] text-[13.5px] leading-relaxed text-muted">
-            Sem ninguém cadastrado, a Sala responde <strong className="text-ink2">“sem
-            acesso” para todo mundo</strong> — inclusive para você. Crie aqui o
-            primeiro, e depois os vendedores.
+            Duas coisas diferentes nesta tela: <strong className="text-ink2">agentes</strong>,
+            que ficam no sistema e não fazem login, e <strong className="text-ink2">pessoas</strong>,
+            que entram com e-mail e senha e enxergam conforme o que são.
           </p>
         </header>
 
@@ -176,14 +238,15 @@ export function AcessosClient() {
         <section className="rounded-xl border border-line bg-paper p-4">
           <h2 className="text-[15px] font-semibold text-ink">Time de agentes</h2>
           <p className="mt-1 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
-            Já estão nomeados. Um clique cria o acesso e mostra a senha aqui em cima.
-            Crie <strong className="text-ink2">só os que forem trabalhar agora</strong> —
-            agente parado na fila é fila dividida à toa.
+            Já estão nomeados. <strong className="text-ink2">Agente não faz login</strong> —
+            ele fica no sistema, atende, assume lead e assina a conversa com o nome
+            dele. Não há senha porque não há ninguém para digitá-la.
           </p>
 
           <ul className="mt-3 flex flex-col gap-2">
             {TIME_DE_AGENTES.map((a) => {
-              const esteCriando = criandoAgente === a.slug;
+              const entrando = pondoAgente === a.slug;
+              const dentro = noSistema?.has(a.email) ?? false;
               return (
                 <li
                   key={a.slug}
@@ -193,23 +256,51 @@ export function AcessosClient() {
                     <span className="block text-[13.5px] font-semibold text-ink">{a.nome}</span>
                     <span className="block text-[12.5px] text-muted">{a.funcao}</span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => void criarAgente(a)}
-                    disabled={criandoAgente !== null}
-                    className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                  >
-                    {esteCriando ? "Criando…" : "Criar acesso"}
-                  </button>
+                  {dentro ? (
+                    <span className="shrink-0 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[13px] font-semibold text-emerald-800">
+                      No sistema
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void porNoSistema(a)}
+                      disabled={pondoAgente !== null}
+                      className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      {entrando ? "Pondo…" : "Pôr no sistema"}
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
 
           <p className="mt-3 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
-            Cada um entra com o próprio login, assume o lead no nome dele e aparece na
-            conversa como quem atendeu — igual a uma pessoa do time.
+            Pôr no sistema <strong className="text-ink2">não solta o agente na linha</strong>.
+            Quem responde ao cliente é o atendente de IA, e o interruptor dele
+            continua sendo seu, na aba “O agente”.
           </p>
+        </section>
+
+        {/* ── O ATALHO DO DONO ───────────────────────────────────────────────
+            O beco que ele descreveu: entrou com a senha da casa, que não carrega
+            nome, e a Sala recusou — cada lead tem um responsável e responsável
+            sem nome não responde por nada. A saída é ele ter o login dele. */}
+        <section className="mt-4 rounded-xl border border-line bg-paper p-4">
+          <h2 className="text-[15px] font-semibold text-ink">O seu acesso</h2>
+          <p className="mt-1 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
+            A senha da casa abre a porta, mas não tem nome — e a Sala precisa saber
+            de quem é cada conversa. Com o seu login você enxerga{" "}
+            <strong className="text-ink2">a operação inteira</strong>: os vendedores,
+            os agentes e todos os clientes. O vendedor enxerga só os dele.
+          </p>
+          <button
+            type="button"
+            onClick={souODono}
+            className="mt-3 rounded-xl bg-brand-500 px-3.5 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-brand-600"
+          >
+            Criar o meu acesso de CEO
+          </button>
         </section>
 
         {/* ── E O FORMULÁRIO, PARA GENTE ─────────────────────────────────────

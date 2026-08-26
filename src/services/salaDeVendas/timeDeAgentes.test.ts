@@ -19,6 +19,8 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   TIME_DE_AGENTES,
   PAPEL_DO_TIME,
@@ -26,6 +28,21 @@ import {
   agentePorSlug,
 } from "./timeDeAgentes";
 import { abasDoComercial } from "@/lib/sala/rotas";
+
+/**
+ * O código sem os comentários.
+ *
+ * Existe por causa de um erro real: um teste que varre a fonte procurando
+ * `randomBytes` encontra a frase "este arquivo não tem `randomBytes`" e reprova
+ * o arquivo justamente por ele explicar que está correto.
+ *
+ * Não é um parser — uma `//` dentro de uma string literal seria cortada por
+ * engano. Para o que estes casos medem (imports e atribuições em rotas curtas)
+ * isso basta, e a alternativa seria carregar um analisador para ler três linhas.
+ */
+function semComentarios(fonte: string): string {
+  return fonte.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
 
 describe("o time vem pronto", () => {
   it("⭐ tem cinco agentes já nomeados", () => {
@@ -81,37 +98,92 @@ describe("⭐ agente não se passa por gente", () => {
   });
 });
 
-describe("⭐ o papel deixa o agente trabalhar", () => {
-  it("é AGENTE_HUMANO, e não AGENTE_IA", () => {
-    // Parece o contrário do certo, e não é. `AGENTE_IA` está escrito no schema
-    // como ator técnico que **nunca faz login interativo** — é o papel do TA,
-    // que não abre tela nenhuma. Estes aqui abrem: assumem lead, respondem,
-    // movem no funil. Trocar por AGENTE_IA não os tornaria "mais robôs",
-    // tiraria deles as telas, e o sintoma seria "o agente não abre a conversa".
-    expect(PAPEL_DO_TIME).toBe("AGENTE_HUMANO");
-  });
-
-  it("com esse papel ele enxerga a fila e a conversa", () => {
-    // A outra metade: não basta o papel existir, ele precisa abrir as telas do
-    // trabalho. Se a lista de abas mudar e o vendedor perder a conversa, este
-    // caso cai junto.
+describe("⭐ agente não faz login", () => {
+  it("o papel é AGENTE_IA", () => {
+    // ⚠️ A primeira versão deste arquivo afirmava o CONTRÁRIO — que o papel
+    // tinha de ser AGENTE_HUMANO "porque o agente usa as telas". A premissa
+    // estava errada, e o CEO corrigiu: *"os agentes de IA, eles não têm login,
+    // eles estão lá no sistema"*.
     //
-    // ⚠️ E ele prova só isso. Hoje Filas e Conversas estão em `PARA_TODOS`, ou
-    // seja, a aba não distingue papel — trocar AGENTE_HUMANO por outro papel
-    // qualquer passaria aqui. Quem pega essa troca é o caso acima, pelo nome.
-    const abas = abasDoComercial(PAPEL_DO_TIME).map((x) => x.rotulo);
-    expect(abas, `abas do agente: ${abas.join(", ")}`).toContain("Conversas");
-    expect(abas).toContain("Filas");
+    // O papel é o que faz isso valer: `autenticarInterno` recusa AGENTE_IA
+    // mesmo com hash gravado no banco. Trocar esta linha por AGENTE_HUMANO
+    // devolveria a capacidade de login a cinco contas que ninguém usa.
+    expect(PAPEL_DO_TIME).toBe("AGENTE_IA");
   });
 
-  it("e NÃO enxerga criar acesso — agente não cria agente", () => {
-    // Criar conta é do dono. Um agente que cria agente fecha o laço sozinho.
-    const abas = abasDoComercial(PAPEL_DO_TIME).map((x) => x.rotulo);
-    expect(abas).not.toContain("Criar acesso");
+  it("⭐ e a recusa é do código, não deste teste", () => {
+    // A prova que importa: o portão do login existe e barra este papel. Sem
+    // este caso, `PAPEL_DO_TIME` seria só uma etiqueta que eu escolhi — e uma
+    // etiqueta não impede ninguém de entrar.
+    //
+    // Guardrail 4: prompt é aviso, código é trava.
+    const fonte = readFileSync(
+      join(process.cwd(), "src/lib/internal-auth.ts"),
+      "utf8",
+    );
+    expect(
+      fonte.includes(`user.role === "${PAPEL_DO_TIME}"`),
+      "internal-auth.ts não barra mais o papel do time — o agente voltou a poder entrar",
+    ).toBe(true);
+  });
+
+  it("a rota do time não gera senha, e não é a rota de gente", () => {
+    // A separação é estrutural: `primeiro-acesso` sorteia senha e a devolve na
+    // resposta. Se o time passasse por lá, o agente ganharia credencial de
+    // volta — e nada na tela mostraria isso.
+    //
+    // ⚠️ Lê o CÓDIGO, não os comentários. A primeira versão deste caso falhou
+    // contra a própria explicação do arquivo, que cita `randomBytes` para dizer
+    // que ele não está lá. Um teste que lê prosa mede a prosa.
+    const codigo = semComentarios(
+      readFileSync(
+        join(process.cwd(), "src/app/api/admin/sala-de-vendas/time-de-agentes/route.ts"),
+        "utf8",
+      ),
+    );
+    expect(codigo, "a rota do time passou a gerar senha").not.toMatch(
+      /randomBytes|bcryptjs|passwordHash/,
+    );
+  });
+
+  it("⭐ e a rota de GENTE continua recusando este papel", () => {
+    // A outra metade. Não basta a rota do time ser limpa: se `primeiro-acesso`
+    // aceitasse AGENTE_IA, bastaria um POST com o papel no corpo para criar um
+    // agente COM senha, por fora da tela.
+    const fonte = readFileSync(
+      join(process.cwd(), "src/app/api/admin/sala-de-vendas/primeiro-acesso/route.ts"),
+      "utf8",
+    );
+    const lista = fonte.slice(fonte.indexOf("const PAPEIS"), fonte.indexOf("const EMAIL"));
+    expect(
+      lista.includes(PAPEL_DO_TIME),
+      "primeiro-acesso passou a aceitar AGENTE_IA — agente com senha de novo",
+    ).toBe(false);
   });
 
   it("trabalha em vendas, e só", () => {
     expect(DEPARTAMENTOS_DO_TIME).toEqual(["vendas"]);
+  });
+});
+
+describe("⭐ e por isso ele não aparece nas telas", () => {
+  it("o papel do time não abre aba nenhuma do comercial", () => {
+    // Coerência com o de cima: se o agente não entra, não faz sentido a lista
+    // de abas responder por ele. Este caso pega a incoerência — alguém dando
+    // telas a um papel que não tem como chegar nelas.
+    const abas = abasDoComercial(PAPEL_DO_TIME).map((x) => x.rotulo);
+    expect(abas, `o papel que não entra recebeu abas: ${abas.join(", ")}`).toEqual([]);
+  });
+
+  it("o vendedor de verdade continua enxergando a fila e a conversa", () => {
+    // A metade que passa. Sem ela, uma `abasDoComercial` que devolvesse lista
+    // vazia para TODO MUNDO passaria no caso acima — e a Sala inteira ficaria
+    // sem menu.
+    const abas = abasDoComercial("AGENTE_HUMANO").map((x) => x.rotulo);
+    expect(abas).toContain("Conversas");
+    expect(abas).toContain("Filas");
+    // E criar conta continua sendo do dono.
+    expect(abas).not.toContain("Criar acesso");
   });
 });
 

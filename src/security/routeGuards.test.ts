@@ -123,6 +123,22 @@ const ADMIN_GUARD_EXEMPT = new Map<string, string>([
       "o que muda é trocar 'abrir um terminal em produção' por preencher um formulário.",
   ],
   [
+    "admin/sala-de-vendas/time-de-agentes/route.ts",
+    "põe um agente do time no sistema. Mesma autorização própria e MAIS ESTREITA " +
+      "que a irmã `primeiro-acesso`: exige `ADMIN_SECRET` ou sessão de " +
+      "MASTER_CEO/DIRETOR_FOOCCI, e não a guarda genérica, que aceitaria qualquer " +
+      "sessão de admin. " +
+      "É deliberadamente uma rota SEPARADA da de gente, e não um `if` dentro dela: " +
+      "esta aqui não cria credencial nenhuma. Não importa `bcryptjs`, não sorteia " +
+      "senha, não escreve `passwordHash`, e fixa o papel `AGENTE_IA` — que " +
+      "`autenticarInterno` recusa mesmo com hash gravado. Um `if` compartilhado " +
+      "devolveria senha ao agente no dia em que alguém o invertesse, e nada na tela " +
+      "mostraria isso. " +
+      "Nome e e-mail vêm da lista fixa em `timeDeAgentes.ts`, nunca do corpo do " +
+      "pedido: aceitá-los deixaria uma chamada inventar um agente com o e-mail de " +
+      "uma pessoa real, e o `upsert` cairia em cima do registro dela.",
+  ],
+  [
     "admin/reset-owner/route.ts",
     "recuperação de emergência (isento no early-exit do middleware); auth inline por x-admin-secret === ADMIN_SECRET.",
   ],
