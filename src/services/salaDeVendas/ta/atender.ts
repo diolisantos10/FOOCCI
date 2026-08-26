@@ -50,6 +50,10 @@
  * diz que vai chamar alguém e **para** — o dossiê vai junto, pelo caminho já
  * provado de `passarParaGente`. Mandar a resposta de venda junto com o "vou
  * chamar alguém" é o que faz o lead responder à pergunta errada.
+ *
+ * Mas ele **diz**. O aviso de que alguém vem é gravado e entregue como qualquer
+ * outra mensagem: passar o bastão em silêncio deixa quem pediu uma pessoa sem
+ * resposta nenhuma — que é a pior resposta possível a um pedido.
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
@@ -262,6 +266,27 @@ async function executarTurno(
     });
 
     if (h.ok) {
+      // ── ⚠️ O CLIENTE PRECISA SABER QUE ALGUÉM VEM ────────────────────────
+      //
+      // Até 26/08/2026 o TA passava o bastão e voltava calado: o handoff era
+      // registrado, o dono do lead mudava, a fila recebia o dossiê — e a pessoa
+      // que acabou de escrever "quero falar com alguém" **não recebia nada**.
+      //
+      // Do lado de dentro tudo parecia certo. Do lado de fora era silêncio
+      // depois de um pedido, que é a pior resposta possível a um pedido.
+      //
+      // A fala do handoff é gravada como qualquer outra mensagem e entregue
+      // pelo mesmo caminho. Se falhar, o handoff CONTINUA valendo: o bastão já
+      // passou, e desfazê-lo por causa da mensagem deixaria o lead sem ninguém.
+      const avisoGravado = await registrarSaida(db, {
+        leadId: lead.id,
+        texto: r.texto,
+        autor: "IA",
+        agora,
+      });
+
+      if (avisoGravado.ok) await entregarMensagem(db, avisoGravado.mensagemId);
+
       return { falou: false, chamouGente: true, handoffId: h.handoffId, motivo: h.motivo };
     }
 

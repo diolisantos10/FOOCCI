@@ -397,7 +397,31 @@ describe("portão 7a — chama gente e PARA", () => {
 
     expect(r).toMatchObject({ falou: false, chamouGente: true, motivo: "PEDIU_HUMANO" });
     expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
-    expect(db.leadMensagem.create).not.toHaveBeenCalled();
+
+    // UMA mensagem, e ela é o aviso — não a resposta de venda.
+    expect(db.leadMensagem.create).toHaveBeenCalledTimes(1);
+    const dita = db.leadMensagem.create.mock.calls[0]![0]!.data.texto as string;
+    expect(dita).toMatch(/chamar algu[ée]m/i);
+    expect(dita, "mandou preço junto com o pedido de gente").not.toMatch(/R\$/);
+  });
+
+  it("⭐ e o cliente É AVISADO de que alguém vem", async () => {
+    // O defeito de 26/08/2026: o TA passava o bastão e voltava calado. O handoff
+    // era registrado, o dono do lead mudava, a fila recebia o dossiê — e quem
+    // acabou de escrever "quero falar com alguém" não recebia nada.
+    //
+    // Do lado de dentro tudo parecia certo. Do lado de fora era silêncio depois
+    // de um pedido, que é a pior resposta possível a um pedido.
+    const db = banco();
+    await atenderComOTA(db as never, {
+      leadId: "l1",
+      mensagem: "quero falar com uma pessoa",
+      agora: AGORA,
+    });
+
+    expect(db.leadMensagem.create, "passou o bastão em silêncio").toHaveBeenCalledTimes(1);
+    expect(db.leadMensagem.create.mock.calls[0]![0]!.data.status).toBe("PENDENTE");
+    expect(db.leadMensagem.create.mock.calls[0]![0]!.data.autor).toBe("IA");
   });
 
   it("desconto sai da mão da IA, e o dossiê carrega a frase do cliente", async () => {
