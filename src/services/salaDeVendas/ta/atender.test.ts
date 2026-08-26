@@ -220,6 +220,23 @@ describe("portão 2 — o TA não fala por cima de quem assumiu", () => {
     expect(r).toMatchObject({ motivo: "leadNaoEDaIA" });
   });
 
+  it("⭐ ao atender um lead sem dono, a IA ASSUME — e ele sai da fila de abandonados", async () => {
+    // O defeito: o lead nascia `NINGUEM`, o TA respondia sem assumir, e ele
+    // continuava aparecendo na fila "Sem responsável" no exato momento em que
+    // estava sendo atendido. Um SDR humano entrava para salvar, e o cliente
+    // recebia duas vozes na mesma conversa.
+    const db = banco({ lead: { atendidoPor: "NINGUEM" } });
+    await atenderComOTA(db as never, { leadId: "l1", mensagem: PERGUNTA, agora: AGORA });
+
+    expect(db.siteLead.updateMany, "não assumiu o lead").toHaveBeenCalled();
+    const chamada = db.siteLead.updateMany.mock.calls[0]![0]!;
+    expect(chamada.data).toMatchObject({ atendidoPor: "IA" });
+    // ⭐ Condicional a NINGUEM, dentro da escrita. Entre ler e escrever, uma
+    // pessoa pode ter assumido — e a IA não pode tomar de volta.
+    expect(chamada.where, "assumiu sem condição — pode roubar de um humano")
+      .toMatchObject({ atendidoPor: "NINGUEM" });
+  });
+
   it("lead sem dono ainda: o TA PODE atender", async () => {
     // A metade que passa, e ela importa: `NINGUEM` é o estado em que quase todo
     // lead novo nasce. Um portão que barrasse `NINGUEM` deixaria o TA mudo para
@@ -397,7 +414,31 @@ describe("portão 7a — chama gente e PARA", () => {
 
     expect(r).toMatchObject({ falou: false, chamouGente: true, motivo: "PEDIU_HUMANO" });
     expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
-    expect(db.leadMensagem.create).not.toHaveBeenCalled();
+
+    // UMA mensagem, e ela é o aviso — não a resposta de venda.
+    expect(db.leadMensagem.create).toHaveBeenCalledTimes(1);
+    const dita = db.leadMensagem.create.mock.calls[0]![0]!.data.texto as string;
+    expect(dita).toMatch(/chamar algu[ée]m/i);
+    expect(dita, "mandou preço junto com o pedido de gente").not.toMatch(/R\$/);
+  });
+
+  it("⭐ e o cliente É AVISADO de que alguém vem", async () => {
+    // O defeito de 26/08/2026: o TA passava o bastão e voltava calado. O handoff
+    // era registrado, o dono do lead mudava, a fila recebia o dossiê — e quem
+    // acabou de escrever "quero falar com alguém" não recebia nada.
+    //
+    // Do lado de dentro tudo parecia certo. Do lado de fora era silêncio depois
+    // de um pedido, que é a pior resposta possível a um pedido.
+    const db = banco();
+    await atenderComOTA(db as never, {
+      leadId: "l1",
+      mensagem: "quero falar com uma pessoa",
+      agora: AGORA,
+    });
+
+    expect(db.leadMensagem.create, "passou o bastão em silêncio").toHaveBeenCalledTimes(1);
+    expect(db.leadMensagem.create.mock.calls[0]![0]!.data.status).toBe("PENDENTE");
+    expect(db.leadMensagem.create.mock.calls[0]![0]!.data.autor).toBe("IA");
   });
 
   it("desconto sai da mão da IA, e o dossiê carrega a frase do cliente", async () => {

@@ -50,6 +50,10 @@
  * diz que vai chamar alguém e **para** — o dossiê vai junto, pelo caminho já
  * provado de `passarParaGente`. Mandar a resposta de venda junto com o "vou
  * chamar alguém" é o que faz o lead responder à pergunta errada.
+ *
+ * Mas ele **diz**. O aviso de que alguém vem é gravado e entregue como qualquer
+ * outra mensagem: passar o bastão em silêncio deixa quem pediu uma pessoa sem
+ * resposta nenhuma — que é a pior resposta possível a um pedido.
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
@@ -58,6 +62,7 @@ import { VERSAO_1 } from "./ficha";
 import { registrarSaida } from "../conversa";
 import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
+import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 
 /**
@@ -230,6 +235,18 @@ async function executarTurno(
     );
   }
 
+  // ── 5b. A IA assume o lead, se ele não era de ninguém ───────────────────
+  //
+  // Todo lead nasce `NINGUEM` e cai na fila "Sem responsável". Enquanto o TA
+  // respondia sem assumir, o lead aparecia como abandonado no exato momento em
+  // que estava sendo atendido — e um humano entrava para salvar, dando ao
+  // cliente duas vozes na mesma conversa.
+  //
+  // A escrita é condicional a `NINGUEM`: se alguém assumiu entre o portão 2 e
+  // aqui, a IA não toma de volta. Não assumir não é falha — só quer dizer que o
+  // lead já tem dono, e o portão 2 vai calar a IA no próximo turno.
+  await iaAssumeSeEstaLivre(db, { leadId: lead.id, agora });
+
   // ── 6. Compor ───────────────────────────────────────────────────────────
   //
   // `falar()` e não `responder()`: desde 26/08/2026 quem redige é um modelo,
@@ -262,6 +279,27 @@ async function executarTurno(
     });
 
     if (h.ok) {
+      // ── ⚠️ O CLIENTE PRECISA SABER QUE ALGUÉM VEM ────────────────────────
+      //
+      // Até 26/08/2026 o TA passava o bastão e voltava calado: o handoff era
+      // registrado, o dono do lead mudava, a fila recebia o dossiê — e a pessoa
+      // que acabou de escrever "quero falar com alguém" **não recebia nada**.
+      //
+      // Do lado de dentro tudo parecia certo. Do lado de fora era silêncio
+      // depois de um pedido, que é a pior resposta possível a um pedido.
+      //
+      // A fala do handoff é gravada como qualquer outra mensagem e entregue
+      // pelo mesmo caminho. Se falhar, o handoff CONTINUA valendo: o bastão já
+      // passou, e desfazê-lo por causa da mensagem deixaria o lead sem ninguém.
+      const avisoGravado = await registrarSaida(db, {
+        leadId: lead.id,
+        texto: r.texto,
+        autor: "IA",
+        agora,
+      });
+
+      if (avisoGravado.ok) await entregarMensagem(db, avisoGravado.mensagemId);
+
       return { falou: false, chamouGente: true, handoffId: h.handoffId, motivo: h.motivo };
     }
 
