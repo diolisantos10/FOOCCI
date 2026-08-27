@@ -134,14 +134,33 @@ describe("o que cada fila pergunta", () => {
     expect(AGORA.getTime() - f.atendenteDesde.lt.getTime()).toBe(86_400_000);
   });
 
-  it("as sete filas têm título e pergunta escritos", () => {
+  it("toda fila tem título e pergunta escritos, e nenhuma se repete", () => {
     // A pergunta aparece na tela. Fila sem pergunta é filtro que ninguém sabe
     // para que serve.
-    expect(FILAS).toHaveLength(7);
+    //
+    // ⚠️ Isto já foi `toHaveLength(7)`, e a contagem caiu no dia em que as duas
+    // filas do CEO entraram — vermelho que não denunciava defeito nenhum, só que
+    // o número mudou. Contagem fixa não é regra. A regra é que **toda** fila
+    // esteja escrita e nenhuma duplique nome — essa vale para 7, para 9 e para a
+    // próxima que entrar.
+    expect(FILAS.length).toBeGreaterThan(0);
     for (const f of FILAS) {
       expect(f.titulo.length, f.nome).toBeGreaterThan(0);
       expect(f.pergunta.length, f.nome).toBeGreaterThan(10);
     }
+
+    const nomes = FILAS.map((f) => f.nome);
+    expect(new Set(nomes).size, `fila duplicada em ${nomes.join(", ")}`).toBe(nomes.length);
+  });
+
+  it("⭐ as duas filas do CEO existem pelo nome", () => {
+    // O que a contagem fixa realmente queria proteger: que ninguém suma com uma
+    // fila sem querer. Aqui a asserção é sobre a fila que PRECISA existir, e não
+    // sobre quantas existem — apagando a do closer, este caso cai pelo nome dela
+    // em vez de reclamar de aritmética.
+    const nomes = FILAS.map((f) => f.nome);
+    expect(nomes, "sumiu a fila do qualificador").toContain("aguardandoQualificacao");
+    expect(nomes, "sumiu a fila do closer").toContain("qualificados");
   });
 });
 
@@ -206,5 +225,137 @@ describe("listar a fila", () => {
 
     const orderBy = db.siteLead.findMany.mock.calls[0]![0].orderBy;
     expect(orderBy[0]).toEqual({ atendenteDesde: "asc" });
+  });
+});
+
+/**
+ * ── AS DUAS FILAS DO DESENHO DO CEO ─────────────────────────────────────────
+ *
+ * Ele descreveu a estrutura em 27/08/2026: *"o primeiro agente vai ser o agente
+ * que vai sondá-lo, que é o qualificador... frio, morno, quente... Aí a gente
+ * passa pro closer. (...) São duas listas."*
+ *
+ * O que estes casos guardam não é a existência das filas — é o que separa uma
+ * fila útil de uma lista bonita:
+ *
+ *  · **quem NÃO entra** — um desqualificado na fila do closer faz um agente
+ *    agressivo atacar quem nunca poderia comprar;
+ *  · **em que ORDEM** — ninguém trabalha lista inteira, trabalha o topo. A
+ *    ordenação É a decisão de quem é atendido hoje;
+ *  · **`null` não é FRIO** — é o que separa "ninguém mediu" de "medido e frio",
+ *    e é a fila do qualificador inteira.
+ */
+describe("⭐ as duas filas: quem qualifica e quem fecha", () => {
+  function bancoFalso(linhas: unknown[] = []) {
+    return {
+      siteLead: {
+        findMany: vi.fn().mockResolvedValue(linhas),
+        count: vi.fn().mockResolvedValue(0),
+      },
+    };
+  }
+
+  /** O pedaço do `where` que é da fila, já separado do escopo da sessão. */
+  function daFila(fila: Parameters<typeof filtroDaFila>[0]) {
+    const f = filtroDaFila(fila, sessao({ role: "MASTER_CEO" }), AGORA);
+    return (f.AND as Array<Record<string, unknown>>)[1]!;
+  }
+
+  it("aguardando qualificação é quem NUNCA foi medido — e null não é FRIO", () => {
+    // A distinção que carrega a fila. Se `temperatura` fosse FRIO por omissão,
+    // esta lista viria sempre vazia e o qualificador não teria trabalho — com a
+    // tela inteira parecendo correta.
+    expect(daFila("aguardandoQualificacao")).toMatchObject({ temperatura: null });
+  });
+
+  it("⭐ e o desqualificado NÃO entra na fila do closer", () => {
+    // O caso caro. Um agente agressivo em cima de uma loja de roupa queima
+    // número de WhatsApp e não vende nada — e ela somaria pontos, porque a
+    // desqualificação é sobre público, não sobre sinal.
+    const alvo = daFila("qualificados").temperatura as { in: string[] };
+
+    expect(alvo.in, "o desqualificado entrou na fila do closer").not.toContain("DESQUALIFICADO");
+    expect(alvo.in, "quem está em nutrição foi jogado pro closer").not.toContain("NUTRICAO");
+    expect(alvo.in).toContain("QUENTE");
+    expect(alvo.in, "o morno sumiu da fila — é ele que precisa de agendamento").toContain("MORNO");
+  });
+
+  it("as duas ignoram quem já terminou o funil", () => {
+    // Cobrar qualificação de um lead GANHO é mandar o agente falar com quem já
+    // assinou.
+    for (const fila of ["aguardandoQualificacao", "qualificados"] as const) {
+      const stage = daFila(fila).stage as { notIn: string[] };
+      expect(stage.notIn, `${fila} atende quem já acabou`).toEqual(
+        expect.arrayContaining(["GANHO", "PERDIDO"]),
+      );
+    }
+  });
+
+  it("⭐ a fila do closer chega ordenada por temperatura, não por data", async () => {
+    // Antes disto, TODA fila saía com a mesma ordenação fixa — a lista do closer
+    // chegaria por data de criação, ignorando a temperatura recém-calculada. O
+    // qualificador rodaria, o número apareceria na tela, e não mudaria a ordem
+    // de ataque de ninguém: régua ligada, decisão igual.
+    const db = bancoFalso();
+    await listarFila(db as never, { fila: "qualificados", sessao: sessao(), agora: AGORA });
+
+    const orderBy = db.siteLead.findMany.mock.calls[0]![0].orderBy;
+    // `asc` porque a ordem declarada do enum começa em PRIORIDADE_MAXIMA.
+    expect(orderBy[0], "a fila do closer não olha a temperatura").toEqual({ temperatura: "asc" });
+  });
+
+  it("a fila de qualificar chega pelo mais antigo — ninguém sabe nada de ninguém", async () => {
+    const db = bancoFalso();
+    await listarFila(db as never, {
+      fila: "aguardandoQualificacao",
+      sessao: sessao(),
+      agora: AGORA,
+    });
+
+    expect(db.siteLead.findMany.mock.calls[0]![0].orderBy[0]).toEqual({ createdAt: "asc" });
+  });
+
+  it("⭐ a temperatura chega na TELA, e não só na ordenação", async () => {
+    // Uma lista ordenada por um critério invisível é a pior armadilha: o
+    // operador vê uma ordem que não explica, conclui que está aleatória, e passa
+    // a ignorar o topo — que era exatamente o que a ordenação queria destacar.
+    const db = bancoFalso([
+      {
+        id: "l1",
+        nome: "Bar do Zé",
+        restaurante: "Bar do Zé",
+        cidade: "SP",
+        stage: "QUALIFICADO",
+        atendidoPor: "IA",
+        atendenteUserId: null,
+        atendente: null,
+        motivoDoPedido: null,
+        atendenteDesde: null,
+        utmSource: null,
+        utmCampaign: null,
+        lastContactedAt: null,
+        createdAt: AGORA,
+        temperatura: "QUENTE",
+        score: 72,
+      },
+    ]);
+
+    const r = await listarFila(db as never, {
+      fila: "qualificados",
+      sessao: sessao(),
+      agora: AGORA,
+    });
+
+    expect(r.leads[0]!.temperatura, "a etiqueta não chega na tela").toBe("QUENTE");
+    expect(r.leads[0]!.score).toBe(72);
+  });
+
+  it("as duas filas novas também são contadas — senão o botão nasce sem número", async () => {
+    const db = bancoFalso();
+    await listarFila(db as never, { fila: "todos", sessao: sessao(), agora: AGORA });
+
+    const r = await listarFila(db as never, { fila: "todos", sessao: sessao(), agora: AGORA });
+    expect(r.contagens).toHaveProperty("aguardandoQualificacao");
+    expect(r.contagens).toHaveProperty("qualificados");
   });
 });

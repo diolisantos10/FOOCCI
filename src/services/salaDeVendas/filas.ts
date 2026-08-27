@@ -21,13 +21,21 @@
  * `escopoDaConsulta`, que recebe a sessão e não aceita ser chamado sem ela.
  */
 
-import type { Prisma, PrismaClient, LeadAtendidoPor, SiteLeadStage } from "@prisma/client";
+import type {
+  Prisma,
+  PrismaClient,
+  LeadAtendidoPor,
+  SiteLeadStage,
+  LeadTemperatura,
+} from "@prisma/client";
 import type { SessaoInterna } from "@/lib/internal-auth";
 import { enxergaTudo } from "@/lib/internal-auth";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
 export type NomeDaFila =
+  | "aguardandoQualificacao"
+  | "qualificados"
   | "semResponsavel"
   | "meusLeads"
   | "comIA"
@@ -44,6 +52,27 @@ export interface Fila {
 }
 
 export const FILAS: readonly Fila[] = [
+  // ── As duas filas do desenho do CEO ────────────────────────────────────────
+  //
+  // Ele descreveu a estrutura em 27/08/2026: *"basicamente a gente precisa de
+  // uma fila de leads... o primeiro agente vai ser o agente que vai sondá-lo,
+  // que é o qualificador... frio, morno, quente... Aí a gente passa pro closer.
+  // (...) São duas listas."*
+  //
+  // ⚠️ Elas não substituem as de baixo — respondem a outra pergunta. As antigas
+  // organizam por **quem atende** ("o que é meu?", "o que está largado?"); estas
+  // duas organizam por **em que ponto do funil o lead está**. Um mesmo lead
+  // aparece nas duas visões, e é isso mesmo.
+  {
+    nome: "aguardandoQualificacao",
+    titulo: "Aguardando qualificação",
+    pergunta: "quem chegou e ainda ninguém mediu?",
+  },
+  {
+    nome: "qualificados",
+    titulo: "Qualificados",
+    pergunta: "quem já foi medido e está pronto pro fechamento?",
+  },
   {
     nome: "aguardandoHumano",
     titulo: "Aguardando humano",
@@ -110,6 +139,29 @@ export function filtroDaFila(
 
   const daFila: Prisma.SiteLeadWhereInput = (() => {
     switch (fila) {
+      case "aguardandoQualificacao":
+        // `temperatura: null` é literalmente "ninguém mediu" — e é diferente de
+        // FRIO, que é "medido e não esquentou". Escrever FRIO por omissão
+        // esconderia esta fila inteira, que é justamente a do qualificador.
+        //
+        // O funil aberto entra junto: cobrar qualificação de um lead GANHO ou
+        // PERDIDO é mandar o agente falar com quem já acabou.
+        return {
+          temperatura: null,
+          stage: { notIn: ["GANHO", "PERDIDO"] },
+        };
+      case "qualificados":
+        // A fila do closer. DESQUALIFICADO fica de fora por definição — foi
+        // medido e não é público. NUTRICAO também: é espera deliberada, e um
+        // closer agressivo em cima de quem a gente mesmo mandou esperar é o
+        // caminho mais curto para perder o contato.
+        //
+        // ⚠️ FRIO entra. Ele é lead medido e continua sendo trabalho de alguém;
+        // o que muda é a POSIÇÃO dele na lista, não a existência.
+        return {
+          temperatura: { in: ["PRIORIDADE_MAXIMA", "QUENTE", "MORNO", "FRIO"] },
+          stage: { notIn: ["GANHO", "PERDIDO"] },
+        };
       case "aguardandoHumano":
         return { atendidoPor: "AGUARDANDO_HUMANO" };
       case "semResponsavel":
@@ -159,6 +211,20 @@ export interface LeadNaFila {
   origem: { utmSource: string | null; utmCampaign: string | null };
   lastContactedAt: Date | null;
   createdAt: Date;
+
+  /**
+   * A leitura da qualificação. `null` = ninguém mediu — e a tela escreve isso,
+   * não "frio".
+   *
+   * ⚠️ Sai daqui porque a fila `qualificados` é **ordenada por ela**. Uma lista
+   * ordenada por um critério que não aparece na tela é a pior espécie de
+   * armadilha: o operador vê uma ordem que não explica, conclui que está
+   * aleatória, e passa a ignorar o topo — que é exatamente o que a ordenação
+   * existia para destacar.
+   */
+  temperatura: LeadTemperatura | null;
+  /** O número por trás da leitura. `null` quando não há sinal nenhum. */
+  score: number | null;
 }
 
 export interface ResultadoDaFila {
@@ -170,6 +236,8 @@ export interface ResultadoDaFila {
 }
 
 const VAZIO: Record<NomeDaFila, number> = {
+  aguardandoQualificacao: 0,
+  qualificados: 0,
   semResponsavel: 0,
   meusLeads: 0,
   comIA: 0,
@@ -178,6 +246,44 @@ const VAZIO: Record<NomeDaFila, number> = {
   followUpVencido: 0,
   todos: 0,
 };
+
+/**
+ * Em que ordem cada fila chega na tela.
+ *
+ * ── POR QUE ISTO NÃO É DETALHE ──────────────────────────────────────────────
+ *
+ * Ninguém trabalha uma lista inteira. Trabalha-se o topo. A ordenação é, na
+ * prática, **a decisão de quem é atendido hoje e quem espera** — e ela estava
+ * fixa para todas as filas, o que fazia a lista do closer chegar ordenada por
+ * data de criação, ignorando a temperatura que acabou de ser calculada.
+ *
+ * ── ⚠️ O RISCO QUE FICA DE PÉ, E ELE TEM NOME ───────────────────────────────
+ *
+ * Na fila `qualificados`, temperatura vem primeiro. Se um dia entrar QUENTE em
+ * volume maior do que o time consegue atender, **o MORNO nunca sobe** — fica
+ * eternamente abaixo, visível e nunca trabalhado. A segunda chave (quem espera
+ * há mais tempo) alivia dentro da faixa, e não entre faixas.
+ *
+ * Isso não é bug para consertar agora: é **política comercial**, e política é
+ * decisão do CEO, não escolha silenciosa de quem escreve a consulta. Quando o
+ * volume chegar lá, as saídas são fila separada para MORNO ou envelhecimento
+ * que promove de faixa. Fica escrito aqui para a hora ser reconhecida.
+ */
+function ordenacaoDaFila(fila: NomeDaFila): Prisma.SiteLeadOrderByWithRelationInput[] {
+  switch (fila) {
+    case "qualificados":
+      // A ordem do enum `LeadTemperatura` no schema é PRIORIDADE_MAXIMA,
+      // QUENTE, MORNO, FRIO — então `asc` é "mais quente primeiro". Depende da
+      // ordem de declaração do enum: mexer nela reordena esta fila.
+      return [{ temperatura: "asc" }, { scoreAt: "asc" }];
+    case "aguardandoQualificacao":
+      // Quem chegou primeiro e ninguém mediu. Aqui o custo é o tempo parado, e
+      // não existe "mais importante" — ninguém sabe nada sobre nenhum deles.
+      return [{ createdAt: "asc" }];
+    default:
+      return [{ atendenteDesde: "asc" }, { createdAt: "desc" }];
+  }
+}
 
 export async function listarFila(
   db: Cliente,
@@ -189,7 +295,7 @@ export async function listarFila(
     const [linhas, ...contados] = await Promise.all([
       db.siteLead.findMany({
         where: filtroDaFila(params.fila, params.sessao, agora),
-        orderBy: [{ atendenteDesde: "asc" }, { createdAt: "desc" }],
+        orderBy: ordenacaoDaFila(params.fila),
         take: params.limite ?? 100,
         include: { atendente: { select: { nome: true } } },
       }),
@@ -220,6 +326,8 @@ export async function listarFila(
         origem: { utmSource: l.utmSource, utmCampaign: l.utmCampaign },
         lastContactedAt: l.lastContactedAt,
         createdAt: l.createdAt,
+        temperatura: l.temperatura,
+        score: l.score,
       })),
     };
   } catch (erro) {

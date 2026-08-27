@@ -31,6 +31,7 @@
 import { responder, type Resposta } from "./responder";
 import { pensar, type FalaDoTA } from "./cerebro";
 import { VERSAO_1, type TextoDaVersao } from "./ficha";
+import type { PosturaDoAgente } from "./oficio";
 import type { Turno } from "./responder";
 
 export interface FalaFinal {
@@ -54,6 +55,7 @@ export interface FalaFinal {
 export async function falar(
   turno: Turno,
   ficha: TextoDaVersao = VERSAO_1,
+  postura: PosturaDoAgente = "qualificar",
 ): Promise<FalaFinal> {
   const base = responder(turno, ficha);
 
@@ -86,6 +88,11 @@ export async function falar(
       nome: turno.nome,
       historico: turno.historico,
       ficha,
+      // ⚠️ Só chega aqui quem NÃO é caso de gente — o handoff determinístico
+      // acima já devolveu. Ou seja: por mais agressivo que o closer seja, ele
+      // nunca é consultado quando o lead pediu uma pessoa, pediu desconto ou
+      // ficou bravo. A trava é a ordem do arquivo, não uma linha do ofício.
+      postura,
     },
     () => ({
       texto: base.texto,

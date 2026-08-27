@@ -91,4 +91,25 @@ describe('o seletor "ver como"', () => {
     // A trava que impede um `setEspiando` acidental de ampliar o que alguém vê.
     expect(SEM_COMENTARIOS).toContain("podeEspiar && espiando");
   });
+
+  it("⭐ o menu do Admin NÃO tem atalho para o comercial", () => {
+    // ── A SEPARAÇÃO QUE UM LINK DESFAZ EM UM CLIQUE ─────────────────────────
+    //
+    // Havia um item `Comercial → /comercial` aqui. O CEO mandou tirar em
+    // 27/08/2026: *"desvincule o comercial do admin. Tem que ficar em outro
+    // site, não dentro do admin."*
+    //
+    // E o link contradizia o que a própria área já fazia: `/comercial` exige
+    // login PRÓPRIO e recusa a senha da casa. O atalho levava quem clicava
+    // direto a uma tela de login — o Admin prometendo uma porta que ele mesmo
+    // não abre.
+    //
+    // ⚠️ Este caso existe porque o item é fácil de repor "por conveniência", e
+    // quem repuser não vai estar desfazendo um link: vai estar desfazendo a
+    // separação entre duas casas com dois logins.
+    expect(
+      SEM_COMENTARIOS,
+      "o Admin voltou a ter atalho para /comercial — a separação foi desfeita",
+    ).not.toMatch(/href:\s*"\/comercial/);
+  });
 });
