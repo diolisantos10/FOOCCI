@@ -235,3 +235,117 @@ describe("a lista", () => {
     expect(args.orderBy[0]).toEqual({ isActive: "desc" });
   });
 });
+
+/**
+ * ── A SENHA ESCOLHIDA À MÃO ─────────────────────────────────────────────────
+ *
+ * Pedido do CEO em 27/08/2026: *"que não gere senha aleatória. A gente escolha
+ * qual que é a senha, porque são senhas super difíceis de lembrar."*
+ *
+ * ⚠️ O que estes casos guardam **não é** a validação da senha — isso está em
+ * `senhaEscolhida.test.ts`. É que a validação acontece **aqui, no servidor**.
+ *
+ * A tela confere enquanto a pessoa digita, e essa conferência é conveniência:
+ * qualquer um consegue chamar a rota por fora da tela com um `curl`. Uma trava
+ * que só existe no navegador não é trava — é decoração, e o pior tipo, porque
+ * parece proteção quando alguém lê o código do formulário.
+ */
+describe("⭐⭐ a senha escolhida — e a trava que precisa estar no servidor", () => {
+  const BOA = "chopp gelado 22";
+
+  it("⭐ a senha digitada é a que passa a valer", async () => {
+    const db = banco();
+    const r = await criarPessoa(db as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: BOA,
+    });
+
+    expect(r.ok, r.ok ? "" : r.erro).toBe(true);
+    if (!r.ok) return;
+    expect(r.senha, "devolveu uma senha diferente da que foi escolhida").toBe(BOA);
+    expect(r.foiEscolhida).toBe(true);
+  });
+
+  it("⭐⭐ e uma senha fraca é RECUSADA aqui, não só na tela", async () => {
+    // O caso que carrega o bloco. Se esta conferência morasse só no componente,
+    // um `curl` na rota criaria um acesso com "12345678" e ninguém saberia.
+    const r = await criarPessoa(banco() as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: "12345678",
+    });
+
+    expect(r.ok, "o servidor aceitou a senha mais tentada do mundo").toBe(false);
+  });
+
+  it("⭐ e a recusa acontece ANTES de gravar qualquer coisa", async () => {
+    // Recusar depois do `upsert` deixaria a pessoa criada com senha fraca e a
+    // tela mostrando erro — o pior dos dois mundos.
+    const db = banco();
+    await criarPessoa(db as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: "senha123",
+    });
+
+    expect(db.internalUser.upsert, "gravou mesmo recusando").not.toHaveBeenCalled();
+  });
+
+  it("⭐ a senha que contém o nome da pessoa também é barrada no servidor", async () => {
+    const r = await criarPessoa(banco() as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: "marina2026",
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it("⭐ campo vazio continua sorteando — o caminho antigo não morreu", async () => {
+    // Quem cria dez acessos numa tarde não quer inventar dez senhas, e senha
+    // inventada em série é a mais fraca que existe ("Foocci1", "Foocci2"...).
+    // Trocar um caminho pelo outro atenderia ao pedido e criaria outro problema.
+    const r = await criarPessoa(banco() as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: "",
+    });
+
+    expect(r.ok, r.ok ? "" : r.erro).toBe(true);
+    if (!r.ok) return;
+    expect(r.senha.length, "a senha sorteada saiu curta").toBeGreaterThan(10);
+    expect(r.foiEscolhida, "sorteada apareceu como escolhida").toBe(false);
+  });
+
+  it("sem o campo nenhum, também sorteia", async () => {
+    const r = await criarPessoa(banco() as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.foiEscolhida).toBe(false);
+  });
+
+  it("⭐ e a senha gravada é HASH, nunca o texto", async () => {
+    // A regra que não muda por causa do pedido: escolher a senha é uma coisa,
+    // guardá-la legível é outra. Nem o sistema pode lê-la de volta.
+    const db = banco();
+    await criarPessoa(db as never, {
+      nome: "Marina Souza",
+      email: "marina@foocci.com.br",
+      papel: "AGENTE_HUMANO",
+      senhaEscolhida: BOA,
+    });
+
+    const gravado = db.internalUser.upsert.mock.calls[0]![0]!.create.passwordHash as string;
+    expect(gravado, "a senha foi gravada em texto puro").not.toBe(BOA);
+    expect(gravado, "não parece hash de bcrypt").toMatch(/^\$2[aby]\$/);
+  });
+});

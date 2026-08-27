@@ -105,11 +105,16 @@ export async function POST(req: NextRequest) {
   const nome = typeof corpo.nome === "string" ? corpo.nome : "";
   const email = typeof corpo.email === "string" ? corpo.email : "";
   const papel = typeof corpo.papel === "string" ? corpo.papel : "";
+  // Vazio ou ausente = a casa sorteia. O piso da senha escolhida é conferido
+  // dentro de `criarPessoa`, e não aqui: a tela também chama esse piso enquanto
+  // a pessoa digita, e a regra tem de morar num lugar só.
+  const senhaEscolhida = typeof corpo.senha === "string" ? corpo.senha : "";
 
   const r = await criarPessoa(prisma, {
     nome,
     email,
     papel,
+    senhaEscolhida,
     departamentos: Array.isArray(corpo.departamentos)
       ? corpo.departamentos.filter((d): d is string => typeof d === "string")
       : ["vendas"],
@@ -123,12 +128,22 @@ export async function POST(req: NextRequest) {
     `internal_users/${r.id}`,
     // ⚠️ Sem a senha, aqui e em lugar nenhum. A trilha guarda o que aconteceu,
     // não a credencial que aconteceu.
-    { email, papel, jaExistia: r.jaExistia },
+    // ⚠️ `foiEscolhida` é um booleano, e é isso que a trilha pode guardar: se a
+    // senha foi digitada por alguém ou sorteada pela casa. A senha em si não
+    // entra aqui em hipótese nenhuma.
+    { email, papel, jaExistia: r.jaExistia, senhaEscolhida: r.foiEscolhida },
   );
 
   return NextResponse.json({
     ok: true,
-    data: { nome, email, papel, senha: r.senha, trocouSenha: r.jaExistia },
+    data: {
+      nome,
+      email,
+      papel,
+      senha: r.senha,
+      trocouSenha: r.jaExistia,
+      foiEscolhida: r.foiEscolhida,
+    },
   });
 }
 

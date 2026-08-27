@@ -32,6 +32,9 @@
 import type { InternalRole, Prisma, PrismaClient } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
+// A regra da senha escolhida mora num módulo SEM import de servidor, porque a
+// tela também a usa enquanto a pessoa digita. Duas cópias discordariam.
+import { problemaComASenha } from "./senhaEscolhida";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -153,7 +156,7 @@ export async function listarPessoas(db: Cliente): Promise<PessoaNaLista[]> {
 }
 
 export type ResultadoDeCriacao =
-  | { ok: true; senha: string; jaExistia: boolean; id: string }
+  | { ok: true; senha: string; jaExistia: boolean; id: string; foiEscolhida: boolean }
   | { ok: false; erro: string };
 
 /**
@@ -169,7 +172,21 @@ export type ResultadoDeCriacao =
  */
 export async function criarPessoa(
   db: Cliente,
-  dados: { nome: string; email: string; papel: string; departamentos?: string[] },
+  dados: {
+    nome: string;
+    email: string;
+    papel: string;
+    departamentos?: string[];
+    /**
+     * A senha escolhida à mão. Vazio ou ausente = a casa sorteia uma.
+     *
+     * Os dois caminhos continuam existindo de propósito: quem cria o acesso de
+     * um vendedor na frente dele prefere escolher e falar em voz alta; quem cria
+     * dez de uma vez prefere sortear. Tirar o sorteio para atender ao pedido
+     * seria trocar um problema por outro.
+     */
+    senhaEscolhida?: string;
+  },
 ): Promise<ResultadoDeCriacao> {
   const nome = dados.nome.trim();
   const email = dados.email.trim().toLowerCase();
@@ -182,7 +199,20 @@ export async function criarPessoa(
     return { ok: false, erro: `Tipo de acesso desconhecido: ${dados.papel}` };
   }
 
-  const senha = randomBytes(9).toString("base64url");
+  // ── A senha: escolhida ou sorteada ────────────────────────────────────────
+  //
+  // ⚠️ A conferência acontece AQUI, no servidor, mesmo a tela já tendo conferido
+  // enquanto a pessoa digitava. A do navegador é conveniência: qualquer um
+  // consegue chamar esta rota por fora dela, e uma trava que só existe na tela
+  // não é trava — é decoração.
+  const escolhida = (dados.senhaEscolhida ?? "").trim() ? dados.senhaEscolhida! : null;
+
+  if (escolhida !== null) {
+    const problema = problemaComASenha(escolhida, { nome, email });
+    if (problema) return { ok: false, erro: problema };
+  }
+
+  const senha = escolhida ?? randomBytes(9).toString("base64url");
   const passwordHash = await hash(senha, 10);
 
   const jaExistia = await db.internalUser.findUnique({
@@ -209,7 +239,13 @@ export async function criarPessoa(
     });
   }
 
-  return { ok: true, senha, jaExistia: Boolean(jaExistia), id: user.id };
+  return {
+    ok: true,
+    senha,
+    jaExistia: Boolean(jaExistia),
+    id: user.id,
+    foiEscolhida: escolhida !== null,
+  };
 }
 
 export type ResultadoDeCorte =
