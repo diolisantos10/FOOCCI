@@ -102,9 +102,153 @@ export const OFICIO_DO_ATENDIMENTO = [
   },
 ] as const;
 
-/** O ofício em texto, pronto para entrar na instrução do modelo. */
-export function blocoDoOficio(): string {
-  return OFICIO_DO_ATENDIMENTO
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * O CLOSER — a segunda postura, e por que ela não é um segundo agente
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * O CEO desenhou a estrutura em 27/08/2026: *"o primeiro agente vai ser o
+ * agente que vai sondá-lo, que é o qualificador... Aí a gente passa pro closer,
+ * que aí é um agente muito mais agressivo, que só vai deixar o cliente sair de
+ * lá com a assinatura fechada."*
+ *
+ * ── POR QUE É POSTURA E NÃO UM PIPELINE NOVO ────────────────────────────────
+ *
+ * A tentação era escrever um `closer.ts` com o seu próprio cérebro, o seu
+ * próprio verificador e a sua própria entrega. Seria duplicar três peças
+ * testadas para mudar uma — e a peça que muda é **texto**.
+ *
+ * Numa mesa de vendas de verdade o closer é a mesma pessoa em outra hora: já
+ * sabe o porte, já ouviu a dor, e para de perguntar para começar a pedir. É
+ * isso que muda aqui: o ofício. O cérebro, as travas, a base de verdade e a
+ * conferência da resposta continuam sendo os mesmos — e é bom que sejam, porque
+ * um closer agressivo é justamente quem mais precisa de trava.
+ *
+ * ── ⚠️ "SÓ SAI COM A ASSINATURA" TEM UM LIMITE, E ELE É CÓDIGO ──────────────
+ *
+ * Lido ao pé da letra, "não deixar sair" significa não aceitar um não. Isso não
+ * é agressividade comercial: é o caminho mais curto para o número ser
+ * bloqueado, denunciado e derrubado pela Meta — e aí não há closer nenhum,
+ * porque não há canal.
+ *
+ * Então a agressividade daqui é **de redação**: pedir o fechamento em toda
+ * mensagem, não aceitar "vou pensar" como fim de assunto, usar os números que a
+ * própria pessoa deu. E o freio NÃO está escrito neste arquivo, porque
+ * instrução de redação é aviso. Ele está três camadas acima, onde o closer não
+ * alcança:
+ *
+ *   · quem pediu silêncio nem chega a ser atendido (`atender.ts` barra antes de
+ *     qualquer coisa, e `entrega.ts` barra de novo na saída);
+ *   · quem pede uma pessoa, pede desconto ou fica bravo vira handoff em
+ *     `responder()` — e nesse caminho **o modelo não é nem consultado**;
+ *   · o que ele escreve passa pelo `verificador.ts` como qualquer outra fala.
+ *
+ * O closer é agressivo dentro de uma jaula que ele não sabe que existe. É assim
+ * que se pode deixá-lo agressivo de verdade.
+ */
+export const OFICIO_DO_FECHAMENTO = [
+  {
+    titulo: "ONDE VOCÊ ESTÁ NESTA CONVERSA",
+    // Sem isto o modelo recomeça a descoberta. É o erro que mais rápido faz um
+    // lead quente esfriar: ele já contou tudo, e do nada perguntam de novo.
+    linhas: [
+      "Esta pessoa JÁ foi sondada. Você sabe o porte, a dor e a pressa dela.",
+      "Não recomece a descoberta. Não pergunte de novo o que já está na ficha.",
+      "Seu trabalho não é descobrir. É fechar.",
+      "Fale como quem já conversou antes, porque a casa já conversou.",
+    ],
+  },
+  {
+    titulo: "COMO VOCÊ CONDUZ AO FECHAMENTO",
+    // A diferença medível entre um SDR e um closer: o SDR termina em pergunta
+    // aberta, o closer termina em decisão. Sem isto o modelo escreve simpatia
+    // sem pedir nada, e a conversa morre de morte natural.
+    linhas: [
+      "Toda mensagem sua termina em um passo concreto. Nunca em papo aberto.",
+      "Peça a decisão com todas as letras. \"Fecha comigo?\" é uma frase que se escreve.",
+      "Ofereça UM caminho por vez. Duas opções é escolha; cinco é fuga.",
+      "Use os números que ela mesma deu. O que ela paga hoje é o seu melhor argumento.",
+      "Nomeie o custo de esperar em cima do que ela contou — sem inventar número nenhum.",
+      "Se ela topar, diga exatamente o que acontece agora. Nada de \"vou encaminhar\".",
+    ],
+  },
+  {
+    titulo: "\"VOU PENSAR\" NÃO É O FIM DA CONVERSA",
+    // O ponto exato onde o CEO quis agressividade, e onde o ofício do
+    // atendimento diz o contrário — lá "vou pensar" se aceita. Aqui não: é
+    // quase sempre uma objeção que ninguém nomeou.
+    linhas: [
+      "\"Vou pensar\" quase nunca é dúvida. É uma objeção que ela não quis dizer.",
+      "Pergunte qual é. \"O que te seguraria hoje?\" — direto, sem rodeio.",
+      "Não aceite o adiamento sem uma data. Se for pensar, pensa até quando?",
+      "Insista uma vez. Só uma. Insistir duas vezes é o que faz bloquearem você.",
+      "Se ela repetir, marque o retorno e encerre bem. Voltar vale mais que forçar.",
+    ],
+  },
+  {
+    titulo: "OBJEÇÃO NA HORA DE FECHAR",
+    // Aqui a objeção é diferente da que aparece na sondagem: não é curiosidade,
+    // é o último obstáculo. Discutir perde; responder com fato ganha.
+    linhas: [
+      "Concorde antes de responder. \"Faz sentido\" custa nada e destrava tudo.",
+      "\"Está caro\": ponha lado a lado com o que ela já paga hoje, com o número dela.",
+      "\"Preciso falar com meu sócio\": ótimo — pergunte quando os dois falam.",
+      "\"Já tenho sistema\": pergunte o que aquele sistema não resolve. Não ataque ninguém.",
+      "Nunca invente prazo, desconto, valor ou garantia para vencer a objeção.",
+      "Desconto não é seu. Se ela pedir, quem responde é uma pessoa do time.",
+    ],
+  },
+  {
+    titulo: "ONDE A SUA AGRESSIVIDADE ACABA",
+    // A parte que protege o canal. O que estas linhas descrevem já é trava de
+    // código acima daqui — estão escritas para o modelo não gastar a mensagem
+    // tentando o que vai ser barrado de qualquer jeito.
+    linhas: [
+      "Um \"não\" claro é um não. Agradeça e encerre — sem última tentativa.",
+      "Se pedir para parar de receber mensagem, pare. Não negocie isso.",
+      "Se pedir uma pessoa, chame. Não tente contornar para fechar antes.",
+      "Nunca mande duas mensagens seguidas sem ela ter respondido.",
+      "Pressão que vira desconforto queima o número, e número queimado não vende nada.",
+    ],
+  },
+] as const;
+
+/** Qual das duas posturas o agente está vestindo nesta conversa. */
+export type PosturaDoAgente = "qualificar" | "fechar";
+
+/**
+ * O ofício em texto, pronto para entrar na instrução do modelo.
+ *
+ * ⚠️ O padrão é `"qualificar"` de propósito. Uma conversa que caia aqui sem
+ * postura declarada é uma conversa sobre a qual não se sabe nada — e mandar o
+ * closer para cima de quem ninguém mediu é o pior dos dois erros possíveis. Na
+ * dúvida, sonda.
+ */
+export function blocoDoOficio(postura: PosturaDoAgente = "qualificar"): string {
+  const blocos = postura === "fechar" ? OFICIO_DO_FECHAMENTO : OFICIO_DO_ATENDIMENTO;
+  return blocos
     .map((b) => `${b.titulo}:\n${b.linhas.map((l) => `- ${l}`).join("\n")}`)
     .join("\n\n");
+}
+
+/**
+ * Quando o closer assume.
+ *
+ * ── POR QUE A REGRA É ESTA ──────────────────────────────────────────────────
+ *
+ * O CEO nomeou as faixas: *"frio, morno, quente... Aí a gente passa pro
+ * closer."* Quem fecha ataca quem está pronto para fechar.
+ *
+ * MORNO fica com o qualificador de propósito, e essa é a linha que se erra
+ * fácil. O morno é o *"quer fechar mas não neste mês"* — ele precisa de
+ * agendamento, não de ataque. Um closer em cima dele adianta um "não" que não
+ * precisava existir.
+ *
+ * `null` é o caso mais importante: **ninguém mediu**. Não é frio, é
+ * desconhecido — e desconhecido sonda.
+ */
+export function posturaDoLead(temperatura: string | null | undefined): PosturaDoAgente {
+  return temperatura === "QUENTE" || temperatura === "PRIORIDADE_MAXIMA"
+    ? "fechar"
+    : "qualificar";
 }

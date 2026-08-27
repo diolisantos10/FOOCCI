@@ -65,6 +65,7 @@ import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 import { extrairSinais, juntarSinais } from "./sondagem";
+import { posturaDoLead } from "./oficio";
 import { escreverOScore, type SinaisDoLead } from "../score";
 
 /**
@@ -183,6 +184,11 @@ async function executarTurno(
       atendidoPor: true,
       optOutAt: true,
       atendenteUserId: true,
+      // A temperatura decide se quem fala é o sondador ou o closer. Sem ela na
+      // consulta, o closer não existiria na prática: o ofício estaria escrito e
+      // nunca vestido — o mesmo defeito de peça sem chamador que já apareceu
+      // três vezes nesta base.
+      temperatura: true,
     },
   });
 
@@ -287,9 +293,13 @@ async function executarTurno(
     conversaAteAqui(db, lead.id),
   ]);
 
+  // A postura sai da temperatura que o qualificador escreveu no turno anterior.
+  // QUENTE e PRIORIDADE_MAXIMA viram closer; o resto — MORNO, FRIO e sobretudo
+  // `null`, que é "ninguém mediu" — continua sondando. Ver `posturaDoLead`.
   const r = await falar(
     { mensagem: pedido.mensagem, nome: lead.nome, jaPerguntou, historico },
     VERSAO_1,
+    posturaDoLead(lead.temperatura),
   );
 
   // ── 7a. É caso de gente: chama e PARA ───────────────────────────────────

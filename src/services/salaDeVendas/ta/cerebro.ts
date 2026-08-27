@@ -34,7 +34,7 @@ import { buscarNoConhecimento, type PedacoDeConhecimento } from "./conhecimento"
 import { buscarNaVerdade, type Achado } from "./verdade";
 import { verificarResposta, type Veredito } from "./verificador";
 import { VERSAO_1, type TextoDaVersao } from "./ficha";
-import { blocoDoOficio } from "./oficio";
+import { blocoDoOficio, type PosturaDoAgente } from "./oficio";
 
 /**
  * ⚠️ QUEM ESCOLHE O MODELO É O BRAIN, E NÃO ESTE ARQUIVO.
@@ -81,6 +81,14 @@ export interface PedidoAoCerebro {
   /** Os turnos anteriores, do mais antigo para o mais novo. */
   historico?: Array<{ deQuem: "cliente" | "ta"; texto: string }>;
   ficha?: TextoDaVersao;
+  /**
+   * Sondar ou fechar. Vem da temperatura do lead, calculada pelo qualificador.
+   *
+   * Omitido = `"qualificar"`, e o padrão é deliberado: conversa sem postura
+   * declarada é conversa sobre a qual não se sabe nada, e o erro caro é soltar o
+   * closer em cima de quem ninguém mediu.
+   */
+  postura?: PosturaDoAgente;
 }
 
 /**
@@ -122,7 +130,11 @@ export function montarContexto(pergunta: string): {
   };
 }
 
-function instrucao(ficha: TextoDaVersao, ctx: ReturnType<typeof montarContexto>): string {
+function instrucao(
+  ficha: TextoDaVersao,
+  ctx: ReturnType<typeof montarContexto>,
+  postura: PosturaDoAgente = "qualificar",
+): string {
   const verdades = ctx.verdade.map((a) => `- ${a.item.texto}`).join("\n");
   const conhecimento = ctx.conhecimento
     .map((p) => `### ${p.secao} (${p.capitulo})\n${p.texto}`)
@@ -135,7 +147,7 @@ function instrucao(ficha: TextoDaVersao, ctx: ReturnType<typeof montarContexto>)
     "",
     // O ofício vem de `oficio.ts` e não digitado aqui: é texto que se revisa
     // lendo, e enterrado no meio de uma função ninguém o lê inteiro nunca mais.
-    blocoDoOficio(),
+    blocoDoOficio(postura),
     "",
     "O QUE VOCÊ PODE AFIRMAR — palavra por palavra, sem alterar número nenhum:",
     verdades || "(nada específico foi encontrado para esta pergunta)",
@@ -188,7 +200,12 @@ export async function pensar(
   let correcao = "";
 
   for (let tentativa = 0; tentativa <= TENTATIVAS_APOS_REPROVA; tentativa++) {
-    const texto = await escrever(engine, instrucao(ficha, ctx), pedido, correcao);
+    const texto = await escrever(
+      engine,
+      instrucao(ficha, ctx, pedido.postura),
+      pedido,
+      correcao,
+    );
     if (texto === null) break; // rede ou modelo fora do ar — cai no chão
 
     const veredito = verificarResposta(texto);
