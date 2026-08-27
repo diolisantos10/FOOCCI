@@ -29,6 +29,10 @@ interface Ajustes {
   lead?: Record<string, unknown> | null;
   saidasDesdeAUltimaEntrada?: number;
   textosJaEnviados?: string[];
+  /** O time de agentes que existe no banco. Vazio = instalação nova. */
+  timeNoBanco?: Array<{ id: string; nome: string; email: string }>;
+  /** Quantos clientes abertos cada agente já tem, para o desempate de carga. */
+  cargaDosAgentes?: Array<{ atendenteUserId: string; _count: { _all: number } }>;
 }
 
 function banco(a: Ajustes = {}) {
@@ -63,6 +67,7 @@ function banco(a: Ajustes = {}) {
       findUnique: vi.fn().mockResolvedValue(lead),
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      groupBy: vi.fn().mockResolvedValue(a.cargaDosAgentes ?? []),
     },
     leadMensagem: {
       count: vi.fn().mockResolvedValue(a.saidasDesdeAUltimaEntrada ?? 0),
@@ -74,6 +79,13 @@ function banco(a: Ajustes = {}) {
     },
     siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
     leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h1" }) },
+    // Desde 27/08/2026 a tomada do lead escolhe um agente do time e grava o
+    // `atendenteUserId` dele. `a.timeNoBanco` deixa o caso decidir se o time
+    // existe: vazio é o estado de uma instalação nova, e o TA precisa
+    // continuar atendendo — sem nome, mas atendendo.
+    internalUser: {
+      findMany: vi.fn().mockResolvedValue(a.timeNoBanco ?? []),
+    },
   };
 }
 

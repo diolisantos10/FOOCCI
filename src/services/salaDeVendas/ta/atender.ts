@@ -172,7 +172,16 @@ async function executarTurno(
 
   const lead = await db.siteLead.findUnique({
     where: { id: pedido.leadId },
-    select: { id: true, nome: true, atendidoPor: true, optOutAt: true },
+    // `atendenteUserId` entra porque a mensagem passou a ser assinada: quando a
+    // IA já era dona do lead, quem assina é o agente que JÁ estava com ele — e
+    // esse nome só existe aqui.
+    select: {
+      id: true,
+      nome: true,
+      atendidoPor: true,
+      optOutAt: true,
+      atendenteUserId: true,
+    },
   });
 
   if (!lead) return calar("leadNaoExiste", `lead ${pedido.leadId} não existe`);
@@ -245,7 +254,26 @@ async function executarTurno(
   // A escrita é condicional a `NINGUEM`: se alguém assumiu entre o portão 2 e
   // aqui, a IA não toma de volta. Não assumir não é falha — só quer dizer que o
   // lead já tem dono, e o portão 2 vai calar a IA no próximo turno.
-  await iaAssumeSeEstaLivre(db, { leadId: lead.id, agora });
+  //
+  // ── E QUEM ASSUME TEM NOME ────────────────────────────────────────────────
+  //
+  // Até 27/08/2026 a tomada gravava `atendenteUserId: null` — atendimento sem
+  // dono. O CEO perguntou *"cadê o agente pra atender o lead?"* e a resposta
+  // honesta era: existe e não atende ninguém. Agora ela escolhe um agente do
+  // time (o mais livre) e o nome dele viaja daqui até a assinatura da mensagem.
+  const tomada = await iaAssumeSeEstaLivre(db, { leadId: lead.id, agora });
+
+  // ⚠️ Quem assina.
+  //
+  // Se a IA assumiu AGORA, assina o agente escolhido agora. Se ela já era dona
+  // (o portão 2 deixou passar), assina QUEM JÁ ESTAVA com o lead — nunca um
+  // agente novo. Trocar de agente no meio da conversa daria ao cliente duas
+  // vozes com nomes diferentes, que é pior que uma voz sem nome.
+  //
+  // `null` quando o time ainda não existe no banco: a mensagem sai sem autor
+  // nomeado, como antes. Melhor um atendimento sem nome do que nenhum — o
+  // cliente já escreveu e está esperando.
+  const assina = tomada.assumiu ? (tomada.agente?.userId ?? null) : lead.atendenteUserId;
 
   // ── 6. Compor ───────────────────────────────────────────────────────────
   //
@@ -295,6 +323,9 @@ async function executarTurno(
         leadId: lead.id,
         texto: r.texto,
         autor: "IA",
+        // Assina igual à fala de venda: o cliente acabou de conversar com
+        // "Agente Maria" e o aviso de que vem gente não pode chegar anônimo.
+        autorUserId: assina,
         agora,
       });
 
@@ -318,6 +349,11 @@ async function executarTurno(
     // ninguém redigiu. Isto aqui é fala composta, e a auditoria precisa poder
     // separar "o robô escreveu" de "a máquina disparou o passo 2".
     autor: "IA",
+    // ⚠️ `autor: "IA"` E `autorUserId` juntos, de propósito. O primeiro diz O QUE
+    // falou (robô, não pessoa) e o segundo diz QUEM (Agente Maria). A auditoria
+    // precisa dos dois: sem o primeiro, um dia alguém conta fala de robô como
+    // produtividade de gente; sem o segundo, a conversa não tem nome.
+    autorUserId: assina,
     texto: r.texto,
     agora,
   });

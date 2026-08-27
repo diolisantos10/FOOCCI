@@ -64,8 +64,25 @@ export interface LeadSafetyDecision {
  * uma resposta com arquivo e linha.
  */
 export const REGRA = {
-  /** Janela útil de abordagem, hora local de São Paulo. */
-  janela: { inicioHora: 9, fimHora: 19 },
+  /**
+   * Janela útil de abordagem, hora local de São Paulo.
+   *
+   * Decisão do CEO em 27/08/2026: *"a gente não pode colocar os agentes falando
+   * com as pessoas depois das oito da noite. Faz um intervalo das nove da manhã
+   * às oito da noite. Depois disso ninguém atende mais."*
+   *
+   * ⚠️ `fimHora: 20` com a comparação `hora >= fimHora` faz a última hora
+   * atendida ser a das 19h — **às 20h em ponto a Sala fecha**. É o que ele
+   * pediu; escrever 21 aqui para "atender até as 20h" atenderia até 20h59, e um
+   * agente escrevendo às 20h50 é exatamente o que ele proibiu.
+   *
+   * ⚠️ E este número é só o PADRÃO DE SEGURANÇA, usado quando ninguém informa a
+   * janela. A que vale no dia a dia vem da configuração do TA no banco
+   * (`horaInicio`/`horaFim`), ajustável pelo dono. Os dois estavam discordando —
+   * 19 aqui, 20 no banco — e discordância assim não aparece em teste: aparece
+   * num cliente que escreveu às 19h30 e não foi respondido.
+   */
+  janela: { inicioHora: 9, fimHora: 20 },
   /** 1 = segunda … 5 = sexta. Sábado e domingo estão fora, e não é negociável. */
   diasUteis: [1, 2, 3, 4, 5] as const,
   /**
