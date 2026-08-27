@@ -109,10 +109,20 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
     {
       title: "Operação",
       items: [
-        // A Sala de Vendas vem ANTES do CRM: ela é a tela de trabalho do dia, e
-        // o CRM é a base inteira. Quem entra para trabalhar procura a fila, não
-        // a listagem.
-        { href: "/comercial",                label: "Comercial",        icon: "🎯" },
+        // ── ⚠️ O COMERCIAL NÃO ESTÁ NESTA LISTA, E É DECISÃO ────────────────
+        //
+        // Havia aqui um item `Comercial → /comercial`. O CEO mandou tirar em
+        // 27/08/2026: *"desvincule o comercial do admin. Tem que ficar em outro
+        // site, não dentro do admin."*
+        //
+        // Ele está certo, e o link contradizia o que a própria área já fazia:
+        // `/comercial` exige login PRÓPRIO e recusa a senha da casa. Um atalho
+        // daqui levava quem clicava direto para uma tela de login — o admin
+        // prometendo uma porta que ele mesmo não abre.
+        //
+        // São dois lugares, dois logins, duas portas. Quem vende entra pelo
+        // endereço do comercial; quem administra entra aqui. Um atalho entre os
+        // dois desfaz a separação inteira em um clique.
         { href: "/admin/foocci-crm",         label: "CRM da Foocci",    icon: "📨" },
         { href: "/admin/demo-videos",        label: "Vídeos do site",   icon: "🎬" },
         { href: "/admin/padaria-vitrine",    label: "Padaria de vitrine", icon: "🥐" },

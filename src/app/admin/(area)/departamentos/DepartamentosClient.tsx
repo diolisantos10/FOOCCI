@@ -144,11 +144,40 @@ function Conteudo({ painel }: { painel: PainelDeDepartamentos }) {
         )}
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {painel.departamentos.map((d) => (
-          <Card key={d.slug} departamento={d} />
-        ))}
-      </div>
+      {/* ── ⚠️ ZERO NÃO É A MESMA COISA QUE VAZIO ──────────────────────────
+          O CEO abriu esta tela e disse: *"esse link me leva pra essa sala aí,
+          não tem nada pra fazer. Não estou entendendo."*
+
+          Ele estava vendo `Departamentos: 0 · Agentes: 0` e mais nada. Quatro
+          zeros numa tela em branco parecem defeito — e não são: a estrutura da
+          empresa nunca foi criada no banco de produção.
+
+          A diferença entre "está quebrado" e "está vazio" é a frase abaixo. Sem
+          ela, quem chega investiga um defeito que não existe; com ela, sabe que
+          está olhando uma gaveta que ninguém encheu ainda. */}
+      {painel.departamentos.length === 0 ? (
+        <div className="mt-5 rounded-2xl border border-line2 bg-paper px-5 py-6">
+          <h2 className="text-[15px] font-semibold text-ink">
+            A estrutura ainda não foi montada
+          </h2>
+          <p className="mt-1.5 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+            Os zeros acima não são erro:{" "}
+            <strong className="text-ink2">nenhum departamento foi criado</strong> no
+            sistema ainda. Esta tela mostra o organograma da Foocci — quem responde
+            por cada área — e ele existe hoje só no documento, não no banco.
+          </p>
+          <p className="mt-2 max-w-[70ch] text-[13.5px] leading-relaxed text-muted">
+            Nada depende disto para funcionar. O atendimento comercial roda pela
+            área própria dele, com login próprio, e não passa por aqui.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          {painel.departamentos.map((d) => (
+            <Card key={d.slug} departamento={d} />
+          ))}
+        </div>
+      )}
 
       {painel.aposentados.length > 0 && (
         <details className="mt-6">
