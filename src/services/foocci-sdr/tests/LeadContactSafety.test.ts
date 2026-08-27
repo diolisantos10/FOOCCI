@@ -125,7 +125,7 @@ describe("consentimento tem prazo — 90 dias", () => {
   });
 });
 
-describe("janela de abordagem — 9h às 19h, dias úteis, horário de São Paulo", () => {
+describe("janela de abordagem — 9h às 20h, dias úteis, horário de São Paulo", () => {
   it("o fuso é de São Paulo, não do servidor", () => {
     // 23h UTC de quarta = 20h em SP → fora. Se alguém trocasse por getHours()
     // no servidor (UTC), este caso passaria a liberar às 20h da noite.
@@ -139,10 +139,42 @@ describe("janela de abordagem — 9h às 19h, dias úteis, horário de São Paul
     expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-06T15:00:00Z") })).reason).toBe("FORA_DA_JANELA");
   });
 
-  it("a janela do SDR é MAIS ESTREITA que a do CRM — 18h de sexta passa, 19h não", () => {
-    // 21h UTC = 18h SP (sexta 5/6/2026) → dentro. 22h UTC = 19h SP → fora.
-    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-05T21:00:00Z") })).sendable).toBe(true);
-    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-05T22:00:00Z") })).reason).toBe("FORA_DA_JANELA");
+  it("⭐ a última hora atendida é a das 19h — às 20h a Sala fecha", () => {
+    // ── A FRONTEIRA MUDOU EM 27/08/2026 ────────────────────────────────────
+    //
+    // Decisão do CEO: *"a gente não pode colocar os agentes falando com as
+    // pessoas depois das oito da noite. Faz um intervalo das nove da manhã às
+    // oito da noite."*
+    //
+    // Antes disto o limite era 19h — e havia uma discordância silenciosa: o
+    // banco já guardava `horaFim: 20` como padrão e o código usava 19. Dois
+    // números que discordam não aparecem em teste nenhum; aparecem num cliente
+    // que escreveu às 19h30 e não foi respondido.
+    //
+    // ⚠️ A fronteira é onde moram os erros de um-a-mais, e os DOIS lados dela
+    // estão guardados de propósito: 19h dentro, 20h fora. Só o primeiro
+    // passaria com `fimHora: 21`; só o segundo passaria com 20. Juntos, fixam
+    // o número.
+
+    // 22h UTC = 19h SP (sexta 5/6/2026) → DENTRO. É a última hora de trabalho.
+    expect(
+      avaliarContatoDeLead(base({ agora: new Date("2026-06-05T22:00:00Z") })).sendable,
+      "19h deveria ser atendido — é a última hora da janela",
+    ).toBe(true);
+
+    // 23h UTC = 20h SP → FORA. Às oito em ponto ninguém atende mais.
+    expect(
+      avaliarContatoDeLead(base({ agora: new Date("2026-06-05T23:00:00Z") })).reason,
+      "20h deveria estar fechado",
+    ).toBe("FORA_DA_JANELA");
+
+    // E a abertura, que não mudou: 8h fora, 9h dentro.
+    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-05T11:00:00Z") })).reason).toBe(
+      "FORA_DA_JANELA",
+    );
+    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-05T12:00:00Z") })).sendable).toBe(
+      true,
+    );
   });
 });
 

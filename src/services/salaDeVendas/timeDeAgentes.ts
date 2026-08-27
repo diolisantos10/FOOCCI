@@ -60,16 +60,25 @@
  * que um endereço de agente batesse com o de um funcionário, a criação do agente
  * cairia em cima do registro da pessoa — e a pessoa perderia o acesso dela.
  *
- * ── POR QUE OS NOMES SÃO NUMERADOS ──────────────────────────────────────────
+ * ── OS NOMES: "AGENTE MARIA", E NÃO "AGENTE 1" ──────────────────────────────
  *
- * A tentação é batizá-los de Ana, Bruno, Carla. Seria um erro caro: o nome
- * aparece na conversa e na trilha de "quem assumiu". Um lead que lê "Ana assumiu
- * seu atendimento" e depois descobre que Ana é um programa tem motivo para
- * desconfiar de tudo que Ana disse antes — e desconfiança em venda não se
- * recupera com explicação.
+ * A primeira versão numerava — `Agente 1`, `Agente 2` — com este argumento: o
+ * nome aparece na conversa, e um lead que lê "Ana assumiu seu atendimento" e
+ * depois descobre que Ana é um programa desconfia de tudo que Ana disse antes.
  *
- * `Agente 1` trata o agente como profissional sem prometer gente. Quem tem nome
- * de gente aqui é gente.
+ * O CEO decidiu diferente, em 27/08/2026: *"nomes genéricos, tipo agente Maria,
+ * agente João, agente fulana"*. É decisão dele e vale.
+ *
+ * ⚠️ **E a forma que ele escolheu já resolve a preocupação** — reparar nisso
+ * importa mais que a preocupação em si. Ele não pediu "Maria", pediu **"agente
+ * Maria"**. O prefixo faz o trabalho todo: o cliente lê `Agente Maria assumiu` e
+ * já sabe o que está do outro lado. Não há descoberta depois, porque não houve
+ * disfarce antes.
+ *
+ * Por isso o formato é **trava, não convenção**: um teste reprova qualquer nome
+ * que não comece com `Agente `. O dia em que alguém tirar o prefixo para "ficar
+ * mais natural" é o dia em que a Sala passa a fingir ser gente — e ninguém
+ * perceberia, porque a tela continuaria bonita.
  *
  * ── CINCO PRONTOS, E COMEÇAR COM DOIS ───────────────────────────────────────
  *
@@ -96,34 +105,45 @@ export interface AgenteDoTime {
 /** O domínio dos agentes. Um só, para o e-mail não virar decisão de quem clica. */
 const DOMINIO = "agentes.foocci.com.br";
 
+/**
+ * ⚠️ **O `slug` e o e-mail NÃO mudaram junto com os nomes.**
+ *
+ * `agente-1` continua sendo `agente-1`, e `agente1@` continua sendo `agente1@`,
+ * mesmo agora que ele se chama Maria. Parece descuido e é o contrário: o e-mail
+ * é a chave que identifica o registro no banco. Trocá-lo por `maria@` faria a
+ * criação **não encontrar** o agente que já existe e criar um sósia — e os leads
+ * que o primeiro atendeu ficariam pendurados num registro órfão.
+ *
+ * Nome é etiqueta e pode mudar. Chave não muda.
+ */
 export const TIME_DE_AGENTES: readonly AgenteDoTime[] = [
   {
     slug: "agente-1",
-    nome: "Agente 1",
+    nome: "Agente Maria",
     email: `agente1@${DOMINIO}`,
     funcao: "Primeiro atendimento — pega quem acabou de escrever",
   },
   {
     slug: "agente-2",
-    nome: "Agente 2",
+    nome: "Agente João",
     email: `agente2@${DOMINIO}`,
     funcao: "Primeiro atendimento — segunda mão na fila",
   },
   {
     slug: "agente-3",
-    nome: "Agente 3",
+    nome: "Agente Carla",
     email: `agente3@${DOMINIO}`,
     funcao: "Qualificação — entende a operação do restaurante",
   },
   {
     slug: "agente-4",
-    nome: "Agente 4",
+    nome: "Agente Paulo",
     email: `agente4@${DOMINIO}`,
     funcao: "Retomada — volta em quem parou de responder",
   },
   {
     slug: "agente-5",
-    nome: "Agente 5",
+    nome: "Agente Rita",
     email: `agente5@${DOMINIO}`,
     funcao: "Reserva — entra quando a fila aperta",
   },

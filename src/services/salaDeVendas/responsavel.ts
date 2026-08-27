@@ -32,6 +32,7 @@
  */
 
 import type { Prisma, PrismaClient, LeadAtendidoPor } from "@prisma/client";
+import { escolherAgente, type AgenteEscolhido } from "./quemAtende";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -309,16 +310,44 @@ export function esperaPorGente(
  * Devolve `false` quando não assumiu, e isso NÃO é falha: significa que o lead
  * já tem dono. Quem chama segue em frente.
  */
+export type ResultadoDaTomada =
+  | { assumiu: false }
+  /** `agente` é `null` quando o time ainda não existe no banco. */
+  | { assumiu: true; agente: AgenteEscolhido | null };
+
 export async function iaAssumeSeEstaLivre(
   db: Cliente,
   params: { leadId: string; agora?: Date },
-): Promise<boolean> {
+): Promise<ResultadoDaTomada> {
   const agora = params.agora ?? new Date();
+
+  // ── QUEM PEGA, ESCOLHIDO ANTES DA ESCRITA ─────────────────────────────────
+  //
+  // Até 27/08/2026 esta função gravava `atendenteUserId: null` — atendimento
+  // sem dono. O CEO perguntou "cadê o agente pra atender o lead?" e a resposta
+  // honesta era: existe e não atende ninguém.
+  //
+  // A leitura acontece FORA da escrita condicional, e isso é aceitável: o pior
+  // caso de uma corrida aqui é dois clientes caírem no mesmo agente por um
+  // instante — desequilíbrio de fila, não dado errado. Pôr a escolha dentro da
+  // condição exigiria travar a tabela de leads inteira para atribuir UM
+  // cliente, e o preço não paga o que evita.
+  //
+  // O que não pode correr risco é o `atendidoPor: "NINGUEM"` — e esse continua
+  // dentro do `where`, onde sempre esteve.
+  const agente = await escolherAgente(db);
 
   const alterados = await db.siteLead.updateMany({
     where: { id: params.leadId, atendidoPor: "NINGUEM" },
-    data: { atendidoPor: "IA", atendenteUserId: null, atendenteDesde: agora },
+    data: {
+      atendidoPor: "IA",
+      // `null` quando o time ainda não existe no banco: melhor um atendimento
+      // sem nome do que nenhum atendimento. O cliente já escreveu.
+      atendenteUserId: agente?.userId ?? null,
+      atendenteDesde: agora,
+    },
   });
 
-  return alterados.count === 1;
+  if (alterados.count !== 1) return { assumiu: false };
+  return { assumiu: true, agente };
 }

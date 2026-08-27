@@ -131,12 +131,52 @@ describe("o time vem pronto", () => {
 });
 
 describe("⭐ agente não se passa por gente", () => {
-  it("os nomes são numerados, não são nomes de pessoa", () => {
-    // A tentação é Ana, Bruno, Carla — e sairia caro. O nome aparece na
-    // conversa e na trilha de "quem assumiu". Quem tem nome de gente aqui é
-    // gente.
+  it("⭐ todo nome começa com 'Agente ' — o prefixo é a honestidade", () => {
+    // ── A REGRA MUDOU, E A TRAVA MUDOU COM ELA ─────────────────────────────
+    //
+    // A primeira versão exigia numeração (`Agente 1`), com o argumento de que
+    // "Ana" faria o cliente descobrir depois que Ana é um programa.
+    //
+    // O CEO decidiu por nomes de gente em 27/08/2026 — *"agente Maria, agente
+    // João"* — e a forma que ele escolheu já resolve a preocupação: ele não
+    // pediu "Maria", pediu **"agente Maria"**. O prefixo faz o trabalho todo.
+    // Não há descoberta depois porque não houve disfarce antes.
+    //
+    // ⚠️ Por isso o PREFIXO é a trava, e não o nome. O dia em que alguém tirar
+    // o "Agente " para "ficar mais natural" é o dia em que a Sala passa a
+    // fingir ser gente — e ninguém perceberia, porque a tela continuaria
+    // bonita e o cliente continuaria respondendo.
     for (const a of TIME_DE_AGENTES) {
-      expect(a.nome, `${a.slug} tem nome que parece de pessoa`).toMatch(/^Agente \d+$/);
+      expect(
+        a.nome,
+        `${a.slug} perdeu o prefixo "Agente " — passou a se passar por pessoa`,
+      ).toMatch(/^Agente .+/);
+    }
+  });
+
+  it("e o nome não é só o prefixo", () => {
+    // A outra metade: `/^Agente .+/` passaria com "Agente x". O nome precisa
+    // existir, senão cinco agentes viram cinco "Agente" iguais na conversa.
+    for (const a of TIME_DE_AGENTES) {
+      const semPrefixo = a.nome.replace(/^Agente\s+/, "");
+      expect(semPrefixo.length, `${a.slug} não tem nome depois do prefixo`).toBeGreaterThan(2);
+    }
+
+    const nomes = TIME_DE_AGENTES.map((a) => a.nome);
+    expect(new Set(nomes).size, `nome repetido em: ${nomes.join(", ")}`).toBe(nomes.length);
+  });
+
+  it("⭐ o e-mail NÃO acompanha a troca de nome", () => {
+    // Maria mora em `agente1@`, e é de propósito. O e-mail é a chave que
+    // identifica o registro no banco: trocá-lo por `maria@` faria a criação não
+    // encontrar o agente que já existe e criar um sósia — e os leads que o
+    // primeiro atendeu ficariam pendurados num registro órfão.
+    //
+    // Nome é etiqueta e pode mudar. Chave não muda.
+    for (const a of TIME_DE_AGENTES) {
+      expect(a.email, `${a.email} virou nome — a chave seguiu a etiqueta`).toMatch(
+        /^agente\d+@/,
+      );
     }
   });
 
@@ -358,7 +398,7 @@ describe("⭐ a tela não pode prometer o que o código não faz", () => {
 
 describe("agentePorSlug", () => {
   it("acha quem existe", () => {
-    expect(agentePorSlug("agente-1")?.nome).toBe("Agente 1");
+    expect(agentePorSlug("agente-1")?.nome).toBe("Agente Maria");
   });
 
   it("devolve null para quem não existe, em vez de o primeiro da lista", () => {
