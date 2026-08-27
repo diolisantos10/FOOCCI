@@ -64,6 +64,8 @@ import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
+import { extrairSinais, juntarSinais } from "./sondagem";
+import { escreverOScore, type SinaisDoLead } from "../score";
 
 /**
  * Aceita a transação além do cliente solto — igual a `conversa.ts` e
@@ -376,7 +378,89 @@ async function executarTurno(
   // o "oi" do cliente e o TA responder duas vezes.
   const entrega = await entregarMensagem(db, gravada.mensagemId);
 
+  // ── 9. Qualificar: ouvir o que ele disse e etiquetar ────────────────────
+  //
+  // ⚠️ **DEPOIS de entregar, e nunca antes.** Qualificar chama o modelo de
+  // novo, e o cliente já está esperando desde o portão 1. Pôr isto antes da
+  // entrega somaria a espera da extração à espera da composição — e a única
+  // coisa que o cliente percebe é o tempo até a resposta chegar.
+  //
+  // Foi o buraco que o CEO destampou em 27/08/2026 perguntando *"você já fez
+  // teste com esse qualificador?"*: a régua de temperatura existia, testada, e
+  // NINGUÉM a chamava. O agente perguntava "quantas unidades?", a pessoa
+  // respondia "três", e a resposta morria na conversa. Todo lead sem etiqueta,
+  // e a fila do closer vazia para sempre.
+  await qualificar(db, { leadId: lead.id, mensagem: pedido.mensagem, agora });
+
   return { falou: true, mensagemId: gravada.mensagemId, resposta: r, entregue: entrega.entregue };
+}
+
+/**
+ * Ouve a conversa, junta com o que já se sabia, e grava a etiqueta.
+ *
+ * **Nunca lança, e nunca devolve nada.** O turno já terminou quando ela roda: a
+ * mensagem foi composta, gravada e entregue. Uma falha aqui não pode desfazer
+ * nada disso — o pior que acontece é o lead ficar mais um turno sem etiqueta, e
+ * o próximo turno tenta de novo com a conversa maior.
+ */
+async function qualificar(
+  db: Cliente,
+  p: { leadId: string; mensagem: string; agora: Date },
+): Promise<void> {
+  try {
+    // ⚠️ A conversa INTEIRA, e não a janela de 12 que a composição usa.
+    //
+    // Compor precisa do contexto recente; qualificar precisa de TUDO. Se a
+    // extração enxergasse só as últimas 12 mensagens, o "tenho 3 lojas" dito no
+    // começo cairia fora da janela numa conversa longa — e o score baixaria
+    // sozinho, sem ninguém ter dito nada novo.
+    //
+    // Custa uma consulta a mais e resolve, sem coluna nova no banco: a conversa
+    // já É o registro dos fatos.
+    const msgs = await db.leadMensagem.findMany({
+      where: { leadId: p.leadId, texto: { not: null } },
+      orderBy: { ocorreuEm: "asc" },
+      select: { direcao: true, texto: true },
+    });
+
+    const conversa = msgs.map((m) => ({
+      deQuem: m.direcao === "ENTRADA" ? ("cliente" as const) : ("ta" as const),
+      texto: m.texto ?? "",
+    }));
+
+    const daConversa = await extrairSinais(conversa, p.mensagem);
+
+    // ── O QUE O FORMULÁRIO JÁ TINHA PERGUNTADO ────────────────────────────
+    //
+    // A pessoa preencheu tipo de restaurante e principal desafio antes de
+    // escrever. Ignorar isso faria o agente perguntar de novo o que ela já
+    // respondeu — e é o defeito que mais rápido faz alguém desistir.
+    const ficha = await db.siteLead.findUnique({
+      where: { id: p.leadId },
+      select: { tipo: true, desafio: true },
+    });
+
+    const doFormulario: SinaisDoLead = {
+      dorPrincipal: ficha?.desafio?.trim() || null,
+      // Tipo preenchido no formulário do site é declaração de que É restaurante.
+      // `null` quando vazio: ausência não vira `false`, que desqualificaria.
+      ehRestaurante: ficha?.tipo?.trim() ? true : null,
+    };
+
+    // Engajamento observado, não declarado: quem escreveu três vezes está mais
+    // quente que quem mandou "oi" e sumiu — e isso ninguém precisa perguntar.
+    const mensagensDoLead = conversa.filter((t) => t.deQuem === "cliente").length;
+
+    // A conversa vence o formulário: um menu suspenso é o que a pessoa achou
+    // que era o problema dela antes de conversar. `juntarSinais` mantém o
+    // primeiro argumento e usa o segundo só para preencher buraco.
+    const sinais = juntarSinais({ ...daConversa, mensagensDoLead }, doFormulario);
+
+    await escreverOScore(db, { leadId: p.leadId, sinais, agora: p.agora });
+  } catch {
+    // Modelo fora do ar, banco recusando a escrita, JSON estranho. Nada disso
+    // pode transformar um atendimento que deu certo em turno quebrado.
+  }
 }
 
 /** O instante da última coisa que o cliente escreveu. Epoch quando nunca. */

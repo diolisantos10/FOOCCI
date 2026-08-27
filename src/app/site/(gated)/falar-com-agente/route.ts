@@ -1,40 +1,67 @@
 /**
- * /site/falar-com-agente — a porta única para o WhatsApp de vendas.
+ * /site/falar-com-agente — a porta única para o atendimento comercial.
  *
  * ── Por que um DESVIO no servidor, e não o `wa.me` direto no botão ──────────
  * Se cada botão do site apontasse para `https://wa.me/...`, o endereço estaria
- * assado dentro do HTML de cada página — e ligar ou desligar o canal viraria um
- * novo build. Com o desvio, todo botão do site aponta para um caminho INTERNO e
- * estável, e a decisão de para onde ele leva é tomada **a cada clique**, no
- * servidor:
+ * assado dentro do HTML de cada página — e mudar para onde ele leva viraria um
+ * novo build. Com o desvio, todo botão aponta para um caminho INTERNO e estável,
+ * e a decisão é tomada **a cada clique**, no servidor.
  *
- *   • canal no ar    → WhatsApp do Foocci, com a mensagem já escrita;
- *   • canal desligado → o formulário, que é a porta que de fato funciona hoje.
+ * ── ⚠️ TODO MUNDO PASSA PELO FORMULÁRIO. INCLUSIVE QUEM CLICOU NO WHATSAPP ──
  *
- * Assim o dia em que a Meta terminar a verificação do número é o dia em que o
- * CEO troca UMA variável no Railway — sem deploy, sem build, sem depender de
- * alguém lembrar da armadilha do `NEXT_PUBLIC_`.
+ * Este desvio tinha duas saídas: canal no ar → `wa.me` direto; canal desligado →
+ * formulário. O CEO fechou a primeira em 27/08/2026:
+ *
+ *   *"Quando eles clicarem no botão do WhatsApp, venha um formulário de leads,
+ *   e não apenas 'oi, vim pelo site'. Aí eles preenchem e entram na fila de
+ *   leads pra serem atendidos."*
+ *
+ * O motivo é medível, e o texto que saía denunciava o problema sozinho:
+ *
+ *     "Olá! Quero saber mais sobre o Foocci."
+ *
+ * Chegava um número desconhecido. Sem nome, sem restaurante, sem cidade, sem o
+ * desafio que a pessoa tem. O agente gastava as três primeiras mensagens
+ * descobrindo quem estava do outro lado — **exatamente o que o formulário já
+ * perguntava na tela anterior**. Duas portas, e a mais bonita entregava a pior
+ * conversa.
+ *
+ * Pelo formulário a mesma pessoa chega assim:
+ *
+ *     "Oi! Sou Marina, do restaurante Sabor Caseiro, e quero conhecer o
+ *      Foocci. #A3F9"
+ *
+ * Com ficha criada antes de a conversa começar, e o `#código` casando a
+ * mensagem com ela. O agente abre o WhatsApp já sabendo com quem fala.
+ *
+ * ── E O QUE ACONTECE DEPOIS DO FORMULÁRIO ───────────────────────────────────
+ *
+ * Ele leva ao WhatsApp com a mensagem pronta — quem aperta enviar é a pessoa.
+ * Isso importa: mensagem enviada PELO CLIENTE não precisa de modelo aprovado
+ * pela Meta, e abre a janela em que o agente pode conversar livre. Uma primeira
+ * mensagem partindo da empresa precisaria de modelo, aprovação e espera.
+ *
+ * ⚠️ Sobra uma fresta conhecida: quem preenche o formulário e **não aperta
+ * enviar** no WhatsApp vira lead sem conversa. A ficha existe, o agente não tem
+ * o que responder. Está no backlog como "resgate de quem parou no último
+ * clique"; não se resolve aqui.
  *
  * ── O que este desvio NUNCA faz ─────────────────────────────────────────────
- * Não manda mensagem. Quem escreve primeiro é o visitante — o envio automático
- * do SDR continua desligado por outra chave, e nada aqui o liga.
+ * Não manda mensagem. Quem escreve primeiro é sempre o visitante.
  */
 
 import { NextResponse } from "next/server";
-import { canalDeVendasAtivo, linkDoWhatsAppDeVendas } from "@/lib/site/canalDeVendas";
 import { DEMO_URL } from "@/components/marketing/config";
 
 /** Decidido a cada requisição: nada de resposta guardada em cache de borda. */
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
-  const destino = canalDeVendasAtivo()
-    ? linkDoWhatsAppDeVendas()
-    : new URL(DEMO_URL, "https://foocci.com.br").toString();
+  const destino = new URL(DEMO_URL, "https://foocci.com.br").toString();
 
-  // 307 e não 308: o destino MUDA quando o canal acende, e desvio permanente
-  // fica guardado no navegador e no índice de busca. Um 308 daria a quem clicou
-  // hoje um atalho eterno para o formulário, mesmo depois do WhatsApp no ar.
+  // 307 e não 308: o destino pode voltar a mudar — um desvio permanente fica
+  // guardado no navegador e no índice de busca, e daria a quem clicou hoje um
+  // atalho eterno para uma decisão que não é eterna.
   return NextResponse.redirect(destino, {
     status: 307,
     headers: { "Cache-Control": "no-store" },

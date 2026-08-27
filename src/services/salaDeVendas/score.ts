@@ -51,7 +51,20 @@ export interface SinaisDoLead {
   faixaDeOrcamento?: string | null;
   /** Quantas mensagens o lead mandou. Engajamento observado, não declarado. */
   mensagensDoLead?: number | null;
-  /** É restaurante? `false` desqualifica — não é o público do produto. */
+  /**
+   * Vende comida ou bebida para consumo? `false` desqualifica.
+   *
+   * ⚠️ **O nome do campo é mais estreito que a regra, e isso já quase custou
+   * cliente.** Em 27/08/2026 o CEO corrigiu: *"o Foocci só atende restaurantes,
+   * bares e afins"*. Lendo só o nome, um extrator marcaria um **bar** como
+   * `false` — e bar é cliente. O universo é: restaurante, bar, boteco, pub,
+   * lanchonete, pizzaria, hamburgueria, cafeteria, padaria, açaí, food truck,
+   * marmitaria, delivery de comida. Fora: loja, salão, farmácia, oficina.
+   *
+   * O nome ficou porque é a coluna que já existe no banco e em telas; a
+   * definição que vale é esta, e é ela que está escrita na instrução da
+   * sondagem. Na dúvida sobre o ramo: `null`, nunca `false`.
+   */
   ehRestaurante?: boolean | null;
 }
 
@@ -94,15 +107,18 @@ export function calcularScore(sinais: SinaisDoLead): ResultadoDoScore {
   const fatores: FatorDoScore[] = [];
   const lacunas: string[] = [];
 
-  // ── Desqualificação: não é restaurante ──────────────────────────────────────
+  // ── Desqualificação: não vende comida ───────────────────────────────────────
   // Vem antes de tudo, e é a única regra que encerra a conta. Somar pontos de
   // urgência a quem não é do público seria produzir um lead "quente" que nenhum
   // vendedor deveria tocar.
+  //
+  // ⚠️ Ver a definição do campo: bar, boteco e padaria são público. Só cai aqui
+  // quem NÃO vende comida ou bebida — e a dúvida vale `null`, não `false`.
   if (sinais.ehRestaurante === false) {
     return {
       total: 0,
       temperatura: "DESQUALIFICADO",
-      fatores: [{ fator: "publico", observado: "não é restaurante", pontos: 0 }],
+      fatores: [{ fator: "publico", observado: "não vende comida nem bebida", pontos: 0 }],
       lacunas: [],
       versao: VERSAO_DA_REGUA,
     };
@@ -289,32 +305,51 @@ export async function pontuar(
   db: PrismaClient,
   params: { leadId: string; sinais: SinaisDoLead; agora?: Date },
 ): Promise<ResultadoDoScore> {
+  return db.$transaction((tx) => escreverOScore(tx, params));
+}
+
+/**
+ * As três escritas do score, SEM abrir transação.
+ *
+ * ── POR QUE ELA EXISTE SEPARADA ─────────────────────────────────────────────
+ *
+ * O TA qualifica o lead **dentro** da transação que o webhook já abriu para
+ * declarar a identidade ao RLS. Chamar `pontuar` de lá tentaria abrir uma
+ * transação dentro de outra, e o Prisma não aninha: quebraria em produção, no
+ * meio de um atendimento, e o rastro seria um erro obscuro de driver.
+ *
+ * A atomicidade não se perde — ela muda de dono. `pontuar` abre a sua; o TA usa
+ * a que já está aberta. As três escritas continuam indivisíveis nos dois
+ * caminhos.
+ */
+export async function escreverOScore(
+  tx: Cliente,
+  params: { leadId: string; sinais: SinaisDoLead; agora?: Date },
+): Promise<ResultadoDoScore> {
   const r = calcularScore(params.sinais);
   const agora = params.agora ?? new Date();
 
-  await db.$transaction(async (tx) => {
-    await tx.leadScoreFator.deleteMany({ where: { leadId: params.leadId } });
+  await tx.leadScoreFator.deleteMany({ where: { leadId: params.leadId } });
 
-    if (r.fatores.length) {
-      await tx.leadScoreFator.createMany({
-        data: r.fatores.map((f) => ({
-          leadId: params.leadId,
-          fator: f.fator,
-          observado: f.observado,
-          pontos: f.pontos,
-          reguaVersao: r.versao,
-        })),
-      });
-    }
-
-    await tx.siteLead.update({
-      where: { id: params.leadId },
-      data: {
-        score: r.total,
-        scoreAt: r.total === null ? null : agora,
-        temperatura: r.temperatura,
-      },
+  if (r.fatores.length) {
+    await tx.leadScoreFator.createMany({
+      data: r.fatores.map((f) => ({
+        leadId: params.leadId,
+        fator: f.fator,
+        observado: f.observado,
+        pontos: f.pontos,
+        reguaVersao: r.versao,
+      })),
     });
+  }
+
+  await tx.siteLead.update({
+    where: { id: params.leadId },
+    data: {
+      score: r.total,
+      scoreAt: r.total === null ? null : agora,
+      temperatura: r.temperatura,
+    },
   });
 
   return r;
