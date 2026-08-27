@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { problemaComASenha, MINIMO_DE_CARACTERES } from "@/services/organizacao/senhaEscolhida";
 
 const ROTA = "/api/admin/pessoas";
 
@@ -55,6 +56,8 @@ interface Criada {
   email: string;
   papel: string;
   senha: string;
+  /** Digitada por quem criou, ou sorteada pela casa. Muda o texto do cartão. */
+  foiEscolhida: boolean;
   trocouSenha: boolean;
 }
 
@@ -75,6 +78,11 @@ export function PessoasClient() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [criada, setCriada] = useState<Criada | null>(null);
+  // Vazio = a casa sorteia. É o padrão de propósito: quem cria dez acessos de
+  // uma vez não quer inventar dez senhas, e senha inventada em série é a mais
+  // fraca que existe ("Foocci1", "Foocci2"...).
+  const [senha, setSenha] = useState("");
+  const [verSenha, setVerSenha] = useState(false);
   const [copiou, setCopiou] = useState(false);
   const [mexendo, setMexendo] = useState<string | null>(null);
 
@@ -105,6 +113,11 @@ export function PessoasClient() {
     };
   }, [tentativa]);
 
+  // ⚠️ Só avisa depois que a pessoa digitou alguma coisa: campo vazio significa
+  // "sorteia pra mim", que é um caminho válido — reclamar dele seria transformar
+  // o padrão em erro.
+  const problemaDaSenha = senha.length > 0 ? problemaComASenha(senha, { nome, email }) : null;
+
   async function criar(e: React.FormEvent) {
     e.preventDefault();
     if (salvando) return;
@@ -118,7 +131,7 @@ export function PessoasClient() {
       const r = await fetch(ROTA, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, email, papel, departamentos: ["vendas"] }),
+        body: JSON.stringify({ nome, email, papel, senha, departamentos: ["vendas"] }),
       });
       const j = (await r.json()) as { ok: boolean; data?: Criada; error?: string };
 
@@ -129,6 +142,7 @@ export function PessoasClient() {
       setCriada(j.data);
       setNome("");
       setEmail("");
+      setSenha("");
       recarregar();
     } catch {
       setErro("Sem resposta do servidor.");
@@ -222,8 +236,12 @@ export function PessoasClient() {
             {tipoDe(criada.papel)?.rotulo ?? criada.papel}
           </p>
 
+          {/* ⚠️ O texto muda conforme a senha foi sorteada ou digitada. "Aparece
+              uma vez só" é verdade para a sorteada e mentira para a escolhida —
+              e uma tela que avisa de um perigo que não existe treina a pessoa a
+              ignorar o próximo aviso, que pode ser real. */}
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-400">
-            A senha — ela aparece uma vez só
+            {criada.foiEscolhida ? "A senha que você escolheu" : "A senha — ela aparece uma vez só"}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <code className="select-all rounded-lg bg-gray-950 px-3 py-2 text-base font-semibold tracking-wide text-white">
@@ -239,8 +257,9 @@ export function PessoasClient() {
             </button>
           </div>
           <p className="mt-2 max-w-[62ch] text-xs leading-relaxed text-emerald-200/70">
-            Não fica guardada em lugar nenhum. Passe para a pessoa agora. Se perder,
-            crie de novo com o mesmo e-mail — a senha é trocada e a antiga para de valer.
+            {criada.foiEscolhida
+              ? "Guardada só como código embaralhado — nem o sistema consegue lê-la de volta. Para trocar, é só cadastrar de novo com o mesmo e-mail."
+              : "Não fica guardada em lugar nenhum. Passe para a pessoa agora. Se perder, crie de novo com o mesmo e-mail — a senha é trocada e a antiga para de valer."}
           </p>
         </div>
       )}
@@ -341,6 +360,46 @@ export function PessoasClient() {
             className="mt-1 w-full rounded-xl border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-white outline-none focus:border-gray-600"
           />
 
+          {/* ── A SENHA ──────────────────────────────────────────────────────
+              Pedido do CEO em 27/08/2026: poder escolher, porque senha sorteada
+              é impossível de guardar e acaba num post-it.
+
+              Vazio continua sorteando de propósito — quem cria dez acessos numa
+              tarde não quer inventar dez senhas, e senha inventada em série é a
+              mais fraca que existe ("Foocci1", "Foocci2"...).                */}
+          <label className="mt-3 block text-xs font-semibold text-gray-400" htmlFor="senha">
+            Senha{" "}
+            <span className="font-normal text-gray-500">
+              — deixe vazio para o sistema sortear uma
+            </span>
+          </label>
+          <div className="mt-1 flex gap-2">
+            <input
+              id="senha"
+              type={verSenha ? "text" : "password"}
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              autoComplete="new-password"
+              placeholder={`no mínimo ${MINIMO_DE_CARACTERES} caracteres`}
+              className={`w-full rounded-xl border bg-gray-950 px-3 py-2 text-sm text-white outline-none ${
+                problemaDaSenha ? "border-red-800 focus:border-red-600" : "border-gray-800 focus:border-gray-600"
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setVerSenha((v) => !v)}
+              className="shrink-0 rounded-xl border border-gray-800 px-3 text-xs text-gray-300 hover:border-gray-600"
+            >
+              {verSenha ? "Ocultar" : "Ver"}
+            </button>
+          </div>
+          {/* O aviso aparece enquanto ela digita, e não depois do clique. Levar
+              um "não" no botão faz a pessoa recomeçar o formulário inteiro. */}
+          {problemaDaSenha && <p className="mt-1 text-xs text-red-400">{problemaDaSenha}</p>}
+          {!problemaDaSenha && senha.length > 0 && (
+            <p className="mt-1 text-xs text-emerald-400">Essa senha serve.</p>
+          )}
+
           <fieldset className="mt-4">
             <legend className="text-xs font-semibold text-gray-400">Tipo de acesso</legend>
             <div className="mt-2 flex flex-col gap-1.5">
@@ -408,7 +467,9 @@ export function PessoasClient() {
 
           <button
             type="submit"
-            disabled={salvando || !nome.trim() || !email.trim()}
+            // Não deixa enviar o que já se sabe que o servidor recusa: levar o "não"
+            // no clique faz a pessoa reabrir o formulário inteiro.
+            disabled={salvando || !nome.trim() || !email.trim() || Boolean(problemaDaSenha)}
             className="mt-4 w-full rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-200 disabled:opacity-50"
           >
             {salvando ? "Criando…" : "Criar acesso e mostrar a senha"}
