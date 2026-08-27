@@ -103,6 +103,22 @@ const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno|guardarSal
 // admin route that merely "forgets" the guard still fails the build.
 const ADMIN_GUARD_EXEMPT = new Map<string, string>([
   [
+    "admin/pessoas/route.ts",
+    "a área de RH: cria, lista e CORTA acesso de gente. Faz autorização própria e " +
+      "MAIS ESTREITA que a guarda comum: exige `ADMIN_SECRET` ou sessão de " +
+      "MASTER_CEO — nem o diretor entra. " +
+      "A estreiteza é a decisão: quem cria acesso ESCOLHE O PAPEL, e portanto pode " +
+      "criar outro CEO. A guarda genérica aceitaria qualquer sessão de admin, e " +
+      "isso transformaria esta rota na porta pela qual qualquer pessoa do " +
+      "administrativo vira dona da casa. " +
+      "O `ADMIN_SECRET` continua valendo porque é por ele que o primeiro CEO nasce; " +
+      "sem isso a casa começa trancada por fora. Não abre superfície nova: quem tem " +
+      "o segredo já abre a empresa inteira. " +
+      "O PATCH desativa (`isActive: false`) e nunca apaga — o nome de quem atendeu " +
+      "cada cliente tem de sobreviver à saída da pessoa — e recusa cortar o último " +
+      "CEO ativo, que seria trancar a casa por fora com todo mundo lá dentro.",
+  ],
+  [
     "admin/session/route.ts",
     "login de admin: valida o ADMIN_SECRET cru e EMITE o cookie; não pode exigir a sessão que ela mesma cria.",
   ],

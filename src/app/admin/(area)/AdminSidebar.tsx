@@ -141,6 +141,9 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
     {
       title: "Sistema",
       items: [
+        // Quem entra no sistema e com que poderes. Fica em Sistema, ao lado de
+        // Credenciais, porque é da mesma natureza: quem tem a chave de quê.
+        { href: "/admin/pessoas",        label: "Pessoas e acessos", icon: "🪪" },
         { href: "/admin/assinaturas",    label: "Assinaturas",       icon: "💳" },
         { href: "/admin/credenciais",    label: "Credenciais",       icon: "🔒" },
         { href: "/admin/meta",           label: "Aplicativo Meta",   icon: "🔑" },
