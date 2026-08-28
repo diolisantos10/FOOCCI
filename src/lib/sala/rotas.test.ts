@@ -134,6 +134,15 @@ describe("as abas continuam fechando por papel", () => {
     expect(dele).toContain("Funil");
   });
 
+  it("⭐ o vendedor alcança o Cadastro frio — foi para ele que a tela foi pedida", () => {
+    // O pedido do CEO em 28/08/2026 foi textual: "colocar os AGENTES para
+    // alimentar cadastros frios pelo navegador ao invés de usar o Google
+    // Drive". Uma aba visível só para a chefia devolveria a planilha ao Drive
+    // no dia seguinte — e o cadastro voltaria a entrar sem origem declarada.
+    expect(rotulos("AGENTE_HUMANO")).toContain("Cadastro frio");
+    expect(rotulos("MASTER_CEO")).toContain("Cadastro frio");
+  });
+
   it("criar acesso é só do dono", () => {
     expect(rotulos("MASTER_CEO")).toContain("Criar acesso");
     expect(rotulos("DIRETOR_FOOCCI")).toContain("Criar acesso");

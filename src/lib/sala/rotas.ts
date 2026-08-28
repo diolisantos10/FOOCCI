@@ -47,6 +47,15 @@ export const ROTAS = {
   funil: `${COMERCIAL}/funil`,
   agentes: `${COMERCIAL}/agentes`,
   precos: `${COMERCIAL}/precos`,
+  /**
+   * O cadastro frio — a lista que vinha do Google Drive.
+   *
+   * Não é `/leads` nem `/contatos`: os dois nomes descrevem a base inteira, e
+   * esta tela não mostra base nenhuma. Ela só ALIMENTA, e alimenta um tipo
+   * específico — o contato que ninguém pediu para ser contatado, e que por isso
+   * precisa declarar de onde veio.
+   */
+  frios: `${COMERCIAL}/frios`,
   ensaio: `${COMERCIAL}/ensaio`,
   /**
    * Os números de quem está olhando — e **não** o painel do gerente.
@@ -101,6 +110,11 @@ const PARA_TODOS: readonly Aba[] = [
   { href: ROTAS.filas, rotulo: "Filas" },
   { href: ROTAS.conversas, rotulo: "Conversas" },
   { href: ROTAS.funil, rotulo: "Funil" },
+  // O cadastro frio fica para a Sala inteira, o SDR incluído: alimentar a base
+  // é o trabalho dele, e foi exatamente esse o pedido do CEO — "colocar os
+  // agentes para alimentar cadastros frios pelo navegador". Uma aba escondida
+  // do vendedor devolveria a planilha ao Google Drive no dia seguinte.
+  { href: ROTAS.frios, rotulo: "Cadastro frio" },
   // Os números da própria pessoa. Fica em `PARA_TODOS` porque não há de quem
   // esconder: são os dela. O CEO abre e vê os dele, que é o que faz sentido —
   // os números do time inteiro ele tem no Painel, ao lado.
