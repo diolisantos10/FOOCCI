@@ -15,15 +15,28 @@ import {
   resumoDoTexto,
   janelaDe24h,
   marcarComoLidas,
+  explicarRecusaDeSaida,
 } from "./conversa";
 
 const AGORA = new Date("2026-08-25T12:00:00Z");
 
-function bancoQueAceita() {
+/** Uma hora antes de AGORA: o lead escreveu, a janela de 24h está aberta. */
+const HA_UMA_HORA = new Date("2026-08-25T11:00:00Z");
+/** Dois dias antes: ele escreveu um dia, a janela fechou. */
+const HA_DOIS_DIAS = new Date("2026-08-23T12:00:00Z");
+
+/**
+ * @param ultimaEntradaEm quando o lead escreveu pela última vez. `null` = ele
+ *   nunca escreveu, que é o estado de todo lead numa abordagem fria.
+ */
+function bancoQueAceita(ultimaEntradaEm: Date | null = HA_UMA_HORA) {
   return {
     leadMensagem: {
       create: vi.fn().mockResolvedValue({ id: "m1" }),
       findUnique: vi.fn(),
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(ultimaEntradaEm ? { ocorreuEm: ultimaEntradaEm } : null),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     siteLead: {
@@ -144,6 +157,127 @@ describe("uma mensagem que sai", () => {
     const db = bancoQueAceita();
     const r = await registrarSaida(db as never, { leadId: "l1", texto: "   ", autor: "IA" });
     expect(r).toEqual({ ok: false, causa: "semTexto" });
+  });
+});
+
+describe("⭐⭐ a janela de 24h é TRAVA, não aviso", () => {
+  /*
+    Achado em 28/08/2026: `janelaDe24h` existia e estava testada, e a rota
+    apenas a INFORMAVA na tela. Nada recusava.
+
+    Na abordagem de leads isso quebra tudo, e quebra em silêncio: todo lead
+    abordado é lead que não escreveu hoje. O texto livre entraria na fila como
+    PENDENTE, a Meta recusaria, e o time leria "o sistema não enviou".
+  */
+
+  it("⭐⭐ lead que NUNCA escreveu não recebe texto livre — é o caso da abordagem", async () => {
+    const db = bancoQueAceita(null);
+    const r = await registrarSaida(db as never, {
+      leadId: "l1", texto: "Oi! Vi que você tem um bar…", autor: "HUMANO",
+      autorUserId: "u1", agora: AGORA,
+    });
+
+    expect(r).toEqual({ ok: false, causa: "janelaFechada", motivo: "nuncaFalou" });
+    expect(db.leadMensagem.create, "gravou uma mensagem que não pode sair")
+      .not.toHaveBeenCalled();
+  });
+
+  it("⭐ conversa que esfriou também fecha, e o motivo é outro", async () => {
+    // Os dois motivos existem separados porque pedem coisas diferentes de quem
+    // lê a tela: um é primeiro contato, o outro é reabrir conversa parada.
+    const db = bancoQueAceita(HA_DOIS_DIAS);
+    const r = await registrarSaida(db as never, {
+      leadId: "l1", texto: "E aí, pensou?", autor: "IA", agora: AGORA,
+    });
+
+    expect(r).toEqual({ ok: false, causa: "janelaFechada", motivo: "expirou" });
+    expect(db.leadMensagem.create).not.toHaveBeenCalled();
+  });
+
+  it("⭐⭐ MAS o modelo aprovado atravessa — é para isso que ele existe", async () => {
+    // A metade que faz a trava valer alguma coisa. Sem ela, uma trava que
+    // recusasse tudo passaria nos dois testes acima, e a abordagem ficaria
+    // impossível em vez de correta.
+    const db = bancoQueAceita(null);
+    const r = await registrarSaida(db as never, {
+      leadId: "l1", texto: "Olá, {{1}}!", autor: "SISTEMA",
+      templateNome: "abordagem_inicial", tipo: "TEMPLATE", agora: AGORA,
+    });
+
+    expect(r).toEqual({ ok: true, mensagemId: "m1" });
+    expect(db.leadMensagem.create.mock.calls[0]![0].data.templateNome)
+      .toBe("abordagem_inicial");
+  });
+
+  it("⭐ o nome do modelo sozinho já basta — não se exige as duas marcas juntas", async () => {
+    // `templateNome` e `tipo: TEMPLATE` nomeiam a mesma coisa, e o chamador usa
+    // ora um, ora outro. Exigir os dois juntos recusaria envio legítimo, e é o
+    // tipo de rigor que ninguém depura de madrugada.
+    const db = bancoQueAceita(null);
+    const r = await registrarSaida(db as never, {
+      leadId: "l1", texto: "Olá!", autor: "SISTEMA",
+      templateNome: "abordagem_inicial", agora: AGORA,
+    });
+
+    expect(r.ok).toBe(true);
+  });
+
+  it("⭐ com a janela ABERTA o texto livre passa normalmente", async () => {
+    // A outra metade: a trava não pode atrapalhar a conversa que está viva.
+    const db = bancoQueAceita(HA_UMA_HORA);
+    const r = await registrarSaida(db as never, {
+      leadId: "l1", texto: "Claro! O plano Crescimento é…", autor: "IA", agora: AGORA,
+    });
+
+    expect(r.ok).toBe(true);
+  });
+
+  it("⭐ a recusa chega ao vendedor em português, não em palavra de programador", () => {
+    // A rota devolvia `r.causa` cru: o vendedor lia "janelaFechada" na tela.
+    // Palavra de programador no lugar onde ele precisa saber o que FAZER é a
+    // mesma falha de sempre, só que com nome mais bonito.
+    const recusas = [
+      { ok: false, causa: "semTexto" },
+      { ok: false, causa: "humanoSemAutor" },
+      { ok: false, causa: "janelaFechada", motivo: "nuncaFalou" },
+      { ok: false, causa: "janelaFechada", motivo: "expirou" },
+    ] as const;
+
+    for (const r of recusas) {
+      const frase = explicarRecusaDeSaida(r);
+      expect(frase.length, `"${r.causa}" ficou sem frase`).toBeGreaterThan(20);
+      // Nenhum nome interno vaza para a tela.
+      for (const palavra of ["janelaFechada", "semTexto", "humanoSemAutor", "null", "undefined"]) {
+        expect(frase, `"${palavra}" vazou na frase de "${r.causa}"`).not.toContain(palavra);
+      }
+    }
+  });
+
+  it("⭐ e as duas frases da janela dizem coisas DIFERENTES", () => {
+    // Se as duas fossem iguais, os dois motivos existiriam à toa. Quem nunca
+    // escreveu precisa de primeiro contato; quem esfriou precisa de reabertura.
+    const nunca = explicarRecusaDeSaida({ ok: false, causa: "janelaFechada", motivo: "nuncaFalou" });
+    const velha = explicarRecusaDeSaida({ ok: false, causa: "janelaFechada", motivo: "expirou" });
+
+    expect(nunca).not.toBe(velha);
+    expect(nunca).toContain("nunca escreveu");
+    expect(velha).toContain("24 horas");
+  });
+
+  it("⭐ a trava lê a última entrada SOZINHA — quem chama não a informa", async () => {
+    // O ponto do desenho: se a janela viesse por parâmetro, um chamador novo
+    // poderia esquecer de passá-la e a trava sumiria sem ninguém notar. Aqui
+    // não existe caminho que grave saída sem antes olhar a entrada.
+    const db = bancoQueAceita(null);
+    await registrarSaida(db as never, {
+      leadId: "l1", texto: "Oi", autor: "IA", agora: AGORA,
+    });
+
+    expect(db.leadMensagem.findFirst).toHaveBeenCalledTimes(1);
+    expect(db.leadMensagem.findFirst.mock.calls[0]![0].where).toEqual({
+      leadId: "l1",
+      direcao: "ENTRADA",
+    });
   });
 });
 

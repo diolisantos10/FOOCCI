@@ -192,7 +192,15 @@ export interface MensagemParaEnviar {
 export type ResultadoDeSaida =
   | { ok: true; mensagemId: string }
   | { ok: false; causa: "semTexto" }
-  | { ok: false; causa: "humanoSemAutor" };
+  | { ok: false; causa: "humanoSemAutor" }
+  /**
+   * Texto livre com a janela de 24h fechada. Fora dela, só modelo aprovado sai.
+   *
+   * O motivo vem junto porque as duas metades pedem coisas diferentes de quem
+   * lê: `nuncaFalou` é abordagem — o primeiro contato TEM de ser modelo;
+   * `expirou` é uma conversa que esfriou, e o modelo serve para reabri-la.
+   */
+  | { ok: false; causa: "janelaFechada"; motivo: "nuncaFalou" | "expirou" };
 
 /**
  * Registra uma mensagem de saída como PENDENTE, antes de tentar entregar.
@@ -203,6 +211,25 @@ export type ResultadoDeSaida =
  * gravação produz o pior estado possível: o cliente recebeu, e o sistema não
  * sabe. O vendedor manda de novo. Gravando antes, o pior caso é uma linha
  * PENDENTE que nunca saiu — visível, corrigível, e honesta.
+ *
+ * ── ⚠️ POR QUE A JANELA DE 24h É CONFERIDA AQUI, E NÃO NA TELA ──────────────
+ *
+ * Achado em 28/08/2026, na véspera de começar a abordar leads: `janelaDe24h`
+ * existia, estava testada, e **a rota só a INFORMAVA**. Ninguém recusava nada.
+ *
+ * O estrago seria exatamente na abordagem: todo lead abordado é lead que não
+ * escreveu hoje — janela fechada, ou nunca aberta. O texto livre entraria na
+ * fila como PENDENTE, a Meta recusaria, e o time leria "o sistema não enviou"
+ * sem nunca entender por quê. É a falha que o comentário de `janelaDe24h` diz,
+ * com todas as letras, que não pode acontecer.
+ *
+ * A trava mora no serviço e **lê a última entrada por conta própria**, em vez
+ * de receber a janela de quem chama. Recebê-la seria confiar no chamador — e a
+ * regra desta casa é que, para o que causa dano real, se exige o mecanismo e
+ * não a boa intenção. Um chamador novo, amanhã, não tem como esquecer.
+ *
+ * O preço é uma consulta a mais por mensagem que sai. É barato: o caminho já
+ * faz duas escritas, e a alternativa é mensagem que não chega.
  */
 export async function registrarSaida(
   db: Cliente,
@@ -217,6 +244,23 @@ export async function registrarSaida(
   if (m.autor === "HUMANO" && !m.autorUserId) return { ok: false, causa: "humanoSemAutor" };
 
   const agora = m.agora ?? new Date();
+
+  // Modelo aprovado atravessa a janela fechada — é para isso que ele existe.
+  // A condição olha as DUAS marcas porque as duas nomeiam a mesma coisa e o
+  // chamador usa ora uma, ora outra: exigir as duas juntas transformaria um
+  // envio legítimo em recusa, e é o tipo de rigor que ninguém depura às 3h.
+  const ehModelo = Boolean(m.templateNome) || m.tipo === "TEMPLATE";
+
+  if (!ehModelo) {
+    const ultimaEntrada = await db.leadMensagem.findFirst({
+      where: { leadId: m.leadId, direcao: "ENTRADA" },
+      orderBy: { ocorreuEm: "desc" },
+      select: { ocorreuEm: true },
+    });
+
+    const janela = janelaDe24h(ultimaEntrada?.ocorreuEm ?? null, agora);
+    if (!janela.aberta) return { ok: false, causa: "janelaFechada", motivo: janela.motivo };
+  }
 
   const criada = await db.leadMensagem.create({
     data: {
@@ -492,4 +536,36 @@ export function janelaDe24h(
   if (agora < fechaEm) return { aberta: true, fechaEm };
 
   return { aberta: false, motivo: "expirou", ultimaEm: ultimaEntradaEm };
+}
+
+/**
+ * A recusa dita em português, para a tela do vendedor.
+ *
+ * ── POR QUE ELA MORA AQUI E NÃO NA ROTA ─────────────────────────────────────
+ *
+ * A rota devolvia `r.causa` cru, e o vendedor lia **"janelaFechada"** na tela.
+ * Uma palavra de programador no lugar onde ele precisa saber o que fazer é a
+ * mesma falha que a regra existe para evitar — só que agora com um nome mais
+ * bonito. Ele não sabe o que é uma janela; sabe o que é "ele precisa te
+ * responder primeiro".
+ *
+ * A frase fica ao lado da regra porque toda porta nova — rota, tela, cadência,
+ * a que ainda não existe — vai precisar da mesma explicação, e duas versões da
+ * mesma frase divergem como duas versões de qualquer outra coisa.
+ */
+export function explicarRecusaDeSaida(r: Extract<ResultadoDeSaida, { ok: false }>): string {
+  switch (r.causa) {
+    case "semTexto":
+      return "A mensagem está vazia.";
+    case "humanoSemAutor":
+      return "Não deu para identificar quem está enviando. Entre de novo e tente outra vez.";
+    case "janelaFechada":
+      return r.motivo === "nuncaFalou"
+        ? "Este contato nunca escreveu para a gente, então o WhatsApp não deixa " +
+          "mandar mensagem escrita na hora. O primeiro contato tem que ser por " +
+          "um modelo aprovado."
+        : "Faz mais de 24 horas que este contato não escreve, e o WhatsApp fecha " +
+          "a conversa depois desse prazo. Para reabrir, use um modelo aprovado — " +
+          "depois que ele responder, dá para escrever normalmente.";
+  }
 }
