@@ -225,6 +225,19 @@ describe("o medidor nunca é mais destrutivo que o problema que evita", () => {
     await vi.waitFor(() => expect(avisos).toHaveBeenCalled(), { timeout: 1000 });
   });
 
+  it("`registrarUsoDoMotor` NUNCA rejeita — nem com entrada quebrada", async () => {
+    /*
+      A metade que faltava, achada por mutação: tirar o try/catch de dentro de
+      `registrarUsoDoMotor` não derrubava nenhum teste, porque o `.catch` do
+      disparo em segundo plano cobria o caminho do dispatcher. Mas a função é
+      EXPORTADA — um chamador futuro que a espere receberia a exceção que ela
+      promete nunca ter. O contrato é da função, não só do disparo.
+    */
+    const entradaQuebrada = { model: "gpt-4o-mini", latencyMs: 1, success: true } as never;
+    await expect(registrarUsoDoMotor(entradaQuebrada)).resolves.toBeUndefined();
+    expect(avisos).toHaveBeenCalled();
+  });
+
   it("a resposta volta ANTES de o registro terminar — o cliente não espera o INSERT", async () => {
     let liberar: (() => void) | null = null;
     bancoFalso.prisma.aIInteractionLog.create.mockImplementation(

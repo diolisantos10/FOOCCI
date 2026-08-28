@@ -242,8 +242,16 @@ describe("as afirmações que a Sala escreve na tela continuam verdadeiras", () 
       A metade que passa: os dois escritores legítimos de hoje — o fluxo de
       pedido do Garçom e o medidor do dispatcher do Brain — continuam ali.
     */
+    /*
+      `semComentarios` não é zelo: sem ele, um COMENTÁRIO que cite
+      `AIInteractionLogger.log(` faz o arquivo entrar na lista sem escrever nada
+      — e, pior, faz um arquivo que DEIXOU de escrever continuar aparecendo como
+      escritor. Foi exatamente o que uma mutação pegou em 28/08/2026: trocar a
+      chamada por um apelido (`registrador.log`) escondia o escritor do detector,
+      e o teste passava porque o comentário do arquivo casava com a regex.
+    */
     const chamadas = arquivosDeCodigo(path.join(RAIZ, "src")).filter((f) =>
-      /AIInteractionLogger\.log\(/.test(readFileSync(f, "utf8")),
+      /AIInteractionLogger\.log\(/.test(semComentarios(readFileSync(f, "utf8"))),
     );
     expect(chamadas.map((f) => path.relative(RAIZ, f)).sort()).toEqual([
       "src/services/ai/AIOrderService.ts",
@@ -257,7 +265,7 @@ describe("as afirmações que a Sala escreve na tela continuam verdadeiras", () 
       logger pode chamar `aIInteractionLog.create`.
     */
     const escritoresDiretos = arquivosDeCodigo(path.join(RAIZ, "src")).filter((f) =>
-      /aIInteractionLog\.create\(/.test(readFileSync(f, "utf8")),
+      /aIInteractionLog\.create\(/.test(semComentarios(readFileSync(f, "utf8"))),
     );
     expect(escritoresDiretos.map((f) => path.relative(RAIZ, f))).toEqual([
       "src/services/ai/AIInteractionLogger.ts",
