@@ -139,10 +139,14 @@ export function lerColagem(texto: string): LinhaLida[] {
 
   return texto
     .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((bruto, i): LinhaLida => {
-      const numero = i + 1;
+    // ⚠️ O número é fixado ANTES de descartar as vazias, e isso importa. Numerar
+    // depois faz a recusa dizer "linha 5" apontando para a 7 do textarea — e
+    // quem colou 200 linhas da planilha vai procurar o erro no lugar errado.
+    // Uma mensagem de erro que manda a pessoa para a linha errada é pior que
+    // não dizer o número.
+    .map((bruto, i) => ({ bruto: bruto.trim(), numero: i + 1 }))
+    .filter((l) => l.bruto !== "")
+    .map(({ bruto, numero }): LinhaLida => {
       const [nome = "", whatsapp = "", estabelecimento = "", cidade = ""] = colunas(bruto);
 
       if (!nome) return { numero, bruto, linha: null, digitos: null, problema: "semNome" };

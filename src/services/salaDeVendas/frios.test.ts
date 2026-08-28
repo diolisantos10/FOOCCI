@@ -280,7 +280,12 @@ describe("o texto colado vira linhas conferidas", () => {
     );
 
     expect(r).toHaveLength(2);
-    expect(r.map((l) => l.numero)).toEqual([1, 2]);
+    // ⚠️ 1 e 4, não 1 e 2. As vazias não viram linha, mas **contam na
+    // numeração**, porque o número serve para a pessoa achar a linha no
+    // textarea dela. Este teste afirmava [1, 2] até 28/08/2026, e a
+    // expectativa é que estava errada: com ela, a recusa da segunda linha boa
+    // mandaria a pessoa para a linha 2, que está em branco.
+    expect(r.map((l) => l.numero)).toEqual([1, 4]);
     expect(r.every((l) => l.problema === null)).toBe(true);
   });
 
@@ -656,5 +661,38 @@ describe("a gravação dos leads frios", () => {
     );
 
     expect(Object.keys(db)).toEqual(["siteLead", "siteLeadInteraction"]);
+  });
+});
+
+describe("⭐ o número da linha aponta para o que a pessoa vê", () => {
+  it("⭐ linha em branco no meio NÃO desloca a numeração", () => {
+    /*
+      Achado em 28/08/2026, depois de a funcionalidade estar pronta: o número
+      era o índice DEPOIS de descartar as vazias. Numa colagem com uma linha em
+      branco no meio — que toda planilha tem — a recusa dizia "linha 3" e a
+      pessoa ia procurar o erro na linha 3 do textarea, onde não há erro nenhum.
+
+      Mensagem de erro que manda a pessoa para o lugar errado é pior que
+      mensagem sem número.
+    */
+    const r = lerColagem(
+      [
+        "Marina\t11988887777\tBar do Zé\tSP", // linha 1
+        "", //                                   linha 2 — em branco
+        "Sem telefone", //                       linha 3 — a que falha
+      ].join("\n"),
+    );
+
+    expect(r).toHaveLength(2);
+    expect(r[1]!.problema).toBe("semWhatsapp");
+    expect(r[1]!.numero, "a recusa apontou para a linha errada").toBe(3);
+  });
+
+  it("⭐ e sem linhas em branco a contagem continua igual", () => {
+    // A metade que passa: a correção não podia deslocar o caso comum.
+    const r = lerColagem("Marina\t11988887777\nJoão\t11977776666");
+
+    expect(r[0]!.numero).toBe(1);
+    expect(r[1]!.numero).toBe(2);
   });
 });
