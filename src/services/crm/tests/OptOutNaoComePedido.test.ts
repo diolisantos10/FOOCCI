@@ -57,6 +57,14 @@ const FRASES: Array<{ frase: string; optOut: boolean; porque: string }> = [
   { frase: "pode cancelar",         optOut: false, porque: "tem outra palavra: é fala, não comando" },
   { frase: "preciso cancelar pedido", optOut: false, porque: "objeto do balcão explícito" },
   { frase: "quero cancelar o pedido", optOut: false, porque: "objeto do balcão explícito" },
+
+  // A irmã do mesmo defeito: `remover` é verbo de prato antes de ser verbo de
+  // lista. Entrou na classe ambígua por decisão do Diretor em 28/08 — consertar
+  // só `cancelar` seria consertar metade de uma família.
+  { frase: "remover",               optOut: true,  porque: "comando sozinho — é a mensagem inteira" },
+  { frase: "remover a cebola",      optOut: false, porque: "tem outras palavras: é o prato, não a lista" },
+  { frase: "remover o item",        optOut: false, porque: "objeto do balcão explícito" },
+  { frase: "pode remover a cebola", optOut: false, porque: "tem outras palavras: é o prato, não a lista" },
 ];
 
 describe("detectOptOutIntent — a tabela de frases do restaurante", () => {
@@ -109,13 +117,12 @@ describe("detectOptOutIntent — na dúvida, NÃO descadastra", () => {
   });
 
   /*
-    ── BURACO CONHECIDO, dito em voz alta ───────────────────────────────────
-    "remover a cebola" (3 tokens, nenhum objeto da lista) ainda vira opt-out.
-    O verbo `remover` continua com a regra antiga de ≤3 palavras porque o
-    pedido deste conserto era mexer em `cancelar` sem afrouxar nada; fechar
-    este buraco exigiria ou pôr `remover` na classe ambígua (e aí "remover
-    numero" deixaria de valer) ou listar nomes de ingrediente, que é infinito.
-    Fica registrado como dívida, não como comportamento desejado.
+    ── O CUSTO ACEITO desta regra, dito em voz alta ──────────────────────────
+    `remover numero` (2 tokens, sem o "meu") deixou de valer sozinho quando
+    `remover` foi para a classe ambígua. Quem escreve "remover meu numero" ou
+    "remover da lista" continua saindo pela frase explícita; quem escreve só
+    "remover numero" recebe mais uma mensagem e repete. É o lado barato do
+    erro — e o rodapé "responda SAIR" vai junto em toda campanha.
   */
 });
 
@@ -169,7 +176,7 @@ describe("caminho real — quem quer cancelar o PEDIDO continua atendido e na ba
 });
 
 describe("caminho real — quem pede silêncio de verdade sai da base e não é respondido", () => {
-  it.each(["PARAR", "SAIR", "STOP", "cancelar", "não quero receber mais mensagens"])(
+  it.each(["PARAR", "SAIR", "STOP", "cancelar", "remover", "não quero receber mais mensagens"])(
     "%p → opt-out gravado e a IA NÃO responde",
     async (frase) => {
       const r = await InboundGuardsService.apply({ ...ENTRADA, messageText: frase });
