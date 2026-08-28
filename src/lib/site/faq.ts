@@ -66,4 +66,34 @@ export const FAQS: readonly PerguntaDoSite[] = [
     q: "Preciso entender de tecnologia?",
     a: "Não. A tecnologia trabalha no bastidor. A experiência precisa ser simples para o dono, a equipe e o cliente.",
   },
+  /*
+    ⚠️ ENTRADA NOVA EM 28/08/2026 — E ELA CORRIGE UM BURACO QUE CUSTAVA VENDA.
+
+    As nove respostas acima dizem "restaurante" nove vezes e **bar nenhuma**.
+    Só que o CEO define o atendimento do Foocci como *"restaurantes, bares e
+    afins"* — ou seja, o site descrevia um público menor do que o real.
+
+    Duas coisas quebravam por causa disso, e as duas na véspera de começar a
+    abordar leads:
+
+      · O dono de bar que lê o site se autodesqualifica antes de falar com
+        alguém. Ninguém mede essa perda, porque ela acontece antes do primeiro
+        contato.
+      · O TA **não podia afirmar** que o Foocci atende bar. A base de verdade
+        dele é derivada do que está publicado, de propósito — então a pergunta
+        *"vocês atendem bar?"*, medida, voltava sem material nenhum, e ele
+        respondia "vou confirmar" para a pergunta mais fácil que existe.
+
+    O texto abaixo não promete recurso novo: repete o público que o CEO já
+    definiu e o mesmo enquadramento que as respostas acima já publicam.
+
+    ⚠️ Entrou no FIM da lista porque o id do item na base de verdade é
+    `faq-${índice}`. Inserir no meio renomearia os ids dos itens seguintes, e
+    esses ids são o que fica gravado em `LeadHandoff` como apoio da resposta —
+    ou seja, a trilha do que já foi dito passaria a apontar para outra coisa.
+  */
+  {
+    q: "O Foocci atende bar?",
+    a: "Sim. O Foocci atende restaurantes, bares e negócios de alimentação em geral. A proposta é a mesma: pedido direto, atendimento e relacionamento com o cliente.",
+  },
 ];

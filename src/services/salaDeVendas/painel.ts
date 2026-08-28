@@ -31,6 +31,7 @@ import { leadsComSlaEstourado } from "./distribuicao";
 import { followUpsVencidos, semProximaAcao } from "./followUp";
 import { taxaDeComparecimento } from "./agenda";
 import { desempenhoDe } from "./qa";
+import { cadernoDeLacunas, type CadernoDeLacunas } from "./lacunas";
 import { SEQUENCIA_FUNIL, ROTULO_ETAPA } from "@/services/foocci-crm/foocciCrmFunnel";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
@@ -405,6 +406,16 @@ export interface VisaoDoGerente {
   receita: Receita;
   perdas: MotivoDePerdaContado[];
   iaVsHumano: ComparativoIaHumano;
+  /**
+   * As perguntas que o agente não soube responder no período.
+   *
+   * Fica no painel do gerente, e não numa tela à parte, porque é o único lugar
+   * onde alguém já olha `porMotivo` e lê "metade dos handoffs é
+   * INFORMACAO_NAO_CONFIRMADA". Esse número diz o tamanho do buraco; esta lista
+   * diz **onde ele está** — e sem ela o gerente sabe que precisa completar a
+   * base de verdade sem saber com o quê.
+   */
+  lacunas: CadernoDeLacunas;
   periodo: { de: Date; ate: Date };
 }
 
@@ -421,18 +432,29 @@ export async function visaoDoGerente(
 ): Promise<VisaoDoGerente> {
   const agora = params.agora ?? new Date();
 
-  const [filas, time, espera, primeira, conversao, comparecimento, receita, perdas, comparativo] =
-    await Promise.all([
-      filasDoAgora(db, agora),
-      timeNoPainel(db),
-      esperaPorGente(db, agora),
-      tempoDePrimeiraResposta(db, params),
-      conversaoDoPeriodo(db, params),
-      taxaDeComparecimento(db, params),
-      receitaGanha(db, params),
-      motivosDePerda(db, params),
-      compararIaComHumano(db, params),
-    ]);
+  const [
+    filas,
+    time,
+    espera,
+    primeira,
+    conversao,
+    comparecimento,
+    receita,
+    perdas,
+    comparativo,
+    lacunas,
+  ] = await Promise.all([
+    filasDoAgora(db, agora),
+    timeNoPainel(db),
+    esperaPorGente(db, agora),
+    tempoDePrimeiraResposta(db, params),
+    conversaoDoPeriodo(db, params),
+    taxaDeComparecimento(db, params),
+    receitaGanha(db, params),
+    motivosDePerda(db, params),
+    compararIaComHumano(db, params),
+    cadernoDeLacunas(db, params),
+  ]);
 
   return {
     agora: filas,
@@ -444,6 +466,7 @@ export async function visaoDoGerente(
     receita,
     perdas,
     iaVsHumano: comparativo,
+    lacunas,
     periodo: { de: params.de, ate: params.ate },
   };
 }

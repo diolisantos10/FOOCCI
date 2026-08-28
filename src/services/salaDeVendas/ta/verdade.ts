@@ -42,6 +42,10 @@ import { PLANS } from "@/lib/site/plans";
 import { COMMISSION_RATES, COMMISSION_SOURCE, MARKETPLACE_NAME } from "@/lib/site/commissionRates";
 import { SERVICOS_A_PARTE, NOTA_FISCAL_A_PARTE, MAIS_DE_UMA_LOJA } from "@/lib/site/servicosAParte";
 import { tabelaPublicada, descontoPublicado } from "../precos";
+// ⚠️ A lista de palavras vazias mora em UM lugar. Ela já esteve duplicada aqui
+// e em `conhecimento.ts`, e a divergência não aparecia como erro: aparecia como
+// o agente achando material numa pergunta e não achando na irmã dela.
+import { palavras } from "./vocabulario";
 
 /** De onde a frase veio. Vai junto na resposta, para a Sala poder auditar. */
 export type FonteDaVerdade =
@@ -81,17 +85,6 @@ function normalizar(s: string): string {
  * de ser piso — foi exatamente assim que "pedido", presente em 21 dos 36 guias,
  * fazia "nota fiscal do pedido" casar com o guia errado.
  */
-const VAZIAS = new Set(
-  ("a o e de da do das dos em no na nos nas um uma uns umas para por com sem que " +
-    "se ao aos as os e ou mas como qual quais quanto quanta é sao são tem ter " +
-    "voce voces eu meu minha isso isto esse essa aqui la ja nao sim").split(" "),
-);
-
-function palavras(s: string): string[] {
-  return normalizar(s)
-    .split(" ")
-    .filter((p) => p.length > 2 && !VAZIAS.has(p));
-}
 
 /**
  * A base inteira, montada das fontes.
@@ -187,7 +180,26 @@ export function baseDeVerdade(): ItemDeVerdade[] {
   itens.push({
     id: "comissao-marketplace",
     fonte: "comissao-do-marketplace",
-    sobre: `quanto o ${MARKETPLACE_NAME} cobra de comissão marketplace taxa`,
+    // ── ⚠️ O CAMPO `sobre` É ÍNDICE, E ELE ESTAVA ESCRITO COMO BUSCA ────────
+    //
+    // Medido em 28/08/2026, véspera de começar a abordar leads:
+    //
+    //   "quanto o ifood cobra"                → achava
+    //   "quanto eu economizo saindo do ifood" → NÃO achava
+    //   "vale a pena sair do ifood"           → NÃO achava
+    //
+    // O primeiro é como se digita numa busca; os outros dois são como um dono de
+    // restaurante pergunta — e este é O argumento de venda da Foocci. O agente
+    // sabia a resposta e diria "não sei", sem ninguém descobrir por quê.
+    //
+    // A correção certa é aqui, no índice, e não na régua da busca: afrouxar a
+    // régua faria o TA responder sobre Colibri e Pix, que ele não conhece.
+    // **Nada do que ele AFIRMA muda** — `texto` continua idêntico, derivado da
+    // fonte publicada. O que muda é sob quais palavras o mesmo fato é
+    // encontrável.
+    sobre:
+      `quanto o ${MARKETPLACE_NAME} cobra de comissão marketplace taxa ` +
+      "economizo economia economizar sair saindo vale pena perco desconto aplicativo",
     texto:
       `Com entrega própria, a comissão fica em torno de ${pct(COMMISSION_RATES.own.rate)} ` +
       `(${COMMISSION_RATES.own.breakdown}). Com a entrega do marketplace, sobe para ` +
@@ -250,6 +262,42 @@ export interface Achado {
  *
  * A direção importa. Medir ao contrário premia item curto: um texto de cinco
  * palavras que casa duas parece ótimo, e não respondeu nada.
+ *
+ * ── ⚠️ ESTA RÉGUA É ESTRITA DE PROPÓSITO, E EU TENTEI AFROUXÁ-LA ────────────
+ *
+ * Em 28/08/2026 medi que ela pune quem fala naturalmente:
+ *
+ *   "quanto o ifood cobra"                 → 1,00 · responde
+ *   "quanto eu economizo saindo do ifood"  → 0,33 · NÃO responde
+ *
+ * Falha por um centésimo, e o segundo é como um dono de restaurante pergunta de
+ * verdade. Tentei corrigir tirando do denominador as palavras que a base não
+ * conhece ("economizo", "saindo"), e **dois testes caíram na hora**:
+ *
+ *   "vocês integram com o sistema Colibri?"  passou a achar material
+ *   "como funciona o pagamento por pix?"     passou a achar material
+ *
+ * Os dois **precisam** dar "não sei". A palavra que carrega a pergunta —
+ * Colibri, Pix — o corpus não conhece; o que casou foi "sistema" e "pagamento",
+ * contexto incidental. Responder ali é dar a entender que se conhece o Colibri,
+ * que é o defeito mais caro que esta função pode ter.
+ *
+ * Tentei separar os dois casos por raridade do termo (IDF) e **medi que não dá**:
+ * nesta base de 19 itens, "sistema" (peso 2,25) e "pagamento" (2,94) são tão
+ * raros quanto "ifood" (2,94). Sobreposição de palavras não distingue "a
+ * pergunta é sobre algo que eu conheço" de "casou por acaso numa palavra de
+ * apoio".
+ *
+ * **Então a régua fica estrita, e o limite fica escrito.** O custo é conhecido e
+ * é o menor dos dois: aqui se decide o que o TA pode AFIRMAR palavra por
+ * palavra. Uma afirmação errada sobre integração fecha negócio que explode na
+ * implantação; um "não sei" a mais faz o modelo responder pelo conhecimento —
+ * `falar.ts` dá essa chance justamente quando o motivo é
+ * `INFORMACAO_NAO_CONFIRMADA` — e, no pior caso, chama uma pessoa.
+ *
+ * ⚠️ O jeito certo de fechar o buraco do "economizo saindo do ifood" **não é
+ * mexer aqui**: é indexar o mesmo fato sob as palavras que o cliente usa, no
+ * campo `sobre` do item. Índice, não régua.
  */
 export const COBERTURA_MINIMA = 0.34;
 
@@ -273,3 +321,5 @@ export function buscarNaVerdade(pergunta: string, base = baseDeVerdade()): Achad
     .filter((a) => a.cobertura >= COBERTURA_MINIMA)
     .sort((a, b) => b.cobertura - a.cobertura);
 }
+
+

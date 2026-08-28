@@ -20,9 +20,15 @@
  *
  *   · **prazo de implantação** — não existe prazo publicado. Prometer um é o
  *     primeiro item da lista de proibidos da ficha;
- *   · **tipo de restaurante específico** (self service e afins) — não há fato
- *     publicado sobre quais tipos são atendidos. Inventar um "sim" fecha negócio
- *     e explode na implantação.
+ *   · **formato de operação específico** (self service e afins) — não há fato
+ *     publicado sobre quais formatos são atendidos. Inventar um "sim" fecha
+ *     negócio e explode na implantação.
+ *
+ * ⚠️ *Bar* saiu desta lista em 28/08/2026, e a diferença entre os dois casos é
+ * a regra inteira desta casa: bar deixou de ser palpite porque o CEO afirmou o
+ * público ("restaurantes, bares e afins") e o fato foi **publicado** no FAQ.
+ * Self service continua fora porque ninguém afirmou nada — e a ausência de
+ * informação não é informação.
  *
  * Elas estão na lista com a ausência DECLARADA. Um teste que só medisse o número
  * cheio empurraria alguém a preencher esses dois buracos com um palpite — que é
@@ -53,6 +59,13 @@ const PRECISA_SABER = [
   "quantos clientes recompram",
   "tem cupom de desconto",
   "funciona para pizzaria",
+  // ⭐ Entrou em 28/08/2026, e medindo: até esse dia voltava VAZIA. O CEO define
+  // o atendimento como "restaurantes, bares e afins", mas o site dizia
+  // "restaurante" nove vezes e bar nenhuma — então o TA não tinha o que
+  // afirmar sobre metade do próprio público, e a primeira pergunta de um dono
+  // de bar recebia "vou confirmar". A correção foi publicar o fato no FAQ.
+  "vocês atendem bar",
+  "vocês atendem bares",
   "tenho duas lojas, funciona",
   "quem coloca meu cardápio no sistema",
   "preciso comprar equipamento",

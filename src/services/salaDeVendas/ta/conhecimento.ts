@@ -33,6 +33,8 @@
  */
 
 import { MANUAL_V01_CONTENT } from "@/services/manual/manualV01Content";
+// Uma lista de palavras vazias para as duas buscas — ver `vocabulario.ts`.
+import { palavras } from "./vocabulario";
 
 /**
  * Os capítulos que um prospecto pode conhecer.
@@ -151,15 +153,6 @@ function normalizar(s: string): string {
     .trim();
 }
 
-const VAZIAS = new Set(
-  ("a o e de da do das dos em no na nos nas um uma uns umas para por com sem que " +
-    "se ao aos as os ou mas como qual quais quanto quanta e sao tem ter " +
-    "voce voces eu meu minha isso isto esse essa aqui la ja nao sim").split(" "),
-);
-
-function palavras(s: string): string[] {
-  return normalizar(s).split(" ").filter((p) => p.length > 2 && !VAZIAS.has(p));
-}
 
 /**
  * Quantos pedaços vão junto na pergunta.
@@ -169,6 +162,26 @@ function palavras(s: string): string[] {
  * piorar a resposta. Quem escolhe é a busca; quem redige é o modelo.
  */
 export const PEDACOS_POR_TURNO = 6;
+
+/**
+ * Todas as palavras que aparecem em algum lugar da base.
+ *
+ * Memorizada por base: `baseDeConhecimento()` devolve a mesma lista a cada
+ * turno, e varrer o Manual inteiro em toda pergunta é trabalho repetido à toa.
+ */
+const VOCABULARIOS = new WeakMap<object, Set<string>>();
+
+function vocabularioDa(base: PedacoDeConhecimento[]): Set<string> {
+  const guardado = VOCABULARIOS.get(base);
+  if (guardado) return guardado;
+
+  const vocabulario = new Set<string>();
+  for (const p of base) {
+    for (const t of palavras(`${p.secao} ${p.texto}`)) vocabulario.add(t);
+  }
+  VOCABULARIOS.set(base, vocabulario);
+  return vocabulario;
+}
 
 /**
  * O que a base tem sobre esta pergunta.
@@ -188,11 +201,28 @@ export function buscarNoConhecimento(
   const termos = palavras(pergunta);
   if (termos.length === 0) return [];
 
+  // ── ⚠️ AQUI O DENOMINADOR IGNORA O QUE A BASE NÃO CONHECE ────────────────
+  //
+  // E **só aqui**. Medido em 28/08/2026: dividir por todas as palavras da
+  // pergunta pune quem fala como gente — cada palavra a mais derruba a nota, e
+  // "quanto eu economizo saindo do ifood" reprovava enquanto "quanto o ifood
+  // cobra" passava. O primeiro é como um dono de restaurante pergunta.
+  //
+  // A mesma mudança em `buscarNaVerdade` foi TENTADA e revertida: lá ela fez
+  // "vocês integram com o sistema Colibri?" achar material, e aquilo decide o
+  // que o TA pode AFIRMAR. A diferença entre os dois arquivos é essa, e é toda
+  // a diferença: **isto aqui é contexto de leitura**. Mandar um parágrafo pouco
+  // relacionado junto não faz o modelo mentir — faz ele ignorar. Lá, afirmar com
+  // base fraca É mentir.
+  const vocabulario = vocabularioDa(base);
+  const pesam = termos.filter((t) => vocabulario.has(t));
+  if (pesam.length === 0) return [];
+
   return base
     .map((p) => {
       const texto = new Set(palavras(`${p.secao} ${p.texto}`));
-      const cobertos = termos.filter((t) => texto.has(t)).length;
-      return { p, nota: cobertos / termos.length };
+      const cobertos = pesam.filter((t) => texto.has(t)).length;
+      return { p, nota: cobertos / pesam.length };
     })
     .filter((x) => x.nota > 0)
     .sort((a, b) => b.nota - a.nota)
