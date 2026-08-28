@@ -1106,3 +1106,75 @@ meus**. Meus arquivos: 7 modificados + 5 de teste novos.
 Quantas campanhas em produção estão com pool salvo (e portanto NÃO pegam o rodízio
 de catálogo) — sem `ADMIN_SECRET`/`RAILWAY_TOKEN`. É o número que diz o alcance
 real desta mudança, e eu não o tenho. **Não estimei ganho de conversão.**
+
+---
+
+## 2026-08-28 · "cancelar" o PEDIDO deixava o cliente fora da base — e sem resposta
+
+**Branch** `claude/opt-out-nao-come-pedido` (worktree isolada, a partir de
+`origin/claude/remove-legacy-runner-q8iXa` @ `d24a0e3`) · commit `0aaa463`.
+
+**O defeito.** `detectOptOutIntent` (`src/services/crm/ContactSafetyService.ts`)
+tinha `cancelar` na mesma lista de `stop/sair/parar/descadastrar/remover`, e
+qualquer mensagem de até 3 palavras com uma dessas virava opt-out de LGPD. No
+balcão de restaurante, `quero cancelar`, `pode cancelar`, `cancelar meu pedido` e
+`preciso cancelar pedido` são conversa normal — e o efeito era duplo:
+`hasOptedOut=true` + `crmContactable=false` (sai da base do restaurante) e
+`aiMayRespond=false` no `InboundGuardsService` (fica sem resposta naquele turno).
+Erro silencioso: ninguém reclama do que não recebeu.
+
+**O conserto — só na detecção, o efeito não foi tocado.** Três regras, nesta
+ordem: (1) frase explícita de `OPT_OUT_PHRASES` em qualquer lugar → opt-out, como
+sempre; (2) objeto do balcão na mensagem (`ORDER_CONTEXT_WORDS`: pedido, entrega,
+item, conta, mesa, cupom…) **desliga** o caminho de palavra solta; (3) palavra
+solta — `cancelar` só quando é a mensagem INTEIRA (um token), o resto segue com a
+regra de ≤3 palavras.
+
+**O sinal escolhido, e por quê.** Não é o objeto, é **a presença de qualquer
+outra palavra**. O rodapé que a Foocci manda em toda campanha diz *"Para não
+receber mais ofertas, responda SAIR"*
+(`src/services/whatsapp/MetaTemplateProvisionService.ts:29`): opt-out de verdade
+chega como **comando de uma palavra**; quem cancela pedido escreve **frase**. A
+lista de objetos ficou como segunda trava, porque lista de palavra nunca fica
+completa e o sinal estrutural fica.
+
+**A assimetria está no código, não só no commit:** na dúvida NÃO descadastra.
+Deixar de marcar quem queria sair custa uma mensagem e a pessoa repete; marcar
+quem não pediu tira o cliente da base sem ele saber.
+
+**Cinco mutações rodadas** (commit antes, `git checkout --` depois; árvore limpa
+conferida): quebrar `parar` → reprova 6 testes, incluindo os pré-existentes;
+devolver o bug original → 5; remover a guarda de pedido → 2; afrouxar a regra
+ambígua para ≤3 → 5; tirar `crmContactable:false` do efeito → 6.
+
+**Dívida registrada dentro do teste:** `remover a cebola` (3 palavras, nenhum
+objeto da lista) ainda vira opt-out. Fechar isso exigiria pôr `remover` na classe
+ambígua — o que não estava no pedido — ou listar ingrediente, que é infinito.
+
+**Verificação.** `npx tsc --noEmit` exit 0. `npx vitest run src/services/crm
+src/services/foocci-sdr src/services/whatsapp/inbound` → 93 arquivos, 1356 testes,
+todos passando. Não rodei a bateria inteira do repositório.
+
+### 2026-08-28 · adendo — a dívida do `remover` foi PAGA no mesmo dia
+
+Decisão do Diretor: fechar pela saída (a). `remover` saiu de `OPT_OUT_KEYWORDS` e
+entrou em `AMBIGUOUS_OPT_OUT_KEYWORDS` — só vale como opt-out quando é a mensagem
+inteira. Commit `a3f035b`.
+
+Era a irmã do mesmo defeito: `remover a cebola`, `remover o item`, `pode remover a
+cebola` são frase de balcão e descadastravam pela regra de ≤3 palavras. A tabela do
+teste agora carrega as quatro frases do verbo, e o custo aceito está escrito no
+código e no teste: **`remover numero` (2 tokens, sem o "meu") deixa de valer
+sozinho** — o legítimo continua pelas frases explícitas (`remover meu numero`,
+`remover da lista`), que rodam antes e não contam palavra.
+
+**Mutações novas:** devolver `remover` para a classe inequívoca → reprova 3
+(`'remover a cebola' → optOut=false` e o caminho real dela); tirar `remover` das
+duas listas → reprova 4, incluindo o teste pré-existente
+`ContactSafetyService.test.ts > detects opt-out in remover`. **M1 conferida de
+novo** (quebrar `parar`) → continua reprovando 6: `PARAR`, `SAIR` e `STOP` não
+regrediram.
+
+**Verificação:** `npx tsc --noEmit` exit 0; `npx vitest run src/services/crm
+src/services/foocci-sdr src/services/whatsapp/inbound` → 93 arquivos, **1364**
+testes, todos passando.

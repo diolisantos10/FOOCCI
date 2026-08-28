@@ -384,9 +384,55 @@ function normalize(text: string): string {
     .trim();
 }
 
-/** Single-word commands that count as opt-out only when sent essentially alone. */
+/**
+ * Comandos inequívocos: valem como opt-out quando a mensagem é essencialmente a
+ * palavra (≤ 3 tokens). São os que o próprio sistema pede ou que não têm outra
+ * leitura possível num chat com restaurante.
+ */
 const OPT_OUT_KEYWORDS = new Set([
-  "stop", "sair", "parar", "cancelar", "descadastrar", "remover",
+  "stop", "sair", "parar", "descadastrar",
+]);
+
+/**
+ * Palavras que pedem silêncio numa lista E pedem outra coisa completamente
+ * diferente no balcão de um restaurante. Só valem como opt-out quando vêm
+ * **sozinhas na mensagem** — ver `detectOptOutIntent`.
+ *
+ * São duas, e são a mesma família de defeito:
+ *
+ * - **"cancelar"** — "quero cancelar", "pode cancelar", "cancelar meu pedido"
+ *   falam do PEDIDO, não da lista de mensagens.
+ * - **"remover"** — "remover a cebola", "remover o item", "pode remover a
+ *   cebola" falam do PRATO. Esta entrou depois, quando ficou claro que consertar
+ *   só o `cancelar` era consertar metade de uma família: imitação anda em bando.
+ *
+ * O rodapé que a Foocci manda em toda campanha
+ * (`MetaTemplateProvisionService.ts` — *"Para não receber mais ofertas, responda
+ * SAIR"*) **não pede nenhuma das duas**: quem quer sair da lista é instruído a
+ * mandar SAIR. O uso legítimo delas continua coberto pelas frases explícitas de
+ * `OPT_OUT_PHRASES` — "cancelar inscricao", "remover meu numero", "remover da
+ * lista" —, que rodam ANTES desta regra e não dependem de contagem de palavra.
+ *
+ * O custo aceito, dito por extenso: `remover numero` (2 tokens, sem "meu")
+ * deixa de valer sozinho. É o lado barato do erro — a pessoa repete, e o rodapé
+ * dizendo "responda SAIR" vai junto em toda campanha.
+ */
+const AMBIGUOUS_OPT_OUT_KEYWORDS = new Set([
+  "cancelar", "remover",
+]);
+
+/**
+ * Objetos do dia a dia do restaurante. Se a mensagem cita um deles, o verbo
+ * solto ("cancelar", "remover", "parar") tem dono — é o pedido, não a lista.
+ *
+ * Esta lista é um **piso, não um teto**: ela não precisa estar completa para o
+ * conserto funcionar (a regra da palavra sozinha já barra a maioria dos casos),
+ * e cada palavra nova aqui só empurra a decisão para o lado seguro.
+ */
+const ORDER_CONTEXT_WORDS = new Set([
+  "pedido", "pedidos", "compra", "compras", "entrega", "entregas", "delivery",
+  "item", "itens", "produto", "produtos", "conta", "mesa", "reserva", "reservas",
+  "agendamento", "cardapio", "comanda", "cupom", "adicional", "adicionais",
 ]);
 
 /** Multi-word phrases that count as opt-out anywhere in the message. */
@@ -406,22 +452,62 @@ const OPT_OUT_PHRASES = [
 /**
  * Returns true when an inbound message expresses an opt-out / unsubscribe intent.
  *
- * Single keywords (STOP/SAIR/PARAR/…) match only when the message is essentially
- * just that word (≤ 3 tokens) to avoid false positives like "vou sair amanhã".
- * Multi-word phrases match anywhere.
+ * ── Para que lado esta função erra, e por quê ────────────────────────────────
+ * **Na dúvida, NÃO é opt-out.** A assimetria é do dano, não do gosto:
+ *
+ * - Deixar de marcar quem queria sair custa **uma mensagem a mais**, e a pessoa
+ *   repete o pedido — o rodapé com "responda SAIR" vai junto em toda campanha.
+ * - Marcar quem NÃO pediu para sair tira o cliente da base do restaurante
+ *   (`hasOptedOut`, `crmContactable=false`) **sem ele saber**, e ainda o deixa
+ *   sem resposta naquele turno (`InboundGuardsService` nega a IA quando houve
+ *   opt-out). Ninguém reclama do que não recebeu: o erro é silencioso e só
+ *   aparece como base que encolhe sozinha.
+ *
+ * Por isso todo empate abaixo cai para `false`.
+ *
+ * ── As três regras, na ordem ─────────────────────────────────────────────────
+ * 1. **Frase explícita** (`OPT_OUT_PHRASES`) em qualquer lugar do texto → sim.
+ *    Quem escreve "não quero receber" ou "sair da lista" nomeou o objeto; não há
+ *    ambiguidade a resolver.
+ * 2. **Contexto de pedido desliga a palavra solta.** Se a mensagem cita um
+ *    objeto do balcão (`ORDER_CONTEXT_WORDS`: pedido, entrega, item…), o verbo
+ *    tem dono e não é a lista de mensagens.
+ * 3. **Palavra solta**, e aqui as duas classes se separam:
+ *    - ambígua (`cancelar`, `remover`) → só quando é a mensagem INTEIRA, um
+ *      único token;
+ *    - inequívoca (`stop`/`sair`/`parar`/`descadastrar`) → mensagem
+ *      essencialmente igual à palavra (≤ 3 tokens), como sempre foi.
+ *
+ * O sinal escolhido para separar "quero sair da lista" de "quero cancelar meu
+ * pedido" é **a presença de qualquer outra palavra**. Foi ele, e não uma lista
+ * de objetos, porque a lista nunca fica completa — sempre haverá um "pode
+ * cancelar", um "remover a cebola" fora dela — enquanto o comando de opt-out de
+ * verdade é, por construção, uma palavra e nada mais: é o que o rodapé da
+ * campanha manda fazer. Cliente mexendo no pedido escreve frase; cliente saindo
+ * da lista responde comando. A lista de objetos ficou como segunda trava, para
+ * os casos em que o verbo aparece grudado no objeto ("parar pedido", 2 tokens,
+ * que a regra ≤3 dos comandos inequívocos deixaria passar).
  */
 export function detectOptOutIntent(text: string | null | undefined): boolean {
   if (!text) return false;
   const norm = normalize(text);
   if (!norm) return false;
 
-  // Phrase match (substring) — robust to surrounding words.
+  // 1 · Phrase match (substring) — robust to surrounding words.
   for (const phrase of OPT_OUT_PHRASES) {
     if (norm.includes(phrase)) return true;
   }
 
-  // Short single-keyword commands: only when the message is essentially the word.
   const tokens = norm.split(" ");
+
+  // 2 · Contexto de pedido: o verbo já tem objeto, e não é a lista de mensagens.
+  if (tokens.some((tok) => ORDER_CONTEXT_WORDS.has(tok))) return false;
+
+  // 3a · Palavra ambígua: só quando é a mensagem inteira ("CANCELAR"/"REMOVER"
+  //      e nada mais). Qualquer outra palavra na frente já a torna conversa.
+  if (tokens.length === 1 && AMBIGUOUS_OPT_OUT_KEYWORDS.has(norm)) return true;
+
+  // 3b · Comandos inequívocos: quando a mensagem é essencialmente a palavra.
   if (tokens.length <= 3) {
     for (const tok of tokens) {
       if (OPT_OUT_KEYWORDS.has(tok)) return true;
