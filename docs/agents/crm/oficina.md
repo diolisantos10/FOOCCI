@@ -1154,3 +1154,27 @@ ambígua — o que não estava no pedido — ou listar ingrediente, que é infin
 **Verificação.** `npx tsc --noEmit` exit 0. `npx vitest run src/services/crm
 src/services/foocci-sdr src/services/whatsapp/inbound` → 93 arquivos, 1356 testes,
 todos passando. Não rodei a bateria inteira do repositório.
+
+### 2026-08-28 · adendo — a dívida do `remover` foi PAGA no mesmo dia
+
+Decisão do Diretor: fechar pela saída (a). `remover` saiu de `OPT_OUT_KEYWORDS` e
+entrou em `AMBIGUOUS_OPT_OUT_KEYWORDS` — só vale como opt-out quando é a mensagem
+inteira. Commit `a3f035b`.
+
+Era a irmã do mesmo defeito: `remover a cebola`, `remover o item`, `pode remover a
+cebola` são frase de balcão e descadastravam pela regra de ≤3 palavras. A tabela do
+teste agora carrega as quatro frases do verbo, e o custo aceito está escrito no
+código e no teste: **`remover numero` (2 tokens, sem o "meu") deixa de valer
+sozinho** — o legítimo continua pelas frases explícitas (`remover meu numero`,
+`remover da lista`), que rodam antes e não contam palavra.
+
+**Mutações novas:** devolver `remover` para a classe inequívoca → reprova 3
+(`'remover a cebola' → optOut=false` e o caminho real dela); tirar `remover` das
+duas listas → reprova 4, incluindo o teste pré-existente
+`ContactSafetyService.test.ts > detects opt-out in remover`. **M1 conferida de
+novo** (quebrar `parar`) → continua reprovando 6: `PARAR`, `SAIR` e `STOP` não
+regrediram.
+
+**Verificação:** `npx tsc --noEmit` exit 0; `npx vitest run src/services/crm
+src/services/foocci-sdr src/services/whatsapp/inbound` → 93 arquivos, **1364**
+testes, todos passando.
