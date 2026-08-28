@@ -25,8 +25,8 @@
 # ── A ORDEM CERTA DE USO ─────────────────────────────────────────────────────
 #   1. `conferir`      → é de graça, não muda nada, e responde a pergunta que
 #                        ninguém respondeu ainda: existe alguma cópia hoje?
-#   2. `copiar`        → tira UMA cópia agora. É a rede embaixo, e protege o
-#                        passado — que é o que o PITR NÃO faz.
+#   2. `copiar`        → tira UMA cópia agora e ESPERA ela terminar. É a rede
+#                        embaixo, e protege o passado — que o PITR NÃO faz.
 #   3. `ligar-continuo`→ liga o PITR. Só protege dali para frente, e cobra
 #                        armazenamento todo mês. Depois de 1 e 2, nunca antes.
 #
@@ -143,16 +143,42 @@ jobs:
               # nada: cria um ponto novo. É a operação mais segura das quatro.
               railway postgres pitr backup create "${ALVO[@]}" --name "$NOME"
               echo
-              echo "── Conferindo que a cópia apareceu na lista ──"
-              # Sem esta conferência, um comando que devolve 0 sem ter criado nada
-              # viraria "cópia feita" no relatório. Portão que não registra
-              # resultado bloqueia por construção — guardrail 2 da casa.
-              railway postgres pitr backup list "${ALVO[@]}" | tee /tmp/lista.txt
-              if ! grep -q "$NOME" /tmp/lista.txt; then
-                echo "::error::A cópia '$NOME' NÃO apareceu na lista. Trate como cópia NÃO FEITA."
+              # ── POR QUE ESPERAR, E NÃO SÓ OLHAR A LISTA ──────────────────────
+              # A primeira versão deste portão conferia só se o NOME aparecia na
+              # lista. Rodei contra a conta real e o nome apareceu em 1 segundo —
+              # com a coluna SIZE vazia. `backup create` só DISPARA o trabalho
+              # ("Started an on-demand backup... check once it completes"), e a
+              # linha nasce na hora.
+              #
+              # Ou seja: o portão dizia "✓ confirmada" para uma cópia que ainda
+              # estava sendo feita, e teria dito o mesmo para uma que falhasse no
+              # meio. Era exatamente o defeito que ele existia para impedir —
+              # guardrail 2 escrito e não cumprido pelo próprio guardrail.
+              #
+              # O sinal de término é a coluna SIZE deixar de ser "-".
+              echo "── Esperando a cópia TERMINAR (o nome aparece antes de acabar) ──"
+              PRONTA=""
+              for _ in $(seq 1 60); do
+                railway postgres pitr backup list "${ALVO[@]}" > /tmp/lista.txt || true
+                LINHA=$(grep -F "$NOME" /tmp/lista.txt || true)
+                if [ -n "$LINHA" ]; then
+                  # A coluna SIZE é o penúltimo-antes-de-SCHEDULE; pegamos o
+                  # primeiro número isolado após a data. "-" significa em curso.
+                  TAM=$(printf '%s' "$LINHA" | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/) {print $i; exit}}')
+                  if [ -n "$TAM" ] && [ "$TAM" -gt 0 ] 2>/dev/null; then
+                    PRONTA="$TAM"; break
+                  fi
+                fi
+                sleep 10
+              done
+              echo
+              railway postgres pitr backup list "${ALVO[@]}"
+              if [ -z "$PRONTA" ]; then
+                echo "::error::A cópia '$NOME' NÃO terminou em 10 minutos (SIZE segue vazio)."
+                echo "  Trate como cópia NÃO FEITA. Rode 'listar-copias' para ver se ela concluiu depois."
                 exit 1
               fi
-              echo "✓ Cópia '$NOME' confirmada na lista."
+              echo "✓ Cópia '$NOME' CONCLUÍDA — ${PRONTA} MB."
               ;;
 
             ligar-continuo)
