@@ -17,6 +17,7 @@ import {
   extractMetaMessageId, maskGraphResponse,
 } from "./metaPayload";
 import { validateMetaSignature, normalizeMetaWebhook } from "./metaWebhook";
+import { maskPhone } from "@/lib/wa-text-ordering-flag";
 
 const PROVIDER = "META_CLOUD_API" as const;
 
@@ -24,31 +25,51 @@ function fail(error: string, errorCode: string, retryable = false): SendResult {
   return { ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null, error, errorCode, retryable };
 }
 
+/**
+ * Recusa de envio vira LINHA DE LOG — antes saía um `SendResult` mudo.
+ *
+ * As quatro portas de saída deste arquivo (sem config, telefone inválido, erro
+ * HTTP da Graph, erro de rede) devolviam `ok:false` e nada mais. Quem lia o log
+ * via a mensagem sumir sem uma palavra. O formato é o MESMO do recepcionista
+ * (`WhatsAppReceptionistService.sendReply`, "envio recusado (…): status=…"), de
+ * propósito: os dois caminhos precisam ser comparáveis num único grep.
+ *
+ * ⚠️ Nada de credencial aqui. `accessToken` nunca entra; `error` já vem por
+ * `maskGraphResponse`, e o destinatário sai mascarado.
+ */
+function logRecusa(restaurantId: string, res: SendResult, to?: string): SendResult {
+  console.error(
+    `[MetaWhatsAppCloudProvider] envio recusado (rest ${restaurantId}${to ? ` → ${maskPhone(to)}` : ""}): ` +
+    `status=${res.status} ${res.errorCode ?? ""} ${res.error ?? ""}`.trimEnd(),
+  );
+  return res;
+}
+
 export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
   readonly id = PROVIDER;
 
   async sendText(input: SendTextInput): Promise<SendResult> {
     const cfg = await MetaConfigService.getResolved(input.restaurantId);
-    if (!cfg) return fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED");
+    if (!cfg) return logRecusa(input.restaurantId, fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED"), input.to);
     const recipient = toMetaRecipient(input.to);
-    if (!recipient) return fail("Telefone inválido para envio.", "INVALID_PHONE");
-    return this.post(cfg, buildMetaTextPayload(recipient, input.text));
+    if (!recipient) return logRecusa(input.restaurantId, fail("Telefone inválido para envio.", "INVALID_PHONE"), input.to);
+    return this.post(cfg, buildMetaTextPayload(recipient, input.text), input.restaurantId, input.to);
   }
 
   async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
     const cfg = await MetaConfigService.getResolved(input.restaurantId);
-    if (!cfg) return fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED");
+    if (!cfg) return logRecusa(input.restaurantId, fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED"), input.to);
     const recipient = toMetaRecipient(input.to);
-    if (!recipient) return fail("Telefone inválido para envio.", "INVALID_PHONE");
-    return this.post(cfg, buildMetaTemplatePayload(recipient, input.templateName, input.language, input.bodyParams ?? []));
+    if (!recipient) return logRecusa(input.restaurantId, fail("Telefone inválido para envio.", "INVALID_PHONE"), input.to);
+    return this.post(cfg, buildMetaTemplatePayload(recipient, input.templateName, input.language, input.bodyParams ?? []), input.restaurantId, input.to);
   }
 
   async sendMedia(input: SendMediaInput): Promise<SendResult> {
     const cfg = await MetaConfigService.getResolved(input.restaurantId);
-    if (!cfg) return fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED");
+    if (!cfg) return logRecusa(input.restaurantId, fail("WhatsApp Meta não conectado.", "META_NOT_CONNECTED"), input.to);
     const recipient = toMetaRecipient(input.to);
-    if (!recipient) return fail("Telefone inválido para envio.", "INVALID_PHONE");
-    return this.post(cfg, buildMetaMediaPayload(recipient, input.mediaType, input.mediaUrl, input.caption));
+    if (!recipient) return logRecusa(input.restaurantId, fail("Telefone inválido para envio.", "INVALID_PHONE"), input.to);
+    return this.post(cfg, buildMetaMediaPayload(recipient, input.mediaType, input.mediaUrl, input.caption), input.restaurantId, input.to);
   }
 
   /** Validates X-Hub-Signature-256 against the app secret (provider-neutral entry). */
@@ -66,7 +87,7 @@ export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
     return { provider: PROVIDER, channelIds: n.phoneNumberIds, messages: n.messages, statuses: n.statuses };
   }
 
-  private async post(cfg: MetaConfigResolved, payload: object): Promise<SendResult> {
+  private async post(cfg: MetaConfigResolved, payload: object, restaurantId: string, to?: string): Promise<SendResult> {
     try {
       const res = await fetch(metaGraphUrl(`${cfg.phoneNumberId}/messages`), {
         method:  "POST",
@@ -76,16 +97,20 @@ export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
       const json: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         const err = (json as { error?: { message?: string; code?: number } }).error ?? {};
-        return {
+        return logRecusa(restaurantId, {
           ok: false, provider: PROVIDER, status: "FAILED", providerMessageId: null,
           error:     maskGraphResponse(err.message ?? json),
           errorCode: err.code != null ? `META_${err.code}` : `HTTP_${res.status}`,
           retryable: res.status >= 500 || res.status === 429,
-        };
+        }, to);
       }
       return { ok: true, provider: PROVIDER, status: "SENT", providerMessageId: extractMetaMessageId(json) };
     } catch (e) {
-      return fail(maskGraphResponse(e instanceof Error ? e.message : String(e)), "NETWORK", true);
+      return logRecusa(
+        restaurantId,
+        fail(maskGraphResponse(e instanceof Error ? e.message : String(e)), "NETWORK", true),
+        to,
+      );
     }
   }
 

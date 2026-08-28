@@ -208,11 +208,28 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     conversation.status === ConversationStatus.HUMANO_ASSUMIU ||
     conversation.status === ConversationStatus.RESOLVED
   ) {
-    return { status: "SKIPPED", reason: "conversation not AI-eligible" };
+    const motivo = !conversation
+      ? "conversa não encontrada"
+      : !conversation.aiEnabled
+        ? "aiEnabled=false"
+        : `status=${conversation.status}`;
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "conversation-not-eligible",
+      reason:         `conversation not AI-eligible (${motivo})`,
+      conversationId,
+      restaurantId:   conversation?.restaurantId ?? null,
+    }));
+    return { status: "SKIPPED", reason: `conversation not AI-eligible (${motivo})` };
   }
 
   const resolvedPhone = (conversation.customer?.phone ?? conversation.customerPhone ?? "").trim();
   if (!resolvedPhone) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "no-phone",
+      reason:         "no customer phone",
+      conversationId,
+      restaurantId:   conversation.restaurantId,
+    }));
     return { status: "SKIPPED", reason: "no customer phone" };
   }
 
@@ -222,6 +239,13 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     select: { content: true, type: true, sentAt: true },
   });
   if (!lastMessage || lastMessage.type !== "TEXT" || !lastMessage.content.trim()) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "no-usable-text",
+      reason:         "no usable inbound text",
+      conversationId,
+      restaurantId:   conversation.restaurantId,
+      messageType:    lastMessage?.type ?? "NENHUMA",
+    }));
     return { status: "SKIPPED", reason: "no usable inbound text" };
   }
 
@@ -230,7 +254,15 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     where: { conversationId, direction: "OUTBOUND", senderType: "AI", sentAt: { gte: lastMessage.sentAt } },
     select: { id: true },
   });
-  if (alreadyReplied) return { status: "SKIPPED", reason: "already replied" };
+  if (alreadyReplied) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "already-replied",
+      reason:         "already replied",
+      conversationId,
+      restaurantId:   conversation.restaurantId,
+    }));
+    return { status: "SKIPPED", reason: "already replied" };
+  }
 
   // ── Menu is the fixed anchor — the Brain must respect it ───────────────────
   // Greetings, "menu"/"cardápio", the "0"/"voltar" shortcut and numbered
@@ -308,8 +340,26 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
     ...(await loadCustomerMemory(restaurantId, conversation.customer?.id).then((m) => (m ? { customerMemory: m } : {}))),
   });
 
+  // ── Portão da resposta vazia ────────────────────────────────────────────────
+  // Até 28/08/2026 este portão CALAVA: devolvia SKIPPED sem log e sem rede,
+  // enquanto os dois irmãos dele (crítico, adiante, e juiz) já caíam no
+  // recepcionista. Isso era assimetria, não decisão — um LLM que devolve string
+  // vazia não é motivo para o cliente ficar sem resposta, é motivo para o
+  // determinístico assumir. Mesma rede dos irmãos, mesmo formato de log.
   const replyBruto = outcome.result.idealResponse?.trim();
-  if (!replyBruto) return { status: "SKIPPED", reason: "brain produced no reply" };
+  if (!replyBruto) {
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "empty-reply",
+      reason:         "brain produced no reply",
+      conversationId,
+      restaurantId,
+      text:           inboundText.slice(0, 60),
+      mode:           outcome.reasoningMode,
+    }));
+    registrarAmostraDoTopo({ restaurantId, conversationId, outcome, passou: false, motivo: "empty reply gate" });
+    await recep.WhatsAppReceptionistService.respond(conversationId);
+    return { status: "REPLIED", reason: "brain produced no reply → receptionist" };
+  }
 
   // ── Portão da promessa: este agente NÃO tem carrinho ────────────────────────
   // Uma cliente real ouviu "vou adicionar tare ao seu pedido" e "posso confirmar
@@ -399,7 +449,18 @@ async function run(conversationId: string): Promise<BrainReplyOutcome> {
   });
   // Falha de REDE nao vira amostra: mede a Meta, nao o agente. Contar isso como
   // erro de qualidade derrubaria o degrau por problema de operadora.
-  if (!sent.ok) return { status: "SKIPPED", reason: sent.blockReason ?? sent.error ?? "meta send failed" };
+  if (!sent.ok) {
+    const motivo = sent.blockReason ?? sent.error ?? "meta send failed";
+    console.warn("[BrainDecision]", JSON.stringify({
+      gate:           "meta-send-failed",
+      reason:         motivo,
+      conversationId,
+      restaurantId,
+      blockReason:    sent.blockReason ?? null,
+      status:         sent.status ?? null,
+    }));
+    return { status: "SKIPPED", reason: motivo };
+  }
 
   // Chegou ao cliente. PASS so se nenhuma trava precisou entrar no meio — a
   // promessa de pedido substituiu a resposta do agente, entao ela conta como

@@ -513,3 +513,149 @@ Lição para a casa, e ela não é minha de resolver: **agentes em paralelo no m
 `working tree` compartilham o índice do git.** `git add -A` de qualquer um
 sequestra o trabalho de todos. Ou cada sessão paralela usa `git commit -- <paths>`
 com caminho explícito, ou usa árvore separada. Vale escalar ao Diretor.
+
+---
+
+## 2026-08-28 · Acender a luz no silêncio — o motivo de não responder vira log
+
+**Pedido:** tornar visível o silêncio. Nenhuma mudança de comportamento de
+resposta ao cliente, com UMA exceção nomeada.
+**Branch:** `claude/acender-a-luz-no-silencio` (worktree isolada, a partir de
+`origin/claude/remove-legacy-runner-q8iXa` @ `147dae8`). Commit `c5c6ace`.
+
+### Quem chama isto — a cadeia inteira, com linha
+
+`src/app/api/webhooks/meta/whatsapp/route.ts:347` → `dispatchInboundAgent(...)`
+→ `src/services/whatsapp/inbound/InboundAgentDispatch.ts` (os três disparos de
+agente) → `WhatsAppBrainRuntimeService.respond` → recepcionista ou
+`WhatsAppMessagingService` → `MetaWhatsAppCloudProvider`.
+
+Não há outro chamador de `dispatchInboundAgent` em produção. O webhook da
+Evolution foi apagado em 04/08; esta é a única porta de entrada viva.
+
+### O achado que estava embaixo do achado
+
+`maskGraphResponse` (`src/services/whatsapp/providers/metaPayload.ts:127`)
+**deixava vazar token da Meta**. A classe do regex era `EAA[A-Za-z0-9]{20,}` e
+o token da Meta é **base64url** — tem `_`, `-` e `.`. O regex parava no primeiro
+`_` e o resto do token ia inteiro para o log.
+
+Não era teórico: a Graph devolve o token **dentro da mensagem de erro**
+(`"Invalid OAuth token EAA…"`), fora de qualquer campo nomeado, então nem a
+regra de `access_token` nem a de `Bearer` pegavam. E esse `error` já ia para o
+`console.error` do recepcionista (`WhatsAppReceptionistService.ts:1606`) desde
+sempre — meu log novo não criou o vazamento, só o tornou testável.
+
+**Lição de forma:** *máscara de segredo escrita com a classe de caracteres
+errada não protege nada e parece que protege.* Quem escreve a máscara precisa
+saber o alfabeto do segredo. E foi um teste de LOG que achou uma falha de
+SEGURANÇA — acender a luz mostra o que estava no escuro, inclusive o que não se
+estava procurando.
+
+### Por que `console.info` para "agente não declarou nada"
+
+`AIOrderService.processTurn` e `WhatsAppReceptionistService.respond` devolvem
+`Promise<void>`: eles não dizem se o cliente foi atendido. Registrar isso como
+**aviso** faria sair um `warn` por mensagem normal — e aviso que dispara sempre
+é aviso que ninguém lê (é a mesma doença do gate que reprova tudo). Ficou:
+desfecho ruim **declarado** e exceção em `warn`; "não declarou" em `info`, com o
+**mesmo prefixo `[BrainDecision]` e o mesmo JSON**, para um único grep ver os
+dois. Guardrail 1 aplicado ao log: *ausência de declaração não vira "deu certo"*.
+
+### A assimetria do portão da resposta vazia
+
+Três portões do Cérebro reprovam a resposta do LLM: crítico
+(`WhatsAppBrainRuntimeService.ts`, gate `critic`), juiz (gate `judge`) e
+resposta vazia. Os dois primeiros caíam no recepcionista; o terceiro devolvia
+`SKIPPED` e calava. Isso não estava escrito em lugar nenhum como decisão —
+era omissão. Foi corrigido copiando **exatamente** o que os irmãos fazem: log,
+`registrarAmostraDoTopo(passou: false)`, recepcionista, `REPLIED`.
+
+**Regra de bolso que fica:** *quando três caminhos irmãos existem e um deles não
+tem a rede que os outros dois têm, presuma omissão até achar a decisão escrita.*
+
+### O teste que prova o que o cliente LÊ
+
+`src/services/whatsapp/brain/tests/respostaVaziaCaiNoRecepcionista.test.ts` usa
+o **recepcionista real**, não um mock. O único ponto falso é
+`WhatsAppMessagingService.sendConversationReply` — a porta de saída para o
+telefone. A asserção é sobre o TEXTO: string vazia do LLM → o cliente recebe
+`"Estamos em: Rua das Palmeiras, 100, …"`.
+
+Três armadilhas que custaram tempo montar isso, anotadas para a próxima:
+
+1. **Mockar `BrainShadowEvidenceService` inteiro mata a escada.**
+   `resolveFreeFormAccess` importa `getLiveStageSamples` **de lá**; um mock só
+   com `recordShadowOutcome` faz a função sumir, o `try/catch` engolir e o
+   veredito virar `"erro de config — shadow"`. O free-form nunca liga e o teste
+   passa a medir outra coisa. **Não mocke o módulo — deixe-o falar com o mock do
+   prisma** (`brainShadowLog.create` e `findMany`).
+2. **Chegar ao LLM exige QUATRO coisas ao mesmo tempo:** `brainFreeFormConfig`
+   em `ALLOWLIST` com o telefone dentro **e** `updatedAt`; `qualityAuditRun`
+   verde (LiveStageGuard); ~30 amostras `coherence: "PASS"` em
+   `brainShadowLog.findMany` (senão a segunda trava derruba o degrau); e uma
+   sessão ativa (`message.findFirst` da janela de 30 min devolvendo algo).
+3. **`message.findFirst` serve dois serviços com quatro perguntas.** Encadear
+   `mockResolvedValueOnce` quebra na hora em que a cadeia cresce. Roteie pelo
+   `where`. A única distinção sutil é entre "já respondi?" e "há sessão ativa?":
+   as duas filtram `direction: OUTBOUND, senderType: AI`; o que as separa é o
+   `sentAt.gte` — a primeira usa o instante da mensagem do cliente, a segunda
+   usa agora−30min. **Só a segunda olha para trás.**
+
+### Mutações rodadas — seis, todas mortas
+
+| # | Mutação | Teste que reprovou |
+|---|---|---|
+| M1 | tirar a rede do item 3 (voltar a `SKIPPED`) | `respostaVazia… > a rede existe: string vazia do LLM faz o recepcionista REAL enviar texto ao telefone do cliente` (+ o caso do espaço em branco) |
+| M2 | apagar o log do portão `meta-send-failed` | `silencioComLog > Meta recusa o envio: o motivo da recusa vai para o log` |
+| M3 | dispatch volta a descartar o desfecho (`.then(() => {})`) | `InboundAgentDispatch > Cérebro devolve SKIPPED: gate, motivo, conversa e restaurante saem no log` (+ o de não esperar o agente) |
+| M4 | `SKIPPED` passa a contar como desfecho bom | os mesmos dois de M3 |
+| M5 | máscara volta a `EAA[A-Za-z0-9]{20,}` | `metaProviderRecusaLoga > SEGREDO: nem o token nem o telefone cru entram na linha` |
+| M6 | tirar `logRecusa` do erro HTTP da Graph | `metaProviderRecusaLoga > erro HTTP da Graph` (+ o SEGREDO) |
+
+Commit feito **antes** das mutações; árvore restaurada com `git checkout --` e
+conferida limpa depois de cada uma.
+
+### O que NÃO consegui provar
+
+- **Que os catorze buracos viraram zero.** Acendi seis saídas do Cérebro, três
+  disparos do dispatch e quatro do provedor. O diagnóstico contava catorze
+  saídas mudas no caminho inteiro — as que ficam em `InboundGuardsService`, na
+  política de retorno da IA e no `ContactSafetyService` **não foram tocadas** (as
+  duas últimas por ordem explícita: são de outro dono).
+- **Que a linha aparece no Railway.** Tudo é asserção sobre `console`; ninguém
+  leu um log de produção. Se o transporte de log do Railway engolir `console.info`,
+  o caso `NAO_DECLARADO` fica invisível lá — e este teste não veria.
+- **Que o `AI_ORDERING` loga direito ao vivo.** O caminho está no código e sob
+  teste pelo mesmo helper, mas `AIOrderService` devolve `void`: o melhor que o
+  log consegue dizer é "rodou" ou "explodiu". **Enquanto ele não devolver
+  `status`/`reason`, esse ramo continua meio cego** — e nenhum teste pode
+  consertar isso, só uma mudança de assinatura dele.
+- **Volume real.** Não medi quantas linhas por dia isso gera num restaurante
+  movimentado. Se virar ruído, o candidato a cortar é o `NAO_DECLARADO`, não os
+  `SKIPPED`.
+
+### Proposta de vitrine — o Diretor decide
+
+> **Máscara de segredo escrita com o alfabeto errado não protege — e parece que
+> protege.** `maskGraphResponse` usava `EAA[A-Za-z0-9]{20,}`; token da Meta é
+> base64url (`_`, `-`, `.`). O regex parava no primeiro `_` e o resto vazava.
+> Pior: a Graph devolve o token **dentro da mensagem de erro** ("Invalid OAuth
+> token EAA…"), fora de campo nomeado — as regras de `access_token` e `Bearer`
+> não pegavam. Ao escrever ou revisar máscara, comece pelo **alfabeto do
+> segredo**, não pelo formato que você imagina.
+> — origem: `metaProviderRecusaLoga.test.ts` (caso "SEGREDO"), commit `c5c6ace`
+
+> **Quando três caminhos irmãos existem e um não tem a rede dos outros dois,
+> presuma omissão até achar a decisão escrita.** Os portões `critic` e `judge`
+> do Cérebro caíam no recepcionista; o da resposta vazia calava. Não havia
+> decisão registrada em lugar nenhum — era esquecimento, e custou o silêncio de
+> um cliente do Sushi Cazza.
+> — origem: `WhatsAppBrainRuntimeService.ts`, commit `c5c6ace`
+
+> **Não mocke `BrainShadowEvidenceService` para testar o Cérebro ao vivo.**
+> `resolveFreeFormAccess` importa `getLiveStageSamples` de lá. Mock parcial faz a
+> função sumir, o `try/catch` engolir e o veredito virar "erro de config —
+> shadow": o free-form nunca liga e o teste mede outra coisa **passando**. Deixe
+> o módulo real falar com o mock do prisma.
+> — origem: `respostaVaziaCaiNoRecepcionista.test.ts`, commit `c5c6ace`
