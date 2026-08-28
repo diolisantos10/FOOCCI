@@ -1,0 +1,176 @@
+# Cópia de segurança do banco — sob demanda, um clique.
+#
+# ── POR QUE ESTE ARQUIVO EXISTE ──────────────────────────────────────────────
+# Em 28/08/2026 o diagnóstico (docs/diagnosticos/estado-do-foocci-28-08.md)
+# provou que NENHUM banco da casa tem cópia contínua: o PITR grava variáveis
+# `WAL_ARCHIVE_*` no serviço ao ser ligado, e nenhum dos três as tem.
+#
+# O Diretor não conseguia agir: o MCP do Railway não expõe backup, o agente dele
+# estava no limite de uso, não havia CLI nem token no ambiente da sessão, e as
+# credenciais de banco vêm redigidas para aplicativo OAuth. A conclusão foi
+# "só o CEO consegue, pelo painel".
+#
+# ESTAVA ERRADO, e o erro era meu: `RAILWAY_TOKEN` e `RAILWAY_PROJECT_ID` JÁ
+# EXISTEM nos segredos deste repositório desde sempre — `railway-deploy.yml` usa
+# os dois. Existia o tempo todo um caminho que não pede credencial nova.
+# A lição fica: antes de declarar impossível, procure o que a casa já tem.
+#
+# ── O QUE ESTE WORKFLOW NÃO FAZ ──────────────────────────────────────────────
+# Não roda sozinho. Não tem `schedule`, não tem `push`, não tem `pull_request`.
+# Só `workflow_dispatch` — alguém precisa clicar. Ligar a cópia contínua gasta
+# dinheiro, e gastar dinheiro é do CEO: o departamento financeiro desta casa tem
+# escrito que NUNCA gasta por conta própria, e um robô não pode ter mais
+# autonomia que o agente que responde pelo dinheiro.
+#
+# ── A ORDEM CERTA DE USO ─────────────────────────────────────────────────────
+#   1. `conferir`      → é de graça, não muda nada, e responde a pergunta que
+#                        ninguém respondeu ainda: existe alguma cópia hoje?
+#   2. `copiar`        → tira UMA cópia agora. É a rede embaixo, e protege o
+#                        passado — que é o que o PITR NÃO faz.
+#   3. `ligar-continuo`→ liga o PITR. Só protege dali para frente, e cobra
+#                        armazenamento todo mês. Depois de 1 e 2, nunca antes.
+#
+# Por que 2 antes de 3: a documentação do Railway diz, com todas as letras,
+# "if you enable PITR today, you can't restore to yesterday". Ligar o contínuo
+# primeiro deixa todo o histórico até hoje a descoberto.
+
+name: Cópia de segurança do banco
+
+on:
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: "O que fazer"
+        required: true
+        default: conferir
+        type: choice
+        options:
+          - conferir          # de graça, não muda nada
+          - copiar            # uma cópia agora
+          - listar-copias     # o que já existe
+          - ligar-continuo    # ⚠️ GASTA DINHEIRO TODO MÊS
+      servico:
+        description: "Qual banco"
+        required: true
+        default: Postgres
+        type: choice
+        options:
+          - Postgres          # o banco VIVO — é este que tem cliente pagante
+          - Postgres-76OG     # o órfão (tráfego zero desde julho)
+      confirmo_o_gasto:
+        description: "Só para 'ligar-continuo': digite LIGAR para confirmar o gasto mensal"
+        required: false
+        default: ""
+        type: string
+
+# Duas execuções ao mesmo tempo no mesmo banco é pedir corrida. Uma de cada vez,
+# e a nova NÃO cancela a que está rodando: cancelar uma cópia no meio é
+# exatamente o tipo de proteção que fica pior que o problema.
+concurrency:
+  group: copia-de-seguranca-${{ inputs.servico }}
+  cancel-in-progress: false
+
+jobs:
+  copia:
+    name: "${{ inputs.acao }} · ${{ inputs.servico }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Conferir os segredos
+        run: |
+          FALTA=()
+          [ -z "${{ secrets.RAILWAY_TOKEN }}" ]      && FALTA+=("RAILWAY_TOKEN")
+          [ -z "${{ secrets.RAILWAY_PROJECT_ID }}" ] && FALTA+=("RAILWAY_PROJECT_ID")
+          if [ ${#FALTA[@]} -gt 0 ]; then
+            echo "::error::Faltam segredos: ${FALTA[*]}"
+            echo "  Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "Segredos presentes. (Nenhum valor é impresso — o log deste repositório já foi público.)"
+
+      # O portão do dinheiro. Fica ANTES de instalar qualquer coisa: quem digitou
+      # errado descobre em cinco segundos, não depois de dois minutos de setup.
+      - name: Portão do gasto
+        if: inputs.acao == 'ligar-continuo'
+        # A confirmação entra por `env`, NUNCA interpolada direto no shell:
+        # `confirmo_o_gasto` é texto livre, e texto livre interpolado em `run:`
+        # é injeção de comando. `acao` e `servico` são `choice` (o GitHub só
+        # aceita as opções da lista), por isso esses podem ser interpolados.
+        env:
+          CONFIRMO: ${{ inputs.confirmo_o_gasto }}
+        run: |
+          if [ "$CONFIRMO" != "LIGAR" ]; then
+            echo "::error::'ligar-continuo' cria custo recorrente e exige confirmação explícita."
+            echo "  Rode de novo digitando LIGAR no campo de confirmação."
+            echo "  Antes disso, considere rodar 'conferir' — é de graça e diz se já existe cópia."
+            exit 1
+          fi
+          echo "Gasto confirmado por quem clicou."
+
+      - name: Instalar a CLI do Railway
+        run: npm install -g @railway/cli
+
+      - name: Executar
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          PROJETO: ${{ secrets.RAILWAY_PROJECT_ID }}
+          SERVICO: ${{ inputs.servico }}
+        run: |
+          set -o pipefail
+          ALVO=(--project "$PROJETO" --environment production --service "$SERVICO")
+
+          case "${{ inputs.acao }}" in
+            conferir)
+              echo "── Estado da cópia de segurança de '$SERVICO' ──"
+              # Read-only. Responde: PITR está ligado? há janela de restauração?
+              # o arquivador está saudável? Nada aqui altera o banco.
+              railway postgres pitr status "${ALVO[@]}"
+              echo
+              echo "── Agendamentos automáticos de cópia ──"
+              railway postgres pitr schedule list "${ALVO[@]}"
+              ;;
+
+            listar-copias)
+              echo "── Cópias existentes de '$SERVICO' ──"
+              railway postgres pitr backup list "${ALVO[@]}"
+              ;;
+
+            copiar)
+              NOME="manual-$(date -u +%Y%m%d-%H%M)"
+              echo "── Tirando uma cópia de '$SERVICO' com o nome '$NOME' ──"
+              # Cópia de volume sob demanda. NÃO derruba o banco e não sobrescreve
+              # nada: cria um ponto novo. É a operação mais segura das quatro.
+              railway postgres pitr backup create "${ALVO[@]}" --name "$NOME"
+              echo
+              echo "── Conferindo que a cópia apareceu na lista ──"
+              # Sem esta conferência, um comando que devolve 0 sem ter criado nada
+              # viraria "cópia feita" no relatório. Portão que não registra
+              # resultado bloqueia por construção — guardrail 2 da casa.
+              railway postgres pitr backup list "${ALVO[@]}" | tee /tmp/lista.txt
+              if ! grep -q "$NOME" /tmp/lista.txt; then
+                echo "::error::A cópia '$NOME' NÃO apareceu na lista. Trate como cópia NÃO FEITA."
+                exit 1
+              fi
+              echo "✓ Cópia '$NOME' confirmada na lista."
+              ;;
+
+            ligar-continuo)
+              echo "── Ligando a cópia contínua (PITR) em '$SERVICO' ──"
+              echo "⚠️  Isto redeploya o serviço: segundos de indisponibilidade."
+              echo "⚠️  A janela de restauração começa AGORA — não alcança o passado."
+              railway postgres pitr enable "${ALVO[@]}"
+              echo
+              echo "── Estado depois de ligar ──"
+              railway postgres pitr status "${ALVO[@]}"
+              ;;
+          esac
+
+      - name: O que ficou registrado
+        if: always()
+        run: |
+          echo "Ação: ${{ inputs.acao }} · Banco: ${{ inputs.servico }} · Quem clicou: ${{ github.actor }}"
+          echo "Resultado do passo anterior: ${{ job.status }}"
+          echo
+          echo "Se 'conferir' disse que NÃO há cópia: rode 'copiar' primeiro (protege o passado),"
+          echo "e só depois 'ligar-continuo' (protege o futuro). Nesta ordem."
