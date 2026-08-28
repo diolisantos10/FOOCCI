@@ -251,3 +251,123 @@ describe("dispatchInboundAgent — nunca lança para dentro do webhook", () => {
     expect(r.reason).toBeTruthy();
   });
 });
+
+// ── O desfecho do agente deixa de ser descartado ──────────────────────────────
+//
+// Os três disparos de agente eram `void` puro. O Cérebro devolvia
+// `{ status: "SKIPPED", reason: "..." }` — a resposta exata para "por que ele
+// não respondeu?" — e o valor ia para o lixo. Um cliente do Sushi Cazza ficou
+// sem resposta e não havia UMA linha de log explicando.
+//
+// O que estes casos travam: o motivo vira linha `[BrainDecision]` legível por
+// máquina, SEM `await` (o webhook não pode esperar o agente) e SEM deixar
+// exceção escapar (guardrail 5: derrubar o webhook faz a Meta desativar a
+// inscrição e o restaurante perde TODAS as mensagens).
+
+/** Linhas `[BrainDecision]` desserializadas, do nível pedido. */
+function decisoes(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown>[] {
+  return spy.mock.calls
+    .filter((c) => c[0] === "[BrainDecision]")
+    .map((c) => JSON.parse(String(c[1])) as Record<string, unknown>);
+}
+
+describe("dispatchInboundAgent — o silêncio do agente vira log", () => {
+  it("Cérebro devolve SKIPPED: gate, motivo, conversa e restaurante saem no log", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    agents.brain.mockResolvedValue({ status: "SKIPPED", reason: "no usable inbound text" });
+
+    const r = await dispatchInboundAgent(BASE);
+    await flush();
+
+    expect(r.handler).toBe("BRAIN");
+    const d = decisoes(warn).find((x) => x.gate === "dispatch/brain");
+    expect(d, "o desfecho do Cérebro continua sendo descartado").toBeDefined();
+    expect(d).toMatchObject({
+      status:         "SKIPPED",
+      reason:         "no usable inbound text",
+      conversationId: "conv_1",
+      restaurantId:   "rest_1",
+    });
+    warn.mockRestore();
+  });
+
+  it("Cérebro respondeu (REPLIED): nada de aviso — senão o aviso vira ruído e ninguém lê", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    agents.brain.mockResolvedValue({ status: "REPLIED", reason: "PAYMENT_QUESTION" });
+
+    await dispatchInboundAgent(BASE);
+    await flush();
+
+    expect(decisoes(warn).some((x) => x.gate === "dispatch/brain")).toBe(false);
+    warn.mockRestore();
+  });
+
+  it("HANDOFF também é desfecho bom: o cliente foi atendido e um humano assumiu", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    agents.brain.mockResolvedValue({ status: "HANDOFF", reason: "reclamação" });
+
+    await dispatchInboundAgent(BASE);
+    await flush();
+
+    expect(decisoes(warn).some((x) => x.gate === "dispatch/brain")).toBe(false);
+    warn.mockRestore();
+  });
+
+  it("agente explode: o erro vira linha estruturada E o despacho NÃO lança", async () => {
+    const warn  = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    agents.brain.mockRejectedValue(new Error("openai fora do ar"));
+
+    const r = await dispatchInboundAgent(BASE);
+    await flush();
+
+    expect(r.handler).toBe("BRAIN"); // não lançou
+    expect(decisoes(warn).find((x) => x.gate === "dispatch/brain")).toMatchObject({
+      status:         "ERRO",
+      reason:         "openai fora do ar",
+      conversationId: "conv_1",
+      restaurantId:   "rest_1",
+    });
+    warn.mockRestore();
+    error.mockRestore();
+  });
+
+  it("recepcionista não declara desfecho (retorno void): registrado como NAO_DECLARADO, e em info", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    agents.receptionist.mockResolvedValue(undefined);
+
+    const r = await dispatchInboundAgent({ ...BASE, isTextMessage: false, messageText: null });
+    await flush();
+
+    expect(r.handler).toBe("RECEPTIONIST");
+    // Ausência de informação NÃO é informação (guardrail 1): o log diz que o
+    // agente não declarou nada, em vez de fingir que deu certo.
+    expect(decisoes(info).find((x) => x.gate === "dispatch/receptionist")).toMatchObject({
+      status:         "NAO_DECLARADO",
+      conversationId: "conv_1",
+      restaurantId:   "rest_1",
+    });
+    // E não em `warn`: aviso por mensagem normal treina todo mundo a ignorar aviso.
+    expect(decisoes(warn).some((x) => x.gate === "dispatch/receptionist")).toBe(false);
+    info.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("o despacho NÃO espera o agente: ele retorna antes do desfecho existir", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let liberar: (v: unknown) => void = () => {};
+    agents.brain.mockReturnValue(new Promise((res) => { liberar = res; }));
+
+    const r = await dispatchInboundAgent(BASE);
+
+    // O webhook já respondeu à Meta com o agente ainda pensando.
+    expect(r.handler).toBe("BRAIN");
+    expect(decisoes(warn).some((x) => x.gate === "dispatch/brain")).toBe(false);
+
+    liberar({ status: "SKIPPED", reason: "tarde demais" });
+    await flush();
+    expect(decisoes(warn).find((x) => x.gate === "dispatch/brain")).toMatchObject({ reason: "tarde demais" });
+    warn.mockRestore();
+  });
+});

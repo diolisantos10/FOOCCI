@@ -62,6 +62,61 @@ export interface InboundDispatchResult {
   reason:  string;
 }
 
+/**
+ * O desfecho que o agente devolveu — e o que fazer com ele.
+ *
+ * ── Por que isto existe ──────────────────────────────────────────────────────
+ * Os três disparos abaixo eram `void` puro: o Cérebro devolvia
+ * `{ status: "SKIPPED", reason: "..." }` dizendo EXATAMENTE por que não
+ * respondeu, e o valor era jogado fora. Resultado: um cliente do Sushi Cazza
+ * ficou sem resposta e não havia uma linha de log para explicar. O Cérebro
+ * sabia; ninguém escutava.
+ *
+ * ⚠️ Continua sem `await` e continua engolindo exceção — de propósito. O webhook
+ * não pode esperar o agente para responder à Meta, e um dispatcher que lança
+ * derruba a inscrição do webhook (guardrail 5). O que muda é só que agora o
+ * motivo é REGISTRADO em vez de descartado.
+ */
+type DesfechoDoAgente = { status?: string; reason?: string } | void | undefined;
+
+/** Desfecho declarado que significa "o cliente foi atendido". */
+function desfechoBom(status: string | undefined): boolean {
+  return status === "REPLIED" || status === "HANDOFF";
+}
+
+function registrarDesfecho(
+  gate: string,
+  input: InboundDispatchInput,
+  desfecho: DesfechoDoAgente,
+): void {
+  const status = desfecho && typeof desfecho === "object" ? desfecho.status : undefined;
+  const linha = JSON.stringify({
+    gate,
+    status:         status ?? "NAO_DECLARADO",
+    reason:         (desfecho && typeof desfecho === "object" ? desfecho.reason : undefined)
+                      ?? (status ? "sem motivo declarado" : "o agente não declara desfecho (retorno void)"),
+    conversationId: input.conversationId,
+    restaurantId:   input.restaurantId,
+  });
+  // Silêncio DECLARADO grita (warn). Agente que não declara nada vai em `info`:
+  // é informação de menor valor e transformá-la em aviso treinaria todo mundo a
+  // ignorar o aviso — mas o prefixo é o mesmo, para um único grep ver os dois.
+  if (desfechoBom(status)) return;
+  if (status) console.warn("[BrainDecision]", linha);
+  else console.info("[BrainDecision]", linha);
+}
+
+/** Exceção do agente: o log estruturado sai junto do erro cru, no mesmo prefixo. */
+function registrarFalha(gate: string, input: InboundDispatchInput, err: unknown): void {
+  console.warn("[BrainDecision]", JSON.stringify({
+    gate,
+    status:         "ERRO",
+    reason:         err instanceof Error ? err.message : String(err),
+    conversationId: input.conversationId,
+    restaurantId:   input.restaurantId,
+  }));
+}
+
 /** O Cérebro é a porta padrão para TEXTO; `WHATSAPP_BRAIN_ENABLED=false` desliga. */
 function isBrainEnabled(): boolean {
   return process.env.WHATSAPP_BRAIN_ENABLED !== "false";
@@ -218,18 +273,32 @@ export async function dispatchInboundAgent(input: InboundDispatchInput): Promise
         reason  = "agentMode=AI_ORDERING_EXPERIMENTAL";
         void import("@/services/ai/AIOrderService")
           .then(({ AIOrderService }) =>
-            AIOrderService.processTurn(input.conversationId).catch((err) =>
-              console.error("[InboundAgentDispatch] turno do AI ordering falhou:", err)))
-          .catch((err) => console.error("[InboundAgentDispatch] AIOrderService não carregou:", err));
+            AIOrderService.processTurn(input.conversationId)
+              .then((desfecho: DesfechoDoAgente) => registrarDesfecho("dispatch/ai-ordering", input, desfecho))
+              .catch((err) => {
+                console.error("[InboundAgentDispatch] turno do AI ordering falhou:", err);
+                registrarFalha("dispatch/ai-ordering", input, err);
+              }))
+          .catch((err) => {
+            console.error("[InboundAgentDispatch] AIOrderService não carregou:", err);
+            registrarFalha("dispatch/ai-ordering-import", input, err);
+          });
       } else if (agentMode !== "MENU_ONLY" && isBrainEnabled() && input.isTextMessage && text) {
         // Cérebro: porta padrão do TEXTO. Mídia/áudio cai no recepcionista.
         handler = "BRAIN";
         reason  = "texto com Cérebro ligado";
         void import("@/services/whatsapp/brain/WhatsAppBrainRuntimeService")
           .then(({ WhatsAppBrainRuntimeService }) =>
-            WhatsAppBrainRuntimeService.respond(input.conversationId).catch((err) =>
-              console.error("[InboundAgentDispatch] Cérebro falhou:", err)))
-          .catch((err) => console.error("[InboundAgentDispatch] Cérebro não carregou:", err));
+            WhatsAppBrainRuntimeService.respond(input.conversationId)
+              .then((desfecho: DesfechoDoAgente) => registrarDesfecho("dispatch/brain", input, desfecho))
+              .catch((err) => {
+                console.error("[InboundAgentDispatch] Cérebro falhou:", err);
+                registrarFalha("dispatch/brain", input, err);
+              }))
+          .catch((err) => {
+            console.error("[InboundAgentDispatch] Cérebro não carregou:", err);
+            registrarFalha("dispatch/brain-import", input, err);
+          });
       } else {
         handler = "RECEPTIONIST";
         reason  = agentMode === "MENU_ONLY" ? "agentMode=MENU_ONLY"
@@ -237,9 +306,16 @@ export async function dispatchInboundAgent(input: InboundDispatchInput): Promise
                 : "Cérebro desligado";
         void import("@/services/ai/WhatsAppReceptionistService")
           .then(({ WhatsAppReceptionistService }) =>
-            WhatsAppReceptionistService.respond(input.conversationId).catch((err) =>
-              console.error("[InboundAgentDispatch] recepcionista falhou:", err)))
-          .catch((err) => console.error("[InboundAgentDispatch] recepcionista não carregou:", err));
+            WhatsAppReceptionistService.respond(input.conversationId)
+              .then((desfecho: DesfechoDoAgente) => registrarDesfecho("dispatch/receptionist", input, desfecho))
+              .catch((err) => {
+                console.error("[InboundAgentDispatch] recepcionista falhou:", err);
+                registrarFalha("dispatch/receptionist", input, err);
+              }))
+          .catch((err) => {
+            console.error("[InboundAgentDispatch] recepcionista não carregou:", err);
+            registrarFalha("dispatch/receptionist-import", input, err);
+          });
       }
     }
 

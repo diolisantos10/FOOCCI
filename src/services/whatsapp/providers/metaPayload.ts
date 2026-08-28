@@ -124,6 +124,12 @@ export function maskGraphResponse(raw: unknown): string {
   // Redact anything that looks like a token / bearer / access_token value.
   s = s.replace(/(access_token"?\s*[:=]\s*"?)[A-Za-z0-9._-]+/gi, "$1***")
        .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1***")
-       .replace(/EAA[A-Za-z0-9]{20,}/g, "EAA***"); // Meta long-lived tokens start with EAA
+       // Meta long-lived tokens start with EAA and são base64url: `_`, `-` e `.`
+       // fazem parte do alfabeto. A classe antiga era só [A-Za-z0-9] e parava no
+       // primeiro `_` — um token real vazava do underscore em diante. Achado por
+       // `metaProviderRecusaLoga.test.ts` ("SEGREDO"), quando a recusa da Meta
+       // passou a ir para o log: a Graph devolve o token DENTRO da mensagem de
+       // erro ("Invalid OAuth token EAA…"), fora de qualquer campo nomeado.
+       .replace(/EAA[A-Za-z0-9._-]{20,}/g, "EAA***");
   return s.length > 500 ? s.slice(0, 500) + "…" : s;
 }
