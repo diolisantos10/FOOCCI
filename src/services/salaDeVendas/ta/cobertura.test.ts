@@ -76,6 +76,8 @@ const PRECISA_SABER = [
   "e para adega",
   "atende food truck",
   "vocês atendem delivery",
+  "atende mercearia",
+  "vocês atendem os mesmos clientes do ifood",
   "tenho duas lojas, funciona",
   "quem coloca meu cardápio no sistema",
   "preciso comprar equipamento",
@@ -121,6 +123,26 @@ describe("o TA sabe responder o que perguntam numa venda", () => {
     for (const p of ["quanto custa", "qual o valor do plano", "tem desconto"]) {
       expect(buscarNaVerdade(p).length, `"${p}" não achou preço afirmável`).toBeGreaterThan(0);
     }
+  });
+
+  it("⭐⭐ o iFood é a régua publicada de quem a gente atende", () => {
+    /*
+      Decisão do CEO em 28/08/2026: *"Use sempre o iFood como referência pra
+      responder essas perguntas. Os mesmos clientes do iFood."*
+
+      Eu havia escrito o texto SEM citar o iFood, com receio de a promessa
+      crescer sozinha junto com o catálogo deles. Ele decidiu o contrário, e a
+      régua tem uma vantagem que o meu texto não tinha: responde sozinha o
+      formato que ninguém previu.
+
+      Este teste existe para que ninguém "limpe" a menção achando que é
+      comparação descuidada com concorrente. É regra de negócio, e é do CEO.
+    */
+    const achados = buscarNaVerdade("que tipo de estabelecimento vocês atendem");
+    const texto = achados.map((a) => a.item.texto).join(" ").toLowerCase();
+
+    expect(achados.length, "a pergunta de quem atendemos ficou sem resposta").toBeGreaterThan(0);
+    expect(texto, "a régua do iFood sumiu do texto publicado").toContain("ifood");
   });
 
   it("⭐ e as duas que ele NÃO deve saber continuam sem material", () => {

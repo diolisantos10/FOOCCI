@@ -85,23 +85,28 @@ export const FAQS: readonly PerguntaDoSite[] = [
     consumo"*. O agente sabia quem qualificar; o site é que não sabia contar.
     Agora as duas pontas leem a mesma coisa.
 
-    ── ⚠️ POR QUE O TEXTO NÃO DIZ "TUDO QUE O IFOOD ATENDE" ────────────────
+    ── ⚠️ O IFOOD É A RÉGUA, POR DECISÃO DO CEO ───────────────────────────
 
-    Foi como o CEO explicou para mim, e é uma ótima explicação. Mas como texto
-    **publicado** seria uma promessa ruim, por dois motivos:
+    Eu tinha escrito este texto **sem** citar o iFood, com receio de que a
+    promessa crescesse sozinha quando o catálogo deles crescesse. Levei a
+    ressalva ao CEO e ele decidiu o contrário, com todas as letras:
 
-      1. **Ela muda sem a gente.** O catálogo do iFood cresceu para farmácia,
-         mercado e pet. Prometer "tudo que eles atendem" faz a nossa promessa
-         crescer junto, em silêncio — e aí aparece um dono de farmácia com o
-         nosso próprio site na mão.
-      2. **É afirmação comparativa sobre característica do serviço.** O CDC
-         art. 37 §1º (copiado em `control_room/docs/juridico/base-de-leis.md`)
-         alcança informação publicitária capaz de induzir a erro sobre natureza
-         e qualidade "mesmo por omissão".
+      *"Use sempre o iFood como referência pra responder essas perguntas. Os
+      mesmos clientes do iFood."*
 
-    Nomear a categoria com as nossas palavras é mais largo na prática — a lista
-    abaixo é longa de propósito, para o dono reconhecer o negócio DELE escrito
-    ali — e não depende de decisão de concorrente nenhum.
+    Decisão dele, registrada, e é ela que vale. A régua tem uma vantagem real
+    que o meu texto não tinha: **ela responde sozinha o caso que ninguém
+    previu.** Quando aparecer um formato que não está em lista nenhuma, a
+    pergunta deixa de ser "será que atendemos?" e vira "o iFood atende?" — que
+    qualquer pessoa consegue checar em trinta segundos.
+
+    A lista continua no texto como exemplo, não como limite, porque é ela que
+    faz o dono reconhecer o negócio DELE escrito ali.
+
+    ⚠️ **A consequência prática, e ela é grande:** o qualificador
+    (`ta/sondagem.ts`) desqualificava farmácia e mercado. Pela régua nova eles
+    passam a contar, porque o iFood os atende. Está alinhado lá, no mesmo
+    commit — as duas pontas não podem discordar sobre quem é cliente.
 
     Duas coisas quebravam por causa disso, e as duas na véspera de começar a
     abordar leads:
@@ -124,6 +129,6 @@ export const FAQS: readonly PerguntaDoSite[] = [
   */
   {
     q: "Que tipo de estabelecimento o Foocci atende?",
-    a: "Todo negócio que vende comida ou bebida: restaurante, bar, boteco, lanchonete, pizzaria, hamburgueria, japonês, cafeteria, padaria, confeitaria, doceria, açaí, sorveteria, food truck, adega, marmitaria, self-service, dark kitchen e delivery em geral. Se você vende comida ou bebida, é para você — a proposta é a mesma: pedido direto, atendimento e relacionamento com o cliente.",
+    a: "Os mesmos estabelecimentos que o iFood atende. Restaurante, bar, boteco, lanchonete, pizzaria, hamburgueria, japonês, cafeteria, padaria, confeitaria, doceria, açaí, sorveteria, food truck, adega, marmitaria, self-service, dark kitchen, mercado, mercearia, conveniência e delivery em geral. Se você vende no iFood, ou poderia vender, o Foocci é para você — a proposta é a mesma: pedido direto, atendimento e relacionamento com o cliente.",
   },
 ];
