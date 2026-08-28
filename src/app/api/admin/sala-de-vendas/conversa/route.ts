@@ -31,10 +31,22 @@ import {
   registrarSaida,
   marcarComoLidas,
   janelaDe24h,
+  explicarRecusaDeSaida,
 } from "@/services/salaDeVendas/conversa";
 import { explicacaoDoScore } from "@/services/salaDeVendas/score";
 import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 import { lerOSilencio, avisoDoSilencio } from "@/services/salaDeVendas/anterioresASala";
+import { respostasDoFormulario, origemDoLead } from "@/services/salaDeVendas/fichaDoLead";
+import {
+  listarContatosManuais,
+  rotuloDoContatoManual,
+  TIPOS_DE_CONTATO_MANUAL,
+} from "@/services/salaDeVendas/contatoManual";
+import {
+  podeApagarDadosDoLead,
+  ORIGENS_DO_PEDIDO,
+  ROTULO_ORIGEM_DO_PEDIDO,
+} from "@/services/salaDeVendas/lgpd";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,7 +74,20 @@ export async function GET(req: NextRequest) {
       createdAt: true,
       atendidoPor: true, atendenteUserId: true, atendenteDesde: true,
       motivoDoPedido: true, tags: true, prioritario: true,
-      utmSource: true, utmCampaign: true, origem: true, codigo: true,
+      codigo: true,
+      // ── ORIGEM COMPLETA, E NÃO DOIS CAMPOS ────────────────────────────────
+      //
+      // Vinham só `utmSource`, `utmCampaign` e `origem`, e a ficha mostrava os
+      // três crus. Com isso, um lead que chegou por `utm_medium` ou por
+      // `referrer` aparecia como se não tivesse origem nenhuma — e "não sei de
+      // onde veio" é a resposta que mata a decisão de mídia. As sete colunas
+      // vêm juntas porque quem monta o rótulo é `origemDoLead`, no servidor.
+      utmSource: true, utmMedium: true, utmCampaign: true, utmContent: true,
+      utmTerm: true, clickId: true, landingPath: true, referrer: true,
+      origem: true,
+      // `desafio` é a dor escrita pela própria pessoa no formulário, e era a
+      // única resposta que esta tela não lia.
+      desafio: true,
       optOutAt: true, consentAt: true, proximaAcaoEm: true, proximaAcaoNota: true,
       qualificacao: true,
       atendente: { select: { nome: true } },
@@ -88,6 +113,12 @@ export async function GET(req: NextRequest) {
     ]),
   );
 
+  // Os contatos registrados à mão ficam FORA do embrulho de identidade: a
+  // tabela de interações não está sob RLS (ver a migração `autorizacao_no_banco`,
+  // que lista as nove tabelas cobertas), e enfiar esta leitura lá dentro só
+  // alongaria a transação que carrega a conversa.
+  const contatosManuais = await listarContatosManuais(prisma, { leadId });
+
   // POR QUE O AVISO É MONTADO NO SERVIDOR: a tela receberia `createdAt` e
   // `mensagens.length` e poderia decidir sozinha — e aí a regra do que é
   // "anterior à Sala" viveria no navegador, longe do teste, e mudaria de
@@ -111,6 +142,41 @@ export async function GET(req: NextRequest) {
       // `null` quando há conversa. Aviso que aparece sempre é aviso que
       // ninguém lê.
       avisoDoSilencio: aviso,
+
+      // ── O QUE VEIO DA TELA VELHA DO CRM ───────────────────────────────────
+      //
+      // As três montadas no SERVIDOR, e não no navegador, pelo mesmo motivo do
+      // aviso acima: são regras sobre o dado, e regra que mora na tela some da
+      // vista do teste e muda de definição na próxima tela que precisar dela.
+      respostas: respostasDoFormulario(lead),
+      origem: origemDoLead(lead),
+      contatosManuais,
+
+      // Quem pode apagar decide a ROTA. Isto aqui é só a tela sabendo se deve
+      // desenhar o botão — esconder um botão nunca foi autorização, e a rota
+      // `apagar-dados` recusa igual para quem chamar direto.
+      podeApagarDados: podeApagarDadosDoLead(portao.sessao),
+
+      // ── AS OPÇÕES VIAJAM COM O DADO ───────────────────────────────────────
+      //
+      // Mesma razão de `admin/pessoas`, que manda `tipos` junto: a tela precisa
+      // OFERECER as escolhas, e a lista oferecida tem de ser a MESMA que a rota
+      // usa para validar. Duas listas discordam no primeiro dia em que alguém
+      // mexe só numa — e a discordância aparece como "escolhi e não salvou".
+      //
+      // Elas também não podem ser importadas pela tela: `contatoManual.ts` e
+      // `lgpd.ts` falam com o Prisma, e um `import` deles num componente de
+      // cliente levaria o serviço de apagamento para dentro do navegador.
+      opcoes: {
+        contatoManual: TIPOS_DE_CONTATO_MANUAL.map((t) => ({
+          valor: t,
+          rotulo: rotuloDoContatoManual(t),
+        })),
+        origemDoPedidoDeApagamento: ORIGENS_DO_PEDIDO.map((o) => ({
+          valor: o,
+          rotulo: ROTULO_ORIGEM_DO_PEDIDO[o],
+        })),
+      },
     },
   });
 }
@@ -199,7 +265,17 @@ export async function POST(req: NextRequest) {
   });
 
   if (!r.ok) {
-    return NextResponse.json({ ok: false, error: r.causa }, { status: 400 });
+    // A frase vem do serviço, e não daqui: até 28/08/2026 esta linha devolvia
+    // `r.causa` cru e o vendedor lia "janelaFechada" na tela. O código da causa
+    // continua indo junto, porque é dele que o suporte precisa — mas o que
+    // aparece para quem está vendendo é a frase.
+    //
+    // 409 e não 400 para a janela: o pedido está correto, o estado da conversa
+    // é que não permite — a mesma leitura que o opt-out logo acima já usa.
+    return NextResponse.json(
+      { ok: false, error: explicarRecusaDeSaida(r), causa: r.causa },
+      { status: r.causa === "janelaFechada" ? 409 : 400 },
+    );
   }
 
   // ── A ENTREGA, tentada na hora ──────────────────────────────────────────

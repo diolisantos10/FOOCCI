@@ -17,6 +17,8 @@ export const ROTA_FICHA = "/api/admin/sala-de-vendas/ficha";
 export const ROTA_FUNIL = "/api/admin/sala-de-vendas/funil";
 export const ROTA_TAREFAS = "/api/admin/sala-de-vendas/tarefas";
 export const ROTA_AGENDA = "/api/admin/sala-de-vendas/agenda";
+export const ROTA_CONTATO_MANUAL = "/api/admin/sala-de-vendas/contato-manual";
+export const ROTA_APAGAR_DADOS = "/api/admin/sala-de-vendas/apagar-dados";
 
 export interface Qualificacao {
   segmento: string | null;
@@ -41,6 +43,8 @@ export interface LeadNaConversa {
   restaurante: string | null;
   cidade: string | null;
   tipo: string | null;
+  /** A dor que a pessoa escreveu no formulário do site. */
+  desafio: string | null;
   stage: string;
   score: number | null;
   temperatura: string | null;
@@ -62,12 +66,65 @@ export interface LeadNaConversa {
   atendente: { nome: string } | null;
 }
 
+/**
+ * Um contato registrado à mão, já com o NOME de quem registrou.
+ *
+ * O servidor resolve o nome antes de mandar. Se viesse o id, a tela teria de
+ * buscar as pessoas por conta própria — e uma tela que não consegue traduzir o
+ * id acaba mostrando o id, que não diz nada a quem está atendendo.
+ */
+export interface ContatoManualNaTela {
+  id: string;
+  tipo: string;
+  rotulo: string;
+  quem: string;
+  quando: string;
+  nota: string | null;
+}
+
+/** A origem, já montada pelo servidor. `rotulo` NUNCA vem vazio. */
+export interface OrigemNaTela {
+  rotulo: string;
+  canal: string;
+  canalRotulo: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+  clickId: string | null;
+  landingPath: string | null;
+  referrer: string | null;
+  legado: string | null;
+  temSinalDeCampanha: boolean;
+}
+
 export interface DadosDaConversa {
   lead: LeadNaConversa;
   mensagens: MensagemNaTela[];
   fatoresDoScore: FatorDoScore[];
   janela: JanelaDe24h;
   podeEscrever: boolean;
+  /** O que a pessoa preencheu no site. Vazio quando só deu nome e WhatsApp. */
+  respostas: Array<{ pergunta: string; resposta: string }>;
+  origem: OrigemNaTela;
+  contatosManuais: ContatoManualNaTela[];
+  /**
+   * Se a tela deve DESENHAR o botão de apagar. Não é a autorização — quem
+   * recusa é a rota `apagar-dados`, no servidor, para quem chamar direto.
+   */
+  podeApagarDados: boolean;
+  /**
+   * As escolhas que a tela pode oferecer, vindas de quem as valida.
+   *
+   * A tela NÃO importa as listas dos serviços: `contatoManual.ts` e `lgpd.ts`
+   * falam com o Prisma, e importá-los aqui levaria o serviço de apagamento para
+   * dentro do navegador. Vêm pela rota, que é a mesma que valida.
+   */
+  opcoes: {
+    contatoManual: Array<{ valor: string; rotulo: string }>;
+    origemDoPedidoDeApagamento: Array<{ valor: string; rotulo: string }>;
+  };
   /**
    * Por que o cartão está vazio — `null` quando há conversa.
    *
@@ -202,6 +259,76 @@ export const criarTarefa = (corpo: {
   tipo?: string;
 }) => enviar(ROTA_TAREFAS, "POST", corpo);
 
+/**
+ * Como `enviar`, mas devolve o que a rota respondeu.
+ *
+ * Existe porque duas ações precisam do RESULTADO para dizer a verdade na tela:
+ * o registro manual precisa saber se contou como abordagem, e o apagamento
+ * precisa dizer quanto foi destruído. Um `{ ok: true }` mudo obrigaria a tela a
+ * inventar a frase seguinte.
+ */
+async function enviarEsperandoDados<T>(
+  rota: string,
+  corpo: unknown,
+): Promise<{ ok: true; dados: T } | { ok: false; mensagem: string }> {
+  try {
+    const r = await fetch(rota, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+
+    const j = (await r.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      data?: T;
+    };
+
+    if (r.ok && j.ok && j.data !== undefined) return { ok: true, dados: j.data };
+
+    return {
+      ok: false,
+      mensagem: j.error ?? `Não foi possível concluir (HTTP ${r.status}).`,
+    };
+  } catch (e) {
+    return { ok: false, mensagem: e instanceof Error ? e.message : "Falha de rede." };
+  }
+}
+
+/**
+ * Registra um contato que aconteceu fora do sistema.
+ *
+ * `ocorridoEm` viaja sempre, e é a tela que preenche com "agora" — a rota não
+ * tem valor padrão de propósito, porque registro manual costuma ser lançado
+ * depois do fato.
+ */
+export const registrarContatoManual = (corpo: {
+  leadId: string;
+  tipo: string;
+  ocorridoEm: string;
+  nota?: string | null;
+}) =>
+  enviarEsperandoDados<{ interacaoId: string; ocorridoEm: string; contouComoAbordagem: boolean }>(
+    ROTA_CONTATO_MANUAL,
+    corpo,
+  );
+
+/**
+ * Apaga os dados do contato. Sem volta.
+ *
+ * `confirmacaoNome` é o nome digitado por quem está apagando, e a rota o compara
+ * com o que está gravado. Não existe versão desta chamada sem ele.
+ */
+export const apagarDadosDoLead = (corpo: {
+  leadId: string;
+  confirmacaoNome: string;
+  origemDoPedido: string;
+}) =>
+  enviarEsperandoDados<{
+    apagadoEm: string;
+    apagados: { interacoes: number; mensagens: number };
+  }>(ROTA_APAGAR_DADOS, corpo);
+
 /** "há 3 min", "há 2 h". Relógio do navegador — é a tela de quem está olhando. */
 export function desde(iso: string | Date | null): string | null {
   if (!iso) return null;
@@ -221,4 +348,30 @@ export function hora(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Dia e hora, para a linha do tempo do que foi registrado à mão. */
+export function dataEHora(iso: string | Date | null): string {
+  if (!iso) return "—";
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+/**
+ * O valor de um `<input type="datetime-local">`.
+ *
+ * O campo exige `AAAA-MM-DDTHH:MM` **na hora local**, e `toISOString()` devolve
+ * UTC — usá-lo faria o campo abrir três horas atrasado no Brasil, e o vendedor
+ * registraria toda ligação com o horário errado sem perceber.
+ */
+export function paraCampoDeDataHora(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}`
+  );
 }

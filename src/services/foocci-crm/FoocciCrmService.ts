@@ -30,6 +30,15 @@ import {
 } from "./foocciCrmFunnel";
 import { normalizaWhatsapp, rotuloDaOrigem, canalDoContato, linkWhatsapp } from "./leadOrigin";
 import { extractLeadCode, LEAD_CODE_LEN } from "@/lib/site/leadCode";
+// A ficha do lead é a MESMA nas duas telas — esta e a da Sala Comercial —
+// porque as duas leem a mesma tabela. Quando o trecho vivia aqui dentro, migrar
+// a Sala teria criado uma segunda régua sobre o mesmo dado; o dono agora é um só.
+import {
+  respostasDoFormulario,
+  origemDoLead,
+  type RespostaDoFormulario,
+  type OrigemDoLead,
+} from "@/services/salaDeVendas/fichaDoLead";
 
 /** Quem pode aparecer como autor. Texto livre viraria "admin"/"Admin"/"adm". */
 export type FoocciCrmActor = "admin" | "sistema" | "sdr-agent";
@@ -297,21 +306,9 @@ export interface InteracaoResumo {
  */
 export interface DossieContato extends ContatoResumo {
   /** Origem crua, para quem quiser reagrupar sem depender do rótulo. */
-  origem: {
-    legado: string | null;
-    utmSource: string | null;
-    utmMedium: string | null;
-    utmCampaign: string | null;
-    utmContent: string | null;
-    utmTerm: string | null;
-    clickId: string | null;
-    landingPath: string | null;
-    referrer: string | null;
-    canal: string;
-    rotulo: string;
-  };
+  origem: OrigemDoLead;
   /** O que a pessoa respondeu no formulário, em linguagem de gente. */
-  respostas: Array<{ pergunta: string; resposta: string }>;
+  respostas: RespostaDoFormulario[];
   historico: InteracaoResumo[];
 }
 
@@ -324,12 +321,6 @@ export async function getDossie(leadId: string): Promise<DossieContato | null> {
     },
   });
   if (!l) return null;
-
-  const respostas: Array<{ pergunta: string; resposta: string }> = [];
-  if (l.restaurante) respostas.push({ pergunta: "Nome do restaurante", resposta: l.restaurante });
-  if (l.cidade)      respostas.push({ pergunta: "Cidade",              resposta: l.cidade });
-  if (l.tipo)        respostas.push({ pergunta: "Tipo de restaurante", resposta: l.tipo });
-  if (l.desafio)     respostas.push({ pergunta: "Principal desafio",   resposta: l.desafio });
 
   return {
     id: l.id,
@@ -354,20 +345,8 @@ export async function getDossie(leadId: string): Promise<DossieContato | null> {
     notifiedAt: l.notifiedAt,
     notifyError: l.notifyError,
     interacoes: l._count.interactions,
-    origem: {
-      legado: l.origem,
-      utmSource: l.utmSource,
-      utmMedium: l.utmMedium,
-      utmCampaign: l.utmCampaign,
-      utmContent: l.utmContent,
-      utmTerm: l.utmTerm,
-      clickId: l.clickId,
-      landingPath: l.landingPath,
-      referrer: l.referrer,
-      canal: canalDoContato(l),
-      rotulo: rotuloDaOrigem(l),
-    },
-    respostas,
+    origem: origemDoLead(l),
+    respostas: respostasDoFormulario(l),
     historico: l.interactions.map((i) => ({
       id: i.id,
       tipo: i.tipo as FoocciInteractionType,

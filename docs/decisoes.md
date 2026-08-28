@@ -11,6 +11,54 @@
 
 ---
 
+## 2026-08-28 — Apagar dado de contato é do CEO e do Diretor, e exige o nome escrito
+
+**O contexto:** o CRM velho (`/admin/foocci-crm`) e a Sala Comercial
+(`/comercial`) mostram os MESMOS leads. O CEO decidiu desligar o velho, e quatro
+capacidades só existiam lá. Elas foram para a Sala; **o CRM velho continua no ar
+de propósito** — a remoção é outro passo, com ele.
+
+**As quatro, e onde ficaram:** as respostas do formulário, a origem/UTM, o
+registro de contato manual e o apagamento por LGPD, todas na ficha do lead em
+`/comercial/conversas`.
+
+**Decisão 1 — quem apaga.** Só `MASTER_CEO` e `DIRETOR_FOOCCI`. O SDR humano, o
+gerente de departamento e o auditor **não**. O SDR passa o dia com o dedo na
+ficha do lead: é ele quem mais erra o clique, e este erro não se conserta. A
+recusa é da rota (`POST /api/admin/sala-de-vendas/apagar-dados`), não da tela —
+esconder botão nunca foi autorização.
+
+**Decisão 2 — a confirmação é o NOME, não um "sim".** Um `confirmo: true` é
+mandado por qualquer laço de script e por qualquer clique apressado, e o defeito
+que ele produz tem nome: **apagar a pessoa errada**, porque o id vem da URL e a
+ficha aberta pode ser de outro contato. O nome digitado só confere com um.
+
+**Decisão 3 — a trilha e o apagamento andam na MESMA transação, e a trilha não
+guarda o dado que apagou.** Registro antes do delete afirmaria uma exclusão que
+pode não acontecer; registro depois deixaria o dado sumir sem rastro — e
+apagamento irreversível sem rastro é indistinguível de vazamento. E o registro
+guarda o id, quem executou, quando, a origem do pedido e o tamanho do que sumiu:
+**nunca o nome**. Guardar o nome de quem pediu para ser esquecido, na linha que
+prova o esquecimento, é manter o dado pessoal com outro nome.
+
+**Decisão 4 — a origem do pedido é declarada, e são duas.** `TITULAR` (a pessoa
+pediu, LGPD) e `CONTATO_DE_TESTE` (limpeza da base). A tela velha fazia os dois
+pelo mesmo botão, sem distinguir — e "quantos pedidos de eliminação a Foocci
+recebeu este ano" é pergunta que a lei pode fazer.
+
+**Decisão 5 — o contato manual exige quem e quando.** *Quem* vem da sessão, nunca
+do corpo do pedido. *Quando* é digitado e não presumido: registro manual quase
+sempre é lançado depois do fato, e carimbar a hora da digitação embaralha a linha
+do tempo. Data no futuro é recusada — um ano digitado errado empurraria
+`lastContactedAt` para frente e o lead sumiria da fila para sempre, sem erro e
+sem alarme.
+
+**O que NÃO foi duplicado:** a régua do formulário e da origem saiu de dentro do
+serviço velho e virou `src/services/salaDeVendas/fichaDoLead.ts`, puro, usado
+pelas DUAS telas. Cópia seria duas verdades sobre a mesma tabela.
+
+---
+
 ## 2026-08-23 — A porta do administrador para o teto de contatos
 
 **Decisão do CEO:** *"pode criar a porta"*, com o motivo dito por ele — *"eu não

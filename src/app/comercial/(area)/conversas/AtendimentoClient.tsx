@@ -52,7 +52,9 @@ import { useState } from "react";
 import { useSalaDeVendas, mudarResponsavel } from "../_dados";
 import {
   useConversa, escrever, marcarLidas, salvarFicha, moverEtapa,
-  desde, hora, type LeadNaConversa,
+  registrarContatoManual, apagarDadosDoLead,
+  desde, hora, dataEHora, paraCampoDeDataHora,
+  type DadosDaConversa,
 } from "./_dados";
 import type { NomeDaFila, LeadNaFila } from "@/services/salaDeVendas/filas";
 import type { MensagemNaTela } from "@/services/salaDeVendas/conversa";
@@ -205,6 +207,15 @@ export function AtendimentoClient() {
             aoAvisar={setAviso}
             aoSalvar={() => {
               recarregarConversa();
+              recarregarLista();
+            }}
+            aoApagar={() => {
+              // Depois do apagamento o lead não existe mais. Recarregar a
+              // conversa devolveria 404 e a tela diria "esta conversa não está
+              // disponível para você" — que é falso e assustador logo depois de
+              // um apagamento bem-sucedido. Voltar para a lista é o fim honesto.
+              setLeadId(null);
+              setPainel("lista");
               recarregarLista();
             }}
           />
@@ -658,19 +669,26 @@ function PainelDaFicha({
   estado,
   aoAvisar,
   aoSalvar,
+  aoApagar,
 }: {
   estado: ReturnType<typeof useConversa>["estado"];
   aoAvisar: (s: string | null) => void;
   aoSalvar: () => void;
+  aoApagar: () => void;
 }) {
   if (estado.fase !== "pronto") {
     return <p className="p-4 text-[13px] text-muted">—</p>;
   }
   return (
     <FichaEditavel
+      // `key` pelo id do lead: sem ela, o React reaproveita o formulário desta
+      // ficha ao trocar de conversa, e o nome digitado na confirmação de
+      // apagamento sobreviveria à troca — apontando para outra pessoa.
+      key={estado.dados.lead.id}
       dados={estado.dados}
       aoAvisar={aoAvisar}
       aoSalvar={aoSalvar}
+      aoApagar={aoApagar}
     />
   );
 }
@@ -679,10 +697,12 @@ function FichaEditavel({
   dados,
   aoAvisar,
   aoSalvar,
+  aoApagar,
 }: {
-  dados: { lead: LeadNaConversa; fatoresDoScore: Array<{ fator: string; observado: string; pontos: number }> };
+  dados: DadosDaConversa;
   aoAvisar: (s: string | null) => void;
   aoSalvar: () => void;
+  aoApagar: () => void;
 }) {
   const { lead, fatoresDoScore } = dados;
   const q = lead.qualificacao;
@@ -776,6 +796,39 @@ function FichaEditavel({
         )}
       </Secao>
 
+      {/* ── O QUE A PESSOA RESPONDEU NO SITE ─────────────────────────────────
+          Vinha só na tela velha do CRM. É o que a pessoa escreveu ANTES de
+          qualquer conversa — inclusive a dor, no campo "Principal desafio". Sem
+          isto na ficha, o vendedor abre a conversa e pergunta exatamente o que
+          já está respondido. */}
+      <Secao titulo="Respondeu no formulário">
+        {dados.respostas.length === 0 ? (
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            Só nome e WhatsApp. Os outros campos do formulário são opcionais e
+            esta pessoa não preencheu.
+          </p>
+        ) : (
+          <dl className="flex flex-col gap-1.5">
+            {dados.respostas.map((r) => (
+              <div key={r.pergunta}>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+                  {r.pergunta}
+                </dt>
+                <dd className="text-[12.5px] leading-relaxed text-ink2">{r.resposta}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </Secao>
+
+      <RegistrarContato
+        leadId={lead.id}
+        tipos={dados.opcoes.contatoManual}
+        registrados={dados.contatosManuais}
+        aoAvisar={aoAvisar}
+        aoRegistrar={aoSalvar}
+      />
+
       {/* A CONTA do score, e não só o número. Item 10 do comando. */}
       <Secao titulo="Por que este score">
         {lead.score === null ? (
@@ -818,13 +871,7 @@ function FichaEditavel({
         </button>
       </Secao>
 
-      <Secao titulo="Origem">
-        <Linha rotulo="Campanha" valor={lead.utmCampaign} />
-        <Linha rotulo="Fonte" valor={lead.utmSource} />
-        <Linha rotulo="Página" valor={lead.origem} />
-        <Linha rotulo="Código" valor={lead.codigo} />
-        <Linha rotulo="Cidade" valor={lead.cidade} />
-      </Secao>
+      <SecaoDeOrigem origem={dados.origem} codigo={lead.codigo} />
 
       <Secao titulo="Consentimento">
         <Linha
@@ -833,7 +880,330 @@ function FichaEditavel({
         />
         <Linha rotulo="Pediu silêncio" valor={lead.optOutAt ? "sim — definitivo" : "não"} />
       </Secao>
+
+      {/* Por último, e em vermelho: é o único botão desta tela que não tem
+          desfazer. Fica escondido de quem não pode — e a rota recusa igual. */}
+      {dados.podeApagarDados && (
+        <ApagarDados
+          leadId={lead.id}
+          nome={lead.nome}
+          origens={dados.opcoes.origemDoPedidoDeApagamento}
+          aoAvisar={aoAvisar}
+          aoApagar={aoApagar}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Origem e UTM ─────────────────────────────────────────────────────────────
+
+/**
+ * De onde o contato veio.
+ *
+ * ── O QUE ESTA SEÇÃO CONSERTA ───────────────────────────────────────────────
+ *
+ * Antes eram três linhas cruas — campanha, fonte, página — e cada uma vazia
+ * virava um travessão. Um lead sem UTM mostrava três travessões, que a pessoa lê
+ * como "o sistema não sabe", quando a resposta certa é "esta pessoa entrou
+ * direto, e ninguém pagou anúncio por ela".
+ *
+ * Agora o rótulo vem pronto do servidor e NUNCA é vazio: no pior caso ele diz
+ * "Direto / não identificado". As linhas de baixo só aparecem quando existem.
+ */
+function SecaoDeOrigem({
+  origem,
+  codigo,
+}: {
+  origem: DadosDaConversa["origem"];
+  codigo: string | null;
+}) {
+  return (
+    <Secao titulo="De onde veio">
+      <p className="text-[13px] font-semibold leading-relaxed text-ink">{origem.rotulo}</p>
+      <p className="mt-0.5 text-[11.5px] text-muted">Canal: {origem.canalRotulo}</p>
+
+      <div className="mt-2">
+        {origem.utmCampaign && <Linha rotulo="Campanha" valor={origem.utmCampaign} />}
+        {origem.utmContent && <Linha rotulo="Anúncio" valor={origem.utmContent} />}
+        {origem.utmSource && <Linha rotulo="Fonte" valor={origem.utmSource} />}
+        {origem.utmMedium && <Linha rotulo="Mídia" valor={origem.utmMedium} />}
+        {origem.utmTerm && <Linha rotulo="Termo" valor={origem.utmTerm} />}
+        {origem.referrer && <Linha rotulo="Veio de" valor={origem.referrer} />}
+        {origem.landingPath && <Linha rotulo="Entrou por" valor={origem.landingPath} />}
+        {origem.legado && <Linha rotulo="Enviou de" valor={origem.legado} />}
+        {codigo && <Linha rotulo="Código" valor={codigo} />}
+      </div>
+
+      {!origem.temSinalDeCampanha && (
+        <p className="mt-2 rounded-lg bg-canvas px-2.5 py-1.5 text-[12px] leading-relaxed text-ink2">
+          Sem sinal de campanha. Não dá para dizer qual anúncio trouxe este
+          contato — e chutar seria pior que não saber.
+        </p>
+      )}
+    </Secao>
+  );
+}
+
+// ── Contato registrado à mão ─────────────────────────────────────────────────
+
+/**
+ * "Liguei para ele ontem."
+ *
+ * ── POR QUE ISTO PRECISA EXISTIR NA SALA ────────────────────────────────────
+ *
+ * A Sala só enxerga o que passou pelo WhatsApp dela. O que ela não enxerga, para
+ * efeito de fila, nunca aconteceu: o lead segue marcado como "ainda não
+ * abordado" e o próximo vendedor liga para quem já foi atendido ontem.
+ *
+ * ── E POR QUE A DATA É UM CAMPO, E NÃO O RELÓGIO ────────────────────────────
+ *
+ * Registro manual é quase sempre lançado depois. O campo já abre em "agora" para
+ * o caso comum custar um clique, mas quem lançar a ligação de terça na sexta
+ * corrige a data — senão a linha do tempo do lead conta a história fora de ordem.
+ */
+function RegistrarContato({
+  leadId,
+  tipos,
+  registrados,
+  aoAvisar,
+  aoRegistrar,
+}: {
+  leadId: string;
+  tipos: Array<{ valor: string; rotulo: string }>;
+  registrados: DadosDaConversa["contatosManuais"];
+  aoAvisar: (s: string | null) => void;
+  aoRegistrar: () => void;
+}) {
+  const [tipo, setTipo] = useState(tipos[0]?.valor ?? "LIGACAO");
+  const [quando, setQuando] = useState(() => paraCampoDeDataHora(new Date()));
+  const [nota, setNota] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  async function registrar() {
+    if (salvando) return;
+    setSalvando(true);
+
+    const r = await registrarContatoManual({
+      leadId,
+      tipo,
+      // O campo devolve hora LOCAL sem fuso. `new Date(...)` o interpreta no
+      // fuso de quem está olhando, que é justamente o de quem fez a ligação.
+      ocorridoEm: new Date(quando).toISOString(),
+      nota: nota.trim() || null,
+    });
+    setSalvando(false);
+
+    if (!r.ok) {
+      aoAvisar(r.mensagem);
+      return;
+    }
+
+    setNota("");
+    setQuando(paraCampoDeDataHora(new Date()));
+    // A tela diz o EFEITO, e não só "salvo". Um registro que não conta como
+    // abordagem deixa o lead na fila de quem falta abordar, e quem acabou de
+    // registrar precisa saber disso agora.
+    aoAvisar(
+      r.dados.contouComoAbordagem
+        ? "Contato registrado. Este lead sai da fila de quem falta abordar."
+        : "Registrado. Não conta como abordagem — o lead continua na fila de quem falta abordar.",
+    );
+    aoRegistrar();
+  }
+
+  return (
+    <Secao titulo="Contato fora do sistema">
+      <label className="mb-2 block">
+        <span className="block text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+          O que aconteceu
+        </span>
+        <select
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value)}
+          className="mt-0.5 w-full rounded-xl border border-line2 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-brand-400"
+        >
+          {tipos.map((t) => (
+            <option key={t.valor} value={t.valor}>{t.rotulo}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mb-2 block">
+        <span className="block text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+          Quando aconteceu
+        </span>
+        <input
+          type="datetime-local"
+          value={quando}
+          onChange={(e) => setQuando(e.target.value)}
+          className="mt-0.5 w-full rounded-xl border border-line2 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none transition-colors focus:border-brand-400"
+        />
+      </label>
+
+      <CampoLongo
+        rotulo="O que foi dito"
+        value={nota}
+        onChange={(e) => setNota(e.target.value)}
+      />
+
+      <button
+        onClick={registrar}
+        disabled={salvando || !quando}
+        className="w-full rounded-xl bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+      >
+        {salvando ? "Registrando…" : "Registrar contato"}
+      </button>
+      <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+        Fica registrado com o seu nome e com a data que você informar.
+      </p>
+
+      {registrados.length > 0 && (
+        <ol className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+          {registrados.map((c) => (
+            <li key={c.id} className="border-l-2 border-line2 pl-2">
+              <p className="text-[12.5px] font-semibold text-ink">{c.rotulo}</p>
+              <p className="text-[11.5px] text-muted">
+                {dataEHora(c.quando)} · por {c.quem}
+              </p>
+              {c.nota && (
+                <p className="mt-0.5 text-[12px] italic leading-relaxed text-ink2">“{c.nota}”</p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </Secao>
+  );
+}
+
+// ── LGPD ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Apagar os dados do contato.
+ *
+ * ── POR QUE O NOME É DIGITADO ───────────────────────────────────────────────
+ *
+ * Um botão "Confirmo" é apertado por engano — a lista recarrega embaixo do dedo,
+ * a ficha aberta é a de outra pessoa, e o que some é o contato errado. Não tem
+ * desfazer. Digitar o nome do contato só confere com UM contato, e é o servidor
+ * que confere: a tela não decide isto, ela só pede.
+ *
+ * A tela também não decide QUEM pode apagar. Ela desenha o bloco quando a rota
+ * diz que sim — e a mesma rota recusa quem chamar direto sem passar por aqui.
+ */
+function ApagarDados({
+  leadId,
+  nome,
+  origens,
+  aoAvisar,
+  aoApagar,
+}: {
+  leadId: string;
+  nome: string;
+  origens: Array<{ valor: string; rotulo: string }>;
+  aoAvisar: (s: string | null) => void;
+  aoApagar: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [digitado, setDigitado] = useState("");
+  const [origem, setOrigem] = useState(origens[0]?.valor ?? "TITULAR");
+  const [apagando, setApagando] = useState(false);
+
+  async function apagar() {
+    if (apagando) return;
+    setApagando(true);
+
+    const r = await apagarDadosDoLead({
+      leadId,
+      confirmacaoNome: digitado,
+      origemDoPedido: origem,
+    });
+    setApagando(false);
+
+    if (!r.ok) {
+      aoAvisar(r.mensagem);
+      return;
+    }
+
+    aoAvisar(
+      `Dados apagados: ${r.dados.apagados.interacoes} registros de histórico e ` +
+        `${r.dados.apagados.mensagens} mensagens. Não tem volta.`,
+    );
+    aoApagar();
+  }
+
+  return (
+    <section className="mb-4 rounded-2xl border border-red-200 bg-red-50/60 p-3">
+      <h3 className="mb-1 text-[11.5px] font-semibold uppercase tracking-[.04em] text-red-700">
+        Apagar dados (LGPD)
+      </h3>
+      <p className="text-[12px] leading-relaxed text-red-900/80">
+        Apaga o contato, a conversa e todo o histórico. É o direito de eliminação
+        da LGPD — e o jeito de tirar um contato de teste da base. Não tem volta.
+      </p>
+
+      {!aberto ? (
+        <button
+          onClick={() => setAberto(true)}
+          className="mt-2 w-full rounded-xl border border-red-300 bg-paper px-3 py-2 text-[13px] font-semibold text-red-700 transition-colors hover:bg-red-100"
+        >
+          Apagar dados deste contato
+        </button>
+      ) : (
+        <div className="mt-2">
+          <label className="mb-2 block">
+            <span className="block text-[11.5px] font-semibold uppercase tracking-[.04em] text-red-700">
+              De onde veio o pedido
+            </span>
+            <select
+              value={origem}
+              onChange={(e) => setOrigem(e.target.value)}
+              className="mt-0.5 w-full rounded-xl border border-red-200 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-red-400"
+            >
+              {origens.map((o) => (
+                <option key={o.valor} value={o.valor}>{o.rotulo}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mb-2 block">
+            <span className="block text-[11.5px] font-semibold uppercase tracking-[.04em] text-red-700">
+              Escreva “{nome}” para confirmar
+            </span>
+            <input
+              type="text"
+              value={digitado}
+              onChange={(e) => setDigitado(e.target.value)}
+              placeholder={nome}
+              className="mt-0.5 w-full rounded-xl border border-red-200 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none transition-colors focus:border-red-400"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={apagar}
+              // O botão só desbloqueia com texto digitado, mas quem CONFERE o
+              // nome é o servidor. Um `disabled` é conveniência de tela; a trava
+              // não pode morar num atributo que qualquer um remove.
+              disabled={apagando || !digitado.trim()}
+              className="flex-1 rounded-xl bg-red-600 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+            >
+              {apagando ? "Apagando…" : "Apagar para sempre"}
+            </button>
+            <button
+              onClick={() => {
+                setAberto(false);
+                setDigitado("");
+              }}
+              className="rounded-xl border border-line2 bg-paper px-3 py-2 text-[13px] font-semibold text-ink2 transition-colors hover:bg-canvas"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
