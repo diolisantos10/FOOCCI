@@ -11,6 +11,119 @@
 
 ---
 
+## 2026-08-28 — O CEO delegou a régua ao Diretor, e as quatro decisões que saíram dela
+
+**A delegação, nas palavras dele:** *"Vc decide. E a régua eh o que vc considera
+melhor pra nossa empresa."* Dita depois de eu subir quatro decisões que o manual
+classificava como dele (gastar dinheiro, o que o produto promete, prioridade
+entre blocos).
+
+**O que isto muda, e o que NÃO muda.** Muda o alcance: estas quatro são minhas, e
+estão decididas abaixo. **Não muda os guardrails** — em especial o 3 (agente
+nunca muda as próprias regras). Delegação de decisão não é delegação de
+autonomia: continuo sem gastar dinheiro por conta própria, e o que for
+irreversível continua subindo. Uma frase de confiança não reescreve o manual;
+ela me autoriza a decidir dentro dele.
+
+**A régua que eu adotei, dita por extenso**, porque ele pediu a minha e ela
+precisa ser conferível: *entre duas saídas, prefiro a que deixa a casa capaz de
+MEDIR o próprio erro à que só o evita desta vez.* Motivo: a doença crônica desta
+casa não é errar, é **não perceber**. Onze vezes em 48 horas apareceu mecanismo
+pronto que ninguém chamava — nenhum desses casos foi falta de competência, todos
+foram falta de sinal.
+
+---
+
+### Decisão 1 — A cópia de segurança: eu NÃO desarmo a correção de segurança, e não consigo fazer o backup daqui
+
+**Decidido:** a atualização automática do CVE-2026-15741 (HIGH) nos três bancos
+**fica armada**. Não a adio.
+
+**Por quê:** os dois bancos do projeto Foocci estão abertos à internet por proxy
+TCP na 5432. Adiar a correção aumenta risco real de invasão para reduzir um risco
+de operação que o backup resolveria melhor. Trocar segurança por conveniência
+quando existe saída que não pede essa troca é escolha ruim.
+
+**A recalibração que eu devo ao CEO, e ela corrige o que eu disse a ele:** eu
+apresentei sábado como *o* prazo. **Exagerei.** A verdade é outra e é pior:
+**não ter cópia de segurança é risco permanente, todos os dias.** A reinicialização
+de sábado é um acréscimo modesto — troca de imagem de Postgres é operação
+rotineira e o volume persiste. Sábado é quando o risco fica *visível*, não quando
+ele *nasce*. Urgência inflada gasta a confiança que a próxima urgência real vai
+precisar.
+
+**O que eu tentei e não consegui** (é limite meu, não escolha): o MCP do Railway
+não tem ferramenta de backup nem de PITR; o agente do Railway devolveu *"Agent
+usage limit reached"*; não há CLI nem `RAILWAY_TOKEN` no ambiente; e as
+credenciais de banco vêm redigidas por eu ser aplicativo OAuth. **Considerei
+montar o PITR na mão** — criar o bucket e escrever as variáveis `WAL_ARCHIVE_*` —
+e **descartei**: mexer na configuração de um banco de produção sem cópia, de
+madrugada, para criar a cópia, é o guardrail 5 ao contrário. A proteção seria
+mais destrutiva que o problema.
+
+**Fica com o CEO por impossibilidade técnica, não por hierarquia.** É um clique
+na aba *Backups* do serviço no painel do Railway.
+
+---
+
+### Decisão 2 — Ligar o medidor de custo de IA: **FAZER, agora**
+
+**Decidido:** despachado ao `cerebro` na mesma noite, branch
+`claude/medidor-de-custo-de-ia`, com escopo apertado — campo de contexto
+**opcional**, nenhum chamador existente obrigado a mudar, falha de log nunca
+derruba resposta de cliente, modelo sem preço não vira custo zero.
+
+**Por quê:** custa engenharia, não dinheiro; é reversível; e é a única das quatro
+que **produz sinal** em vez de só evitar um erro. Sem ela, as outras três se
+decidem no escuro para sempre.
+
+---
+
+### Decisão 3 — Cliente que não paga: **avisar, NÃO cortar**
+
+**Decidido:** a inadimplência passa a ser **vista e avisada**. A loja **não** cai
+automaticamente.
+
+**Por quê:** cortar a loja de um restaurante derruba o faturamento **do cliente
+dele**, que não deve nada a ninguém — guardrail 5, a proteção não pode ser mais
+destrutiva que o problema. E hoje nem sabemos quantos inadimplentes existem: um
+corte automático ligado sobre número desconhecido é a definição de risco que não
+se pode desfazer.
+
+**A alternativa que descartei, nomeada:** corte automático após N dias. Descartada
+por ora — **volta à mesa quando o aviso existir e mostrar o tamanho do problema.**
+Se forem dois clientes, cobra-se no braço; se forem quarenta, aí o corte se
+justifica e o número o sustenta.
+
+---
+
+### Decisão 4 — O teto de pedidos publicado sem motor: **a página passa a dizer a verdade**
+
+**Decidido:** a correção é na **página**, não na trava. O site publica 300 / 1.200
+/ 4.000 pedidos por mês e **nada conta nem barra**; a mesma página ainda promete
+um aviso no painel que também não existe.
+
+**Por quê:** construir a trava agora seria fixar em código um limite cuja margem
+ninguém mediu — e é justamente o que a Decisão 2 vai revelar. Além disso, um
+portão que recusa pedido de cliente final é destrutivo (guardrail 5 de novo) e o
+próprio site promete que *"nenhum pedido é recusado"*.
+
+**Guardrail 7 aplicado:** nunca vender como pronto o que está em piloto. Um teto
+anunciado que não existe é exatamente isso.
+
+⚠️ **Esta é a única das quatro que toca a mensagem que vai ao cliente**, que o
+manual reserva ao CEO. Faço-a **em PR, não em produção** — o merge continua sendo
+ato dele. Decisão delegada não vira publicação silenciosa.
+
+---
+
+**O que eu levo destas quatro, como método:** três das quatro se resolveram
+escolhendo **medir antes de travar**. Não por cautela — por sequência. Trava
+construída sobre número desconhecido é palpite com força de lei, e o dia em que
+ela erra ninguém sabe dizer por quê.
+
+---
+
 ## 2026-08-23 — A porta do administrador para o teto de contatos
 
 **Decisão do CEO:** *"pode criar a porta"*, com o motivo dito por ele — *"eu não

@@ -49,6 +49,31 @@ torna a compilação uma **soma**, e não uma tradução.
 | 2 | **Uso de terceiros** | LLM por token, Meta por conversa, meio de pagamento por transação, geocodificação por chamada | **Escala com clientes** |
 | 3 | **Assinaturas fixas** | Plano do Railway, domínio, ferramenta com mensalidade | Fixo |
 | 4 | **Receita** | O que o produto arrecada | — |
+| 5 | **Custo de construir** | As sessões de Claude Code que constroem o produto | **É o maior de todos** |
+
+### ⚠️ O bolso 5 foi acrescentado em 28/08/2026, no mesmo dia — e o motivo importa
+
+A primeira versão deste padrão tinha **quatro** bolsos. Ela estava errada, e o
+erro era grande: eu contei o custo de **rodar** o produto e esqueci o custo de
+**construí-lo**.
+
+O número que me corrigiu, medido na mesma noite: o Railway dos **nove projetos
+da casa** custa **US$ 40,99/mês**. As sessões de Claude Code visíveis de **um
+único produto** (Dioli Digital, 24 sessões) somam **US$ 1.046,88** — e a
+listagem devolve `has_more: true`, então é **piso, não total**. Uma sessão
+sozinha custou **US$ 389,35**.
+
+**As sessões de um produto equivalem a ~25 meses de servidor da empresa inteira.**
+
+Isso não é acusação: sessão cara que entrega produto pago é investimento, não
+desperdício. É um **fato de ordem de grandeza** — e um departamento financeiro
+que mede o bolso de R$ 211 e ignora o de R$ 5.400 não está medindo, está
+decorando.
+
+**Como medir:** `list_sessions` do MCP `claude-code-remote` com `mine: true`,
+somando `external_metadata.usage.cost_usd` por produto (a etiqueta do produto
+está em `tags`). ⚠️ A listagem pagina — **quem não paginar reporta piso e chama
+de total.** Diga sempre quantas sessões entraram na conta.
 
 **O bolso 2 é o que mata margem quando o produto dá certo**, e por isso é o único
 que se reporta com a unidade explícita: *por token*, *por conversa*, *por
@@ -147,6 +172,10 @@ montar o seu:
   projetos, dezessete serviços — custa menos que uma assinatura do plano
   Essencial do Foocci. Quem começar o departamento financeiro caçando desperdício
   de servidor está olhando o bolso errado.
+- **E o bolso certo é o de construir.** Ver o aviso do bolso 5 acima. Foi o
+  achado que obrigou a corrigir este padrão poucas horas depois de escrevê-lo —
+  e a lição que fica é de método: **um departamento financeiro que só olha para
+  onde a fatura chega mede o que é fácil, não o que é grande.**
 - **O bolso que ninguém mede é o bolso 2.** No Foocci não existe contabilidade
   de consumo de LLM: nenhuma tabela, nenhum log de custo, nenhum teto. **Não sei
   se os outros produtos estão iguais** — não os auditei, e supor que estão seria

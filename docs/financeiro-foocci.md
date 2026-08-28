@@ -22,11 +22,44 @@ RAM US$ 10/GB/mês · CPU US$ 20/vCPU/mês · Volume US$ 0,15/GB/mês · Saída 
 | **2 · Uso de terceiros** (LLM, Meta, pagamento) | **NÃO MEDIDO** — e o medidor cobre 1 de ~10 caminhos (§4) | `AIOrderService.ts:1271` é o único escritor | 🔴 |
 | **3 · Assinaturas fixas** (plano Railway, domínio) | **NÃO MEDIDO** | — | 🔴 |
 | **4 · Receita** (assinatura dos restaurantes) | **NÃO MEDIDO** — preço conhecido, nº de assinantes só existe no banco (§5) | `pricing.ts:95-99` | 🔴 |
+| **5 · Custo de construir** (sessões de Claude Code) | **NÃO MEDIDO para o Foocci** — ver §2.1 | listagem da conta não traz `usage` nas sessões deste produto | 🔴 |
 
 **Três dos quatro bolsos estão em branco, e isso é o resultado principal deste
 fechamento.** O produto que fatura de verdade na casa não sabe quanto gasta nem
 quanto arrecada. O que dava para medir sem gastar nada e sem credencial nova, foi
 medido; o resto está nomeado em §8 com o que falta para fechar.
+
+---
+
+## 2.1 ⚠️ O bolso que eu tinha esquecido — e ele é o maior
+
+Este relatório nasceu com quatro bolsos. **Faltava um, e era o maior de todos:
+o custo de CONSTRUIR o produto.** Eu contei o custo de rodar e esqueci o de
+fazer.
+
+O número que me corrigiu, medido em 28/08 pela listagem de sessões da conta
+(`list_sessions`, somando `external_metadata.usage.cost_usd`):
+
+| | |
+|---|---|
+| Railway dos **nove projetos**, por mês | **US$ 40,99** |
+| Sessões de Claude Code visíveis de **um** produto (Dioli Digital, 24 sessões) | **US$ 1.046,88** |
+| A mais cara delas, sozinha | **US$ 389,35** |
+
+**As sessões de um produto equivalem a ~25 meses de servidor da empresa inteira.**
+
+Não é desperdício: sessão cara que entrega produto pago é investimento. É ordem
+de grandeza — e um financeiro que mede R$ 211 e ignora R$ 5.400 está decorando,
+não medindo. Virou o **bolso 5** de `docs/financeiro-padrao-da-casa.md`.
+
+**⛔ E para o Foocci eu NÃO consigo esse número.** As entradas de sessão deste
+produto na listagem vêm **sem o campo `usage`** — as da Dioli Digital vêm com.
+Não sei o motivo. Então o bolso 5 do Foocci é **NÃO MEDIDO**, e eu não vou
+estimá-lo por semelhança: o Foocci tem histórico e volume próprios, e chutar por
+analogia com outro produto é exatamente o que este documento proíbe.
+
+⚠️ **A listagem também pagina** (`has_more: true`). Os US$ 1.046,88 são **piso,
+não total** — e quem repetir esse número como total estará errando para menos.
 
 ---
 
