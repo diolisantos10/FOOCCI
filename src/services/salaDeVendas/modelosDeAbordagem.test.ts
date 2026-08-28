@@ -46,6 +46,30 @@ describe("⭐⭐ o funil inteiro está pronto para submeter", () => {
     }
   });
 
+  it("⭐⭐ os nomes são EXATAMENTE os que estão na Meta", () => {
+    /*
+      ⚠️ Estes quatro nomes existem na conta Meta "Foocci" (2094729331144866),
+      submetidos em 28/08/2026. O envio pede o modelo PELO NOME.
+
+      Mudar uma letra aqui faz a Meta responder que o modelo não existe e a
+      mensagem não sai — sem erro de compilação, sem teste vermelho e sem
+      pista. É o defeito mais silencioso que este arquivo pode ter.
+
+      Já aconteceu: eu tinha escrito `foocci_convite_site` e
+      `foocci_duvida_aberta`; quem submeteu nomeou por etapa do funil. O código
+      foi alinhado à Meta, porque o que está lá é a realidade.
+
+      Se este teste reprovar, a pergunta NÃO é "como faço passar". É: o modelo
+      novo já foi submetido e aprovado na Meta?
+    */
+    expect(MODELOS_DE_ABORDAGEM.map((m) => m.name)).toEqual([
+      "foocci_primeiro_contato",
+      "foocci_sem_resposta",
+      "foocci_interesse_parado",
+      "foocci_reativacao",
+    ]);
+  });
+
   it("todos têm o prefixo que separa dos modelos dos restaurantes", () => {
     // A conta hospeda os modelos dos dois lados. O prefixo impede disparar
     // "aniversário do cliente" para um dono de restaurante.

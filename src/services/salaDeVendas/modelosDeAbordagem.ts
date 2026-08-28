@@ -80,11 +80,25 @@ const VARIAVEIS = ["nome", "estabelecimento"] as const;
  * ⚠️ A ordem das variáveis é contrato: a Meta preenche `{{1}}` com o primeiro
  * parâmetro enviado. Trocar aqui sem trocar no envio manda o nome do bar no
  * lugar do nome da pessoa.
+ *
+ * ── ⚠️ `name` É CONTRATO COM SISTEMA DE FORA. NÃO SE EDITA AQUI ────────────
+ *
+ * Estes quatro nomes existem na conta Meta "Foocci" (2094729331144866), onde
+ * foram submetidos em 28/08/2026. O envio pede o modelo **pelo nome**: mudar
+ * uma letra aqui faz a Meta responder que o modelo não existe, e a mensagem
+ * não sai — sem erro de compilação, sem teste vermelho, sem pista.
+ *
+ * Aconteceu no mesmo dia: eu tinha escrito `foocci_convite_site` e
+ * `foocci_duvida_aberta`, e quem submeteu nomeou por etapa do funil. Alinhei o
+ * código à Meta, e não o contrário — **o que está lá é a realidade**.
+ *
+ * Renomear exige: submeter de novo, esperar aprovação, e só então trocar aqui.
+ * Há teste fixando os quatro nomes para a mudança ser deliberada.
  */
 export const MODELOS_DE_ABORDAGEM: readonly ModeloDeAbordagem[] = [
   {
     passo: 1,
-    name: "foocci_convite_site",
+    name: "foocci_primeiro_contato",
     quando: "Primeiro contato com quem nunca falou com a gente.",
     /*
       Não pede nada. Diz quem somos, o que fazemos e onde ver — e encerra
@@ -122,7 +136,7 @@ export const MODELOS_DE_ABORDAGEM: readonly ModeloDeAbordagem[] = [
   },
   {
     passo: 3,
-    name: "foocci_duvida_aberta",
+    name: "foocci_interesse_parado",
     quando: "Quem respondeu ou demonstrou interesse e parou no meio.",
     /*
       ⚠️ NÃO afirma que a pessoa visitou o site. A gente não mede isso com
