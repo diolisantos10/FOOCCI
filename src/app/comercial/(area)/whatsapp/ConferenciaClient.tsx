@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { NUMERO_DE_VENDAS } from "@/lib/site/numeroDeVendas";
 
 interface Presenca {
   provedor: string;
@@ -34,8 +35,15 @@ type Estado =
   | { fase: "semAcesso" }
   | { fase: "erro"; detalhe: string | null };
 
-/** O número real da Foocci, como a Meta o escreve. A prova do apontamento. */
-const NUMERO_ESPERADO = "5511943723316";
+/**
+ * O número que esta tela EXIGE encontrar na Meta — a prova do apontamento.
+ *
+ * ⚠️ Vem da fonte única desde 28/08/2026. Estava escrito à mão aqui, e era a
+ * terceira cópia do mesmo telefone no repositório — a mais perigosa das três,
+ * porque é a tela que CONFERE o canal: com o número trocado no site e não aqui,
+ * ela carimbaria "conferido" comparando com o telefone antigo.
+ */
+const NUMERO_ESPERADO = NUMERO_DE_VENDAS;
 
 export function ConferenciaClient() {
   const [estado, setEstado] = useState<Estado>({ fase: "carregando" });

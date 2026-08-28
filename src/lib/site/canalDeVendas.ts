@@ -31,8 +31,12 @@
  * `NEXT_PUBLIC_` chega vazio no navegador, e o botão sumiria sem explicação.
  */
 
-/** O número de vendas do Foocci, decidido pelo CEO em 23/08/2026. Só dígitos. */
-export const NUMERO_DE_VENDAS = "5511943723316";
+// ⚠️ O número NÃO é digitado aqui desde 28/08/2026. Ele existia nesta linha e
+// também em `marketing/config.ts`, com políticas diferentes — e trocar pelo
+// Railway mudava só metade do site, sem erro nem log. Fonte única em
+// `./numeroDeVendas`; o re-export mantém quem já importava daqui.
+export { NUMERO_DE_VENDAS } from "./numeroDeVendas";
+import { NUMERO_DE_VENDAS } from "./numeroDeVendas";
 
 /** A mensagem que já vai escrita para a pessoa só apertar enviar. */
 export const MENSAGEM_PADRAO = "Olá! Vim pelo site e quero tirar dúvidas sobre o Foocci.";

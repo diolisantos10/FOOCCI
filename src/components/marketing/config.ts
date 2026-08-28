@@ -23,6 +23,8 @@
  * History of the pre-launch posture: docs/foocci-site/pre-launch-mode-v1.md.
  */
 
+import { NUMERO_DE_VENDAS } from "@/lib/site/numeroDeVendas";
+
 export const LOGIN_URL = "/login";
 
 /**
@@ -72,9 +74,20 @@ export const LOGIN_URL = "/login";
  * quebrado. Depois de salvar, **Redeploy**. O mesmo aviso já existe em
  * `docs/setup-meta-passo-a-passo.md` para `NEXT_PUBLIC_META_APP_ID`.
  *
- * Formato: só dígitos, com DDI. `55` + `11` + `94372-3316`.
+ * Formato: só dígitos, com DDI.
+ *
+ * ⚠️ **O número não é digitado aqui desde 28/08/2026.** Ele estava escrito nesta
+ * linha E em `@/lib/site/canalDeVendas`, com políticas diferentes: aquele recusa
+ * variável de ambiente, este aceita. Resultado — trocar o número pelo Railway
+ * mudava **metade do site**, e a outra metade continuava mandando gente para o
+ * telefone antigo, sem erro, sem log e sem sintoma.
+ *
+ * A fonte única é `@/lib/site/numeroDeVendas`, módulo puro (sem import e sem
+ * `process.env`), justamente para ser lido dos dois lados sem arrastar nada de
+ * servidor para o navegador. A precedência da variável continua valendo — o que
+ * mudou é de onde vem o valor de baixo.
  */
-const HARDCODED_SALES_NUMBER: string | null = "5511943723316";
+const HARDCODED_SALES_NUMBER: string | null = NUMERO_DE_VENDAS;
 
 /** Tira tudo que não é dígito; devolve null se não sobrar número de verdade. */
 function onlyDigits(v: string | null | undefined): string | null {
