@@ -20,15 +20,17 @@
  *
  *   · **prazo de implantação** — não existe prazo publicado. Prometer um é o
  *     primeiro item da lista de proibidos da ficha;
- *   · **formato de operação específico** (self service e afins) — não há fato
- *     publicado sobre quais formatos são atendidos. Inventar um "sim" fecha
- *     negócio e explode na implantação.
+ *   · **certificação** — nenhuma foi publicada, e um "temos ISO" inventado é a
+ *     mentira que fecha contrato e aparece na auditoria do cliente.
  *
- * ⚠️ *Bar* saiu desta lista em 28/08/2026, e a diferença entre os dois casos é
- * a regra inteira desta casa: bar deixou de ser palpite porque o CEO afirmou o
- * público ("restaurantes, bares e afins") e o fato foi **publicado** no FAQ.
- * Self service continua fora porque ninguém afirmou nada — e a ausência de
- * informação não é informação.
+ * ⚠️ **Duas perguntas saíram desta lista em 28/08/2026**, e o motivo é a regra
+ * inteira desta casa: *bar* e *self service* deixaram de ser palpite porque o
+ * CEO afirmou o alcance — *"todo estabelecimento que vende comida ou bebida…
+ * delivery no geral"* — e o fato foi **publicado** no FAQ.
+ *
+ * Não é o TA que ficou mais esperto: é a empresa que passou a dizer em público
+ * o que já sabia em particular. Enquanto o fato só existia na cabeça do CEO, a
+ * ausência era a resposta certa.
  *
  * Elas estão na lista com a ausência DECLARADA. Um teste que só medisse o número
  * cheio empurraria alguém a preencher esses dois buracos com um palpite — que é
@@ -59,13 +61,21 @@ const PRECISA_SABER = [
   "quantos clientes recompram",
   "tem cupom de desconto",
   "funciona para pizzaria",
-  // ⭐ Entrou em 28/08/2026, e medindo: até esse dia voltava VAZIA. O CEO define
-  // o atendimento como "restaurantes, bares e afins", mas o site dizia
-  // "restaurante" nove vezes e bar nenhuma — então o TA não tinha o que
-  // afirmar sobre metade do próprio público, e a primeira pergunta de um dono
-  // de bar recebia "vou confirmar". A correção foi publicar o fato no FAQ.
+  // ⭐ Entraram em 28/08/2026, e medindo: até esse dia voltavam VAZIAS. O site
+  // dizia "restaurante" nove vezes e bar nenhuma — o TA não tinha o que
+  // afirmar sobre a maior parte do próprio público, e a primeira pergunta de um
+  // dono de bar recebia "vou confirmar". A correção foi publicar a lista no FAQ.
+  //
+  // A lista é longa porque o público é largo: o CEO define o alcance como
+  // "todo estabelecimento que vende comida ou bebida… delivery no geral".
   "vocês atendem bar",
   "vocês atendem bares",
+  "atende lanchonete",
+  "vocês atendem padaria",
+  "serve para hamburgueria",
+  "e para adega",
+  "atende food truck",
+  "vocês atendem delivery",
   "tenho duas lojas, funciona",
   "quem coloca meu cardápio no sistema",
   "preciso comprar equipamento",
@@ -82,7 +92,10 @@ const PRECISA_SABER = [
 /** O que ele NÃO sabe, e não deve saber. A ausência é a resposta certa. */
 const NAO_DEVE_CHUTAR = [
   { pergunta: "quanto tempo demora para instalar", porque: "não existe prazo publicado" },
-  { pergunta: "e para self service", porque: "não há fato publicado sobre tipos atendidos" },
+  {
+    pergunta: "vocês têm certificação ISO",
+    porque: "nenhuma certificação foi publicada, e afirmar uma é o tipo de mentira que fecha contrato",
+  },
 ];
 
 function temMaterial(p: string): boolean {

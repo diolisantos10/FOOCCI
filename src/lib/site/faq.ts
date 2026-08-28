@@ -70,8 +70,38 @@ export const FAQS: readonly PerguntaDoSite[] = [
     ⚠️ ENTRADA NOVA EM 28/08/2026 — E ELA CORRIGE UM BURACO QUE CUSTAVA VENDA.
 
     As nove respostas acima dizem "restaurante" nove vezes e **bar nenhuma**.
-    Só que o CEO define o atendimento do Foocci como *"restaurantes, bares e
-    afins"* — ou seja, o site descrevia um público menor do que o real.
+    Só que o público real é bem maior, e o site descrevia um menor.
+
+    ── A LISTA VEIO DO CEO, E JÁ ESTAVA NO CÓDIGO ──────────────────────────
+
+    Ele definiu o alcance assim, em 28/08: *"o Foocci atende todos os
+    estabelecimentos que o iFood e o 99 atendem. Então a gente atende bares sim,
+    porque bares vendem comida. E bares vendem bebida. A gente atende delivery
+    no geral."*
+
+    A lista abaixo não foi inventada aqui: é **a mesma** que o qualificador já
+    usava internamente (`salaDeVendas/ta/sondagem.ts`), escrita a partir de uma
+    definição anterior do próprio CEO — *"quem vende comida ou bebida para
+    consumo"*. O agente sabia quem qualificar; o site é que não sabia contar.
+    Agora as duas pontas leem a mesma coisa.
+
+    ── ⚠️ POR QUE O TEXTO NÃO DIZ "TUDO QUE O IFOOD ATENDE" ────────────────
+
+    Foi como o CEO explicou para mim, e é uma ótima explicação. Mas como texto
+    **publicado** seria uma promessa ruim, por dois motivos:
+
+      1. **Ela muda sem a gente.** O catálogo do iFood cresceu para farmácia,
+         mercado e pet. Prometer "tudo que eles atendem" faz a nossa promessa
+         crescer junto, em silêncio — e aí aparece um dono de farmácia com o
+         nosso próprio site na mão.
+      2. **É afirmação comparativa sobre característica do serviço.** O CDC
+         art. 37 §1º (copiado em `control_room/docs/juridico/base-de-leis.md`)
+         alcança informação publicitária capaz de induzir a erro sobre natureza
+         e qualidade "mesmo por omissão".
+
+    Nomear a categoria com as nossas palavras é mais largo na prática — a lista
+    abaixo é longa de propósito, para o dono reconhecer o negócio DELE escrito
+    ali — e não depende de decisão de concorrente nenhum.
 
     Duas coisas quebravam por causa disso, e as duas na véspera de começar a
     abordar leads:
@@ -93,7 +123,7 @@ export const FAQS: readonly PerguntaDoSite[] = [
     ou seja, a trilha do que já foi dito passaria a apontar para outra coisa.
   */
   {
-    q: "O Foocci atende bar?",
-    a: "Sim. O Foocci atende restaurantes, bares e negócios de alimentação em geral. A proposta é a mesma: pedido direto, atendimento e relacionamento com o cliente.",
+    q: "Que tipo de estabelecimento o Foocci atende?",
+    a: "Todo negócio que vende comida ou bebida: restaurante, bar, boteco, lanchonete, pizzaria, hamburgueria, japonês, cafeteria, padaria, confeitaria, doceria, açaí, sorveteria, food truck, adega, marmitaria, self-service, dark kitchen e delivery em geral. Se você vende comida ou bebida, é para você — a proposta é a mesma: pedido direto, atendimento e relacionamento com o cliente.",
   },
 ];

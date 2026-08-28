@@ -85,7 +85,11 @@ const FORMATO_ESCRITO = [
 ].join("\n");
 
 const INSTRUCAO = [
-  "Você lê a conversa entre um dono de restaurante e o atendimento da Foocci e extrai FATOS.",
+  // ⚠️ "negócio de comida ou bebida", e não "restaurante". A frase de abertura
+  // enquadra tudo o que vem depois: dizendo "restaurante", o modelo lê a lista
+  // de baixo como exceções toleradas em vez de público normal — e bar, adega e
+  // food truck são público normal, não exceção.
+  "Você lê a conversa entre um dono de negócio de comida ou bebida e o atendimento da Foocci e extrai FATOS.",
   "",
   FORMATO_ESCRITO,
   "",
