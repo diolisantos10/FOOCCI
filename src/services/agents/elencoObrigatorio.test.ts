@@ -161,3 +161,67 @@ describe("a pasta não perde agentes em silêncio", () => {
     }
   });
 });
+
+describe("o departamento financeiro do produto existe — ordem do CEO, 28/08/2026", () => {
+  /*
+    "Todo produto precisa ter o seu departamento financeiro, que vai cuidar dos
+    gastos, de quanto qual projeto está gastando, em todos os sentidos."
+
+    ── POR QUE ISTO É TESTE ──
+
+    Mesmo motivo dos cinco acima, com um agravante: o financeiro é o único agente
+    cuja ausência NÃO produz sintoma. Se o `qualidade` some, um bug passa e
+    alguém reclama. Se o financeiro some, a conta continua chegando e ninguém
+    nota nada — até o dia em que ela dobra. Perda silenciosa por construção.
+
+    ── O QUE ESTE BLOCO NÃO AFIRMA ──
+
+    Que `financeiro` virou o sexto Essencial. A lista dos cinco foi fechada pelo
+    CEO em 07/08 e mexer nela é doutrina — do Diretor Geral, não deste teste. O
+    pedido de adoção está em `docs/perguntas-ao-diretor-geral.md`. Até lá ele é
+    um especialista obrigatório DESTE produto, travado aqui.
+  */
+  const PERFIL = "financeiro";
+
+  it("`financeiro` está presente", () => {
+    expect(existsSync(path.join(PASTA, `${PERFIL}.md`))).toBe(true);
+  });
+
+  it("`financeiro` declara o próprio nome no frontmatter", () => {
+    expect(ler(PERFIL)).toMatch(new RegExp(`^name:\\s*${PERFIL}\\s*$`, "m"));
+  });
+
+  it("`financeiro` não é casca vazia", () => {
+    const corpo = ler(PERFIL).split(/^---\s*$/m).slice(2).join("").trim();
+    expect(corpo.length).toBeGreaterThan(400);
+  });
+
+  it("`financeiro` NUNCA gasta — a trava que mais importa", () => {
+    /*
+      Um agente que mede dinheiro e também pode gastá-lo é a definição de
+      conflito de interesse. E aqui a autonomia é vedada por natureza, não por
+      grau: gastar é irreversível e move dinheiro de terceiro.
+
+      A metade que reprova: apagar a linha "NUNCA gasta" do perfil para o agente
+      "já ir resolvendo" um upgrade de plano. É a mudança mais tentadora deste
+      arquivo, exatamente como o `Write` no `qualidade`.
+    */
+    expect(ler(PERFIL)).toMatch(/NUNCA gasta, contrata, cadastra cartão/i);
+  });
+
+  it("`financeiro` nunca escreve o valor de um segredo", () => {
+    // Ele varre variáveis de ambiente atrás de serviço pago. Sem esta linha,
+    // um relatório de custo vira vazamento de credencial.
+    expect(ler(PERFIL)).toMatch(/nunca escreve segredo|use o \*\*nome da variável\*\*, nunca o valor/i);
+  });
+
+  it("`financeiro` aponta para o padrão da casa, e o padrão existe", () => {
+    /*
+      "Regra não se copia, se aponta." O contrato com o financeiro da companhia
+      mora num arquivo só; perfil que perde o ponteiro passa a reportar no
+      formato que inventar, e a compilação da Control Room deixa de ser uma soma.
+    */
+    expect(ler(PERFIL)).toMatch(/financeiro-padrao-da-casa\.md/);
+    expect(existsSync(path.join(process.cwd(), "docs", "financeiro-padrao-da-casa.md"))).toBe(true);
+  });
+});
