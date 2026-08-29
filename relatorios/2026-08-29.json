@@ -1,0 +1,109 @@
+{
+  "produto": "Foocci",
+  "data": "2026-08-29",
+  "gerado_em_utc": "2026-08-29T11:15:00Z",
+  "assinado_por": "Diretor do Foocci",
+  "aviso": "null = NAO MEDIDO. 0 = medido e deu zero. Nenhum numero abaixo foi estimado.",
+  "ficha_lida": false,
+  "ficha_observacao": "Nao tenho acesso ao repositorio control_room; montei pelas oito secoes nomeadas na chamada.",
+
+  "saude": {
+    "app_no_ar": true,
+    "origem": "GET https://foocci.com.br/api/health as 11:08 UTC",
+    "db_status": "ok",
+    "commit_em_producao": "476c1acf",
+    "uptime_segundos": 65784,
+    "ultimo_deploy_utc": "2026-08-28T16:51:59Z",
+    "erro_5xx_24h_pct": 0.0056,
+    "requisicoes_24h": 35853,
+    "erros_5xx_24h": 2,
+    "erros_4xx_24h": 122,
+    "origem_erros": "Railway http-error-rate, janela 24h",
+    "ontem_erro_5xx_pct": 0.0,
+    "comparacao": "ontem 0 erros em 4.511 req (janela 3h); hoje 2 em 35.853 (janela 24h). Janelas diferentes: nao sao comparaveis direto."
+  },
+
+  "cliente": {
+    "clientes_sem_resposta_hoje": null,
+    "motivo_null": "exige banco de producao; nao tenho credencial",
+    "pontos_de_silencio_com_log": 12,
+    "pontos_de_silencio_sem_log_ontem": 8,
+    "origem": "contagem de [BrainDecision] em WhatsAppBrainRuntimeService.ts no commit 476c1ac (era 5 antes do PR #172)",
+    "retorno_automatico_da_ia_ligado": false,
+    "origem_retorno": "unico escritor de aiEnabled=true segue sendo /api/chat/conversations/[id]/release (acao manual)",
+    "opt_out_falso_positivo_corrigido": true,
+    "origem_optout": "PR #173 em producao desde 2026-08-28T16:51Z"
+  },
+
+  "produtividade": {
+    "prs_mergeados_24h": 4,
+    "prs_abertos": 3,
+    "lista_mergeados": ["#171 botao de copia", "#172 silencio com log", "#173 opt-out", "#174 portao da copia"],
+    "lista_abertos": ["#169 financeiro", "#170 medidor de custo de IA", "#175 diagnostico CRM"],
+    "origem": "git log origin/claude/remove-legacy-runner-q8iXa desde 2026-08-28 11:00"
+  },
+
+  "qualidade": {
+    "suite_total": 7538,
+    "suite_falhando": 0,
+    "tsc_limpo": true,
+    "origem": "npx vitest run e npx tsc --noEmit rodados por mim em 2026-08-28",
+    "mutacoes_rodadas_24h": 3,
+    "origem_mutacoes": "3 minhas por cima das dos especialistas: rede da resposta vazia, opt-out de verdade, gravador do medidor"
+  },
+
+  "dinheiro": {
+    "infra_railway_foocci_usd_mes": 20.65,
+    "infra_railway_casa_usd_mes": 40.99,
+    "origem_infra": "metrica x tarifa publicada, medido 2026-08-28",
+    "confianca_infra": "ESTIMADO",
+    "receita_mrr": null,
+    "assinantes_ativos": null,
+    "custo_ia_mes": null,
+    "motivo_null_dinheiro": "receita e custo de IA exigem banco de producao. Medidor de IA pronto no PR #170, nao mergeado."
+  },
+
+  "risco": {
+    "cve_id": "CVE-2026-15741",
+    "cve_severidade": "HIGH",
+    "cve_aplicado": false,
+    "cve_versao_atual": "18.4",
+    "cve_janela_aberta_agora": true,
+    "cve_janela": "sabado 10h-24h UTC e domingo 0h-18h UTC",
+    "origem_cve": "get-service-config as 11:08 UTC: remediationNotice ainda presente, deploy ativo do Postgres segue de 2026-07-23",
+    "dados_intactos": true,
+    "origem_dados": "disco do Postgres 0,854 GB as 11:08 (era 0,852 em 28/08), sem falhas, replica 1/1 online",
+    "pitr_ligado": false,
+    "agendamento_de_copia": false,
+    "origem_backup": "workflow copia-de-seguranca acao=conferir, rodado hoje 11:09 UTC",
+    "copias_existentes": 2,
+    "copia_mais_recente": "manual-20260828-1547, 5 MB, 2026-08-28T15:47Z",
+    "copia_mais_antiga": "automatica de resize, 167 MB, 2026-08-07T00:39Z",
+    "copias_ficam_no_mesmo_volume": true,
+    "bancos_expostos_na_internet": 2
+  },
+
+  "bloqueio_do_ceo": {
+    "itens": 6,
+    "lista": [
+      "guardar copia dos dados fora do sistema (R$ 2/mes)",
+      "construir porta do Instagram para o WhatsApp",
+      "retomar custo por restaurante antes de 1 de setembro",
+      "cliente que nao paga: cortar ou nao",
+      "limite de pedidos publicado sem motor",
+      "IA volta sozinha depois do humano assumir"
+    ],
+    "pagina": "https://claude.ai/code/artifact/4c618674-6dd8-44d2-8c4e-ddbe4f2ebbff"
+  },
+
+  "nao_medido": [
+    "quantos clientes ficaram sem resposta hoje - exige banco",
+    "receita, MRR e numero de assinantes - exige banco",
+    "custo de IA do mes - medidor no PR #170, nao mergeado",
+    "se a Meta aprovou os 84 modelos submetidos em 23/08 - exige GET /api/admin/meta/diag com autenticacao de admin",
+    "se alguma campanha ja bateu na parede de 500 - exige banco",
+    "o agente solto mudou de 1-em-21? - exige banco; nenhuma mudanca de codigo no caminho desde 28/08",
+    "prova de RESTAURACAO da copia - restore e in-place e sobrescreve; exige banco descartavel ou PITR ligado",
+    "conteudo do Postgres-76OG - sem credencial, segue sendo 0,35 GB desconhecido e exposto"
+  ]
+}
