@@ -1,6 +1,6 @@
 # Pendências — o que está aberto
 
-> Última atualização: 23/08/2026.
+> Última atualização: 28/08/2026.
 
 
 > ⚠️ **Duas numerações de rodada convivem abaixo, e não é engano.** Em 23/08/2026
@@ -9,6 +9,43 @@
 > (registro do número na Cloud API × teto de contatos e etiqueta do CRM). Nada
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
+
+## 💰 28/08 — O departamento financeiro, por ordem do CEO
+
+Bloco `claude/financeiro-por-produto`. Fonte: `docs/financeiro-foocci.md`.
+
+Criado o especialista `financeiro` do Foocci e o padrão comum
+(`docs/financeiro-padrao-da-casa.md`), que é a especificação para a arquiteta
+construir o Financeiro da Companhia na Control Room — pedido registrado em
+`docs/perguntas-ao-diretor-geral.md`, porque **o Diretor do Foocci não alcança a
+Control Room**.
+
+**Primeiro fechamento: 1 dos 4 bolsos está medido.** Infraestrutura Railway do
+Foocci = US$ 20,65/mês (R$ 106,55), medido por métrica × tarifa — metade do
+consumo dos nove projetos da casa. Uso de terceiros, assinaturas fixas e receita:
+**NÃO MEDIDO**, cada um com a consulta que faltou.
+
+**Três achados que valem dinheiro, conferidos no código:**
+
+1. **O medidor de custo de IA está plugado em um lugar só.**
+   `AIInteractionLogger.log` é chamado apenas de `AIOrderService.ts:1271`. E
+   `callStructuredJson` (`OpenAIEngineAdapter.ts:40-65`) — gargalo de todo o Brain
+   — recebe o `usage` da OpenAI e **descarta**. Ligar o logger ali cobre sete
+   caminhos de uma vez. **Não existe nenhum teto de gasto** no repositório.
+2. **Quem para de pagar continua servido.** Não há cron de billing;
+   `INADIMPLENTE` é escrito num lugar e lido em dois — uma consulta de purga e uma
+   cor no admin. Não corta nada, não avisa ninguém.
+3. **O teto de pedidos por plano é promessa sem motor**, e a página promete até um
+   aviso que também não existe (`precos/page.tsx:1164`).
+
+**Correção ao `CLAUDE.md` feita neste bloco:** a linha "a única leitura de
+`restaurant.plan` monta contexto de IA" deixou de ser verdade — existe gate por
+plano em `src/lib/plan-features.ts:30-33`. A parte central (teto de pedidos não é
+medido) continua válida.
+
+⏰ **Prazo real: 01/10/2026.** A Meta passa a cobrar conversa de serviço e
+utilidade dentro da janela de 24h — hoje R$ 0 e a maior parte do volume. A coleta
+de custo leva ~1 semana e a tarifa definitiva sai até 01/09.
 
 ## 📚 24/08 — Doutrina registrada: `docs/licoes-o-que-deriva.md`
 

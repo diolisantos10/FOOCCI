@@ -52,6 +52,73 @@ inteira dentro do Foocci, a resposta também cabe.
 
 ## Abertas
 
+## PEDIDO DO CEO — criar o Financeiro da Companhia na Control Room
+
+**Aberta em** 2026-08-28 · **bloqueia:** nada no Foocci. O departamento do produto
+já existe e já fechou o primeiro mês. O que falta é **para onde ele reporta**.
+
+**Quem pediu, e nas palavras dele (28/08/2026):**
+
+> *"Todo produto precisa ter o seu departamento financeiro, que vai cuidar dos
+> gastos, de quanto qual projeto está gastando, em todos os sentidos. E aí,
+> Railway, assinatura e tudo mais. E você tem que estar claro por produto. Esses
+> departamentos eles precisam reportar pra um novo departamento, que eu não sei
+> se eu já fiz, que é o departamento financeiro da empresa, que fica lá dentro da
+> Control Room. Se esse departamento não tiver, essa pra arquiteta já criar, e é
+> lá que é compilado todo o financeiro da empresa por produto."*
+
+**O que eu já fiz, do lado do Foocci** (não precisa de resposta para seguir):
+
+| Entrega | Onde |
+|---|---|
+| Departamento financeiro do produto | `.claude/agents/financeiro.md` |
+| Primeiro fechamento mensal | `docs/financeiro-foocci.md` |
+| **A especificação do padrão comum** | `docs/financeiro-padrao-da-casa.md` |
+| Trava para o departamento não sumir em silêncio | `src/services/agents/elencoObrigatorio.test.ts` |
+
+**O que eu NÃO consigo fazer, e é por isso que isto está aqui:** **não alcanço a
+Control Room.** Conversas não se falam, e o repositório dela não é meu. Criar o
+Financeiro da Companhia é da arquiteta. Por isso escrevi a **especificação** em
+vez de só o pedido — `docs/financeiro-padrao-da-casa.md` é feito para ser
+construído a partir dele, não para ser lido e reinterpretado.
+
+**O que eu já li e não respondeu:** `CLAUDE.md` (a escada não tem departamento
+financeiro em nível nenhum), `docs/decisoes.md`, `docs/modelo-de-negocio.md`
+(mapeia a natureza dos custos e diz explicitamente que **nenhum valor está
+apurado**), `docs/pendencias.md:1615-1678` (a OS de custo por restaurante, de
+02/08, autorizada e parada).
+
+**As três perguntas de doutrina:**
+
+1. **`financeiro` vira o sexto Essencial?** O CEO disse "todo produto precisa
+   ter", que é a definição de Essencial — mas a lista dos cinco foi fechada por
+   ele em 07/08 e mexer nela é doutrina, não é minha. **Deixei fora**: travei o
+   agente como obrigatório *deste* produto, com um bloco de teste que declara em
+   comentário que não está afirmando promoção. Se subir a Essencial, a doutrina 23
+   precisa dos doze campos e o teste passa para a lista principal.
+2. **O padrão de `docs/financeiro-padrao-da-casa.md` serve como está, ou a
+   Control Room quer outro formato?** Se a compilação for feita a partir de
+   colunas diferentes, cada produto vai reescrever o fechamento — melhor descobrir
+   agora, com um produto entregue, do que com cinco.
+3. **Quem rateia o custo compartilhado?** A assinatura do Railway é uma só e serve
+   nove projetos. Ela não é de produto nenhum. Propus que o rateio seja decisão da
+   companhia (§5 do padrão), mas não é minha para tomar.
+
+**Minha recomendação, dita por extenso:** adotar o padrão como está e ajustá-lo
+depois do segundo produto fechar — o formato só mostra o que falta quando duas
+fontes tentam somar. E, sobre a pergunta 1: **subir `financeiro` a Essencial**,
+porque a ausência dele é o único caso em que o desaparecimento de um agente não
+produz sintoma nenhum. Se o `qualidade` some, um defeito passa e alguém reclama;
+se o financeiro some, a conta continua chegando e ninguém percebe até ela dobrar.
+
+**Um achado que a Control Room precisa levar aos outros produtos, e que não é
+pergunta:** o Foocci **não mede consumo de LLM** em 9 de ~10 caminhos — o medidor
+existe, é bom, e está plugado num lugar só. **Não sei se os outros produtos estão
+iguais, e não vou supor.** Vale como a primeira pergunta do Financeiro da
+Companhia a cada Diretor. Se a resposta se repetir, é a maior lacuna da casa.
+
+---
+
 ## PROPOSTA — problema nunca sobe sozinho: no mínimo duas saídas, sempre
 
 **Aberta em** 2026-08-14 · **bloqueia:** nada. Já está valendo no Foocci

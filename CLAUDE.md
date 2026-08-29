@@ -182,6 +182,7 @@ naquele turno.
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
 | `seguranca` | **quem consegue entrar sem ser convidado** — rota pública sem autenticação, webhook que aceita qualquer chamador, id de inquilino aceito sem provar dono, segredo que nunca rotacionou |
+| `financeiro` | **o dinheiro da Foocci** — quanto o produto gasta (Railway, LLM, Meta, assinaturas) e quanto arrecada; custo por restaurante; o fechamento mensal que sobe ao financeiro da companhia |
 
 > Esta tabela listava onze e **omitia o `seguranca`**, que existe em disco desde
 > 07/08, é Essencial pela doutrina 23 e tem teste travando a existência dele
