@@ -21,6 +21,8 @@ function input(over: Record<string, unknown> = {}) {
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
     contactHistoryKnown: true, // contadores apurados — o override é sobre teto, não sobre ignorância
+    // cenário-base: cliente sem pedido em andamento nem pedido recente
+    orderState: { known: true, hasActiveOrder: false, lastRealOrderAt: null },
     contactBudgetUsed: 0,
     isNewContact: false, // teto pré-pago desligado no cenário-base
     enforceFrequency: true, // cenário-base: é abordagem, a frequência vale

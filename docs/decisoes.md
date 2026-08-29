@@ -11,6 +11,35 @@
 
 ---
 
+## 2026-08-29 — O CRM não fala por cima de um pedido em andamento
+
+**Decisão do Diretor** (conserto de defeito visto pelo CEO em cliente real —
+não era escolha de negócio). Detalhe em `docs/campanha-nao-atropela-pedido.md`.
+
+Um cliente confirmou R$ 74,00 às 18:51 e às 18:52 recebeu campanha de captação
+com 10% de desconto; às 18:57 perguntou sobre o pedido e ficou sem resposta.
+
+**Fica decidido:** cliente com **pedido em voo** (CONFIRMED / PREPARING / READY /
+OUT_FOR_DELIVERY) não recebe mensagem de CRM nenhuma, e cliente que pediu nas
+últimas **6 horas** não recebe abordagem. A regra mora num módulo só
+(`src/services/crm/activeOrderGuard.ts`) e é aplicada em três portas: público
+(`resolveAudience`), envio (`ContactSafetyService`) e conversa
+(`markConversationCrmContext`).
+
+**Atravessa três domínios**, e é por isso que está aqui: `crm` (público e
+campanha), `operacao` (o que conta como pedido vivo) e `canais`/`garcom` (a
+conversa que ficou muda quando o carimbo de campanha entrou nela).
+
+**O bloqueio por pedido em voo é incondicional** — aniversário e override de teto
+semanal não o furam. **A janela de 6h vale só para abordagem**: recuperação de
+carrinho é resposta a um ato do cliente e segue isenta dela (guardrail 5), mas não
+do pedido em voo.
+
+**O que este bloco NÃO resolveu, de propósito:** `ORDER_SUPPORT` continua sendo um
+`contextType` que ninguém escreve. A trava nova parou de depender dele — passou a
+olhar o fato (tem pedido?) em vez do rótulo —, mas o crachá "Pós-venda" da Central
+de Conversas segue sem acender nunca.
+
 ## 2026-08-23 — A porta do administrador para o teto de contatos
 
 **Decisão do CEO:** *"pode criar a porta"*, com o motivo dito por ele — *"eu não

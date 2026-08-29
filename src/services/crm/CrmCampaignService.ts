@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { busyCustomerOrderFilter } from "./activeOrderGuard";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
 import { isWhatsAppChannelConnected, SendFailure, NO_WHATSAPP_CONFIG_DETAIL } from "./crmWhatsAppChannel";
 import { sendMetaCrmMessage } from "./metaCrmSend";
@@ -131,6 +132,16 @@ export async function resolveAudience(
     hasOptedOut:    false,
     crmContactable: true,           // exclude no-phone imported customers
     phone:          { not: null },  // belt-and-suspenders: require a real phone
+    // Quem está no meio de um pedido não entra em público de campanha —
+    // NENHUMA campanha. A regra e o caso que a criou estão em
+    // `activeOrderGuard.ts`. Aqui é o primeiro dos dois lugares em que ela
+    // mora: este filtro poupa orçamento e faz a prévia do lojista contar a
+    // verdade. O segundo, e o que de fato trava o envio, é o
+    // `ContactSafetyService`, por destinatário, no instante do disparo — o
+    // público é resolvido antes do lote, e um pedido pode entrar no meio dele.
+    // Guardrail 4: prompt é aviso, código é trava; e a trava que vale é a que
+    // fica na última porta.
+    orders:         { none: busyCustomerOrderFilter(now) },
   };
 
   const baseSelect = {

@@ -20,6 +20,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ACTIVE_ORDER_STATUSES } from "@/services/crm/activeOrderGuard";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -73,15 +74,65 @@ export async function assignConversationContext(
  * (`shouldAiRespond` → CRM_CONTEXT) still fires on the customer's reply, and the
  * Central de Conversas "Campanha/Automação enviada" badge shows correctly.
  *
- * Safety: it never overwrites an ORDER_SUPPORT context, so an active Waiter order
- * conversation is left untouched. It does not touch aiEnabled/aiLocked/status, so
- * human-takeover and the persistent Staff/Supplier lock are unaffected.
+ * Safety: it does not touch aiEnabled/aiLocked/status, so human-takeover and the
+ * persistent Staff/Supplier lock are unaffected.
+ *
+ * ⚠️ E AQUI MORAVA O TERCEIRO DEFEITO DE 29/08/2026 — o mais grave dos três.
+ *
+ * Esta função dizia proteger a conversa de um pedido em andamento: "it never
+ * overwrites an ORDER_SUPPORT context, so an active Waiter order conversation is
+ * left untouched". A guarda era real, o estado não: **nada no repositório
+ * escreve ORDER_SUPPORT.** A constante existe, o crachá aparece na Central de
+ * Conversas, esta cláusula o protege — e nenhum caminho o define. A guarda
+ * defendia um estado que nunca acontece.
+ *
+ * O resultado, em campo: o cliente pediu pelo WhatsApp às 18:51 e a conversa
+ * ficou com `contextType` nulo. Às 18:52 a campanha reusou essa mesma conversa
+ * (é o que `findOrCreateCrmConversation` faz: pega a conversa OPEN mais recente)
+ * e a carimbou CRM_CAMPAIGN — o `not: ORDER_SUPPORT` deixou passar, porque
+ * `not` inclui nulo. Às 18:57 ele escreveu "Boa noite fiz um pedido" e
+ * "Mas é entrega", e `shouldAiRespond` devolveu CRM_CONTEXT: a IA está proibida
+ * de responder em conversa de campanha. Ninguém respondeu, com o pedido em
+ * preparo.
+ *
+ * A guarda passou a olhar o FATO em vez do rótulo: se o cliente tem pedido em
+ * voo, a conversa dele não vira conversa de campanha, tenha ela o contextType
+ * que tiver. O rótulo continua valendo — quem já está marcado ORDER_SUPPORT
+ * segue protegido —, mas não é mais a única defesa.
+ *
+ * Guardrail 4 aplicado a si mesmo: o comentário prometia a trava; agora existe a
+ * trava.
  */
 export async function markConversationCrmContext(
   conversationId: string,
   contextType: "CRM_CAMPAIGN" | "CRM_AUTOMATION",
   opts?: { relatedCampaignId?: string }
 ): Promise<void> {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { restaurantId: true, customerId: true },
+  });
+  if (!conv) return;
+
+  if (conv.customerId) {
+    const emVoo = await prisma.order.count({
+      where: {
+        restaurantId: conv.restaurantId,
+        customerId: conv.customerId,
+        status: { in: [...ACTIVE_ORDER_STATUSES] as never[] },
+      },
+    });
+    if (emVoo > 0) {
+      // O alerta carrega a própria evidência (guardrail 6): quem ler o log sabe
+      // QUAL conversa e QUAL cliente, não só que "algo foi barrado".
+      console.warn(
+        "[AgentRouting] conversa NÃO carimbada como CRM — cliente tem pedido em andamento",
+        { conversationId, customerId: conv.customerId, contextType, pedidosEmVoo: emVoo },
+      );
+      return;
+    }
+  }
+
   await prisma.conversation.updateMany({
     // Prisma `not` is null-inclusive, so this also matches contextType = null.
     where: { id: conversationId, contextType: { not: CONTEXT_TYPE.ORDER_SUPPORT } },

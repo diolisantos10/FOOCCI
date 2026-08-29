@@ -10,6 +10,30 @@
 > foi perdido e nenhuma rodada está faltando: o que vale é o assunto de cada
 > bloco, não o número.
 
+## 🟢 29/08 — O CRM não fala por cima de um pedido (P0, cliente real)
+
+Bloco `claude/crm-pedido-ativo`. Detalhe em `docs/campanha-nao-atropela-pedido.md`.
+
+Cliente confirmou R$ 74,00 às 18:51 e recebeu campanha de captação com 10% às
+18:52; às 18:57 perguntou sobre o pedido e ninguém respondeu. **Não havia regra
+errada — não havia regra:** nem `resolveAudience` nem o `ContactSafetyService`
+olhavam para os pedidos do cliente.
+
+Consertado com uma regra em três portas (público, envio, conversa). O silêncio era
+o pior dos três e tinha causa própria: `markConversationCrmContext` prometia
+proteger a conversa de um pedido em andamento por um `contextType` —
+`ORDER_SUPPORT` — que **nada no repositório escreve**. A campanha carimbou a
+conversa do pedido como `CRM_CAMPAIGN` e `shouldAiRespond` calou a IA.
+
+**Aberto:**
+- **`ORDER_SUPPORT` continua órfão.** A trava nova não depende mais dele (olha o
+  fato, não o rótulo), mas o crachá "Pós-venda" da Central de Conversas nunca
+  acende, e qualquer código futuro que confie nesse rótulo herda a mesma
+  armadilha. Duas saídas: (a) escrever `ORDER_SUPPORT` no fluxo do Garçom quando o
+  pedido é confirmado; (b) aposentar a constante e o crachá. Recomendação: (a) — o
+  crachá é informação útil para o lojista e o custo é uma linha no fluxo de
+  confirmação.
+
 ## 📚 24/08 — Doutrina registrada: `docs/licoes-o-que-deriva.md`
 
 Do caso da marca: (1) existe defeito que não quebra, **deriva** — e some do radar

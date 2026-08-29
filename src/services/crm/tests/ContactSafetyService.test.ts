@@ -17,6 +17,8 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   campaignExecution: { findMany: vi.fn() },
   customer:          { findUnique: vi.fn(), update: vi.fn() },
+  // O portão pergunta ao banco se o cliente tem pedido em andamento.
+  order:             { count: vi.fn(async () => 0), findFirst: vi.fn(async () => null) },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -60,6 +62,8 @@ function evalInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafe
     // Os quatro contadores acima foram apurados de verdade neste cenário-base.
     // Quem quiser testar a ignorância passa `contactHistoryKnown: false`.
     contactHistoryKnown: true,
+    // cenário-base: cliente sem pedido em andamento nem pedido recente
+    orderState: { known: true, hasActiveOrder: false, lastRealOrderAt: null },
     // Cenário-base: o teto pré-pago de contatos está DESLIGADO (contactBudgetTotal
     // = 0 no DEFAULT_SAFETY_CONFIG) e esta pessoa já é da casa. Quem quiser testar
     // o teto liga `safety.contactBudgetTotal` e passa `isNewContact: true`.
