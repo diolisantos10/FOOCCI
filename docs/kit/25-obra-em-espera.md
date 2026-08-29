@@ -1,13 +1,13 @@
 <!-- ESPELHO-DO-KIT
 origem: docs/25-obra-em-espera.md
-kit-commit: 8d60b5e919b2429b2166a2731c8548e6023a84a3
+kit-commit: 8841e7cc0d3b5f55691e23503f3e30d697925eb1
 sha256-do-corpo: 1321d70a98fb4361c50023da1471f55630b373a10a0af690596787dc40d7d962
 -->
 
 > ⚠️ **ESPELHO GERADO — NÃO EDITE ESTE ARQUIVO.**
 >
 > Ele é uma cópia automática de `diolisantos10/dioli-brain-kit` → `docs/25-obra-em-espera.md`,
-> no commit `8d60b5e`.
+> no commit `8841e7c`.
 >
 > **Editar aqui não muda a doutrina** — muda só este repositório, e reprova o
 > teste `src/services/doutrina/kitEspelho.test.ts` no próximo CI. Para mudar a

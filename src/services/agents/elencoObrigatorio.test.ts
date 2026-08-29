@@ -1,10 +1,28 @@
 /**
- * OS CINCO NÃO PODEM SUMIR.
+ * OS SEIS NÃO PODEM SUMIR.
  *
  * Em 07/08/2026 o CEO fechou a lista dos especialistas que vêm com todo projeto
  * e **não são apagados**: `qualidade`, `cerebro`, `interface`, `experiencia` e
  * `seguranca`. Palavras dele: *"não vão ser apagados de jeito nenhum, que já vem
  * junto com o projeto."*
+ *
+ * ── E EM 09/08/2026 ELES VIRARAM SEIS ──
+ *
+ * O CEO promoveu o `branding` a sexto Essencial — doutrina 27 do kit, que diz
+ * textualmente que **não é proposta e não depende da concordância do Diretor**.
+ * *"A gente não constrói sistemas, a gente constrói marcas. E quem cuida das
+ * marcas é o branding agent."*
+ *
+ * ⚠️ **Este arquivo ficou VINTE DIAS guardando cinco.** De 09/08 a 29/08/2026 a
+ * ordem estava dada, o perfil não existia em disco, e o portão que existe
+ * justamente para reprovar quando um Essencial some **passava verde**. Não é
+ * uma linha esquecida: é a espécie de defeito que a doutrina 31 chama de pior,
+ * porque o verde encerra a investigação — ninguém confere na mão o que o teste
+ * já disse que está certo. Um portão desatualizado é pior que portão nenhum.
+ *
+ * A lição que fica na régua, e não só no comentário: **quando a lista dos
+ * Essenciais mudar, ela muda AQUI na mesma sessão.** O perfil em disco sem a
+ * linha aqui é ordem descumprida com carimbo de aprovada.
  *
  * ── POR QUE ISTO É TESTE, E NÃO UMA LINHA NO CLAUDE.md ──
  *
@@ -32,13 +50,14 @@ import path from "node:path";
 
 const PASTA = path.join(process.cwd(), ".claude", "agents");
 
-/** Os cinco, com o motivo de cada um estar na lista — o alerta carrega a evidência. */
+/** Os seis, com o motivo de cada um estar na lista — o alerta carrega a evidência. */
 const OBRIGATORIOS = [
   { slug: "qualidade",   porque: "o que duvida do resultado, inclusive do Diretor" },
   { slug: "cerebro",     porque: "responde pela verdade e pela escada de autonomia" },
   { slug: "interface",   porque: "como a tela fica" },
   { slug: "experiencia", porque: "se a tela funciona para quem usa" },
   { slug: "seguranca",   porque: "quem consegue entrar sem ser convidado" },
+  { slug: "branding",    porque: "se o trabalho pronto PERTENCE à marca (doutrina 27, ordem do CEO de 09/08/2026)" },
 ] as const;
 
 const ler = (slug: string) => readFileSync(path.join(PASTA, `${slug}.md`), "utf8");
@@ -99,6 +118,28 @@ describe("as restrições que já foram decididas", () => {
     }
   });
 
+  it("`branding` é SOMENTE LEITURA — exigido nominalmente pela doutrina 27", () => {
+    /*
+      A doutrina 27 não pede isto como estilo, pede como item 4 da ordem: *"o
+      `tools:` do perfil não pode conter `Write` nem `Edit`. Se contiver, a
+      proibição central do desenho vira decoração: o agente que pode escrever a
+      própria régua se envenena com a própria conclusão errada e constrói em
+      cima dela."*
+
+      Enquanto isso vivia só na frase do kit, era aviso. Aqui é trava
+      (guardrail 4).
+
+      A metade que reprova: acrescentar `Write` para ele "já registrar a regra
+      que acabou de propor" — que é exatamente o movimento proibido, porque o
+      registro de marca é o documento contra o qual ele julga.
+    */
+    const ferramentas = ferramentasDe(ler("branding"));
+    expect(ferramentas.length).toBeGreaterThan(0); // o frontmatter tem que ser legível
+    for (const proibida of ESCRITA) {
+      expect(ferramentas).not.toContain(proibida);
+    }
+  });
+
   it("`seguranca` TEM escrita — a metade que passa", () => {
     /*
       Sem esta asserção, o teste acima seria satisfeito tirando a escrita de
@@ -117,7 +158,7 @@ describe("as restrições que já foram decididas", () => {
   });
 });
 
-describe("os cinco apontam para a constituição", () => {
+describe("os seis apontam para a constituição", () => {
   /*
     "Regra não se copia, se aponta." Se a constituição for colada dentro de cada
     perfil, ela diverge em três meses e ninguém sabe qual versão vale — foi o

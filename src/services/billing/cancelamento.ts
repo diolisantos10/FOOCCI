@@ -46,6 +46,18 @@
  * ⛔ O QUE ESTE ARQUIVO NÃO FAZ: não decide política de reembolso. O que a tela
  * diz sobre dinheiro é a leitura do Termo assinado — ver `CONSEQUENCIAS_DO_CANCELAMENTO`,
  * onde cada frase carrega a cláusula de onde saiu.
+ *
+ * ⛔ E NÃO MOVE DINHEIRO — 29/08/2026. O Termo agora PROMETE devolução do período
+ * não entregue (cláusula 5.5) e devolução integral no arrependimento de 7 dias
+ * (5.6). A conta dessa devolução, em centavos inteiros, está pronta em
+ * `@/lib/billing/saidaDoPlano` (`devolucaoNaSaida`): pura, testada, sem banco e
+ * sem gateway. **Ela não é chamada aqui, de propósito.** Executar estorno é ato
+ * de dinheiro, e ato de dinheiro nesta casa é decisão do CEO — falta ele definir
+ * quem aperta o botão (operador no painel do Mercado Pago ou rotina automática),
+ * em que prazo, e o que fica registrado. Até lá, cancelar interrompe a cobrança
+ * futura e a devolução é feita fora deste código. Pendência declarada, não
+ * esquecimento: ligar `devolucaoNaSaida` a um estorno sem essa decisão é
+ * exatamente o que o guardrail proíbe.
  */
 
 import type { Prisma, PrismaClient, PlanSubscription } from "@prisma/client";
@@ -64,21 +76,41 @@ export const EVENTO_CANCELAMENTO = "assinatura.cancelada.pelo.cliente";
  * promete devolução de dinheiro que o contrato não promete. Mudou a cláusula?
  * A frase muda junto, e o teste que compara as duas reprova até isso acontecer.
  *
- * A fonte é o Termo de Contratação v1, aprovado pelo CEO em 03/08/2026
+ * A fonte é o Termo de Contratação v2, aprovado pelo CEO em 29/08/2026
  * (`docs/juridico/termo-de-contratacao-foocci.md`).
+ *
+ * ⚠️ MUDOU EM 29/08/2026, e o que saiu importa: a frase *"O valor do ciclo que
+ * já foi pago não é devolvido"* foi **removida**. Ela repetia fielmente a v1 do
+ * contrato — e a v1 estava errada. Reter o mês em curso é legítimo; reter meses
+ * pré-pagos e não prestados é vantagem excessiva, e era o risco real. O que a
+ * tela diz hoje é a v2: o mês em curso não volta, o resto volta.
  */
 export const CONSEQUENCIAS_DO_CANCELAMENTO: readonly { texto: string; clausula: string }[] = [
   {
     clausula: "5.2",
     texto:
-      "Seu acesso continua até o fim do ciclo que você já pagou. Depois disso a " +
-      "assinatura simplesmente não renova.",
+      "Seu acesso continua até o fim do mês em curso, que você já pagou. Depois " +
+      "disso a assinatura simplesmente não renova.",
   },
   {
     clausula: "5.2",
     texto:
-      "Não há multa e não há fidelidade. O valor do ciclo que já foi pago não é " +
-      "devolvido — ele segue valendo até o fim desse ciclo.",
+      "Não há multa e não há fidelidade. O mês em curso não é devolvido — ele " +
+      "segue sendo prestado até o fim.",
+  },
+  {
+    clausula: "5.5",
+    texto:
+      "O que você pagou adiantado e ainda não usamos volta para você: no " +
+      "trimestral, proporcional aos meses que faltam; no anual, refazendo a conta " +
+      "dos meses usados pelo preço do plano mensal. A conta nunca fica negativa — " +
+      "você não paga nada a mais por cancelar.",
+  },
+  {
+    clausula: "5.6",
+    texto:
+      "Se você contratou pelo site e está dentro dos primeiros 7 dias, é " +
+      "arrependimento: volta tudo, integralmente, sem essa conta toda.",
   },
   {
     clausula: "5.4",

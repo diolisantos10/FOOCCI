@@ -581,7 +581,7 @@ describe("o espelho que está no disco deste repositório", () => {
   it.runIf(existsSync(join(RAIZ_DO_REPO, CAMINHO_DO_MANIFESTO)))(
     "se há espelho, a constituição dos Essenciais está nele e legível",
     () => {
-      // Este agente é um dos cinco Essenciais e a doutrina 23 é a constituição
+      // Este agente é um dos seis Essenciais e a doutrina 23 é a constituição
       // dele. Se ela some do espelho, o especialista perde a própria régua.
       if (!existsSync(caminhoManifesto)) return;
 

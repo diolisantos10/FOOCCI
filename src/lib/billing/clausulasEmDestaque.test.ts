@@ -84,10 +84,15 @@ describe("as cláusulas marcadas para destaque", () => {
   });
 
   it("⭐ a cláusula de vigência, cancelamento e dados está entre elas", () => {
-    // É onde moram o "efeito ao fim do ciclo pago" e o apagamento dos dados em
-    // 60 dias — as duas coisas que o cliente descobre tarde demais.
+    // É onde moram o efeito do cancelamento e o apagamento dos dados em 60 dias
+    // — as duas coisas que o cliente descobre tarde demais.
+    //
+    // Na v1 o efeito era "ao fim do ciclo pago". Na v2 (29/08/2026) passou a ser
+    // "ao fim do mês em curso", porque o período não entregue passou a ser
+    // devolvido: manter o acesso até o fim do ano pago E devolver o dinheiro
+    // dele seriam as duas coisas ao mesmo tempo.
     const corpo = clausulasEmDestaque().map((c) => c.body).join(" ");
-    expect(corpo).toContain("ao fim do ciclo pago");
+    expect(corpo).toContain("ao fim do mês em curso");
     expect(corpo).toContain("60 dias são excluídos");
   });
 
@@ -201,12 +206,17 @@ describe("o bloco de destaque", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("⛔ mudar o destaque não pode virar mudar o contrato", () => {
-  it("a versão do Termo continua a v1 aprovada pelo CEO", () => {
-    // Este trabalho mudou COMO as cláusulas aparecem, e nenhuma palavra do
-    // contrato. Se `TERMS_VERSION` mudar junto com um ajuste de destaque, é
-    // sinal de que alguém editou texto — e aí todo aceite anterior vira
-    // afirmação sobre um texto que ninguém consegue reproduzir.
-    expect(TERMS_VERSION).toBe("v1-2026-08-03");
+  it("a versão do Termo é a v2 aprovada pelo CEO", () => {
+    // O ponto deste teste NUNCA foi a string "v1": é que texto e rótulo andam
+    // juntos. Quem mexer no destaque e vir isto reprovar mexeu no texto sem
+    // querer — e aí todo aceite anterior viraria afirmação sobre um texto que
+    // ninguém consegue reproduzir.
+    //
+    // Em 29/08/2026 o texto mudou DE PROPÓSITO (a regra de cancelamento e
+    // devolução decidida pelo CEO), e por isso o rótulo subiu junto: v1 →
+    // v2-2026-08-29. O texto da v1 continua reproduzível em `termsArquivo`, que
+    // é o que mantém de pé a prova de quem aceitou a v1.
+    expect(TERMS_VERSION).toBe("v2-2026-08-29");
   });
 
   it("o Termo continua com as nove seções aprovadas", () => {

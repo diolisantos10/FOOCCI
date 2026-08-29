@@ -99,6 +99,12 @@ import {
   type SitePlanId,
   type CycleCode,
 } from "@/lib/billing/pricing";
+/* A regra de cancelamento e devolução NÃO é digitada nesta página: é lida da
+   mesma fonte que os termos aceitos e o contrato leem. Ver o cabeçalho de
+   `saidaDoPlano` — e, principalmente, a razão de ela aparecer JUNTO DO PREÇO e
+   não só no contrato: cláusula que o cliente não teve como conhecer na hora de
+   contratar não o obriga. Escondida, ela não protege ninguém. */
+import { REGRA_DE_SAIDA } from "@/lib/billing/saidaDoPlano";
 
 /** O link do botão de comprar: plano e ciclo já escolhidos no checkout. */
 function checkoutUrl(planId: SitePlanId, cycle: CycleCode = "MENSAL"): string {
@@ -391,8 +397,22 @@ const PLANS: Plan[] = [
   Se um dia a Configuração tiver preço decidido E cobrança no checkout, o desconto
   por ciclo volta aqui — junto do número, nunca antes dele.
 */
+/*
+  ⛔ "CANCELA AVISANDO 30 DIAS ANTES" SAIU DAQUI EM 29/08/2026.
+
+  A linha do MENSAL dizia isso desde sempre, e era a única das três bocas da casa
+  que exigia aviso prévio: o contrato que o cliente assina NUNCA pediu aviso
+  nenhum — cláusula 5.2, "a qualquer momento". A página cobrava do cliente uma
+  obrigação que o próprio contrato não cria; é o tipo de exigência inventada na
+  vitrine que o PROCON pega, e ela caiu na decisão do CEO de 29/08.
+
+  A linha "O que ganha" fala do GANHO do ciclo. A regra completa da saída — o mês
+  em curso, o proporcional, o recálculo do plano longo e os 7 dias de
+  arrependimento — está logo abaixo da tabela, em `REGRA_DE_SAIDA`, junto do
+  preço e antes de qualquer botão de contratar.
+*/
 const CYCLE_COPY: Record<CycleCode, { badge: string; gain: string }> = {
-  MENSAL: { badge: "Sem fidelidade", gain: "Cancela avisando 30 dias antes." },
+  MENSAL: { badge: "Sem fidelidade", gain: "Cancela quando quiser — o mês em curso segue até o fim." },
   TRIMESTRAL: { badge: "−10%", gain: "10% de desconto em cada mês." },
   ANUAL: { badge: "2 meses grátis", gain: "Paga 10 meses e usa 12." },
 };
@@ -1068,6 +1088,22 @@ export default function PrecosPage() {
                 <p className="mt-3 text-[13px] leading-relaxed text-ink2">{c.gain}</p>
               </div>
             ))}
+          </div>
+
+          {/* Se você cancelar antes do fim — a regra, junto do preço.
+              Não é rodapé nem link: é o texto que precisa ser conhecível ANTES
+              da assinatura, senão não obriga ninguém. As frases vêm de
+              `REGRA_DE_SAIDA`; nenhuma delas é digitada nesta página. */}
+          <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-line bg-canvas p-6 sm:p-7">
+            <h3 className="text-base font-semibold text-ink">Se você quiser sair antes do fim</h3>
+            <ul className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed text-ink2">
+              {REGRA_DE_SAIDA.map((frase) => (
+                <li key={frase} className="flex gap-2.5">
+                  <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+                  <span>{frase}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>

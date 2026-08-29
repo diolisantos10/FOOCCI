@@ -44,10 +44,14 @@ import { contarEntradas, diasDesde, type ContagemDeEntradas } from "./contagemDe
 export const JANELA_DIAS = 30;
 
 /**
- * Os cinco Essenciais (doutrina 21, fechada pelo CEO em 07/08/2026). A mesma
- * lista que `elencoObrigatorio.test.ts` protege. Eles vêm com todo projeto e não
- * são apagados — na Sala aparecem marcados para que ninguém proponha aposentar
- * um deles por "não ter trabalhado esta semana".
+ * Os seis Essenciais. A mesma lista que `elencoObrigatorio.test.ts` protege.
+ * Eles vêm com todo projeto e não são apagados — na Sala aparecem marcados para
+ * que ninguém proponha aposentar um deles por "não ter trabalhado esta semana".
+ *
+ * Cinco vieram da doutrina 21, fechada pelo CEO em 07/08/2026. O `branding`
+ * entrou em 09/08/2026 pela doutrina 27 — ordem do CEO, não proposta. Esta
+ * lista ficou em cinco por vinte dias depois da ordem; a correção veio junto
+ * com o perfil em disco, em 29/08/2026.
  */
 export const ESSENCIAIS = [
   "qualidade",
@@ -55,6 +59,7 @@ export const ESSENCIAIS = [
   "interface",
   "experiencia",
   "seguranca",
+  "branding",
 ] as const;
 
 /**

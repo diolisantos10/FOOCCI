@@ -73,7 +73,7 @@ describe("os agentes deste repositório aparecem na Sala", () => {
     expect(arquivos.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("os cinco Essenciais estão marcados", () => {
+  it("os seis Essenciais estão marcados", () => {
     for (const slug of ESSENCIAIS) {
       const cartao = sala.agentes.find((a) => a.slug === slug);
       expect(cartao, `${slug} sumiu da Sala`).toBeDefined();

@@ -152,12 +152,28 @@ export default function TermosPublicosPage() {
         </p>
       </Block>
 
+      {/* A regra de cancelamento e devolução aparece AQUI porque esta página era
+          a quarta boca da casa a falar de encerramento sem falar de dinheiro.
+          O texto diz a mesma regra do Termo de Contratação (seção 4) e da tabela
+          de preços — divergência entre eles é o que
+          `src/lib/billing/cancelamentoAlinhado.test.ts` reprova. */}
       <Block heading="14. Suspensão e encerramento">
         <p>
           O restaurante pode encerrar o uso a qualquer momento. Podemos suspender ou encerrar o
           acesso em caso de violação destes Termos, de exigência legal ou de risco à segurança.
           Após o encerramento, os dados são tratados conforme a Política de Privacidade e a
           legislação aplicável.
+        </p>
+        <p>
+          Se houver plano contratado, o cancelamento segue o Termo de Contratação:{" "}
+          <strong>a qualquer momento, sem multa e sem fidelidade obrigatória</strong>. O mês em
+          curso, já pago, segue até o fim e não é devolvido — o serviço continua sendo prestado
+          até lá. Nos ciclos abaixo de 6 meses, os meses ainda não entregues são devolvidos de
+          forma proporcional. Nos ciclos de 6 meses ou mais, o período já usado é recalculado
+          pelo preço do plano mensal e a diferença é devolvida; o resultado nunca é negativo e o
+          restaurante nunca paga a mais por cancelar. Quem contratou pelo site tem{" "}
+          <strong>7 dias para desistir e receber tudo de volta</strong> — direito de
+          arrependimento, acima de qualquer cláusula.
         </p>
       </Block>
 

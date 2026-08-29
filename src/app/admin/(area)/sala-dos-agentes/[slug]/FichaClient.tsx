@@ -202,7 +202,7 @@ function Ficha({ agente }: { agente: CartaoAgente }) {
               <Linha termo="Estado">{nomeDoEstado(agente.estado)}</Linha>
               <Linha termo="Pode ser apagado">
                 {agente.essencial ? (
-                  <span className="text-brand-700">não — é um dos cinco Essenciais</span>
+                  <span className="text-brand-700">não — é um dos seis Essenciais</span>
                 ) : (
                   "sim, por decisão humana"
                 )}
@@ -283,7 +283,7 @@ function Ficha({ agente }: { agente: CartaoAgente }) {
                   <span className="min-w-0 text-[12.5px] leading-snug text-ink2">
                     Ser apagado deste projeto
                     <span className="block text-[11px] text-muted">
-                      doutrina 23 — os cinco Essenciais vêm com todo projeto da casa
+                      doutrina 23 — os seis Essenciais vêm com todo projeto da casa
                     </span>
                   </span>
                 </li>

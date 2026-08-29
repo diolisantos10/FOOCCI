@@ -1,6 +1,6 @@
 # O contrato Foocci em 1 minuto — para a equipe
 
-> Versão de bolso do Termo de Contratação (`v1-2026-08-03`, aprovado pelo CEO).
+> Versão de bolso do Termo de Contratação (`v2-2026-08-29`, aprovado pelo CEO).
 > O texto jurídico completo está em `termo-de-contratacao-foocci.md` — **este
 > aqui é o que a equipe precisa saber para vender e atender.**
 
@@ -17,11 +17,34 @@ paga**.
 | Tema | A regra |
 |---|---|
 | **Preço** | Trava durante o ciclo pago. Reajuste só 1×/ano, pelo IPCA. |
-| **Cancelamento** | **A qualquer momento, sem multa, sem fidelidade.** Vale até o fim do ciclo já pago. |
+| **Cancelamento** | **A qualquer momento, sem multa, sem fidelidade.** O mês em curso segue até o fim; o que sobra volta — ver a seção abaixo. |
 | **1º mês** | **50% de desconto** (degustação de lançamento). |
 | **Atraso de pagamento** | Tenta cobrar de novo, avisa, e só depois trava — **a loja do cliente é a ÚLTIMA coisa a cair.** Ele nunca perde vendas por atraso; primeiro trava só o painel de administração. |
 | **Saída** | Ele **leva os dados dele** (clientes, cardápio, histórico) por 30 dias. |
 | **Nota fiscal** | Emitida a cada cobrança. |
+
+## Cancelamento e devolução — o que dizer, palavra por palavra
+
+Mudou em 29/08/2026 por decisão do CEO. Se você aprendeu a frase antiga
+("dinheiro de ciclo pago não volta"), **desaprenda**: ela saiu do contrato.
+
+- **Cancela a qualquer momento**, sem multa e sem fidelidade obrigatória.
+- **O mês em curso, já pago, segue até o fim e não é devolvido** — o serviço
+  continua sendo prestado até lá. Isso é cobrar por serviço entregue, não reter
+  dinheiro.
+- **Trimestral (ciclos abaixo de 6 meses):** os meses que ainda não foram
+  entregues voltam, de forma proporcional.
+- **Anual (ciclos de 6 meses ou mais):** a gente refaz a conta dos meses que ele
+  usou pelo **preço do plano mensal** e devolve a diferença. Ele fica com o
+  desconto dos meses em que ficou e devolve só o dos meses que não vai usar. **A
+  devolução nunca fica negativa: no pior caso é zero, e ele nunca paga a mais por
+  cancelar.**
+- **Contratou pelo site? 7 dias para desistir e receber tudo de volta**,
+  integralmente — é o direito de arrependimento. Vale acima de qualquer outra
+  regra: não negocie, não ofereça "crédito" no lugar.
+
+> ⛔ **Ninguém da equipe executa devolução.** A conta é calculada pelo sistema e
+> mostrada; quem manda devolver dinheiro é o CEO.
 
 ## O que a equipe **NÃO** pode prometer
 

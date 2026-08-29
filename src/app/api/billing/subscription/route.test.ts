@@ -88,8 +88,13 @@ describe("GET — a loja lê o próprio plano", () => {
     expect(body.assinatura.veredito).toBe("podeCancelar");
     // O texto do que acontece depois vem do SERVIDOR: se a tela o escrevesse,
     // a primeira "melhoria de texto" poderia prometer devolução de dinheiro.
-    expect(body.consequencias).toHaveLength(3);
-    expect(body.consequencias.join(" ")).toContain("até o fim do ciclo que você já pagou");
+    //
+    // Eram três frases até 28/08. São CINCO desde 29/08, quando o CEO decidiu a
+    // regra da devolução: entraram o que volta do ciclo (cláusula 5.5) e os 7
+    // dias de arrependimento (5.6). E o acesso passou a terminar no fim do MÊS
+    // em curso, não do ciclo pago — porque o resto do ciclo agora é devolvido.
+    expect(body.consequencias).toHaveLength(5);
+    expect(body.consequencias.join(" ")).toContain("até o fim do mês em curso");
   });
 
   it("sem sessão, 401 — e o banco não é sequer consultado", async () => {

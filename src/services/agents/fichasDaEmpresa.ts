@@ -89,9 +89,16 @@ const JA_EXISTEM: Readonly<Record<string, string>> = {
 /**
  * Slugs que uma ficha de empresa NUNCA pode usar.
  *
- * Os cinco primeiros são os Essenciais que constroem este sistema e vivem em
+ * Os seis primeiros são os Essenciais que constroem este sistema e vivem em
  * `.claude/agents/`. Os quatro últimos foram aposentados em 07/08/2026 por
  * duplicarem um Essencial pelo nome.
+ *
+ * O `branding` entrou na lista em 29/08/2026, quando o perfil dele foi criado em
+ * disco pela doutrina 27 (ordem do CEO de 09/08). ⚠️ Ele **já colide** com o
+ * agente de produto DRAFT `branding` de `defaultAgentProfiles.ts` — populações
+ * diferentes, mesmo nome. Isto está anotado, não resolvido: aposentar um agente
+ * de produto é decisão do CEO, e é exatamente o corte de 07/08 acontecendo de
+ * novo, agora em sentido contrário.
  *
  * A tentação que esta lista contém é real e já aconteceu uma vez: criar
  * "Agente de Qualidade" na empresa e, sem perceber, colidir com o `qualidade`
@@ -104,6 +111,7 @@ export const SLUGS_PROIBIDOS: readonly string[] = [
   "interface",
   "experiencia",
   "seguranca",
+  "branding",
   "orchestrator",
   "security-governance",
   "ui-ux",

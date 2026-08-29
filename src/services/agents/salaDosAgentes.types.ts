@@ -87,7 +87,7 @@ export interface CartaoAgente {
   /** ISO. `null` quando o projeto não registra a data de criação. */
   noArDesde: string | null;
   motor: MotorDoAgente;
-  /** É um dos cinco Essenciais (doutrina 21) — não pode ser apagado. */
+  /** É um dos seis Essenciais (doutrinas 21 e 27) — não pode ser apagado. */
   essencial: boolean;
   /** Até três medidas, na ordem em que aparecem no rodapé do cartão. */
   metricas: Array<{ rotulo: string; medida: Medida }>;

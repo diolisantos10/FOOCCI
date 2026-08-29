@@ -3,7 +3,7 @@
  *
  *   1. agente sem custo atribuído NÃO aparece como zero
  *   2. oficina em formato desconhecido vira `naoMedido`, não 0
- *   3. os cinco Essenciais vêm marcados
+ *   3. os seis Essenciais vêm marcados
  *   4. as duas populações não se misturam numa soma só
  *
  * Cada um com as DUAS metades: a que prova que o caso ruim é barrado e a que
@@ -352,12 +352,12 @@ describe("trabalho dos agentes de desenvolvimento", () => {
   });
 });
 
-// ── 3. os cinco Essenciais vêm marcados ──────────────────────────────────────
+// ── 3. os seis Essenciais vêm marcados ──────────────────────────────────────
 
-describe("os cinco Essenciais", () => {
+describe("os seis Essenciais", () => {
   const todos = [...ESSENCIAIS, "garcom", "operacao"];
 
-  it("os cinco vêm com `essencial: true`", () => {
+  it("os seis vêm com `essencial: true`", () => {
     const sala = montarSalaDosAgentes(
       insumos({
         arquivosDeDesenvolvimento: veio(

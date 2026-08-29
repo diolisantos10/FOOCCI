@@ -21,10 +21,10 @@ repositório quando a sessão abre.
 | Campo | Valor |
 |---|---|
 | Kit | `diolisantos10/dioli-brain-kit` (branch `main`) |
-| Commit espelhado | `8d60b5e919b2429b2166a2731c8548e6023a84a3` |
-| Data do commit do kit | 2026-08-13T14:23:37Z |
-| Última conferência | 2026-08-24T05:56:11.871Z |
-| Documentos espelhados | 35 |
+| Commit espelhado | `8841e7cc0d3b5f55691e23503f3e30d697925eb1` |
+| Data do commit do kit | 2026-08-29T21:11:31+00:00 |
+| Última conferência | 2026-08-29T21:21:45.640Z |
+| Documentos espelhados | 37 |
 | Gerado por | `.github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts` |
 
 Versão de máquina: [`_ESPELHO.json`](./_ESPELHO.json).
@@ -95,5 +95,7 @@ KIT_DIR=/tmp/kit npx ts-node --project tsconfig.scripts.json scripts/espelhar-ki
 | [`27-ordem-subir-o-branding.md`](./27-ordem-subir-o-branding.md) | `docs/27-ordem-subir-o-branding.md` |
 | [`28-nao-se-para-no-meio.md`](./28-nao-se-para-no-meio.md) | `docs/28-nao-se-para-no-meio.md` |
 | [`29-a-camada-de-delegacao.md`](./29-a-camada-de-delegacao.md) | `docs/29-a-camada-de-delegacao.md` |
+| [`30-os-gatilhos-do-diretor.md`](./30-os-gatilhos-do-diretor.md) | `docs/30-os-gatilhos-do-diretor.md` |
+| [`31-verde-e-o-que-esta-rodando.md`](./31-verde-e-o-que-esta-rodando.md) | `docs/31-verde-e-o-que-esta-rodando.md` |
 | [`perguntas-abertas.md`](./perguntas-abertas.md) | `docs/perguntas-abertas.md` |
 | [`presenca.md`](./presenca.md) | `docs/presenca.md` |

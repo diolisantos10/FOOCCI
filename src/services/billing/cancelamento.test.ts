@@ -491,11 +491,16 @@ describe("o cancelamento no Mercado Pago", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("⭐ o que a pessoa lê antes de confirmar", () => {
-  it("as três consequências estão lá, e cada uma cita a cláusula de onde saiu", () => {
+  it("as consequências estão lá, e cada uma cita a cláusula de onde saiu", () => {
     // Sem a cláusula amarrada à frase, a tela vira um lugar onde alguém melhora
     // o texto — e "melhorar" um texto de cancelamento é como se inventa política
     // de reembolso sem querer.
-    expect(CONSEQUENCIAS_DO_CANCELAMENTO).toHaveLength(3);
+    //
+    // Eram três até 28/08. Viraram CINCO em 29/08, quando o CEO decidiu a regra
+    // da devolução: entraram a 5.5 (o que sobra do ciclo volta) e a 5.6 (os 7
+    // dias de arrependimento). Uma tela que fala de cancelamento e não fala do
+    // arrependimento esconde o direito mais forte que a pessoa tem.
+    expect(CONSEQUENCIAS_DO_CANCELAMENTO).toHaveLength(5);
     for (const c of CONSEQUENCIAS_DO_CANCELAMENTO) {
       expect(c.clausula, c.texto).toMatch(/^\d+\.\d+$/);
       expect(c.texto.length, c.clausula).toBeGreaterThan(40);
@@ -503,20 +508,37 @@ describe("⭐ o que a pessoa lê antes de confirmar", () => {
   });
 
   it("diz até quando o acesso continua — a cláusula 5.2 em português", () => {
+    // Era "até o fim do ciclo que você já pagou". Virou "até o fim do mês em
+    // curso" em 29/08 e a troca não é de estilo: se devolvemos os meses não
+    // entregues do anual, o acesso NÃO pode seguir até o fim do ano pago — seria
+    // devolver o dinheiro e entregar o serviço.
     const juntas = CONSEQUENCIAS_DO_CANCELAMENTO.map((c) => c.texto).join(" ");
-    expect(juntas).toContain("até o fim do ciclo que você já pagou");
+    expect(juntas).toContain("até o fim do mês em curso");
     expect(juntas).toContain("não renova");
   });
 
-  it("⭐ diz o que acontece com o que JÁ foi pago — sem prometer devolução", () => {
-    // A cláusula 5.2 do Termo assinado diz que valores de ciclos já pagos não
-    // são reembolsados na saída voluntária. A tela repete isso; ela NÃO cria
-    // política de reembolso, e não pode passar a criar.
+  it("⭐ diz o que acontece com o que JÁ foi pago — as duas metades da regra", () => {
+    // A METADE QUE FICA COM A CASA: o mês em curso não volta, porque o serviço
+    // segue sendo prestado até o fim dele. A METADE QUE VOLTA PARA O CLIENTE: o
+    // que foi pago adiantado e não foi entregue.
+    //
+    // Até 28/08 este teste exigia o oposto — que a tela dissesse que ciclo pago
+    // não é devolvido. Ele estava fiel à v1 do contrato, e a v1 é que estava
+    // errada: reter meses pré-pagos e não prestados é vantagem excessiva.
     const juntas = CONSEQUENCIAS_DO_CANCELAMENTO.map((c) => c.texto).join(" ");
-    expect(juntas).toContain("não é devolvido");
+    expect(juntas).toContain("O mês em curso não é devolvido");
     expect(juntas).toContain("multa");
-    expect(juntas.toLowerCase()).not.toContain("reembolsamos");
-    expect(juntas.toLowerCase()).not.toContain("devolvemos o valor");
+    expect(juntas).toContain("volta para você");
+    expect(juntas).toContain("7 dias");
+  });
+
+  it("⛔ a tela não promete um VALOR de devolução que ninguém calculou aqui", () => {
+    // A conta existe (`devolucaoNaSaida`), mas esta tela diz a REGRA, não o
+    // número — e não executa estorno nenhum. Um "R$ 1.234,00" escrito aqui seria
+    // uma promessa de dinheiro feita por uma tela que não move dinheiro.
+    for (const c of CONSEQUENCIAS_DO_CANCELAMENTO) {
+      expect(c.texto, c.clausula).not.toMatch(/R\$\s*\d/);
+    }
   });
 
   it("diz o que acontece com os dados, com os dois prazos da cláusula 5.4", () => {

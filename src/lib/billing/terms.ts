@@ -13,9 +13,32 @@
  * depends on Meta/gateway/Railway is a breach trap; 99% stays an INTERNAL
  * operational target, not a contractual promise. This version string is stamped
  * on every acceptance — bump it whenever the text changes.
+ *
+ * ── v2 (29/08/2026) — A REGRA DA SAÍDA, DECIDIDA PELO CEO ───────────────────
+ *
+ * O que mudou, e só isto: a seção "4. Vigência, cancelamento e dados" passou a
+ * dizer a regra INTEIRA de cancelamento e devolução. Até aqui ela não falava de
+ * dinheiro nenhum (zero ocorrências de "reembols"), enquanto o site prometia
+ * "cancela avisando 30 dias antes" e o contrato em `docs/juridico` prometia que
+ * "valores de ciclos já pagos não são reembolsados". Três bocas, três regras — e
+ * a que o cliente aceita era justamente a muda.
+ *
+ * A regra que passou a valer (palavra do CEO, 29/08/2026) mora em
+ * `@/lib/billing/saidaDoPlano`, com a conta em centavos inteiros: cancela a
+ * qualquer momento sem multa; o mês em curso segue até o fim, sem devolução;
+ * abaixo de 6 meses devolve-se o proporcional não entregue; de 6 meses para
+ * cima o período usado é recalculado pelo preço mensal e a diferença volta,
+ * nunca negativa e nunca recuperando mais que o desconto concedido; e os 7 dias
+ * de arrependimento de quem contratou pelo site devolvem tudo, acima de tudo.
+ *
+ * ⚠️ POR QUE A VERSÃO SUBIU JUNTO COM O TEXTO. Cada aceite guarda esta string
+ * (`PlanSubscription.termsVersion`). Mudar o texto sem trocar o rótulo faria
+ * TODO aceite anterior apontar para um texto que aquela pessoa nunca leu —
+ * destruir a prova é pior que a divergência que se estava consertando. O texto
+ * da v1 continua reproduzível em `@/lib/billing/termsArquivo`.
  */
 
-export const TERMS_VERSION = "v1-2026-08-03";
+export const TERMS_VERSION = "v2-2026-08-29";
 
 /**
  * ── AS CLÁUSULAS QUE PRECISAM APARECER EM DESTAQUE, SEM CLIQUE ──────────────
@@ -43,7 +66,10 @@ export const TERMS_VERSION = "v1-2026-08-03";
  * que ninguém consegue reproduzir.
  */
 export const TITULOS_EM_DESTAQUE: readonly string[] = [
-  // Cancelamento, efeito ao fim do ciclo pago e apagamento dos dados em 60 dias.
+  // Cancelamento, efeito ao fim do mês em curso, a devolução do que não foi
+  // entregue, os 7 dias de arrependimento e o apagamento dos dados em 60 dias.
+  // Desde a v2 é também onde a regra do dinheiro aparece — e é por estar nesta
+  // lista que ela é lida SEM CLIQUE, antes do aceite, nas duas telas.
   "4. Vigência, cancelamento e dados",
   // Limitação de responsabilidade ao total pago nos 12 meses e exclusão de
   // lucros cessantes — a cláusula que mais limita quem assina.
@@ -77,7 +103,7 @@ export const TERMS_SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "4. Vigência, cancelamento e dados",
-    body: "Renovação automática por ciclo. O Restaurante pode cancelar a qualquer momento, com efeito ao fim do ciclo pago — sem multa e sem fidelidade. Por 30 dias após o término, os dados (cardápio, clientes, pedidos) podem ser exportados em formato estruturado; após 60 dias são excluídos, salvo obrigação legal.",
+    body: "Renovação automática por ciclo. O Restaurante pode cancelar a qualquer momento, sem multa e sem fidelidade obrigatória. O cancelamento tem efeito ao fim do mês em curso, que já está pago e segue sendo prestado até lá — e por isso não é devolvido. Nos ciclos abaixo de 6 meses, os meses do ciclo que ainda não foram entregues são devolvidos de forma proporcional. Nos ciclos de 6 meses ou mais, o período já usado é recalculado pelo preço do plano mensal — o de quem não se comprometeu com prazo — e a diferença é devolvida ao Restaurante; o resultado nunca é negativo, no mínimo zero, e a recuperação nunca ultrapassa o desconto concedido pelo ciclo longo. Quem contratou pelo site tem 7 dias, contados da contratação, para desistir e receber tudo de volta — direito de arrependimento, que prevalece sobre este Termo. Por 30 dias após o término, os dados (cardápio, clientes, pedidos) podem ser exportados em formato estruturado; após 60 dias são excluídos, salvo obrigação legal.",
   },
   {
     title: "5. Dependências de terceiros",

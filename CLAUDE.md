@@ -182,6 +182,7 @@ naquele turno.
 | `agencia` | SDR, esteira, Oficina de peças |
 | `qualidade` | portões, simuladores, varreduras — **sem permissão de escrita, de propósito** |
 | `seguranca` | **quem consegue entrar sem ser convidado** — rota pública sem autenticação, webhook que aceita qualquer chamador, id de inquilino aceito sem provar dono, segredo que nunca rotacionou |
+| `branding` | **se o trabalho pronto PERTENCE à marca** — identidade, não fato: nome, léxico, tom, proibições, limites de promessa, e a fronteira entre a marca Foocci e a marca white-label do Restaurante. **Sem permissão de escrita**, por exigência da doutrina 27 |
 
 > Esta tabela listava onze e **omitia o `seguranca`**, que existe em disco desde
 > 07/08, é Essencial pela doutrina 23 e tem teste travando a existência dele
@@ -189,6 +190,26 @@ naquele turno.
 > Corrigido em 14/08. **Fora da tabela ficam os dois cargos** — `diretor` e `pm`
 > — que não são especialistas: eles não produzem entregável, coordenam quem
 > produz.
+
+> **E aconteceu de novo, com o `branding`.** O CEO promoveu o `branding` a sexto
+> Essencial em **09/08/2026** pela doutrina 27 do kit — que diz textualmente que
+> *não é proposta e não depende da concordância do Diretor*. Vinte dias depois,
+> em 29/08, o perfil **não existia em disco**, esta tabela não o mencionava, e
+> `elencoObrigatorio.test.ts` **ainda guardava cinco**: o portão que existe para
+> reprovar quando um Essencial some passava **verde sobre uma ordem
+> descumprida**. Corrigido em 29/08 — perfil criado, portão em seis, e a trava
+> de ferramenta (`sem Write, sem Edit`) virou teste em vez de frase.
+>
+> **A lição, que vale mais que a correção:** quando a doutrina do kit muda a
+> lista dos Essenciais, a mudança é em três lugares na mesma sessão — o perfil em
+> `.claude/agents/`, esta tabela, e o teste. Dois de três é verde mentindo.
+
+> **`branding` × `qualidade` — a fronteira, porque os dois reprovam trabalho
+> pronto:** o `qualidade` pergunta *"isto é verdade e é verificável?"*; o
+> `branding` pergunta *"podemos dizer isto, e é assim que dizemos?"*. O
+> `branding` roda **depois**, nunca reprova por falsidade e nunca aprova algo só
+> por ser verdadeiro. Superlativo lastreado em dado real passa no `qualidade` e
+> pode ser barrado pelo `branding` — é o campo `limites_de_promessa`.
 
 > **`interface` × `experiencia` — a fronteira, porque eles olham a MESMA tela:**
 > o `interface` responde *"está bonita e funciona em 375/768/1280?"*; o

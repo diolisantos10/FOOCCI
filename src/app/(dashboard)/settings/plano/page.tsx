@@ -27,12 +27,17 @@
  *     armada), mas o cartão pode ser cobrado mais uma vez. A tela diz isso, com
  *     o que fazer — e não um visto verde que o extrato vai desmentir.
  *
- * ⚠️ A TELA NÃO CALCULA DATA DE FIM DE CICLO. O Termo diz "ao fim do ciclo já
- * pago", e o sistema não guarda essa data (`PlanSubscription` não tem coluna de
- * fim de período). Derivar de `activatedAt` daria um dia plausível e às vezes
- * errado — e data errada numa tela de cancelamento é promessa quebrada. Então a
- * tela mostra a REGRA e as âncoras que existem de verdade (desde quando está
- * ativa, qual é o ciclo). Pendência registrada para o CEO.
+ * ⚠️ A TELA NÃO CALCULA DATA NEM VALOR. O Termo v2 diz "ao fim do mês em curso",
+ * e o sistema não guarda essa data (`PlanSubscription` não tem coluna de fim de
+ * período). Derivar de `activatedAt` daria um dia plausível e às vezes errado —
+ * e data errada numa tela de cancelamento é promessa quebrada. Então a tela
+ * mostra a REGRA e as âncoras que existem de verdade (desde quando está ativa,
+ * qual é o ciclo). Pendência registrada para o CEO.
+ *
+ * ⛔ E NÃO MOSTRA O VALOR DA DEVOLUÇÃO. A conta existe e é pura
+ * (`@/lib/billing/saidaDoPlano`), mas exibi-la aqui seria anunciar um número que
+ * ninguém se comprometeu a pagar em que prazo — e esta tela não move dinheiro.
+ * Quem decide como o estorno é executado é o CEO; até lá, a tela diz a regra.
  */
 
 import { useEffect, useState } from "react";
@@ -249,9 +254,15 @@ export default function PlanoPage() {
               <p className="text-sm font-semibold text-red-800">
                 Cancelar o plano {PLANO_LABEL[assinatura.plan] ?? assinatura.plan}?
               </p>
+              {/* Dizia "até o fim do ciclo já pago" até 29/08/2026 — a frase da
+                  v1 do Termo. Com a v2, o resto do ciclo é DEVOLVIDO, então o
+                  acesso vai até o fim do mês em curso; manter o acesso o ano
+                  inteiro E devolver o dinheiro seriam as duas coisas ao mesmo
+                  tempo. O detalhe do dinheiro está nas consequências acima, que
+                  vêm do servidor. */}
               <p className="mt-1 text-sm leading-relaxed text-red-700">
-                Seu acesso continua até o fim do ciclo já pago. Para voltar depois, será uma
-                assinatura nova.
+                Seu acesso continua até o fim do mês em curso, que você já pagou. Para voltar
+                depois, será uma assinatura nova.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button

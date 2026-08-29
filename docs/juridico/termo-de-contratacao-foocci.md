@@ -1,10 +1,21 @@
-# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — v1 (aprovado 03/08/2026)
+# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — v2 (aprovado 29/08/2026)
 
-> **Status: APROVADO pelo CEO em 03/08/2026** (`TERMS_VERSION = v1-2026-08-03`).
-> As cinco decisões abertas foram fechadas: reajuste IPCA · degustação 50% no 1º
-> mês · suspensão 15/30 dias · SLA de disponibilidade mantido FORA do contrato
-> (alvo interno de 99%, não promessa contratual — recomendação do Diretor Geral).
-> Restam apenas os dados que dependem da transformação do CNPJ em SLU-ME.
+> **Status: APROVADO pelo CEO em 29/08/2026** (`TERMS_VERSION = v2-2026-08-29`).
+> A v1 (03/08/2026) fechou as cinco decisões abertas: reajuste IPCA · degustação
+> 50% no 1º mês · suspensão 15/30 dias · SLA de disponibilidade mantido FORA do
+> contrato (alvo interno de 99%, não promessa contratual — recomendação do
+> Diretor Geral). Restam apenas os dados que dependem da transformação do CNPJ
+> em SLU-ME.
+>
+> **O que a v2 mudou, e só isto — a regra da saída (decisão do CEO, 29/08/2026).**
+> A cláusula 5.2 da v1 dizia que *"valores de ciclos já pagos (trimestral/anual)
+> não são reembolsados na saída voluntária"*. **Essa frase foi removida.** Reter
+> o mês em curso é legítimo — o serviço está sendo prestado. Reter o dinheiro de
+> meses **ainda não entregues** num plano pré-pago é vantagem excessiva (CDC art.
+> 51, IV), e era o ponto de risco real deste contrato. No lugar dela entraram as
+> cláusulas **5.5** (devolução na saída) e **5.6** (arrependimento de 7 dias, CDC
+> art. 49). A numeração de 5.3 e 5.4 **não mudou** de propósito: elas são citadas
+> nominalmente pelo código que monta a tela de cancelamento.
 >
 > Nota de identificação da contratada: hoje o CNPJ 59.120.811/0001-79 está
 > enquadrado como MEI com CNAE de vestuário — ver
@@ -47,6 +58,12 @@ para renovações, nunca retroativamente.
 
 3.3. Degustação: **primeiro mês com 50% de desconto** (confirmado pelo CEO, 03/08). Aplicada na primeira cobrança da assinatura.
 
+3.4. **O desconto dos ciclos longos é condicionado à permanência.** Os valores
+de trimestral e anual são menores que doze vezes o mensal porque pressupõem o
+ciclo inteiro. Na saída antecipada aplica-se a cláusula 5.5 — que devolve o
+período não entregue e recupera, no máximo, o desconto efetivamente concedido.
+Não há multa: o que se ajusta é o preço dos meses efetivamente usados.
+
 ## 4. Pagamento e inadimplência
 
 4.1. Cobrança recorrente via Mercado Pago (cartão) na periodicidade do ciclo.
@@ -65,10 +82,10 @@ a suspensão inicial atinge apenas o acesso administrativo.
 
 5.1. Vigência inicia no aceite e renova automaticamente a cada ciclo.
 
-5.2. O Restaurante pode cancelar **a qualquer momento**, com efeito ao fim do
-ciclo já pago. Não há multa de cancelamento nem fidelidade. Valores de ciclos
-já pagos (trimestral/anual) não são reembolsados na saída voluntária, salvo
-o disposto em 5.4.
+5.2. O Restaurante pode cancelar **a qualquer momento**. Não há multa de
+cancelamento nem fidelidade obrigatória. O cancelamento tem efeito **ao fim do
+mês em curso**, que já está pago e segue sendo prestado até lá — e por isso não
+é devolvido. O que exceder esse mês é devolvido na forma da cláusula 5.5.
 
 5.3. A Foocci pode rescindir por violação deste Termo, uso ilícito, ou
 inadimplência (cláusula 4), sempre com aviso prévio de 15 dias, exceto fraude.
@@ -77,6 +94,33 @@ inadimplência (cláusula 4), sempre com aviso prévio de 15 dias, exceto fraude
 exportar seus dados (cardápio, clientes, histórico de pedidos) em formato
 estruturado. Após 60 dias do término, os dados são excluídos, salvo obrigação
 legal de retenção.
+
+5.5. **Devolução do que não foi entregue.** Cancelado o serviço, o período do
+ciclo que ainda não foi prestado é devolvido ao Restaurante, assim:
+
+   a) **Ciclos abaixo de 6 meses** (hoje, o trimestral): devolução
+   **proporcional** aos meses do ciclo que ainda não foram entregues.
+
+   b) **Ciclos de 6 meses ou mais** (hoje, o anual): o período já usado é
+   **recalculado pelo preço do plano mensal vigente na contratação** — o preço de
+   quem não se comprometeu com prazo — e a **diferença** entre o valor pago e
+   esse recálculo é devolvida ao Restaurante. O desconto do plano longo é
+   concedido **em razão da permanência**: quem sai antes fica com o desconto dos
+   meses em que ficou e devolve apenas o dos meses que não vai usar, valor que
+   **diminui a cada mês de permanência**.
+
+   c) **O resultado nunca é negativo.** No pior caso a devolução é zero. O
+   Restaurante **nunca deve valor adicional** por ter cancelado, e a recuperação
+   **nunca ultrapassa o desconto efetivamente concedido** pelo ciclo longo.
+
+   d) O cálculo é feito em centavos e apresentado ao Restaurante com a conta
+   aberta: meses usados, meses não entregues e o valor devolvido.
+
+5.6. **Arrependimento (7 dias).** O Restaurante que contratar pelo site tem
+**7 dias**, contados da contratação, para desistir e receber **de volta tudo o
+que pagou, integralmente**. Este direito decorre do art. 49 do Código de Defesa
+do Consumidor, prevalece sobre as cláusulas 5.2 e 5.5 e **não é afastado por
+nenhuma disposição deste Termo**.
 
 ## 6. Dependências de terceiros — o combinado honesto
 
@@ -148,4 +192,7 @@ período.
 
 ---
 
-*Versão v1 · aprovada pelo CEO em 03/08/2026 · `TERMS_VERSION = v1-2026-08-03`.*
+*Versão v2 · aprovada pelo CEO em 29/08/2026 · `TERMS_VERSION = v2-2026-08-29`.*
+*Versão anterior: v1 · 03/08/2026 · `v1-2026-08-03` — texto congelado e
+reproduzível em `src/lib/billing/termsArquivo.ts`, porque cada aceite guarda o
+rótulo da versão e não o texto dela.*
