@@ -40,6 +40,8 @@ function base(over: Partial<ContactSafetyEvalInput> = {}): ContactSafetyEvalInpu
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
     contactHistoryKnown: true, // os contadores vêm do banco; aqui eles são o cenário
+    // cenário-base: cliente sem pedido em andamento nem pedido recente
+    orderState: { known: true, hasActiveOrder: false, lastRealOrderAt: null },
     contactBudgetUsed: 0,
     isNewContact: false, // teto pré-pago desligado no cenário-base
     enforceFrequency: true, // cenário-base: é abordagem, a frequência vale

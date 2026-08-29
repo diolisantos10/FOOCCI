@@ -129,6 +129,8 @@ function safetyInput(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSa
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends:           0,
     contactHistoryKnown:         true, // cenário-base: os contadores foram apurados
+    // cenário-base: cliente sem pedido em andamento e sem pedido recente
+    orderState:                  { known: true, hasActiveOrder: false, lastRealOrderAt: null },
     enforceFrequency:            true, // cenário-base: é abordagem, frequência vale
     contactBudgetUsed:           0,
     isNewContact:                false, // teto pré-pago desligado no cenário-base

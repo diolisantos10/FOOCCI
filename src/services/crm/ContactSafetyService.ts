@@ -40,6 +40,12 @@ import {
   checkWeekendBlock,
 } from "@/lib/crm-safety";
 import { isRestaurantOpenNow } from "@/lib/business-hours";
+import {
+  ACTIVE_ORDER_STATUSES,
+  REAL_ORDER_STATUSES,
+  evaluateActiveOrderGuard,
+  type CustomerOrderState,
+} from "./activeOrderGuard";
 import { isWhatsAppChannelConnected } from "./crmWhatsAppChannel";
 
 // ─── Decision types ───────────────────────────────────────────────────────────
@@ -65,6 +71,19 @@ export type ContactBlockReason =
   | "RECENT_CRM_MESSAGE_24H"
   | "DUPLICATE_CAMPAIGN_RECIPIENT"
   | "RESTAURANT_CLOSED"
+  /**
+   * Cliente com pedido EM VOO (confirmado / em preparo / pronto / saiu para
+   * entrega). Ver `activeOrderGuard.ts` — incluindo o caso real que criou a
+   * regra.
+   */
+  | "CUSTOMER_HAS_ACTIVE_ORDER"
+  /** Cliente pediu dentro da janela de silêncio pós-pedido. */
+  | "CUSTOMER_ORDERED_RECENTLY"
+  /**
+   * Não foi possível apurar se o cliente tem pedido em andamento. Como
+   * `UNKNOWN_CONTACT_HISTORY`: não sei é NÃO.
+   */
+  | "UNKNOWN_ORDER_STATE"
   /**
    * Não foi possível saber quantas mensagens este contato já recebeu.
    * NÃO é erro: é o portão dizendo "não sei", que aqui significa REPROVADO.
@@ -136,6 +155,18 @@ export interface ContactSafetyEvalInput {
    * Guardrail 2: sem portão = reprovado — não sei é NÃO.
    */
   contactHistoryKnown: boolean;
+
+  /**
+   * O cliente está no meio de um pedido? Ver `activeOrderGuard.ts`.
+   *
+   * Obrigatório, sem default, pelo mesmo motivo de `contactHistoryKnown`: um
+   * default otimista faria a trava nascer desligada e ninguém perceberia —
+   * exatamente como o teto de contatos, que virou enfeite por um default.
+   * Quem não tem cliente cadastrado (lead do site) passa
+   * `{ known: true, hasActiveOrder: false, lastRealOrderAt: null }`: não tem
+   * pedido porque não tem cadastro, e isso é um fato, não uma suposição.
+   */
+  orderState: CustomerOrderState;
 
   // ── global context ──
   safety: CRMWhatsAppSafetyConfig;
@@ -268,6 +299,28 @@ export function evaluateContactSafety(input: ContactSafetyEvalInput): ContactSaf
   // 6. Restaurant operational status (opt-in).
   if (input.enforceRestaurantOpen && !input.restaurantOpen) {
     return block("RESTAURANT_CLOSED", "Restaurante fechado");
+  }
+
+  // 6.5. O cliente está no meio de um pedido?
+  //
+  // Fica ANTES das janelas de tempo, do cap global e de toda a família de
+  // frequência, e fora de qualquer `if` de isenção, porque não é regra de ritmo
+  // nem de custo: é a casa não atropelar o próprio cliente. `isBirthday`,
+  // `allowWeeklyCapOverride`, `enforceFrequency` e `enforceDailyCap` NÃO a
+  // desligam — não existe campanha importante o bastante para falar por cima
+  // de um pedido em preparo.
+  //
+  // Fica DEPOIS de opt-out e telefone só por ordem de leitura: quem pediu para
+  // sair da lista continua saindo com o motivo certo escrito na tela do
+  // lojista, em vez de aparecer como "tem pedido em andamento".
+  const orderVerdict = evaluateActiveOrderGuard(input.orderState, now, {
+    // A janela de silêncio é regra de ABORDAGEM e segue a mesma fronteira do
+    // `enforceFrequency`. O bloqueio por pedido em voo, logo abaixo dela no
+    // módulo, não tem interruptor nenhum.
+    enforceRecentSilence: input.enforceFrequency,
+  });
+  if (!orderVerdict.free) {
+    return block(orderVerdict.reason!, orderVerdict.detail);
   }
 
   // 7–9. Time-window gates (autonomous paths only).
@@ -648,6 +701,51 @@ export class ContactSafetyService {
        */
       let contactHistoryKnown = false;
 
+      /**
+       * Pedidos do cliente. Nasce `known: false` — enquanto ninguém apurar, o
+       * portão reprova em vez de supor que a pessoa está livre.
+       */
+      let orderState: CustomerOrderState = {
+        known: false,
+        hasActiveOrder: false,
+        lastRealOrderAt: null,
+      };
+
+      if (input.customerId) {
+        // Duas buscas indexadas por destinatário. A primeira responde "tem
+        // pedido em voo AGORA?"; a segunda, "quando foi o último pedido de
+        // verdade?". Separadas de propósito: um pedido travado em PREPARING há
+        // dias continua sendo voo mesmo que outro, mais novo, já tenha sido
+        // entregue — uma consulta só, pela data, perderia esse caso.
+        const [activeCount, latestReal] = await Promise.all([
+          prisma.order.count({
+            where: {
+              restaurantId: input.restaurantId,
+              customerId: input.customerId,
+              status: { in: [...ACTIVE_ORDER_STATUSES] as never[] },
+            },
+          }),
+          prisma.order.findFirst({
+            where: {
+              restaurantId: input.restaurantId,
+              customerId: input.customerId,
+              status: { in: [...REAL_ORDER_STATUSES] as never[] },
+            },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
+        ]);
+        orderState = {
+          known: true,
+          hasActiveOrder: activeCount > 0,
+          lastRealOrderAt: latestReal?.createdAt ?? null,
+        };
+      } else {
+        // Sem cliente cadastrado não há pedido — e isso é fato apurado, não
+        // suposição: um lead do site não tem histórico de pedido para ter.
+        orderState = { known: true, hasActiveOrder: false, lastRealOrderAt: null };
+      }
+
       if (input.customerId) {
         const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
         const cooldownCutoff = new Date(
@@ -687,6 +785,7 @@ export class ContactSafetyService {
         otherCampaignSendsWithin24h,
         sameCampaignSends,
         contactHistoryKnown,
+        orderState,
         safety: ctx.safety,
         whatsappAvailable: ctx.whatsappAvailable,
         globalSentToday: ctx.globalSentToday,

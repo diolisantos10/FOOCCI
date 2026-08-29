@@ -34,6 +34,8 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   campaignExecution: { findMany: vi.fn() },
   customer:          { findUnique: vi.fn(), update: vi.fn() },
+  // O portão pergunta ao banco se o cliente tem pedido em andamento.
+  order:             { count: vi.fn(async () => 0), findFirst: vi.fn(async () => null) },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/business-hours", () => ({ isRestaurantOpenNow: vi.fn(async () => true) }));
@@ -59,6 +61,8 @@ function entrada(overrides: Partial<ContactSafetyEvalInput> = {}): ContactSafety
     otherCampaignSendsWithin24h: 0,
     sameCampaignSends: 0,
     contactHistoryKnown: true,
+    // cenário-base: cliente sem pedido em andamento nem pedido recente
+    orderState: { known: true, hasActiveOrder: false, lastRealOrderAt: null },
     contactBudgetUsed: JA_ABORDADAS,
     isNewContact: true,
     enforceFrequency: true, // cenário-base: é abordagem, a frequência vale

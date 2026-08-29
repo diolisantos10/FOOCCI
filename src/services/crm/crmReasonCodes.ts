@@ -18,6 +18,8 @@ export const CRM_REASON_CODES = [
   "BLOCKED_ALREADY_IMPACTED_CONCEPT",
   "BLOCKED_DUPLICATE_MESSAGE",
   "BLOCKED_OUTSIDE_SEND_WINDOW",
+  "BLOCKED_ACTIVE_ORDER",
+  "BLOCKED_RECENT_ORDER",
   "BLOCKED_CAMPAIGN_PAUSED",
   "BLOCKED_AUDIENCE_EMPTY",
   "FAILED_PROVIDER",
@@ -45,6 +47,8 @@ export const REASON_META: Record<CrmReasonCode, { kind: CrmReasonKind; label: st
   BLOCKED_ALREADY_IMPACTED_CONCEPT:    { kind: "BLOCKED",  label: "Já impactado por este conceito" },
   BLOCKED_DUPLICATE_MESSAGE:           { kind: "BLOCKED",  label: "Mensagem duplicada" },
   BLOCKED_OUTSIDE_SEND_WINDOW:         { kind: "BLOCKED",  label: "Fora da janela de envio" },
+  BLOCKED_ACTIVE_ORDER:                { kind: "BLOCKED",  label: "Bloqueado (cliente com pedido em andamento)" },
+  BLOCKED_RECENT_ORDER:                { kind: "BLOCKED",  label: "Bloqueado (cliente pediu há pouco)" },
   BLOCKED_CAMPAIGN_PAUSED:             { kind: "BLOCKED",  label: "Campanha pausada" },
   BLOCKED_AUDIENCE_EMPTY:              { kind: "BLOCKED",  label: "Público vazio" },
   FAILED_PROVIDER:                     { kind: "FAILED",   label: "Falhou (provedor)" },
@@ -65,6 +69,8 @@ export function reasonCodeFromContactBlock(reason: string | null | undefined): C
     case "MISSING_PHONE":
     case "INVALID_PHONE_FORMAT": return "BLOCKED_INVALID_PHONE";
     case "DUPLICATE_CAMPAIGN_RECIPIENT": return "BLOCKED_ALREADY_IMPACTED_CAMPAIGN";
+    case "CUSTOMER_HAS_ACTIVE_ORDER": return "BLOCKED_ACTIVE_ORDER";
+    case "CUSTOMER_ORDERED_RECENTLY": return "BLOCKED_RECENT_ORDER";
     case "QUIET_HOURS":
     case "WEEKEND_BLOCKED":
     case "OUTSIDE_SENDING_WINDOW": return "BLOCKED_OUTSIDE_SEND_WINDOW";

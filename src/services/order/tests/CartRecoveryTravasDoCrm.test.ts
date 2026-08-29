@@ -45,7 +45,7 @@ const db = vi.hoisted(() => ({
   campaignExecution:    { findMany: vi.fn(), count: vi.fn(), create: vi.fn() },
   customer:             { findUnique: vi.fn() },
   metaWhatsAppConfig:   { findMany: vi.fn() },
-  order:                { findMany: vi.fn(), findFirst: vi.fn() },
+  order:                { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(async () => 0) },
   conversation:         { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   message:              { create: vi.fn() },
   $transaction:         vi.fn(),
