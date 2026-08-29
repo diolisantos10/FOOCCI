@@ -77,8 +77,21 @@ function banco(a: Ajustes = {}) {
         .mockResolvedValue((a.textosJaEnviados ?? []).map((texto) => ({ texto }))),
       create: vi.fn().mockResolvedValue({ id: "m1" }),
     },
-    siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
-    leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h1" }) },
+    // ── O que o REVEZAMENTO pergunta quando o lead está com uma pessoa ──────
+    //
+    // Desde 29/08/2026 o portão 2 é `revezamento.ts`, e com o lead em `HUMANO`
+    // ele lê mais duas coisas: a última ação registrada por quem assumiu
+    // (ligação, nota) e se existe handoff `PEDIU_HUMANO` neste lead. Ambas
+    // devolvem `null` aqui — sem ação extra e sem pedido de gente —, que é o
+    // estado neutro. Os casos com carimbo vivem em `revezamento.test.ts`.
+    siteLeadInteraction: {
+      create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    leadHandoff: {
+      create: vi.fn().mockResolvedValue({ id: "h1" }),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     // Desde 27/08/2026 a tomada do lead escolhe um agente do time e grava o
     // `atendenteUserId` dele. `a.timeNoBanco` deixa o caso decidir se o time
     // existe: vazio é o estado de uma instalação nova, e o TA precisa

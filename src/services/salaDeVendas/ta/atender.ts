@@ -19,9 +19,12 @@
  *
  *   1. **O TA está ligado?** `sdr_ia_config.ligado` é a chave mestra do CEO.
  *      Desligado, esta função para no primeiro `if` — e é assim que ela nasce.
- *   2. **O lead é da IA?** Se um humano assumiu, o TA **cala**. Falar por cima
- *      de quem assumiu é o defeito que faz o cliente receber duas respostas
- *      diferentes da mesma empresa no mesmo minuto.
+ *   2. **De quem é a vez?** Quem responde é `revezamento.ts`, e a resposta dele
+ *      é a trava: enquanto houver uma pessoa na conversa, o TA **cala**. Falar
+ *      por cima de quem assumiu é o defeito que faz o cliente receber duas
+ *      respostas diferentes da mesma empresa no mesmo minuto. E o inverso é o
+ *      mesmo portão: se quem assumiu sumiu pelo prazo, a conversa volta para o
+ *      agente — gravada antes de qualquer palavra.
  *   3. **A pessoa pediu silêncio?** `LeadContactSafety` decide, e a resposta
  *      dele é definitiva.
  *   4. **Estamos na janela de horário?** Robô que responde às 3 h da manhã
@@ -63,6 +66,12 @@ import { registrarSaida } from "../conversa";
 import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
+import {
+  aIaPodeFalar,
+  quemFala,
+  lerEstadoDoRevezamento,
+  devolverPorInatividade,
+} from "../revezamento";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
@@ -184,6 +193,10 @@ async function executarTurno(
       atendidoPor: true,
       optOutAt: true,
       atendenteUserId: true,
+      // Desde quando o responsável atual responde. É o piso do relógio do
+      // revezamento: assumir É uma ação humana, e sem este carimbo um lead
+      // recém-assumido pareceria abandonado no primeiro turno.
+      atendenteDesde: true,
       // A temperatura decide se quem fala é o sondador ou o closer. Sem ela na
       // consulta, o closer não existiria na prática: o ofício estaria escrito e
       // nunca vestido — o mesmo defeito de peça sem chamador que já apareceu
@@ -194,15 +207,46 @@ async function executarTurno(
 
   if (!lead) return calar("leadNaoExiste", `lead ${pedido.leadId} não existe`);
 
-  // ── 2. O lead é da IA? ──────────────────────────────────────────────────
+  // ── 2. De quem é a VEZ ──────────────────────────────────────────────────
   //
-  // `AGUARDANDO_HUMANO` também cala: o TA já pediu gente, e voltar a falar
+  // A regra inteira mora em `revezamento.ts`; aqui só se obedece. `estado` é
+  // lido do banco uma vez e serve às duas perguntas — quem pode falar, e se a
+  // conversa volta — para que a decisão e a escrita não possam discordar.
+  //
+  // `AGUARDANDO_HUMANO` continua calando: o TA já pediu gente, e voltar a falar
   // desfaz o pedido dele mesmo na frente do cliente.
-  if (lead.atendidoPor !== "NINGUEM" && lead.atendidoPor !== "IA") {
-    return calar(
-      "leadNaoEDaIA",
-      `o lead está com ${lead.atendidoPor} — o TA não fala por cima de quem assumiu`,
-    );
+  const estado = await lerEstadoDoRevezamento(db, lead, agora);
+  const vez = quemFala(estado);
+
+  if (!aIaPodeFalar(estado)) {
+    return calar("leadNaoEDaIA", vez.porque);
+  }
+
+  // ── 2b. A pessoa sumiu pelo prazo: a conversa VOLTA, e a volta é GRAVADA ─
+  //
+  // ⚠️ Gravar antes de falar não é capricho de ordem. Enquanto o banco disser
+  // `HUMANO`, o lead continua na carteira de quem sumiu, continua fora da fila
+  // de quem precisa de agente — e a mensagem sairia assinada com o
+  // `atendenteUserId` dele, contando fala de robô como produtividade de gente.
+  //
+  // Se a devolução não valer (outra mão pegou o lead entre a leitura e a
+  // escrita), o TA **cala**. Falar sem ser o dono é exatamente o que o portão
+  // acima acabou de impedir; não se contorna a trava por já ter passado por ela.
+  let donoAtual = lead.atendenteUserId;
+
+  if (vez.devolvidoPorInatividade) {
+    const volta = await devolverPorInatividade(db, { leadId: lead.id, estado });
+
+    if (!volta.devolveu) {
+      return calar(
+        "leadNaoEDaIA",
+        `a devolução por inatividade não valeu (${volta.causa}) — o TA não fala sem ser o dono`,
+      );
+    }
+
+    // O lead voltou para um agente com nome, e é ele quem assina daqui em
+    // diante — nunca a pessoa que sumiu.
+    donoAtual = volta.agente?.userId ?? null;
   }
 
   // ── 3. Pediu silêncio? ──────────────────────────────────────────────────
@@ -281,7 +325,10 @@ async function executarTurno(
   // `null` quando o time ainda não existe no banco: a mensagem sai sem autor
   // nomeado, como antes. Melhor um atendimento sem nome do que nenhum — o
   // cliente já escreveu e está esperando.
-  const assina = tomada.assumiu ? (tomada.agente?.userId ?? null) : lead.atendenteUserId;
+  // `donoAtual`, e não `lead.atendenteUserId`: depois de uma devolução por
+  // inatividade o dono já é outro, e ler o valor antigo assinaria a mensagem
+  // com o nome de quem abandonou a conversa.
+  const assina = tomada.assumiu ? (tomada.agente?.userId ?? null) : donoAtual;
 
   // ── 6. Compor ───────────────────────────────────────────────────────────
   //
