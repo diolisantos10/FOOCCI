@@ -368,3 +368,32 @@ se algum robô se mostrar caro demais, aí sim ele vira decisão — com número
 | **Se os outros produtos medem LLM** | Não os auditei — e supor seria chute | Perguntar a cada Diretor |
 
 **Nada disso é "está tudo bem".** É "não consigo ver daqui".
+
+---
+
+## 9. ⚠️ Anthropic e OpenAI são pagos com CRÉDITO — informado pelo CEO em 29/08
+
+Isso muda a natureza do bolso 2. Não é fatura que chega no fim do mês: é saldo
+pré-comprado que **acaba**.
+
+**O risco deixa de ser custo e passa a ser interrupção.** Crédito zerado não
+encarece nada — desliga. Quando o saldo da OpenAI acabar, o Garçom para de
+responder cliente de restaurante; quando o da Anthropic acabar, o robô noturno
+do manual para. Nos dois casos o produto continua no ar, aparentemente saudável.
+
+**E ninguém vigia o saldo.** Varri `src/`, `scripts/` e `.github/`: não existe
+leitura de saldo, de cota ou de limite de nenhum dos dois provedores. A única
+ocorrência próxima é o tratamento de `rate_limit_exceeded` dentro do
+`AISimulatorService` — que reage a um erro já acontecido, não antecipa nada.
+
+**Como isso apareceria hoje, na prática:** a chamada volta com erro de cota, o
+Cérebro cai no `SKIPPED` e — desde o PR #172 — o motivo vira linha de log. Ou
+seja: **é registrado, mas não alerta ninguém.** Alguém precisaria estar lendo o
+log no momento certo.
+
+**O que falta, e é barato:** uma leitura periódica do saldo dos dois provedores,
+com aviso quando cair abaixo de um piso. Não existe hoje e não está em nenhum
+plano. Fica declarado aqui como lacuna, não como tarefa aprovada.
+
+⛔ **Não sei quanto há de saldo em nenhum dos dois.** Isso está nos painéis da
+OpenAI e da Anthropic, e eu não os alcanço. **NÃO MEDIDO.**
