@@ -7056,3 +7056,73 @@ model LeadAvaliacaoCriterio {
   @@index([criterio, nota])
   @@map("lead_avaliacao_criterios")
 }
+
+// ═══════════════════════════════════════════
+//  GASTO MANUAL — o que nenhuma API entrega
+//
+//  Pedido do CEO em 29/08/2026: *"a gente precisa contabilizar absolutamente
+//  tudo que é gasto."* O gasto de IA já está medido em `AIInteractionLog`
+//  (tokens por chamada) e NÃO se repete aqui — duas verdades sobre o mesmo
+//  fato divergem no primeiro esquecimento.
+//
+//  O que falta é tudo o que chega por fatura e não por API: hospedagem
+//  (Railway), Meta/WhatsApp, domínio, ferramentas, imposto. Isso ninguém
+//  consegue ler de um endpoint, então entra pela mão de quem paga.
+//
+//  ── ⚠️ UM DIA SEM LANÇAMENTO NÃO É UM DIA SEM GASTO ──
+//
+//  Railway cobra por mês; domínio, por ano. Um dia de agosto sem linha nesta
+//  tabela NÃO significa que a empresa não gastou naquele dia — significa que
+//  ninguém lançou. A tela é obrigada a dizer "nenhum lançamento" em vez de
+//  "R$ 0,00", e quem garante isso é o serviço, não este comentário.
+// ═══════════════════════════════════════════
+
+/// Um gasto lançado à mão, na moeda em que foi cobrado.
+model GastoManual {
+  id String @id @default(cuid())
+
+  /// O que foi pago, escrito por gente. Obrigatório em toda categoria — e na
+  /// categoria "outro" ele precisa ser ESPECÍFICO, senão "outro" vira o balde
+  /// onde gasto some.
+  descricao String @db.Text
+
+  /// Lista fechada, repetida como CHECK no banco (ver a migração). A lista em
+  /// TypeScript vive em `src/services/financeiro/gastoManual.ts`, e um teste
+  /// confere que as duas são a MESMA lista.
+  categoria String
+
+  /// Quem cobrou (Railway, Meta, Registro.br…). Nulo quando não se sabe —
+  /// nunca "Desconhecido" escrito à mão, que some das buscas.
+  fornecedor String?
+
+  /// CENTAVOS INTEIROS. Nunca float: 0,1 + 0,2 em ponto flutuante não dá 0,3, e
+  /// uma conta de gastos que erra no terceiro decimal deixa de fechar com a
+  /// fatura. O CHECK do banco recusa negativo.
+  valorCent Int
+
+  /// "BRL" ou "USD". Existe porque a IA é cobrada em dólar e a hospedagem em
+  /// real — somar as duas exigiria uma cotação que este repositório não tem.
+  moeda String @default("BRL")
+
+  /// O DIA a que o gasto pertence (regime de competência). É por ele que a
+  /// conta do dia é feita — não por `pagoEm`. A fatura da Railway de agosto é
+  /// gasto de agosto mesmo quando o cartão só passa em setembro.
+  competencia DateTime @db.Date
+
+  /// Quando saiu o dinheiro. Nulo = ainda não pagou, e isso é um fato útil.
+  pagoEm DateTime? @db.Date
+
+  /// Repete todo mês. Não gera lançamento sozinho — é rótulo, para a tela poder
+  /// separar o que vai voltar do que foi uma vez só.
+  recorrente Boolean @default(false)
+
+  /// Quem lançou, no formato `Nome (userId)`. Vem da SESSÃO, nunca do corpo do
+  /// pedido: um autor escolhido por quem age é o mesmo que autor nenhum.
+  criadoPor String
+
+  criadoEm DateTime @default(now())
+
+  @@index([competencia])
+  @@index([categoria, competencia])
+  @@map("gastos_manuais")
+}

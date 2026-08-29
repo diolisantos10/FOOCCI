@@ -154,6 +154,12 @@ export function AdminSidebar({ papel }: { papel?: string | null }) {
         // Quem entra no sistema e com que poderes. Fica em Sistema, ao lado de
         // Credenciais, porque é da mesma natureza: quem tem a chave de quê.
         { href: "/admin/pessoas",        label: "Pessoas e acessos", icon: "🪪" },
+        // O custo da empresa, dia a dia. NÃO entra em `MENU_POR_PAPEL` porque a
+        // rota só abre para MASTER_CEO e DIRETOR_FOOCCI — e esses dois veem o
+        // menu inteiro (`null`). Quem tem escopo de lista simplesmente não
+        // recebe este item; e quem digitasse o endereço bateria no 403 da rota
+        // do mesmo jeito, porque o menu nunca foi a fechadura.
+        { href: "/admin/financeiro",     label: "Financeiro",        icon: "💰" },
         { href: "/admin/assinaturas",    label: "Assinaturas",       icon: "💳" },
         { href: "/admin/credenciais",    label: "Credenciais",       icon: "🔒" },
         { href: "/admin/meta",           label: "Aplicativo Meta",   icon: "🔑" },
