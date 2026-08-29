@@ -25,8 +25,31 @@ describe("⭐ toda versão já carimbada num aceite continua reproduzível", () 
     expect(v1).toHaveLength(9);
   });
 
+  it("a v2 resolve, e é o texto que ela tinha antes da segunda decisão do CEO", () => {
+    // A v2 durou algumas horas — nasceu e foi aposentada em 29/08/2026. Isso não
+    // a torna descartável: enquanto ninguém puder AFIRMAR que nenhum aceite foi
+    // colhido sob ela, o rótulo v2 precisa significar alguma coisa. Presumir o
+    // contrário seria concluir uma negação do silêncio.
+    const v2 = secoesDaVersao("v2-2026-08-29");
+    expect(v2, "o texto da v2 sumiu").toBeDefined();
+    const secao4 = v2!.find((s) => s.title.startsWith("4."))!;
+    // Ela já dizia a regra da devolução…
+    expect(secao4.body).toMatch(/proporcional/i);
+    expect(secao4.body).toMatch(/arrepend/i);
+    // …e ainda NÃO dizia que a conta usa o que o cliente pagou de verdade.
+    expect(secao4.body).not.toMatch(/promo[çc]|efetivamente pagos/i);
+  });
+
   it("a versão vigente resolve para o texto vigente", () => {
     expect(secoesDaVersao(TERMS_VERSION)).toBe(TERMS_SECTIONS);
+  });
+
+  it("⭐ só a versão vigente fala de promoção que não se recupera", () => {
+    // A diferença entre v2 e v3 em duas asserções — é a decisão do CEO, e é o
+    // que dá sentido a existirem duas versões no mesmo dia.
+    const atual = TERMS_SECTIONS.find((s) => s.title.startsWith("4."))!;
+    expect(atual.body).toMatch(/promo[çc]/i);
+    expect(atual.body).toMatch(/efetivamente pagos/i);
   });
 
   it("⛔ o arquivo NÃO é uma cópia do texto de hoje", () => {

@@ -206,17 +206,18 @@ describe("o bloco de destaque", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("⛔ mudar o destaque não pode virar mudar o contrato", () => {
-  it("a versão do Termo é a v2 aprovada pelo CEO", () => {
+  it("a versão do Termo é a v3 aprovada pelo CEO", () => {
     // O ponto deste teste NUNCA foi a string "v1": é que texto e rótulo andam
     // juntos. Quem mexer no destaque e vir isto reprovar mexeu no texto sem
     // querer — e aí todo aceite anterior viraria afirmação sobre um texto que
     // ninguém consegue reproduzir.
     //
-    // Em 29/08/2026 o texto mudou DE PROPÓSITO (a regra de cancelamento e
-    // devolução decidida pelo CEO), e por isso o rótulo subiu junto: v1 →
-    // v2-2026-08-29. O texto da v1 continua reproduzível em `termsArquivo`, que
-    // é o que mantém de pé a prova de quem aceitou a v1.
-    expect(TERMS_VERSION).toBe("v2-2026-08-29");
+    // Em 29/08/2026 o texto mudou DUAS VEZES, de propósito: a regra de
+    // cancelamento e devolução (v2) e, no mesmo dia, o recálculo pelo valor que
+    // o cliente realmente pagou (v3). O rótulo subiu junto nas duas, e v1 e v2
+    // continuam reproduzíveis em `termsArquivo` — é o que mantém de pé a prova
+    // de quem aceitou cada uma.
+    expect(TERMS_VERSION).toBe("v3-2026-08-29");
   });
 
   it("o Termo continua com as nove seções aprovadas", () => {

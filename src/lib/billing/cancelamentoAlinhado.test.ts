@@ -170,13 +170,29 @@ const AFIRMACOES: { nome: string; padrao: RegExp }[] = [
   { nome: "há devolução", padrao: /devolv/i },
   { nome: "proporcional nos ciclos curtos", padrao: /proporcional/i },
   { nome: "o corte dos 6 meses", padrao: /6 meses|seis meses/i },
-  { nome: "recálculo pelo preço do plano mensal", padrao: /pre[çc]o do plano mensal|recalcul/i },
+  { nome: "recálculo pelo preço mensal do plano", padrao: /pre[çc]o mensal do|pre[çc]o do plano mensal|recalcul/i },
   {
     nome: "a devolução nunca fica negativa",
     padrao: /nunca (é|fica|ser[áa]) negativ|no m[íi]nimo zero|nunca (paga|pagar) a mais|nunca deve/i,
   },
   { nome: "os 7 dias", padrao: /7 dias/ },
   { nome: "e que eles são o arrependimento", padrao: /arrepend/i },
+  {
+    // Segunda decisão do CEO em 29/08/2026: *"É sempre recalculado pelo valor
+    // que o cliente pagou."* Uma boca que diga só "recalculamos pelo preço
+    // mensal" deixa no ar que o desconto dele será desfeito na saída — e é
+    // exatamente o contrário.
+    nome: "que a conta usa o que o cliente PAGOU de verdade",
+    padrao: /pagou de verdade|que (voc[êe]|ele|o Restaurante) pagou|efetivamente pagos?|valores? efetivamente pagos?/i,
+  },
+  {
+    // E que promoção não volta para a casa. Sem esta palavra a regra vira
+    // "recalculamos pelo cheio" na cabeça de quem lê — inclusive na do vendedor.
+    // É também a frase que ganha venda: aceitar uma oferta nossa não cobra
+    // pedágio na saída.
+    nome: "que promoção concedida não é recuperada",
+    padrao: /promo[çc]/i,
+  },
 ];
 
 describe("⭐ todas as bocas dizem a MESMA regra de cancelamento", () => {
@@ -410,7 +426,15 @@ describe("⭐ a tela de confirmação diz a mesma regra de dinheiro", () => {
 
   it("fala do proporcional e do recálculo pelo mensal", () => {
     expect(juntas()).toMatch(/proporcional/i);
-    expect(juntas()).toMatch(/pre[çc]o do plano mensal/i);
+    expect(juntas()).toMatch(/pre[çc]o mensal do seu plano/i);
+  });
+
+  it("⭐ diz que a conta usa o que a pessoa pagou, e que a promoção é dela", () => {
+    // É a última tela antes de o cliente ir embora. Se ela sugerir que o
+    // desconto dele será desfeito, o cliente cancela achando que foi punido por
+    // ter aceitado uma oferta nossa — e conta isso para os outros.
+    expect(juntas()).toMatch(/pagou de verdade/i);
+    expect(juntas()).toMatch(/promo[çc]/i);
   });
 
   it("fala dos 7 dias de arrependimento", () => {

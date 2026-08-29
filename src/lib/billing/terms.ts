@@ -31,14 +31,34 @@
  * nunca negativa e nunca recuperando mais que o desconto concedido; e os 7 dias
  * de arrependimento de quem contratou pelo site devolvem tudo, acima de tudo.
  *
+ * ── v3 (29/08/2026) — O PREÇO QUE O CLIENTE PRATICOU, NÃO O DE TABELA ───────
+ *
+ * Ainda no mesmo dia, o CEO fechou a pergunta que a v2 deixou aberta, e a
+ * resposta é mais larga que a pergunta: *"Se ganhou cinquenta por cento, esse é
+ * o valor da primeira mensalidade dele, inquestionável. É sempre recalculado
+ * pelo valor que o cliente pagou."*
+ *
+ * Ou seja: no recálculo da saída, cada mês vale **o que aquele cliente pagou por
+ * ele** — nunca uma tabela que ele nunca praticou. **Promoção concedida não se
+ * recupera:** ela foi preço, não empréstimo. Vale para qualquer campanha —
+ * degustação, cupom, cortesia, mês grátis, preço de fundador —, e por isso o
+ * texto não cita nenhuma delas pelo nome. A seção 4 ganhou a frase; o cálculo
+ * em `saidaDoPlano` passou a receber o preço praticado mês a mês, em vez de
+ * saber quais promoções existem.
+ *
  * ⚠️ POR QUE A VERSÃO SUBIU JUNTO COM O TEXTO. Cada aceite guarda esta string
  * (`PlanSubscription.termsVersion`). Mudar o texto sem trocar o rótulo faria
  * TODO aceite anterior apontar para um texto que aquela pessoa nunca leu —
- * destruir a prova é pior que a divergência que se estava consertando. O texto
- * da v1 continua reproduzível em `@/lib/billing/termsArquivo`.
+ * destruir a prova é pior que a divergência que se estava consertando. v1 e v2
+ * continuam reproduzíveis em `@/lib/billing/termsArquivo`.
+ *
+ * Sim, v2 e v3 nasceram no mesmo dia. O rótulo é versão de TEXTO, não data: duas
+ * decisões do CEO em 29/08 são duas versões. Se ele confirmar que nenhum aceite
+ * foi colhido sob a v2, a v2 pode ser recolhida do arquivo — mas isso é decisão
+ * dele, não presunção nossa (ausência de informação não é informação).
  */
 
-export const TERMS_VERSION = "v2-2026-08-29";
+export const TERMS_VERSION = "v3-2026-08-29";
 
 /**
  * ── AS CLÁUSULAS QUE PRECISAM APARECER EM DESTAQUE, SEM CLIQUE ──────────────
@@ -103,7 +123,7 @@ export const TERMS_SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "4. Vigência, cancelamento e dados",
-    body: "Renovação automática por ciclo. O Restaurante pode cancelar a qualquer momento, sem multa e sem fidelidade obrigatória. O cancelamento tem efeito ao fim do mês em curso, que já está pago e segue sendo prestado até lá — e por isso não é devolvido. Nos ciclos abaixo de 6 meses, os meses do ciclo que ainda não foram entregues são devolvidos de forma proporcional. Nos ciclos de 6 meses ou mais, o período já usado é recalculado pelo preço do plano mensal — o de quem não se comprometeu com prazo — e a diferença é devolvida ao Restaurante; o resultado nunca é negativo, no mínimo zero, e a recuperação nunca ultrapassa o desconto concedido pelo ciclo longo. Quem contratou pelo site tem 7 dias, contados da contratação, para desistir e receber tudo de volta — direito de arrependimento, que prevalece sobre este Termo. Por 30 dias após o término, os dados (cardápio, clientes, pedidos) podem ser exportados em formato estruturado; após 60 dias são excluídos, salvo obrigação legal.",
+    body: "Renovação automática por ciclo. O Restaurante pode cancelar a qualquer momento, sem multa e sem fidelidade obrigatória. O cancelamento tem efeito ao fim do mês em curso, que já está pago e segue sendo prestado até lá — e por isso não é devolvido. Nos ciclos abaixo de 6 meses, os meses do ciclo que ainda não foram entregues são devolvidos de forma proporcional. Nos ciclos de 6 meses ou mais, o período já usado é recalculado pelo preço mensal do plano — o de quem não se comprometeu com prazo — e a diferença é devolvida ao Restaurante. Esse recálculo usa os valores efetivamente pagos pelo Restaurante em cada mês, inclusive descontos e promoções concedidos, que não são recuperados. O resultado nunca é negativo, no mínimo zero, e a recuperação nunca ultrapassa o desconto concedido pelo ciclo longo. Quem contratou pelo site tem 7 dias, contados da contratação, para desistir e receber tudo de volta — direito de arrependimento, que prevalece sobre este Termo. Por 30 dias após o término, os dados (cardápio, clientes, pedidos) podem ser exportados em formato estruturado; após 60 dias são excluídos, salvo obrigação legal.",
   },
   {
     title: "5. Dependências de terceiros",

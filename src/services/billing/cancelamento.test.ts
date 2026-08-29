@@ -496,11 +496,12 @@ describe("⭐ o que a pessoa lê antes de confirmar", () => {
     // o texto — e "melhorar" um texto de cancelamento é como se inventa política
     // de reembolso sem querer.
     //
-    // Eram três até 28/08. Viraram CINCO em 29/08, quando o CEO decidiu a regra
-    // da devolução: entraram a 5.5 (o que sobra do ciclo volta) e a 5.6 (os 7
-    // dias de arrependimento). Uma tela que fala de cancelamento e não fala do
-    // arrependimento esconde o direito mais forte que a pessoa tem.
-    expect(CONSEQUENCIAS_DO_CANCELAMENTO).toHaveLength(5);
+    // Eram três até 28/08. Viraram SEIS em 29/08, nas duas decisões do CEO: a
+    // 5.5 (o que sobra do ciclo volta), a 5.6 (os 7 dias de arrependimento) e a
+    // frase de que a conta usa o que a pessoa PAGOU, com a promoção ficando com
+    // ela. Uma tela que fala de cancelamento e cala sobre o arrependimento
+    // esconde o direito mais forte que a pessoa tem.
+    expect(CONSEQUENCIAS_DO_CANCELAMENTO).toHaveLength(6);
     for (const c of CONSEQUENCIAS_DO_CANCELAMENTO) {
       expect(c.clausula, c.texto).toMatch(/^\d+\.\d+$/);
       expect(c.texto.length, c.clausula).toBeGreaterThan(40);

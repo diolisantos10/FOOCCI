@@ -46,13 +46,25 @@ import {
 
 const PLANOS: PlanCode[] = ["STARTER", "GROWTH", "PRO"];
 
+/**
+ * "Pagou o preço de tabela em todos os meses usados" — o caso sem promoção.
+ *
+ * Existe como AJUDANTE DE TESTE, e não dentro da função: a função não sabe
+ * montar esta lista de propósito, porque montá-la a partir de tabela é
+ * exatamente o que o CEO proibiu em 29/08. Aqui é legítimo porque o teste está
+ * declarando o cenário, não adivinhando o dado de um cliente real.
+ */
+function mensalCheioPor(meses: number, plano: PlanCode = "STARTER"): number[] {
+  return Array.from({ length: meses }, () => PLAN_CYCLE_CENTS[plano].MENSAL);
+}
+
 /** Um pedido "normal": fora do arrependimento, para não cair no atalho dos 7 dias. */
 function pedido(over: Partial<Parameters<typeof devolucaoNaSaida>[0]> = {}) {
   return devolucaoNaSaida({
     plano: "STARTER",
     ciclo: "ANUAL",
     pagoCents: PLAN_CYCLE_CENTS.STARTER.ANUAL,
-    mesesUsados: 1,
+    mensalidadesPraticadasCents: mensalCheioPor(1),
     contratadoPeloSite: false,
     diasDesdeAContratacao: 60,
     ...over,
@@ -108,14 +120,14 @@ describe("⭐ arrependimento de 7 dias (quem contratou pelo site)", () => {
     const dentro = pedido({ contratadoPeloSite: true, diasDesdeAContratacao: DIAS_DE_ARREPENDIMENTO });
     const fora = pedido({ contratadoPeloSite: true, diasDesdeAContratacao: DIAS_DE_ARREPENDIMENTO + 1 });
     expect(dentro.motivo).toBe("arrependimento");
-    expect(fora.motivo).toBe("recalculoPeloMensal");
+    expect(fora.motivo).toBe("recalculoPeloQueFoiPago");
   });
 
   it("não vale para quem NÃO contratou pelo site — é direito de compra à distância", () => {
     // A outra metade. Contratação assistida (link de aceite enviado pela equipe,
     // negociada pessoalmente) não é compra fora do estabelecimento.
     const r = pedido({ contratadoPeloSite: false, diasDesdeAContratacao: 2 });
-    expect(r.motivo).toBe("recalculoPeloMensal");
+    expect(r.motivo).toBe("recalculoPeloQueFoiPago");
   });
 });
 
@@ -125,7 +137,7 @@ describe("⭐ arrependimento de 7 dias (quem contratou pelo site)", () => {
 
 describe("mensal: o mês em curso segue até o fim, e não volta", () => {
   it("devolve zero — não há período por entregar", () => {
-    const r = pedido({ ciclo: "MENSAL", pagoCents: PLAN_CYCLE_CENTS.STARTER.MENSAL, mesesUsados: 1 });
+    const r = pedido({ ciclo: "MENSAL", pagoCents: PLAN_CYCLE_CENTS.STARTER.MENSAL, mensalidadesPraticadasCents: mensalCheioPor(1) });
     expect(r.motivo).toBe("proporcional");
     expect(r.devolverCents).toBe(0);
     expect(r.mesesNaoEntregues).toBe(0);
@@ -137,7 +149,7 @@ describe("trimestral: proporcional do que não foi entregue", () => {
     const r = pedido({
       ciclo: "TRIMESTRAL",
       pagoCents: PLAN_CYCLE_CENTS.STARTER.TRIMESTRAL, // 48.300
-      mesesUsados: 1,
+      mensalidadesPraticadasCents: mensalCheioPor(1),
     });
     expect(r.motivo).toBe("proporcional");
     expect(r.devolverCents).toBe(32_200); // 48.300 × 2/3
@@ -148,7 +160,7 @@ describe("trimestral: proporcional do que não foi entregue", () => {
     const r = pedido({
       ciclo: "TRIMESTRAL",
       pagoCents: PLAN_CYCLE_CENTS.STARTER.TRIMESTRAL,
-      mesesUsados: 3,
+      mensalidadesPraticadasCents: mensalCheioPor(3),
     });
     expect(r.devolverCents).toBe(0);
   });
@@ -156,7 +168,7 @@ describe("trimestral: proporcional do que não foi entregue", () => {
   it("a fração de centavo fica com o CLIENTE, nunca com a casa", () => {
     // 100 centavos ÷ 3 meses × 2 = 66,66… Devolver 66 é ficar com o centavo
     // que não é nosso. Arredonda para cima.
-    const r = pedido({ ciclo: "TRIMESTRAL", pagoCents: 100, mesesUsados: 1 });
+    const r = pedido({ ciclo: "TRIMESTRAL", pagoCents: 100, mensalidadesPraticadasCents: mensalCheioPor(1) });
     expect(r.devolverCents).toBe(67);
   });
 });
@@ -169,8 +181,8 @@ describe("⭐ anual: os dois extremos", () => {
   it("quem cancela no PRIMEIRO mês recebe o ano menos uma mensalidade cheia", () => {
     // Anual STARTER: pagou 179.000 por 12 meses. Usou 1 mês, que a esta altura
     // custa o preço de quem não se comprometeu: 17.900.
-    const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: 1 });
-    expect(r.motivo).toBe("recalculoPeloMensal");
+    const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mensalidadesPraticadasCents: mensalCheioPor(1) });
+    expect(r.motivo).toBe("recalculoPeloQueFoiPago");
     expect(r.devolverCents).toBe(179_000 - 17_900); // 161.100
     // O que ele devolveu de desconto: um mês de desconto, e nada mais.
     expect(r.descontoRecuperadoCents).toBe(2_984); // ≈ 35.800 ÷ 12
@@ -179,14 +191,14 @@ describe("⭐ anual: os dois extremos", () => {
   it("quem cancela na VÉSPERA do fim não recebe nada — e também não deve nada", () => {
     // 12 meses de preço mensal (214.800) passam do que ele pagou (179.000). A
     // conta crua daria −35.800: é aqui que a trava do zero salva o cliente.
-    const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: 12 });
+    const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mensalidadesPraticadasCents: mensalCheioPor(12) });
     expect(r.devolverCents).toBe(0);
     expect(r.mesesNaoEntregues).toBe(0);
   });
 
   it("a devolução DIMINUI a cada mês que ele fica — é preço, não punição", () => {
     const valores = Array.from({ length: 12 }, (_, i) =>
-      pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: i + 1 }).devolverCents,
+      pedido({ ciclo: "ANUAL", pagoCents: 179_000, mensalidadesPraticadasCents: mensalCheioPor(i + 1) }).devolverCents,
     );
     for (let i = 1; i < valores.length; i++) {
       expect(valores[i], `mês ${i + 1}`).toBeLessThanOrEqual(valores[i - 1]);
@@ -200,7 +212,7 @@ describe("⭐ anual: os dois extremos", () => {
     // porque a devolução já é zero e não há mais o que recuperar.
     const desconto = descontoDoCicloCents("STARTER", "ANUAL");
     for (let usados = 1; usados <= 12; usados++) {
-      const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: usados });
+      const r = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mensalidadesPraticadasCents: mensalCheioPor(usados) });
       expect(r.descontoRecuperadoCents, `mês ${usados}`).toBeLessThanOrEqual(desconto);
       // Nunca mais que o desconto USUFRUÍDO até ali (+1 centavo de arredondamento).
       expect(r.descontoRecuperadoCents, `mês ${usados}`).toBeLessThanOrEqual(
@@ -215,11 +227,28 @@ describe("⭐ anual: os dois extremos", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("⛔ as travas que valem mais que o texto", () => {
+  /**
+   * Duas formas de preço praticado, e não uma condicional de campanha: o cliente
+   * que pagou tabela em todos os meses, e o que teve o primeiro mês pela metade.
+   * A função não sabe a diferença — para ela são só dois vetores de centavos.
+   */
+  const FORMAS: { nome: string; precos: (usados: number, plano: PlanCode) => number[] }[] = [
+    { nome: "sem promoção", precos: (u, p) => mensalCheioPor(u, p) },
+    {
+      nome: "com o 1º mês pela metade",
+      precos: (u, p) => {
+        const meses = mensalCheioPor(u, p);
+        meses[0] = Math.round(meses[0]! / 2);
+        return meses;
+      },
+    },
+  ];
+
   const todos = () => {
     const saidas = [];
     for (const plano of PLANOS) {
       for (const ciclo of CYCLE_CODES) {
-        for (const degustacao of [false, true]) {
+        for (const forma of FORMAS) {
           for (let usados = 1; usados <= CYCLE_MONTHS[ciclo]; usados++) {
             const pago = PLAN_CYCLE_CENTS[plano][ciclo];
             saidas.push({
@@ -227,14 +256,14 @@ describe("⛔ as travas que valem mais que o texto", () => {
               ciclo: ciclo as CycleCode,
               usados,
               pago,
+              forma: forma.nome,
               r: devolucaoNaSaida({
                 plano,
                 ciclo,
                 pagoCents: pago,
-                mesesUsados: usados,
+                mensalidadesPraticadasCents: forma.precos(usados, plano),
                 contratadoPeloSite: false,
                 diasDesdeAContratacao: 90,
-                teveDegustacaoDoPrimeiroMes: degustacao,
               }),
             });
           }
@@ -245,7 +274,7 @@ describe("⛔ as travas que valem mais que o texto", () => {
   };
 
   it("varre uma quantidade plausível de casos", () => {
-    // 3 planos × (1 + 3 + 12) meses × 2 (com e sem degustação) = 96.
+    // 3 planos × (1 + 3 + 12) meses × 2 formas de preço praticado = 96.
     expect(todos()).toHaveLength(96);
   });
 
@@ -282,29 +311,119 @@ describe("⛔ as travas que valem mais que o texto", () => {
     expect(() => pedido({ pagoCents: -1 })).toThrow(/centavos/i);
   });
 
+  it("recusa mensalidade fracionária ou negativa, dizendo qual é a errada", () => {
+    expect(() =>
+      pedido({ mensalidadesPraticadasCents: [17_900, 1.5] }),
+    ).toThrow(/mensalidadesPraticadasCents\[1\]/);
+  });
+
+  it("⛔ sem saber o que foi cobrado por mês, RECUSA em vez de estimar", () => {
+    // A trava mais importante deste arquivo depois do "nunca negativo". A regra
+    // do CEO é "recalculado pelo valor que o cliente pagou"; quem não tem esse
+    // valor não tem como cumpri-la. Devolver um número plausível seria inventar
+    // dinheiro alheio — e é o guardrail 1 da casa (ausência de informação não é
+    // informação). O erro diz o que fazer: apurar a cobrança real.
+    expect(() => pedido({ mensalidadesPraticadasCents: [] })).toThrow(/não deve ser estimado/i);
+    expect(() => pedido({ mensalidadesPraticadasCents: [] })).toThrow(/PlanInvoice/);
+  });
+
   it("mês usado fora da faixa não vira devolução maluca", () => {
     // 99 meses num ciclo de 12 é dado errado, não motivo para devolver negativo.
-    const demais = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: 99 });
+    const demais = pedido({
+      ciclo: "ANUAL",
+      pagoCents: 179_000,
+      mensalidadesPraticadasCents: mensalCheioPor(99),
+    });
     expect(demais.mesesUsados).toBe(12);
     expect(demais.devolverCents).toBe(0);
-    // Zero mês usado também não existe: o primeiro mês começa no dia 1.
-    const demenos = pedido({ ciclo: "ANUAL", pagoCents: 179_000, mesesUsados: 0 });
-    expect(demenos.mesesUsados).toBe(1);
+    // E a soma do recálculo também para no ciclo: 12 meses, não 99.
+    expect(demais.mesesUsadosCustaramCents).toBe(17_900 * 12);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// A DEGUSTAÇÃO DO PRIMEIRO MÊS NÃO PODE VIRAR COBRANÇA NA SAÍDA
+// ⭐⭐ PROMOÇÃO CONCEDIDA NÃO SE RECUPERA — a decisão do CEO de 29/08/2026
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("quem teve os 50% do primeiro mês", () => {
-  it("tem o mês 1 recalculado pela metade — como teria no plano mensal", () => {
-    // A regra do CEO recalcula o usado pelo preço "de quem não se comprometeu".
-    // Quem assina o MENSAL também ganha metade do primeiro mês. Cobrar o mês 1
-    // cheio de quem sai seria cobrar dele MAIS do que o cliente mensal pagou.
-    const com = pedido({ ciclo: "ANUAL", pagoCents: 171_542, mesesUsados: 1, teveDegustacaoDoPrimeiroMes: true });
-    const sem = pedido({ ciclo: "ANUAL", pagoCents: 171_542, mesesUsados: 1 });
-    expect(com.devolverCents - sem.devolverCents).toBe(8_950); // metade de R$ 179,00
+describe("⭐ o cliente que teve 50% no 1º mês e cancela no 2º", () => {
+  /*
+    O caso central. Palavra do CEO: *"Se ganhou cinquenta por cento, esse é o
+    valor da primeira mensalidade dele, inquestionável. É sempre recalculado pelo
+    valor que o cliente pagou."*
+
+    Cenário, no Essencial anual com a degustação:
+      · pagou pelo ciclo ...................... R$ 1.715,42 (171.542)
+      · mês 1, preço praticado ................ R$    89,50 (8.950 — metade)
+      · mês 2, preço praticado ................ R$   179,00 (17.900)
+      · usados custaram ....................... R$   268,50 (26.850)
+      · devolver .............................. R$ 1.446,92 (144.692)
+  */
+  const PAGO_NO_ANUAL_COM_DEGUSTACAO = 171_542;
+  const MEIO_MES = 8_950;
+  const MES_CHEIO = 17_900;
+
+  const comPromocao = () =>
+    pedido({
+      ciclo: "ANUAL",
+      pagoCents: PAGO_NO_ANUAL_COM_DEGUSTACAO,
+      mensalidadesPraticadasCents: [MEIO_MES, MES_CHEIO],
+    });
+
+  it("os meses usados custam o que ELE pagou — R$ 89,50 + R$ 179,00", () => {
+    expect(comPromocao().mesesUsadosCustaramCents).toBe(26_850);
+    expect(comPromocao().devolverCents).toBe(144_692);
+  });
+
+  it("⭐ a promoção NÃO é cobrada de volta — ele recebe os R$ 89,50 a mais", () => {
+    // A metade que prova a decisão. Se a casa recalculasse os dois meses pelo
+    // valor cheio (35.800), devolveria 135.742 — R$ 89,50 a menos. Essa
+    // diferença É a promoção, e ela fica com o cliente.
+    const cobrandoCheio = pedido({
+      ciclo: "ANUAL",
+      pagoCents: PAGO_NO_ANUAL_COM_DEGUSTACAO,
+      mensalidadesPraticadasCents: [MES_CHEIO, MES_CHEIO],
+    });
+    expect(cobrandoCheio.devolverCents).toBe(135_742);
+    expect(comPromocao().devolverCents - cobrandoCheio.devolverCents).toBe(MEIO_MES);
+  });
+
+  it("quem teve promoção nunca recebe MENOS que quem não teve, no mesmo cenário", () => {
+    // A generalização, e a que pega a próxima campanha: qualquer preço praticado
+    // menor só pode AUMENTAR a devolução. Se um dia alguém reintroduzir uma
+    // tabela de referência no recálculo, esta ordem se inverte e o teste cai.
+    for (let usados = 1; usados <= 12; usados++) {
+      const praticado = mensalCheioPor(usados);
+      const comDesconto = [...praticado];
+      comDesconto[0] = Math.round(comDesconto[0]! / 2);
+      const base = { ciclo: "ANUAL" as const, pagoCents: PAGO_NO_ANUAL_COM_DEGUSTACAO };
+      const semPromo = pedido({ ...base, mensalidadesPraticadasCents: praticado });
+      const comPromo = pedido({ ...base, mensalidadesPraticadasCents: comDesconto });
+      expect(comPromo.devolverCents, `mês ${usados}`).toBeGreaterThanOrEqual(
+        semPromo.devolverCents,
+      );
+    }
+  });
+
+  it("vale para QUALQUER promoção, não só a dos 50% — inclusive mês grátis", () => {
+    // Cortesia total no primeiro mês: preço praticado zero. A função não sabe o
+    // nome da campanha e não precisa saber — por isso a próxima não recria o bug.
+    const mesGratis = pedido({
+      ciclo: "ANUAL",
+      pagoCents: 179_000,
+      mensalidadesPraticadasCents: [0, MES_CHEIO],
+    });
+    expect(mesGratis.mesesUsadosCustaramCents).toBe(MES_CHEIO);
+    expect(mesGratis.devolverCents).toBe(179_000 - MES_CHEIO);
+  });
+
+  it("e a promoção também não faz a devolução passar do que ele pagou", () => {
+    // O limite superior continua valendo mesmo com preço praticado zero em tudo.
+    const tudoDeGraca = pedido({
+      ciclo: "ANUAL",
+      pagoCents: 179_000,
+      mensalidadesPraticadasCents: [0, 0, 0],
+    });
+    expect(tudoDeGraca.devolverCents).toBe(179_000);
   });
 });
 
@@ -318,6 +437,15 @@ describe("a regra publicada na vitrine bate com a conta", () => {
     expect(texto).toContain(`${MESES_DE_CICLO_LONGO} meses`);
     expect(texto).toContain(`${DIAS_DE_ARREPENDIMENTO} dias`);
     expect(texto).toMatch(/nunca fica negativa/i);
+  });
+
+  it("⭐ e promete o que a conta faz: usa o que foi pago, e a promoção é do cliente", () => {
+    // O texto é a única parte disto que o cliente lê. Se a vitrine não disser
+    // que a promoção fica com ele, a decisão do CEO existe no código e não
+    // existe na venda.
+    const texto = REGRA_DE_SAIDA.join(" ");
+    expect(texto).toMatch(/pagou de verdade/i);
+    expect(texto).toMatch(/promo[çc]/i);
   });
 
   it("são frases inteiras, não rótulos", () => {

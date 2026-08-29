@@ -103,8 +103,17 @@ export const CONSEQUENCIAS_DO_CANCELAMENTO: readonly { texto: string; clausula: 
     texto:
       "O que você pagou adiantado e ainda não usamos volta para você: no " +
       "trimestral, proporcional aos meses que faltam; no anual, refazendo a conta " +
-      "dos meses usados pelo preço do plano mensal. A conta nunca fica negativa — " +
-      "você não paga nada a mais por cancelar.",
+      "dos meses usados pelo preço mensal do seu plano. A conta nunca fica " +
+      "negativa — você não paga nada a mais por cancelar.",
+  },
+  {
+    // A frase que ganha venda, e não só evita processo: ela diz que aceitar uma
+    // oferta nossa não cobra pedágio na saída.
+    clausula: "5.5",
+    texto:
+      "Essa conta usa o que você pagou de verdade em cada mês, inclusive desconto " +
+      "e promoção que você teve. O que foi promoção continua sendo seu: a gente " +
+      "não cobra de volta uma oferta que você aceitou.",
   },
   {
     clausula: "5.6",

@@ -1,6 +1,14 @@
-# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — v2 (aprovado 29/08/2026)
+# TERMO DE CONTRATAÇÃO DO SERVIÇO FOOCCI — v3 (aprovado 29/08/2026)
 
-> **Status: APROVADO pelo CEO em 29/08/2026** (`TERMS_VERSION = v2-2026-08-29`).
+> **Status: APROVADO pelo CEO em 29/08/2026** (`TERMS_VERSION = v3-2026-08-29`).
+>
+> **O que a v3 mudou (mesmo dia, segunda decisão do CEO).** A v2 deixou aberta
+> uma pergunta: no recálculo dos meses já usados, vale o preço de tabela ou o que
+> o cliente pagou? Palavra dele: *"Se ganhou cinquenta por cento, esse é o valor
+> da primeira mensalidade dele, inquestionável. É sempre recalculado pelo valor
+> que o cliente pagou."* Entrou a alínea **5.5 b.1**: o recálculo usa os valores
+> **efetivamente pagos em cada mês**, e **promoção concedida não se recupera** —
+> qualquer promoção, não só a degustação. Nada mais do texto mudou.
 > A v1 (03/08/2026) fechou as cinco decisões abertas: reajuste IPCA · degustação
 > 50% no 1º mês · suspensão 15/30 dias · SLA de disponibilidade mantido FORA do
 > contrato (alvo interno de 99%, não promessa contratual — recomendação do
@@ -102,12 +110,19 @@ ciclo que ainda não foi prestado é devolvido ao Restaurante, assim:
    **proporcional** aos meses do ciclo que ainda não foram entregues.
 
    b) **Ciclos de 6 meses ou mais** (hoje, o anual): o período já usado é
-   **recalculado pelo preço do plano mensal vigente na contratação** — o preço de
+   **recalculado pelo preço mensal do plano vigente na contratação** — o preço de
    quem não se comprometeu com prazo — e a **diferença** entre o valor pago e
    esse recálculo é devolvida ao Restaurante. O desconto do plano longo é
    concedido **em razão da permanência**: quem sai antes fica com o desconto dos
    meses em que ficou e devolve apenas o dos meses que não vai usar, valor que
    **diminui a cada mês de permanência**.
+
+   b.1) **O recálculo usa os valores efetivamente pagos pelo Restaurante em cada
+   mês**, e não uma tabela de referência que ele não praticou. Descontos e
+   promoções concedidos — degustação do primeiro mês, cupom, cortesia, condição
+   negociada ou qualquer outra — **integram o preço daquele mês e não são
+   recuperados** na saída: foram preço, e não empréstimo. Nenhum Restaurante paga
+   mais por ter aceitado uma oferta da Foocci.
 
    c) **O resultado nunca é negativo.** No pior caso a devolução é zero. O
    Restaurante **nunca deve valor adicional** por ter cancelado, e a recuperação
@@ -192,7 +207,8 @@ período.
 
 ---
 
-*Versão v2 · aprovada pelo CEO em 29/08/2026 · `TERMS_VERSION = v2-2026-08-29`.*
-*Versão anterior: v1 · 03/08/2026 · `v1-2026-08-03` — texto congelado e
-reproduzível em `src/lib/billing/termsArquivo.ts`, porque cada aceite guarda o
-rótulo da versão e não o texto dela.*
+*Versão v3 · aprovada pelo CEO em 29/08/2026 · `TERMS_VERSION = v3-2026-08-29`.*
+*Versões anteriores: v2 · 29/08/2026 · `v2-2026-08-29` e v1 · 03/08/2026 ·
+`v1-2026-08-03` — textos congelados e reproduzíveis em
+`src/lib/billing/termsArquivo.ts`, porque cada aceite guarda o rótulo da versão e
+não o texto dela.*

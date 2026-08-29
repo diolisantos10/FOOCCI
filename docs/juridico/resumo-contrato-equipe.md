@@ -1,6 +1,6 @@
 # O contrato Foocci em 1 minuto — para a equipe
 
-> Versão de bolso do Termo de Contratação (`v2-2026-08-29`, aprovado pelo CEO).
+> Versão de bolso do Termo de Contratação (`v3-2026-08-29`, aprovado pelo CEO).
 > O texto jurídico completo está em `termo-de-contratacao-foocci.md` — **este
 > aqui é o que a equipe precisa saber para vender e atender.**
 
@@ -35,10 +35,16 @@ Mudou em 29/08/2026 por decisão do CEO. Se você aprendeu a frase antiga
 - **Trimestral (ciclos abaixo de 6 meses):** os meses que ainda não foram
   entregues voltam, de forma proporcional.
 - **Anual (ciclos de 6 meses ou mais):** a gente refaz a conta dos meses que ele
-  usou pelo **preço do plano mensal** e devolve a diferença. Ele fica com o
+  usou pelo **preço mensal do plano dele** e devolve a diferença. Ele fica com o
   desconto dos meses em que ficou e devolve só o dos meses que não vai usar. **A
   devolução nunca fica negativa: no pior caso é zero, e ele nunca paga a mais por
   cancelar.**
+- **A conta usa o que ele pagou de verdade em cada mês, inclusive desconto e
+  promoção.** Ganhou 50% no primeiro mês? Esse é o valor da primeira mensalidade
+  dele, e ponto final. **O que foi promoção continua sendo dele** — a gente não
+  cobra de volta uma oferta que nós mesmos demos. Vale para qualquer promoção:
+  cupom, cortesia, mês grátis, condição negociada. **Fale isso na venda**: ninguém
+  aqui é punido por ter aceitado uma oferta nossa.
 - **Contratou pelo site? 7 dias para desistir e receber tudo de volta**,
   integralmente — é o direito de arrependimento. Vale acima de qualquer outra
   regra: não negocie, não ofereça "crédito" no lugar.

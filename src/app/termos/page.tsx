@@ -170,8 +170,11 @@ export default function TermosPublicosPage() {
           curso, já pago, segue até o fim e não é devolvido — o serviço continua sendo prestado
           até lá. Nos ciclos abaixo de 6 meses, os meses ainda não entregues são devolvidos de
           forma proporcional. Nos ciclos de 6 meses ou mais, o período já usado é recalculado
-          pelo preço do plano mensal e a diferença é devolvida; o resultado nunca é negativo e o
-          restaurante nunca paga a mais por cancelar. Quem contratou pelo site tem{" "}
+          pelo preço mensal do plano e a diferença é devolvida; o resultado nunca é negativo e o
+          restaurante nunca paga a mais por cancelar. Esse recálculo usa o que o restaurante
+          pagou de verdade em cada mês, inclusive desconto e promoção —{" "}
+          <strong>o que foi promoção continua sendo dele</strong> e não é cobrado de volta na
+          saída. Quem contratou pelo site tem{" "}
           <strong>7 dias para desistir e receber tudo de volta</strong> — direito de
           arrependimento, acima de qualquer cláusula.
         </p>
