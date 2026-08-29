@@ -56,6 +56,7 @@ import {
   desde, hora, dataEHora, paraCampoDeDataHora,
   type DadosDaConversa,
 } from "./_dados";
+import { descreveVersaoConsentida } from "@/lib/site/politicaPrivacidade";
 import type { NomeDaFila, LeadNaFila } from "@/services/salaDeVendas/filas";
 import type { MensagemNaTela } from "@/services/salaDeVendas/conversa";
 
@@ -877,6 +878,17 @@ function FichaEditavel({
         <Linha
           rotulo="Consentiu em"
           valor={lead.consentAt ? new Date(lead.consentAt).toLocaleDateString("pt-BR") : null}
+        />
+        {/* A DATA SOZINHA NÃO DIZ A QUÊ. Contatos gravados entre 14/08 e
+            29/08/2026 consentiram à política de pré-lançamento, que foi
+            recolhida quando o site passou a ter uma só. O que foi consentido
+            continua valendo pelo que era naquele dia — registro não se reescreve
+            —, e por isso a ficha NOMEIA a versão em vez de deixar a pessoa
+            entender que foi a de hoje. `null` vira "não registrada", nunca
+            "não consentiu". */}
+        <Linha
+          rotulo="A que versão"
+          valor={descreveVersaoConsentida(lead.consentPolicyVersion).rotulo}
         />
         <Linha rotulo="Pediu silêncio" valor={lead.optOutAt ? "sim — definitivo" : "não"} />
       </Secao>

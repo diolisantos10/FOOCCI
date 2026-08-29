@@ -33,6 +33,11 @@ const GROUPS: Group[] = [
     items: [
       { href: "/settings/team",     label: "Equipe",    icon: "👥" },
       { href: "/settings/policies", label: "Políticas", icon: "📄" },
+      /* "Cancele quando quiser" está publicado em quatro lugares nossos, um
+         deles o Termo assinado — e até 29/08/2026 não havia onde clicar. Este
+         item é o caminho até o botão; sem ele, a tela existiria e ninguém a
+         acharia, que é o mesmo que ela não existir. */
+      { href: "/settings/plano",    label: "Plano",     icon: "💠" },
     ],
   },
 ];

@@ -11,6 +11,7 @@
 
 import type { MetadataRoute } from "next";
 import { getPublicSiteUrl } from "@/lib/public-url";
+import { POLITICA_PRIVACIDADE_CAMINHO } from "@/lib/site/politicaPrivacidade";
 
 const PAGES: { path: string; priority: number; changeFrequency: "weekly" | "monthly" | "yearly" }[] = [
   { path: "/site",                          priority: 1.0, changeFrequency: "weekly" },
@@ -27,7 +28,11 @@ const PAGES: { path: string; priority: number; changeFrequency: "weekly" | "mont
      para `/site/precos#demonstracao`. Listar redirect é pedir ao Google que
      indexe um salto — o mesmo motivo pelo qual `/` nunca esteve nesta lista. */
   { path: "/site/sobre",                    priority: 0.6, changeFrequency: "monthly" },
-  { path: "/site/politica-de-privacidade",  priority: 0.3, changeFrequency: "yearly" },
+  /* `/site/politica-de-privacidade` SAIU (29/08): era uma SEGUNDA política, de
+     pré-lançamento, convivendo com a completa em `/privacidade` — e com outra
+     data. A rota virou redirecionamento permanente para o canônico, e é o
+     canônico que se indexa. Mesma regra de sempre: não se lista redirect. */
+  { path: POLITICA_PRIVACIDADE_CAMINHO,     priority: 0.3, changeFrequency: "yearly" },
   { path: "/site/termos-de-uso",            priority: 0.3, changeFrequency: "yearly" },
 ];
 

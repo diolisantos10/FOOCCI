@@ -1,5 +1,5 @@
 /**
- * /privacidade — PUBLIC privacy policy (no auth, no pre-launch gate).
+ * /privacidade — a POLÍTICA DE PRIVACIDADE. Única, pública, sem portão.
  *
  * This route is intentionally OUTSIDE /site (which is password-gated) and is added
  * to middleware PUBLIC_PATHS, so it is reachable by anyone — including the Meta /
@@ -8,10 +8,19 @@
  * Content is WhatsApp/Meta + Google + payments + fiscal aware because the product
  * processes messages and business data on behalf of restaurants.
  * TODO(legal): final LGPD review by counsel before scale.
+ *
+ * ⚠️ A DATA NÃO SE DIGITA AQUI. Ela vem de `@/lib/site/politicaPrivacidade`, que
+ * é a mesma constante gravada em `SiteLead.consentPolicyVersion`. Era uma string
+ * solta nesta página até 29/08/2026, e foi exatamente assim que o site chegou a
+ * ter DUAS políticas com datas diferentes — esta, de 30/07, e a de pré-lançamento
+ * em `/site/politica-de-privacidade`, de 04/06, que era a gravada no consentimento.
+ * Enquanto a data mora na constante, a página que a pessoa lê e o registro do que
+ * ela consentiu não têm como divergir.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { POLITICA_PRIVACIDADE_ATUALIZADA_EM } from "@/lib/site/politicaPrivacidade";
 
 const TITLE = "Política de Privacidade | Foocci";
 const DESCRIPTION =
@@ -38,7 +47,9 @@ export default function PrivacidadePublicaPage() {
     <main className="mx-auto max-w-3xl px-5 py-12">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Foocci</p>
       <h1 className="mt-1 text-3xl font-bold text-gray-900">Política de Privacidade</h1>
-      <p className="mt-2 text-xs text-gray-500">Última atualização: 30 de julho de 2026</p>
+      <p className="mt-2 text-xs text-gray-500">
+        Última atualização: {POLITICA_PRIVACIDADE_ATUALIZADA_EM}
+      </p>
 
       <Block heading="Quem somos">
         <p>

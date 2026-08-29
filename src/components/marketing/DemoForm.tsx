@@ -55,6 +55,10 @@ import { leOrigemGuardada } from "./leadOriginStorage";
 import { WhatsAppIcon, CheckIcon } from "./icons";
 import { buildLeadWhatsAppMessage, formatSalesNumber, whatsappUrl } from "./config";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
+import {
+  POLITICA_PRIVACIDADE_CAMINHO,
+  POLITICA_PRIVACIDADE_ATUALIZADA_EM,
+} from "@/lib/site/politicaPrivacidade";
 
 const TIPOS = [
   "Pizzaria",
@@ -305,6 +309,34 @@ export function DemoForm({ includeChallenge = false }: { includeChallenge?: bool
           {temWhatsApp
             ? "Salvamos seus dados e te levamos pro WhatsApp com a mensagem pronta."
             : "Sem compromisso. Uma pessoa do Foocci chama você no WhatsApp."}
+        </p>
+        {/*
+          ── A POLÍTICA QUE O ENVIO CONSENTE, NA TELA DO ENVIO ─────────────────
+
+          O envio deste formulário grava `consentAt` e `consentPolicyVersion` no
+          contato. Até 29/08/2026 ele gravava isso sem que a política aparecesse
+          em lugar nenhum da tela: o único caminho até ela era o rodapé, três
+          seções abaixo — e o rodapé apontava para uma política DIFERENTE da que
+          era gravada. Consentimento registrado a um texto que a pessoa não teve
+          como ver não é prova de nada; é um carimbo.
+
+          Agora a frase, o link e a versão gravada saem todos da mesma constante.
+          A que a pessoa vê e a que fica no registro não têm como divergir: é o
+          mesmo `POLITICA_PRIVACIDADE_CAMINHO` na `href` e o mesmo
+          `POLITICA_PRIVACIDADE_VERSAO` que `SiteLeadService` grava.
+        */}
+        <p className="mt-3 text-center text-xs leading-relaxed text-muted">
+          Ao enviar, você concorda com a{" "}
+          <a
+            href={POLITICA_PRIVACIDADE_CAMINHO}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700"
+          >
+            Política de Privacidade
+          </a>{" "}
+          (versão de {POLITICA_PRIVACIDADE_ATUALIZADA_EM}) e que a gente entre em
+          contato pelo WhatsApp sobre a demonstração. É só pedir que paramos.
         </p>
       </div>
     </form>

@@ -17,6 +17,51 @@
 
 export const TERMS_VERSION = "v1-2026-08-03";
 
+/**
+ * ── AS CLÁUSULAS QUE PRECISAM APARECER EM DESTAQUE, SEM CLIQUE ──────────────
+ *
+ * O CDC, art. 54 §4º: *"As cláusulas que implicarem limitação de direito do
+ * consumidor deverão ser redigidas com destaque, permitindo sua imediata e fácil
+ * compreensão."*
+ *
+ * Até 29/08/2026 as duas cláusulas que mais protegem a Foocci estavam
+ * exatamente onde a lei não quer: no `/contratar/novo`, dentro de um bloco que
+ * só abria depois de a pessoa clicar em "Ler o Termo" — um `<details>` fechado
+ * com outro nome —, e no `/contratar/[token]`, no fim de uma caixa com rolagem
+ * própria. Ninguém as escondeu de propósito; elas simplesmente foram parar no
+ * lugar onde texto longo costuma ir. É assim que este defeito nasce sempre.
+ *
+ * ⚠️ ESTA LISTA GUARDA TÍTULOS, NÃO TEXTO. É o ponto inteiro: o destaque tem de
+ * ser a cláusula, palavra por palavra, e não uma segunda redação dela. Duas
+ * versões da mesma cláusula é como elas passam a dizer coisas diferentes — e a
+ * que a tela mostra em destaque valeria contra nós. `clausulasEmDestaque()`
+ * resolve os títulos contra `TERMS_SECTIONS` e devolve as seções de verdade.
+ *
+ * ⛔ MEXER AQUI NÃO É MEXER NO CONTRATO. Esta lista muda COMO a cláusula
+ * aparece; o texto dela continua sendo `TERMS_SECTIONS`, e mudar texto exige
+ * subir `TERMS_VERSION` — senão um aceite antigo vira afirmação sobre um texto
+ * que ninguém consegue reproduzir.
+ */
+export const TITULOS_EM_DESTAQUE: readonly string[] = [
+  // Cancelamento, efeito ao fim do ciclo pago e apagamento dos dados em 60 dias.
+  "4. Vigência, cancelamento e dados",
+  // Limitação de responsabilidade ao total pago nos 12 meses e exclusão de
+  // lucros cessantes — a cláusula que mais limita quem assina.
+  "8. Propriedade intelectual e responsabilidade",
+];
+
+/**
+ * As cláusulas em destaque, tiradas do próprio contrato.
+ *
+ * Devolve as seções de `TERMS_SECTIONS` na ordem em que aparecem no Termo — o
+ * destaque não reordena a leitura. Um título que não casa some da lista em vez
+ * de virar um bloco vazio na tela; é o teste que reprova nesse caso, e não a
+ * página do cliente.
+ */
+export function clausulasEmDestaque(): { title: string; body: string }[] {
+  return TERMS_SECTIONS.filter((s) => TITULOS_EM_DESTAQUE.includes(s.title));
+}
+
 export const TERMS_SECTIONS: { title: string; body: string }[] = [
   {
     title: "1. Partes e objeto",

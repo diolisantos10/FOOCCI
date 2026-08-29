@@ -14,6 +14,7 @@ import {
   COMO_FUNCIONA_URL,
   AGENTE_URL,
 } from "./config";
+import { POLITICA_PRIVACIDADE_CAMINHO } from "@/lib/site/politicaPrivacidade";
 
 // Espelha o menu (config.NAV_LINKS), sem âncoras órfãs. "Como funciona" segue como
 // link extra de descoberta — a página existe, só saiu do menu principal.
@@ -35,8 +36,13 @@ const EMPRESA = [
   { href: AGENTE_URL, label: "Contato" },
 ];
 
+// A política aponta para `/privacidade` — a ÚNICA. O rodapé levava a
+// `/site/politica-de-privacidade`, que era um segundo documento, de
+// pré-lançamento e com outra data; foi recolhida em 29/08/2026. O caminho vem da
+// constante para o link do rodapé e a versão gravada no consentimento não
+// poderem apontar para documentos diferentes.
 const LEGAL = [
-  { href: "/site/politica-de-privacidade", label: "Política de privacidade" },
+  { href: POLITICA_PRIVACIDADE_CAMINHO, label: "Política de privacidade" },
   { href: "/site/termos-de-uso", label: "Termos de uso" },
 ];
 

@@ -59,6 +59,7 @@ import {
 } from "@/lib/billing/pricing";
 import { suggestSlug, validateSlugShape } from "@/lib/billing/checkout-slug";
 import { PRECOS_URL } from "@/components/marketing/config";
+import { ClausulasEmDestaque } from "@/components/billing/ClausulasEmDestaque";
 
 type SlugState =
   | { kind: "idle" }
@@ -479,6 +480,15 @@ export function CheckoutClient({
           </button>
         </div>
         <p className="mt-1 text-xs text-muted">Versão {termsVersion}</p>
+
+        {/* ── CDC art. 54 §4º ──────────────────────────────────────────────
+            As duas cláusulas que limitam quem assina ficam FORA do `showTerms`.
+            Dentro, elas só existiam depois de a pessoa clicar em "Ler o Termo" —
+            um `<details>` fechado com outro nome. O checkbox de aceite está
+            logo abaixo: quem aceita sem abrir o Termo, que é o comportamento
+            normal de qualquer pessoa com pressa, aceitava sem ter tido como ler
+            justamente as duas cláusulas que a lei manda destacar. */}
+        <ClausulasEmDestaque className="mt-4" />
 
         {showTerms && (
           <div className="mt-4 max-h-[45vh] space-y-4 overflow-y-auto rounded-xl border border-line bg-canvas p-4 pr-3 text-sm leading-relaxed text-ink2">

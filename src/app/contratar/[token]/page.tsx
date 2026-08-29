@@ -11,6 +11,7 @@ import { PlanSubscriptionService, CYCLE_MONTHS } from "@/services/billing/PlanSu
 import { TERMS_SECTIONS, TERMS_VERSION } from "@/lib/billing/terms";
 import { AcceptClient } from "./AcceptClient";
 import { FoocciWordmark } from "@/components/brand/FoocciWordmark";
+import { ClausulasEmDestaque } from "@/components/billing/ClausulasEmDestaque";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,12 @@ export default async function ContratarPage({ params }: { params: { token: strin
             </div>
           </div>
         </div>
+
+        {/* ── CDC art. 54 §4º ──────────────────────────────────────────────
+            As duas cláusulas que limitam quem assina ficam FORA da caixa de
+            rolagem, acima dela e sem clique. Dentro, elas eram as últimas de uma
+            lista de nove numa caixa de meia tela: presentes, e ilegíveis. */}
+        <ClausulasEmDestaque className="mt-6" />
 
         <div className="mt-6 rounded-2xl border border-line bg-paper p-6">
           <h2 className="text-base font-semibold text-ink">Termo de Contratação do Serviço Foocci</h2>

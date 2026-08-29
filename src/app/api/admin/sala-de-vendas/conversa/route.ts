@@ -88,7 +88,13 @@ export async function GET(req: NextRequest) {
       // `desafio` é a dor escrita pela própria pessoa no formulário, e era a
       // única resposta que esta tela não lia.
       desafio: true,
-      optOutAt: true, consentAt: true, proximaAcaoEm: true, proximaAcaoNota: true,
+      // `consentPolicyVersion` viaja junto com a data desde 29/08/2026. A ficha
+      // mostrava só "consentiu em tal dia" — e não a QUÊ. Contatos gravados
+      // entre 14/08 e 29/08 consentiram à política de pré-lançamento, que foi
+      // recolhida; a ficha tem de dizer isso, e não reapresentar o passado como
+      // se fosse a política de hoje.
+      optOutAt: true, consentAt: true, consentPolicyVersion: true,
+      proximaAcaoEm: true, proximaAcaoNota: true,
       qualificacao: true,
       atendente: { select: { nome: true } },
     },

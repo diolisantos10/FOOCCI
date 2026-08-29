@@ -60,6 +60,8 @@ export interface LeadNaConversa {
   codigo: string | null;
   optOutAt: string | null;
   consentAt: string | null;
+  /** A QUÊ a pessoa consentiu. `null` = versão não registrada, nunca "não consentiu". */
+  consentPolicyVersion: string | null;
   proximaAcaoEm: string | null;
   proximaAcaoNota: string | null;
   qualificacao: Qualificacao | null;
