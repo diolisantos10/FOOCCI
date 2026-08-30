@@ -53,10 +53,21 @@ import type { AssuntoDePreco } from "@/services/salaDeVendas/precos";
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * ⭐ O remetente do Foocci na porta do núcleo.
+ * ⚠️⛔ **ESTE NÃO É MAIS O REMETENTE DO DESPACHO.** Ver `origem.ts`.
  *
- * Medido contra produção em 30/08/2026: `diretor` resolve;
- * `diretor-foocci` responde `remetente_desconhecido`.
+ * O nome ficou (nada se apaga), e o crachá continua correto: `diretor` é mesmo
+ * a chave do Diretor da Foocci no diretório corporativo, e a medição de
+ * 30/08/2026 continua valendo — `diretor-foocci`, o slug interno, responde
+ * `remetente_desconhecido`.
+ *
+ * O que mudou é **quem assina a consulta**. Usar este crachá como `de` foi o
+ * defeito que o CEO mediu em produção: o Diretor abria a consulta, o núcleo
+ * escalava de volta para ele por `alcada_nao_declarada`, e o gatilho do Postgres
+ * barrava — *"quem perguntou nao assina a propria resposta"*. Hoje quem assina é
+ * o TA (`dioli.foocci.vendas.sdr-ia-ta`), que é quem de fato perguntou.
+ *
+ * Este par sobrevive como o endereço do **Diretor**, que segue sendo quem recebe
+ * a escalada — o terceiro papel do circuito, e o único que ele deve ocupar.
  *
  * ⚠️ O núcleo aceita **os dois formatos** — a chave local (`diretor`) ou o
  * endereço corporativo inteiro (`dioli.foocci.direcao.diretor`). Ficou a chave
@@ -68,12 +79,21 @@ export const REMETENTE_NO_NUCLEO = "diretor" as const;
 export const ENDERECO_DO_REMETENTE = "dioli.foocci.direcao.diretor" as const;
 
 /**
- * ⭐ O destinatário: o Agente Gerente do departamento dono do agente acionado.
+ * ⚠️⛔ **ESTE NÃO É MAIS O DESTINATÁRIO DA CONSULTA COMERCIAL.** Ver `origem.ts`.
  *
- * ⚠️ `agente-gerente-produto` (o slug interno) **não existe** no diretório: lá a
- * chave é `gerente-de-produto-e-ia`, na sala `produto`. É o mesmo cargo, com
- * dois nomes em dois registros — e é exatamente o tipo de divergência que só
- * aparece na primeira chamada de verdade.
+ * O crachá continua certo e o aviso abaixo continua valendo: `agente-gerente-produto`
+ * (o slug interno) **não existe** no diretório, onde a chave é
+ * `gerente-de-produto-e-ia`, na sala `produto`.
+ *
+ * O que mudou é o **endereçamento**. A ficha 3.1 governa backlog e rollout de
+ * agente — ela não tem alçada sobre preço, permuta ou prazo comercial. Mandar
+ * uma decisão comercial para ela foi a causa medida do `alcada_nao_declarada`
+ * que disparava a escalada. A consulta comercial vai ao Gerente Comercial
+ * (ficha 1.1), que é quem a fonte declara como *"único que altera política
+ * comercial"* — e que é o superior do TA.
+ *
+ * Este par continua sendo o endereço correto do Gerente de Produto e IA, para
+ * quando o assunto for de fato dele (versão de agente, rollout, avaliação).
  */
 export const DESTINATARIO_NO_NUCLEO = "gerente-de-produto-e-ia" as const;
 export const ENDERECO_DO_DESTINATARIO = "dioli.foocci.produto.gerente-de-produto-e-ia" as const;

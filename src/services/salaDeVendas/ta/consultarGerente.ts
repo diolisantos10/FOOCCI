@@ -73,10 +73,18 @@ import {
  * `remetente_desconhecido`, e a escalada morre na porta sem gravar nada. A
  * ponte entre os dois registros mora no conector local, em um lugar só.
  */
+/**
+ * ⭐ E QUEM PERGUNTA É O TA, não o Diretor. Ver `conector/foocci/origem.ts`:
+ * o `de` deste despacho é o crachá do agente que de fato atendeu o lead, e a
+ * trava que impede o conector de cair para o Diretor quando ele não existir
+ * mora lá, em código.
+ */
 import {
-  DESTINATARIO_NO_NUCLEO,
-  REMETENTE_NO_NUCLEO,
-} from "@/services/connect/conector/foocci/traducao";
+  CODIGO_DO_NUCLEO_PARA_ORIGEM_DESCONHECIDA,
+  DECISOR_DO_CONECTOR,
+  MOTIVO_ORIGEM_NAO_CADASTRADA,
+  resolverOrigem,
+} from "@/services/connect/conector/foocci/origem";
 import { MODO_DE_PRODUCAO, type CasoDoLead } from "@/services/connect/contrato";
 
 /** A variável que diz ONDE a porta do Connect atende. */
@@ -96,6 +104,15 @@ export const CAMINHO_DO_DESPACHO = "/api/connect/despacho";
 export const TETO_DE_ESPERA_MS = 8_000;
 
 export type CausaDeNaoConsultar =
+  /**
+   * ⛔ O crachá do agente de ORIGEM não existe no diretório corporativo.
+   *
+   * ⚠️ Motivo PRÓPRIO, e distinto de todos os outros desta lista de propósito:
+   * os demais são falhas de canal (rede, porta, tempo) que se resolvem sozinhas
+   * ou com um retry. Esta **nunca** se resolve sozinha — alguém tem de cadastrar
+   * um crachá. Quem pega a fila de correção precisa saber a diferença.
+   */
+  | "origemNaoCadastrada"
   /** `DIOLI_CONNECT_SECRET` ou `DIOLI_CONNECT_URL` não configurados. */
   | "portaNaoConfigurada"
   /** A porta respondeu, e respondeu "não" — 4xx com motivo. */
@@ -226,6 +243,27 @@ export async function consultarGerente(
   const env = deps.env ?? process.env;
   const buscar = deps.buscar ?? fetch;
 
+  // ── ⛔⭐ Portão 0: QUEM PERGUNTA existe no diretório? ────────────────────
+  //
+  // Antes da rede, antes do segredo, antes de tudo. A ordem do CEO é absoluta:
+  // *"se o agente não existir no organograma, a operação deve entrar em fila de
+  // correção, nunca assumir uma identidade superior"*.
+  //
+  // ⛔ Repare no que NÃO existe abaixo: um `else` que manda o Diretor. Não há
+  // plano B, e é isso que faz disto uma trava em vez de uma intenção. Este
+  // portão vem primeiro de propósito — se ele viesse depois do portão do
+  // segredo, um ambiente sem porta configurada esconderia a origem inexistente
+  // atrás de "portaNaoConfigurada", e o defeito voltaria a ser invisível.
+  const origem = resolverOrigem();
+  if (!origem.ok) {
+    return {
+      consultado: false,
+      causa: MOTIVO_ORIGEM_NAO_CADASTRADA,
+      detalhe: origem.detalhe,
+      paraODossie: dossieDaFalha(MOTIVO_ORIGEM_NAO_CADASTRADA, origem.detalhe),
+    };
+  }
+
   // ── Portão 0: a porta está configurada? ─────────────────────────────────
   //
   // "Não configurado = fechado" é a doutrina da própria porta (`porta.ts`), e
@@ -261,23 +299,34 @@ export async function consultarGerente(
     // sem `fio`, cunha um fio novo — que é exatamente o que uma consulta nova é.
     acao: "receber" as const,
     mensagem: perguntaAoGerente(pedido),
-    // ⚠️ QUEM FALA, dito com honestidade sobre o que isto é e não é.
+    // ⭐⭐ QUEM PERGUNTA E QUEM DECIDE — três identidades, não uma.
     //
-    // `de` é uma lista fechada de dois papéis, e o agente comercial não está
-    // nela. Eu **não** acrescentei um item: a lista saiu de auditoria hoje, e
-    // mexer nela por conveniência é como as travas caem.
+    // ⚠️ Aqui havia `de: "diretor"`, e o comentário que justificava isso dizia
+    // que *"o agente comercial não está na lista"*. **A premissa estava errada.**
+    // Conferido no diretório corporativo consolidado, cuja impressão digital
+    // bate byte a byte com o catálogo desta árvore: o TA tem crachá,
+    // `dioli.foocci.vendas.sdr-ia-ta` (ficha 1.5), e responde ao Gerente
+    // Comercial. Ele não precisava ser criado — precisava ser usado.
     //
-    // O que a Sala faz é o que uma empresa faz: o agente não escreve direto ao
-    // gerente de outro departamento — quem endereça é a camada de direção do
-    // produto. Então o despacho sai em nome do Diretor da Foocci, e a origem
-    // verdadeira (o TA) vai escrita na PERGUNTA e no CASO, para o rastro não
-    // dizer que o Diretor perguntou sozinho.
+    // O efeito do `de: diretor` foi medido em produção pelo CEO e era um beco
+    // sem saída: 201 na abertura, escalada por `alcada_nao_declarada` de volta
+    // para `dioli.foocci.direcao.diretor` — o mesmo crachá que abriu a consulta
+    // — e o gatilho do Postgres barrando *"quem perguntou nao assina a propria
+    // resposta"*. Três papéis num crachá só não fecham circuito nenhum.
     //
-    // ⭐ E os nomes são os do DIRETÓRIO CORPORATIVO, não os do organograma
-    // interno. Ver `conector/foocci/traducao.ts`: são dois registros do mesmo
-    // cargo, e mandar o slug de dentro é `remetente_desconhecido` na porta.
-    de: REMETENTE_NO_NUCLEO,
-    para: DESTINATARIO_NO_NUCLEO,
+    // ⭐ Agora são três, e todos rastreáveis:
+    //   pergunta   dioli.foocci.vendas.sdr-ia-ta          (o TA, ficha 1.5)
+    //   decide     dioli.foocci.vendas.gerente-comercial  (ficha 1.1)
+    //   escalada   dioli.foocci.direcao.diretor           (superior do decisor)
+    //
+    // ⚠️ E `para` mudou junto, pela CAUSA e não por estética: o Gerente de
+    // Produto e IA não tem alçada sobre decisão comercial (ficha 3.1 governa
+    // backlog e rollout), e era essa falta de alçada que disparava a escalada.
+    // Quem governa política comercial é a ficha 1.1, que é também o superior
+    // declarado do TA — endereçar ao gerente de quem pergunta não é hierarquia
+    // inventada, é a que a fonte já escreve.
+    de: origem.cracha.chave,
+    para: DECISOR_DO_CONECTOR,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
     caso: pedido.caso,
     /**
@@ -354,6 +403,28 @@ export async function consultarGerente(
   // despachante. Só `executado` COM `rodadaId` conta — e `rodadaId` é o id da
   // linha que a porta releu do banco.
   if (estado === "recusado") {
+    // ⭐ A MESMA FALHA, VISTA DO OUTRO LADO DO FIO.
+    //
+    // O núcleo tem o diretório de verdade; esta casa tem uma leitura dele. Se o
+    // crachá saiu de lá depois da última carga, o portão 0 passa e o núcleo
+    // recusa com `remetente_desconhecido`. Isso NÃO é "a porta recusou" genérico:
+    // é exatamente `origemNaoCadastrada`, e a fila de correção precisa lê-lo com
+    // o mesmo nome — senão o caso vai para a fila esperando uma rede que já
+    // estava boa.
+    const codigo = typeof corpoDaResposta.codigo === "string" ? corpoDaResposta.codigo : null;
+    if (codigo === CODIGO_DO_NUCLEO_PARA_ORIGEM_DESCONHECIDA) {
+      const detalhe =
+        `o núcleo NÃO reconhece o crachá de origem "${origem.cracha.chave}" ` +
+        `(${origem.cracha.endereco}): ${motivo}. ⛔ Nenhum despacho saiu, e o conector não repetiu a ` +
+        "consulta em nome do Diretor. O crachá existe na fonte desta casa mas não no diretório do " +
+        "núcleo — o que falta é recarregar o diretório, e isso não se resolve sozinho.";
+      return {
+        consultado: false,
+        causa: MOTIVO_ORIGEM_NAO_CADASTRADA,
+        detalhe,
+        paraODossie: dossieDaFalha(MOTIVO_ORIGEM_NAO_CADASTRADA, detalhe),
+      };
+    }
     return {
       consultado: false,
       causa: "portaRecusou",

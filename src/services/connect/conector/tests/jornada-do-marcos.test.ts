@@ -43,6 +43,7 @@ import {
   DESTINATARIO_NO_NUCLEO,
   REMETENTE_NO_NUCLEO,
 } from "../foocci/traducao";
+import { DECISOR_DO_CONECTOR, ORIGEM_DO_CONECTOR } from "../foocci/origem";
 
 /**
  * ⭐ O DIRETÓRIO CORPORATIVO DO FOOCCI, no recorte que este teste usa.
@@ -52,12 +53,23 @@ import {
  * `gerente-de-produto-e-ia`. ⛔ `diretor-foocci` e `agente-gerente-produto` são
  * os slugs do organograma INTERNO do produto, e não existem aqui — que é
  * exatamente o defeito medido em produção.
+ *
+ * ⭐⭐ `sdr-ia-ta` e `gerente-comercial` ENTRARAM aqui em 30/08/2026, e não
+ * porque este teste precisava deles: eles já estavam no diretório consolidado, a
+ * sala `vendas`, derivados das fichas 1.5 e 1.1 do catálogo desta árvore — cuja
+ * impressão digital (sha256 803d4b7bf861…) bate byte a byte com o arquivo em
+ * disco. Este recorte é que estava desatualizado, e a desatualização dele
+ * sustentava o comentário errado que dizia que *"o agente comercial não está na
+ * lista"* — a premissa que fazia o conector assinar como Diretor.
  */
 const DIRETORIO_DO_FOOCCI: readonly string[] = [
   "diretor",
   "gerente-de-produto-e-ia",
   "gerente-de-crescimento",
   "waiter",
+  // sala `vendas` — ficha 1.5 (o TA que atende o lead) e ficha 1.1 (seu gerente)
+  "sdr-ia-ta",
+  "gerente-comercial",
 ];
 import { VERSAO_DO_CONTRATO } from "../versao";
 import { armazemEmMemoria } from "./armazemEmMemoria";
@@ -341,12 +353,17 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
     expect(despacho.sintetico).toBe(false);
     expect((despacho.caso as { resumo: string }).resumo).toContain("permuta");
 
-    // ⭐ RESPONSÁVEL CORRETO ENCONTRADO — o Agente Gerente do departamento dono
-    // do agente, derivado do organograma, não digitado à mão.
-    // ⭐ E pelos nomes do DIRETÓRIO CORPORATIVO. Medido contra produção em
-    // 30/08/2026: o slug do organograma interno é `remetente_desconhecido`.
-    expect(despacho.para).toBe(DESTINATARIO_NO_NUCLEO);
-    expect(despacho.de).toBe(REMETENTE_NO_NUCLEO);
+    // ⭐⭐ TRÊS IDENTIDADES, E NÃO UMA. Quem pergunta é o TA — o agente que de
+    // fato atendeu o Marcos; quem decide é o Gerente Comercial, superior dele e
+    // o único que altera política comercial (ficha 1.1). A escalada do decisor
+    // sobe para o Diretor, que é um terceiro crachá.
+    //
+    // ⛔ Aqui ficava `de: REMETENTE_NO_NUCLEO` (o Diretor). Era o beco sem saída
+    // medido em produção: quem abria a consulta era quem receberia a escalada.
+    expect(despacho.de).toBe(ORIGEM_DO_CONECTOR);
+    expect(despacho.para).toBe(DECISOR_DO_CONECTOR);
+    expect(despacho.de).not.toBe(despacho.para);
+    expect(despacho.de).not.toBe(REMETENTE_NO_NUCLEO);
 
     // ⭐ E O ENDEREÇO DE VOLTA EXISTE. É o que o PR #178 não tinha.
     const protocolo = despacho.protocolo as string;
@@ -795,8 +812,8 @@ describe("⭐⭐ OS DOIS DEFEITOS MEDIDOS CONTRA PRODUÇÃO (30/08/2026)", () =>
 
     expect(ambiente.recusas).toEqual([]);
     expect(ambiente.despachos).toHaveLength(1);
-    expect(ambiente.despachos[0]!.de).toBe(REMETENTE_NO_NUCLEO);
-    expect(ambiente.despachos[0]!.para).toBe(DESTINATARIO_NO_NUCLEO);
+    expect(ambiente.despachos[0]!.de).toBe(ORIGEM_DO_CONECTOR);
+    expect(ambiente.despachos[0]!.para).toBe(DECISOR_DO_CONECTOR);
   });
 
   /**

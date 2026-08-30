@@ -26,6 +26,10 @@ import {
   DESTINATARIO_NO_NUCLEO,
   REMETENTE_NO_NUCLEO,
 } from "@/services/connect/conector/foocci/traducao";
+import {
+  DECISOR_DO_CONECTOR,
+  ORIGEM_DO_CONECTOR,
+} from "@/services/connect/conector/foocci/origem";
 import { DIRETOR_DO_PRODUTO, GERENTE_DO_PRODUTO } from "@/services/connect/cadastro";
 import { conferirPedido } from "@/services/connect/contrato";
 
@@ -160,11 +164,16 @@ describe("⭐ a consulta sai, e sai pelo contrato da porta", () => {
 
     expect(c.pedido.modo).toBe("producao");
     expect(c.pedido.sintetico).toBe(false);
-    // ⭐ Os nomes do DIRETÓRIO CORPORATIVO, e não os do organograma interno.
-    // Medido contra produção em 30/08/2026: o slug interno é recusado com
-    // `remetente_desconhecido`, e a escalada morre na porta sem gravar nada.
-    expect(corpo.de).toBe(REMETENTE_NO_NUCLEO);
-    expect(corpo.para).toBe(DESTINATARIO_NO_NUCLEO);
+    // ⭐⭐ QUEM PERGUNTA É O TA — o agente que atendeu o lead —, e quem decide é
+    // o gerente dele. Os nomes são os do DIRETÓRIO CORPORATIVO, não os do
+    // organograma interno: o slug interno é recusado com `remetente_desconhecido`.
+    //
+    // ⛔ Aqui ficava `REMETENTE_NO_NUCLEO` (o Diretor), e era o defeito medido em
+    // produção: o Diretor abria a consulta e recebia a própria escalada de volta.
+    expect(corpo.de).toBe(ORIGEM_DO_CONECTOR);
+    expect(corpo.para).toBe(DECISOR_DO_CONECTOR);
+    expect(corpo.de).not.toBe(REMETENTE_NO_NUCLEO);
+    expect(corpo.de).not.toBe(corpo.para);
     // ⭐ E são DIFERENTES dos slugs internos — se um dia os dois registros
     // convergirem, esta linha cai junto com a necessidade da tradução.
     expect(corpo.de).not.toBe(DIRETOR_DO_PRODUTO);
@@ -369,5 +378,53 @@ describe("⭐ toda falha vira causa nomeada — e nunca exceção", () => {
       if (r.consultado) continue;
       expect(r.paraODossie).toMatch(/Ninguém do outro lado foi acionado/);
     }
+  });
+
+  /**
+   * ⭐⭐ A OUTRA METADE DA TRAVA — a recusa do NÚCLEO, e não a do portão local.
+   *
+   * O portão 0 confere o diretório que ESTA casa conhece. O diretório de verdade
+   * é o do núcleo, e ele pode estar atrás (o crachá existe na fonte e ainda não
+   * foi recarregado). Nesse caso o núcleo recusa com `remetente_desconhecido` —
+   * e a fila precisa ler isso com o MESMO nome do outro caso, porque é o mesmo
+   * problema visto do outro lado do fio.
+   *
+   * ⛔ E o que este teste garante acima de tudo: o conector **não repete** a
+   * consulta em nome do Diretor depois de levar essa recusa.
+   */
+  it("⛔ o núcleo recusando a origem vira `origemNaoCadastrada`, não `portaRecusou`", async () => {
+    const p = porta({
+      status: 422,
+      corpo: {
+        estado: "recusado",
+        codigo: "remetente_desconhecido",
+        motivo: 'não existe crachá de chave "sdr-ia-ta" no produto "foocci".',
+      },
+    });
+    const r = await consultarGerente(PEDIDO, { buscar: p.buscar, env: AMBIENTE });
+
+    expect(r.consultado).toBe(false);
+    if (r.consultado) return;
+    expect(r.causa).toBe("origemNaoCadastrada");
+    expect(r.causa).not.toBe("portaRecusou");
+    expect(r.detalhe).toMatch(/recarregar o diretório/);
+    // ⛔ UMA chamada só. Nenhuma segunda tentativa em nome do Diretor.
+    expect(p.chamadas).toHaveLength(1);
+  });
+
+  /**
+   * ⭐ E a recusa por OUTRO motivo continua sendo `portaRecusou` — a distinção
+   * só vale se ela separar de verdade. Sem esta metade, mapear tudo para
+   * `origemNaoCadastrada` passaria no teste de cima.
+   */
+  it("uma recusa de outro código continua sendo `portaRecusou`", async () => {
+    const p = porta({
+      status: 422,
+      corpo: { estado: "recusado", codigo: "assunto_fora_do_vocabulario", motivo: "x" },
+    });
+    const r = await consultarGerente(PEDIDO, { buscar: p.buscar, env: AMBIENTE });
+    expect(r.consultado).toBe(false);
+    if (r.consultado) return;
+    expect(r.causa).toBe("portaRecusou");
   });
 });
