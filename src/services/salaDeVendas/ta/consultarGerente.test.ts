@@ -33,6 +33,8 @@ const AMBIENTE: NodeJS.ProcessEnv = {
 } as NodeJS.ProcessEnv;
 
 const PEDIDO: PedidoDeConsulta = {
+  /** ⭐ O endereço de volta — é por ele que a resposta acha a conversa. */
+  protocolo: "foocci:lead-1:aaa",
   foraDaAlcada: [
     { assunto: "escopoAcimaDaCapacidade", motivo: "não existe escopo sob medida contratável hoje." },
     { assunto: "permuta", motivo: "a empresa não decidiu se aceita permuta." },
@@ -100,9 +102,45 @@ describe("⭐ a consulta sai, e sai pelo contrato da porta", () => {
     await consultarGerente(PEDIDO, { buscar: p.buscar, env: AMBIENTE });
 
     const corpo = JSON.parse(String(p.chamadas[0]!.init.body));
-    const c = conferirPedido(corpo);
+
+    // ── ⚠️ AS DUAS PORTAS SÃO DUAS, E ESTA CONFERÊNCIA É A DE CÁ ───────────
+    //
+    // `conferirPedido` é a conferência da porta de ENTRADA do Foocci (Control
+    // Room → produto). Este corpo vai para a porta do NÚCLEO (produto → Control
+    // Room), que é outra e exige dois campos a mais: `protocolo` (o endereço de
+    // volta) e `foraDaAlcada` (a classificação — o núcleo não deduz assunto
+    // lendo prosa, e recusa o despacho sem ela).
+    //
+    // Conferir o corpo INTEIRO contra o contrato de entrada é medir o contrato
+    // errado, e foi o que apareceu quando `foraDaAlcada` entrou: vermelho aqui
+    // dizendo "campo desconhecido", sobre uma porta que não é o destino desta
+    // mensagem.
+    //
+    // ⛔ E a correção NÃO é acrescentar os dois nomes à `CAMPOS_ACEITOS` da
+    // porta de entrada. A regra daquele arquivo é explícita: acrescentar um
+    // nome ali é acrescentar entrada à porta corporativa, e *"só se faz junto
+    // com o código que lê o campo"*. A porta de entrada não lê nenhum dos dois;
+    // abrir entrada para campo que ninguém lê é justamente o que ela proíbe.
+    //
+    // O que este teste continua medindo — e é o que lhe dá valor — é que tudo o
+    // que as duas portas têm em comum atravessa a conferência REAL.
+    const SO_DA_PORTA_DO_NUCLEO = ["protocolo", "foraDaAlcada"];
+    const comum: Record<string, unknown> = { ...corpo };
+    for (const campo of SO_DA_PORTA_DO_NUCLEO) delete comum[campo];
+
+    const c = conferirPedido(comum);
     expect(c.ok, JSON.stringify(c)).toBe(true);
     if (!c.ok) return;
+
+    // ⭐ E a outra metade da separação: os dois campos de saída ESTÃO no corpo,
+    // e são exatamente estes dois. Sem esta asserção, apagar `foraDaAlcada` de
+    // `consultarGerente.ts` deixaria este teste verde — e a escalada morreria
+    // na porta do núcleo sem ninguém aqui ficar sabendo.
+    expect(Object.keys(corpo).filter((k) => SO_DA_PORTA_DO_NUCLEO.includes(k)).sort()).toEqual([
+      "foraDaAlcada",
+      "protocolo",
+    ]);
+    expect(corpo.foraDaAlcada).toHaveLength(2);
 
     expect(c.pedido.modo).toBe("producao");
     expect(c.pedido.sintetico).toBe(false);

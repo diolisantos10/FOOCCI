@@ -127,11 +127,21 @@ type PoliticaGuardada = {
 function nucleoDeMentira() {
   const politicas: PoliticaGuardada[] = [];
   const despachos: Array<Record<string, unknown>> = [];
+  const recusas: string[] = [];
   let foraDoAr = false;
+  /**
+   * ⭐ O campo que este núcleo PODA do corpo antes de conferir.
+   *
+   * É a mutação feita no fio, e é assim que a outra metade se prova sem
+   * inventar um segundo núcleo que se comporta diferente: o mesmo núcleo, o
+   * mesmo caminho de produção, um campo a menos.
+   */
+  let podar: string | null = null;
 
   const buscar = (async (url: string, init: RequestInit) => {
     if (foraDoAr) throw new Error("ECONNREFUSED");
     const corpo = JSON.parse(String(init.body)) as Record<string, unknown>;
+    if (podar) delete corpo[podar];
 
     if (String(url).endsWith(CAMINHO_DA_CONSULTA_DE_POLITICA)) {
       const assuntos = (corpo.assuntos as Array<{ assunto: string }>).map((a) => a.assunto);
@@ -143,6 +153,24 @@ function nucleoDeMentira() {
     }
 
     if (String(url).endsWith(CAMINHO_DO_DESPACHO)) {
+      // ── ⭐ A EXIGÊNCIA DO NÚCLEO REAL (PR #13 da Control Room) ───────────
+      //
+      // O núcleo **não deduz assunto lendo prosa**, e por isso recusa o
+      // despacho que chega sem a classificação estruturada. Este núcleo de
+      // mentira faz a mesma recusa, para que a suíte do Foocci meça o contrato
+      // de verdade em vez de um núcleo complacente que aceitaria qualquer coisa.
+      const fora = corpo.foraDaAlcada;
+      if (!Array.isArray(fora) || fora.length === 0) {
+        const motivo =
+          "despacho sem `foraDaAlcada`: o núcleo não deduz assunto lendo texto corrido. Quem classifica " +
+          "é o produto, em código, antes do modelo.";
+        recusas.push(motivo);
+        return new Response(JSON.stringify({ estado: "recusado", motivo }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
       despachos.push(corpo);
       return new Response(
         JSON.stringify({
@@ -162,6 +190,10 @@ function nucleoDeMentira() {
     buscar,
     despachos,
     politicas,
+    recusas,
+    podarDoCorpo: (campo: string) => {
+      podar = campo;
+    },
     cair: () => {
       foraDoAr = true;
     },
@@ -541,6 +573,88 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
       "lead-bia::Bia: pode ser permuta parcial.",
       `lead-marcos::${RESPOSTA_DO_GERENTE}`,
     ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe("⭐⭐ `foraDaAlcada` NO CORPO — sem ele o núcleo real recusa", () => {
+  /**
+   * ─── A PONTA SOLTA QUE A FRENTE DO CIRCUITO ACHOU (PR #13) ───────────────
+   *
+   * O conector **calculava** `foraDaAlcada` e não o mandava. Contra o núcleo de
+   * verdade, isso quer dizer que a escalada do Foocci **não passava**: o núcleo
+   * recusa o despacho sem a classificação estruturada, e recusa de propósito —
+   * ele não deduz assunto lendo prosa.
+   *
+   * ⚠️ E era um defeito que a suíte não pegava, porque o núcleo de mentira
+   * aceitava qualquer corpo. O conserto de verdade foi duplo: mandar o campo, e
+   * fazer o núcleo de mentira **exigir** o que o real exige. Um teste que só
+   * mede um interlocutor complacente não mede nada.
+   */
+
+  /**
+   * ⭐⭐ MUTAÇÃO: apagar `foraDaAlcada: pedido.foraDaAlcada` do corpo em
+   * `consultarGerente.ts` → este fica vermelho, e é exatamente o estado em que
+   * o Foocci estava: pergunta que sai e é recusada na porta do núcleo.
+   */
+  it("⭐⭐ o corpo que sai por `atenderComOTA` traz a classificação, item a item", async () => {
+    const db = banco();
+    await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem: armazemEmMemoria() },
+    });
+
+    expect(ambiente.recusas).toEqual([]);
+    expect(ambiente.despachos).toHaveLength(1);
+
+    const fora = ambiente.despachos[0]!.foraDaAlcada as Array<{ assunto: string; motivo: string }>;
+    // Os DOIS assuntos do caso do Marcos, cada um com o motivo escrito.
+    expect(fora.map((f) => f.assunto).sort()).toEqual(["escopoAcimaDaCapacidade", "permuta"]);
+    for (const f of fora) expect(f.motivo).toMatch(/Decide:/);
+
+    // ⛔ E ele NÃO é o `assunto`: aquele é uma linha de metadado, este é a lista.
+    expect(typeof ambiente.despachos[0]!.assunto).toBe("string");
+    expect(Array.isArray(fora)).toBe(true);
+  });
+
+  /**
+   * ⭐⭐ A OUTRA METADE — o mesmo núcleo, o mesmo caminho, um campo a menos.
+   *
+   * Sem `foraDaAlcada` o núcleo recusa (422), e o produto trata isso como o que
+   * é: escalada **não aberta**. O cliente não fica em silêncio, a fila humana
+   * pega, e o dossiê diz a verdade — ninguém do outro lado foi acionado.
+   */
+  it("⭐⭐ A OUTRA METADE — podando o campo no fio, o núcleo RECUSA e nada é escalado", async () => {
+    ambiente.podarDoCorpo("foraDaAlcada");
+
+    const db = banco();
+    const armazem = armazemEmMemoria();
+    const turno = await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem },
+    });
+
+    // O núcleo recusou, e recusou com o motivo dele.
+    expect(ambiente.recusas).toHaveLength(1);
+    expect(ambiente.recusas[0]).toMatch(/não deduz assunto lendo texto corrido/);
+    expect(ambiente.despachos).toEqual([]);
+
+    // ⭐ O produto NÃO inventa que consultou: nenhuma pendência foi aberta, e
+    // uma pendência aberta aqui seria pior que o defeito — um cliente esperando
+    // uma resposta que nunca vai voltar, porque ninguém foi perguntado.
+    expect(armazem.todas()).toEqual([]);
+
+    // ⚠️ E o chão não sai do lugar: a fila humana pega e o cliente é avisado.
+    expect(turno.falou).toBe(false);
+    expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
+    expect(ditoAoCliente(db).length).toBeGreaterThan(0);
+
+    const dossie = (db.leadHandoff.create.mock.calls[0]![0] as { data: { objecoes: string } }).data;
+    expect(dossie.objecoes).toMatch(/Ninguém do outro lado foi acionado/);
   });
 });
 

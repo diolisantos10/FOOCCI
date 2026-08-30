@@ -263,6 +263,22 @@ export async function consultarGerente(
     para: GERENTE_DO_PRODUTO,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
     caso: pedido.caso,
+    /**
+     * ⭐ O QUE ESTÁ FORA DA ALÇADA, CLASSIFICADO — e não descrito em prosa.
+     *
+     * ⚠️ O núcleo **recusa** o despacho sem este campo, e recusa de propósito:
+     * ele não deduz assunto lendo texto corrido. Quem classifica é o produto,
+     * em código (`foraDaAlcadaNaMensagem`), antes do modelo — e é a mesma
+     * doutrina que já vale deste lado: a decisão de escalar não é do modelo.
+     *
+     * ⛔ E ele NÃO é substituível pelo `assunto`. `assunto` é uma linha de
+     * metadado, com teto de 300 caracteres, que junta os nomes por vírgula para
+     * caber numa coluna. Este campo é a lista estruturada, com o MOTIVO de cada
+     * item — que é sobre o que o gerente decide, item a item. Mandar só o
+     * `assunto` obrigaria o outro lado a desmontar a frase de volta em itens, e
+     * a primeira vírgula dentro de um motivo quebraria a conta em silêncio.
+     */
+    foraDaAlcada: pedido.foraDaAlcada,
     // ⭐ O endereço de volta. Ver `PedidoDeConsulta.protocolo`.
     //
     // ⚠️ Vai como campo próprio, e não enfiado dentro da mensagem: a resposta
