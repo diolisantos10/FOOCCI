@@ -126,17 +126,44 @@ export const ORIGEM_DO_CONECTOR = "sdr-ia-ta" as const;
 /**
  * ⭐ QUEM DECIDE: o Agente Gerente Comercial.
  *
- * ⚠️ Mudou de `gerente-de-produto-e-ia` para cá, e a razão é a causa medida do
- * beco sem saída — não estética. O núcleo escalava por `alcada_nao_declarada`
- * porque o Gerente de Produto e IA **não tem alçada sobre decisão comercial**:
- * a ficha 3.1 governa backlog e rollout de agente. Quem governa política
- * comercial está escrito na ficha 1.1, com todas as letras: *"Único que altera
- * política comercial"*, e escala *"quando o desconto pedido passa da alçada da
- * tabela"*.
+ * Mudou de `gerente-de-produto-e-ia` para cá por uma razão **estrutural**:
+ * `gerente-comercial` é o gerente da sala **`vendas`**, que é a sala onde o
+ * `sdr-ia-ta` trabalha. Quem decide sobre a pergunta de um agente é o gerente
+ * da sala DELE — não o gerente de outra sala que por acaso tem o assunto no
+ * nome. É a cadeia que a própria ficha 1.5 declara (`superior:
+ * dioli.foocci.vendas.gerente-comercial`), e ela vale sem depender de nenhuma
+ * alçada estar declarada — por isso sobrevive à próxima mudança de alçada.
  *
- * E ele é, pela própria fonte, o superior declarado do TA. Endereçar a consulta
- * ao gerente do agente que pergunta não é hierarquia inventada: é a que a ficha
- * 1.5 já declara.
+ * ─── ⚠️ ESTE PARÁGRAFO JÁ ESTEVE ERRADO, E O ERRO FICA REGISTRADO ──────────
+ *
+ * A versão anterior dizia que a troca **parava** o `alcada_nao_declarada` — que
+ * o núcleo escalava *porque* o Gerente de Produto e IA não tinha alçada
+ * comercial. **A medição contra produção desmentiu isso.**
+ *
+ * Medido com a credencial do Foocci, já com o `para` apontando para cá:
+ *
+ *   · `de: sdr-ia-ta` / `para: gerente-comercial` → **201 entregue**, e o
+ *     núcleo resolveu o destinatário como
+ *     `dioli.foocci.vendas.gerente-comercial`;
+ *   · o gerente tentou decidir → o núcleo **escalou assim mesmo**, por
+ *     `alcada_nao_declarada`, para `dioli.foocci.direcao.diretor`.
+ *
+ * Ou seja: **a escalada continua acontecendo.** Ela dispara porque a matriz de
+ * alçadas está vazia, e vai continuar disparando até a matriz ser aplicada —
+ * trocar o destinatário nunca teve como mudar isso.
+ *
+ * ⭐ O que a troca mudou foi **onde a escalada ATERRISSA**. Antes ela voltava
+ * para `dioli.foocci.direcao.diretor` sendo esse o próprio remetente, e o
+ * gatilho do banco barrava — *"quem perguntou nao assina a propria resposta"*.
+ * Agora ela vai para o mesmo `direcao.diretor`, só que ele é um TERCEIRO
+ * crachá, e não quem abriu a consulta. Medido: `sdr-ia-ta` ≠ esse crachá, e o
+ * núcleo recusou o `sdr-ia-ta` que tentou assinar a própria resposta —
+ * *"Responsabilidade muda com registro, nunca com iniciativa."*
+ *
+ * ⚠️ E o erro fica escrito em vez de apagado de propósito: foi exatamente um
+ * comentário desatualizado — o que afirmava que o TA não estava no organograma
+ * — que sustentou este defeito por horas. Um comentário que se corrige em
+ * silêncio ensina a próxima pessoa a confiar no que está escrito sem medir.
  */
 export const DECISOR_DO_CONECTOR = "gerente-comercial" as const;
 

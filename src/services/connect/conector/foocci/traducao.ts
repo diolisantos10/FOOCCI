@@ -85,12 +85,18 @@ export const ENDERECO_DO_REMETENTE = "dioli.foocci.direcao.diretor" as const;
  * (o slug interno) **não existe** no diretório, onde a chave é
  * `gerente-de-produto-e-ia`, na sala `produto`.
  *
- * O que mudou é o **endereçamento**. A ficha 3.1 governa backlog e rollout de
- * agente — ela não tem alçada sobre preço, permuta ou prazo comercial. Mandar
- * uma decisão comercial para ela foi a causa medida do `alcada_nao_declarada`
- * que disparava a escalada. A consulta comercial vai ao Gerente Comercial
- * (ficha 1.1), que é quem a fonte declara como *"único que altera política
- * comercial"* — e que é o superior do TA.
+ * O que mudou é o **endereçamento**, e a razão é ESTRUTURAL: a consulta vai ao
+ * `gerente-comercial`, que é o gerente da sala `vendas` — a sala onde o
+ * `sdr-ia-ta` trabalha. Quem decide sobre a pergunta de um agente é o gerente
+ * da sala dele, e não o gerente de outra sala que por acaso tem o assunto no
+ * nome. A ficha 3.1 mora na sala `produto`.
+ *
+ * ⛔ CORREÇÃO: aqui já esteve escrito que mandar a decisão comercial para a
+ * ficha 3.1 era *"a causa medida do `alcada_nao_declarada`"*. Está errado. A
+ * medição contra produção mostrou o núcleo escalando por `alcada_nao_declarada`
+ * também com `para: gerente-comercial` — ele escala porque a matriz de alçadas
+ * está vazia, e vai escalar até ela ser aplicada. O que o endereçamento novo
+ * mudou é para ONDE a escalada aterrissa. Ver `origem.ts`.
  *
  * Este par continua sendo o endereço correto do Gerente de Produto e IA, para
  * quando o assunto for de fato dele (versão de agente, rollout, avaliação).

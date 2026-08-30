@@ -319,12 +319,19 @@ export async function consultarGerente(
     //   decide     dioli.foocci.vendas.gerente-comercial  (ficha 1.1)
     //   escalada   dioli.foocci.direcao.diretor           (superior do decisor)
     //
-    // ⚠️ E `para` mudou junto, pela CAUSA e não por estética: o Gerente de
-    // Produto e IA não tem alçada sobre decisão comercial (ficha 3.1 governa
-    // backlog e rollout), e era essa falta de alçada que disparava a escalada.
-    // Quem governa política comercial é a ficha 1.1, que é também o superior
-    // declarado do TA — endereçar ao gerente de quem pergunta não é hierarquia
-    // inventada, é a que a fonte já escreve.
+    // ⚠️ E `para` mudou junto, por razão ESTRUTURAL: `gerente-comercial` é o
+    // gerente da sala `vendas`, que é a sala onde o `sdr-ia-ta` trabalha. Quem
+    // decide sobre a pergunta de um agente é o gerente da sala DELE — não o
+    // gerente de outra sala que por acaso tem o assunto no nome. É a cadeia que
+    // a ficha 1.5 já declara, e ela vale sem depender de alçada declarada.
+    //
+    // ⛔ CORREÇÃO DE UM COMENTÁRIO QUE ESTAVA AQUI. Ele dizia que a troca de
+    // `para` PARAVA o `alcada_nao_declarada`. Está errado, e a medição contra
+    // produção desmentiu: com `para: gerente-comercial` o despacho volta 201 e
+    // o núcleo escala assim mesmo — a matriz de alçadas está vazia e vai
+    // escalar até ela ser aplicada. O que a troca mudou é ONDE a escalada
+    // aterrissa: `direcao.diretor` deixou de ser o remetente e passou a ser um
+    // terceiro crachá. A medição inteira está em `conector/foocci/origem.ts`.
     de: origem.cracha.chave,
     para: DECISOR_DO_CONECTOR,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
