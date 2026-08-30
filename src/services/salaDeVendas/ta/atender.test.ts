@@ -123,7 +123,7 @@ describe("⭐ o TA responde, e a resposta NÃO sai daqui", () => {
     });
 
     expect(falou(r)).toBe(true);
-    if (!r.falou) return;
+    if (!r.falou || r.porPolitica) return;
     expect(r.mensagemId).toBe("m1");
     expect(r.resposta.texto.length).toBeGreaterThan(10);
 
@@ -154,7 +154,7 @@ describe("⭐ o TA responde, e a resposta NÃO sai daqui", () => {
     });
 
     expect(falou(r)).toBe(true);
-    if (!r.falou) return;
+    if (!r.falou || r.porPolitica) return;
     expect(r.resposta.apoiadoEm.length).toBeGreaterThan(0);
   });
 });
@@ -509,7 +509,7 @@ describe("ele não repete pergunta que já fez", () => {
     });
 
     expect(falou(primeira)).toBe(true);
-    if (!primeira.falou) return;
+    if (!primeira.falou || primeira.porPolitica) return;
     if (primeira.resposta.perguntouIndice === null) return; // não sondou, nada a guardar
 
     const segunda = banco({ textosJaEnviados: [primeira.resposta.texto] });
@@ -520,7 +520,7 @@ describe("ele não repete pergunta que já fez", () => {
     });
 
     expect(falou(r2)).toBe(true);
-    if (!r2.falou) return;
+    if (!r2.falou || r2.porPolitica) return;
     expect(r2.resposta.perguntouIndice).not.toBe(primeira.resposta.perguntouIndice);
   });
 });

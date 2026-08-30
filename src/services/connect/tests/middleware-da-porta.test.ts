@@ -45,6 +45,8 @@ import { CABECALHO_DO_SEGREDO } from "@/services/connect/porta";
 /** O caminho da porta, escrito por extenso — é ele que precisa bater. */
 const CAMINHO_DA_PORTA = "/api/connect/despacho";
 const CAMINHO_DO_CADASTRO = "/api/connect/cadastro";
+/** ⭐ O caminho de VOLTA — por onde a resposta do gerente entra na conversa. */
+const CAMINHO_DO_RETORNO = "/api/connect/retorno";
 
 /**
  * ⭐ O caminho de controle: um vizinho do mesmo prefixo que NÃO tem linha no
@@ -76,10 +78,14 @@ describe("⚠️ a linha do middleware, sem a qual nada funciona", () => {
     const bloco = src.slice(src.indexOf("PUBLIC_PATHS"), src.indexOf("function isPublicPath"));
     expect(bloco).toContain("/^\\/api\\/connect\\/despacho$/");
     expect(bloco).toContain("/^\\/api\\/connect\\/cadastro$/");
+    // ⭐ Sem esta, a resposta do gerente NUNCA entra na conversa do cliente: o
+    // núcleo recebe o 401 genérico do middleware, lê como "segredo errado", e o
+    // lead espera para sempre — o defeito de quatro dias, de volta.
+    expect(bloco).toContain("/^\\/api\\/connect\\/retorno$/");
   });
 
   it("⭐ COM a linha: o middleware deixa passar, e nem consulta o token", async () => {
-    for (const caminho of [CAMINHO_DA_PORTA, CAMINHO_DO_CADASTRO]) {
+    for (const caminho of [CAMINHO_DA_PORTA, CAMINHO_DO_CADASTRO, CAMINHO_DO_RETORNO]) {
       getToken.mockClear();
       const r = await middleware(chamar(caminho));
       expect(r.status, caminho).toBe(200);

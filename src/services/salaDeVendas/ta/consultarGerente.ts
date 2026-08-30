@@ -60,10 +60,23 @@ import {
   VARIAVEL_DO_SEGREDO,
   segredoDaPorta,
 } from "@/services/connect/porta";
+/**
+ * ⚠️ DOIS NAMESPACES, E SÃO DOIS DE VERDADE.
+ *
+ * `cadastro.ts` tem os slugs do **organograma interno** do Foocci
+ * (`diretor-foocci`, `agente-gerente-produto`), e é com eles que a porta de
+ * ENTRADA deste produto trabalha. O **diretório corporativo** do Dioli Connect
+ * conhece os mesmos cargos por outras chaves (`diretor`,
+ * `gerente-de-produto-e-ia`) — e é para ele que este despacho vai.
+ *
+ * Medido contra produção em 30/08/2026: mandar o slug interno responde
+ * `remetente_desconhecido`, e a escalada morre na porta sem gravar nada. A
+ * ponte entre os dois registros mora no conector local, em um lugar só.
+ */
 import {
-  DIRETOR_DO_PRODUTO,
-  GERENTE_DO_PRODUTO,
-} from "@/services/connect/cadastro";
+  DESTINATARIO_NO_NUCLEO,
+  REMETENTE_NO_NUCLEO,
+} from "@/services/connect/conector/foocci/traducao";
 import { MODO_DE_PRODUCAO, type CasoDoLead } from "@/services/connect/contrato";
 
 /** A variável que diz ONDE a porta do Connect atende. */
@@ -123,6 +136,18 @@ export type ResultadoDaConsulta =
     };
 
 export interface PedidoDeConsulta {
+  /**
+   * ⭐ O PROTOCOLO — e é ele que faz a resposta VOLTAR.
+   *
+   * Antes deste campo a consulta saía sem identidade: a decisão do gerente
+   * chegaria ao produto e não teria como saber de qual cliente ela era. É o
+   * campo que o núcleo devolve no `POST /api/connect/retorno`, e é por ele que
+   * o conector acha a conversa certa (`connect/conector/pendencias.ts`).
+   *
+   * Opcional só porque a consulta continua funcionando sem ele — mas sem ele
+   * ela é o que era no PR #178: um bilhete que sai e não volta.
+   */
+  protocolo?: string;
   /** O caso do lead, como o gerente precisa ler para decidir. */
   caso: CasoDoLead;
   /** Os assuntos que estão fora da alçada do agente, já com o motivo escrito. */
@@ -247,10 +272,36 @@ export async function consultarGerente(
     // produto. Então o despacho sai em nome do Diretor da Foocci, e a origem
     // verdadeira (o TA) vai escrita na PERGUNTA e no CASO, para o rastro não
     // dizer que o Diretor perguntou sozinho.
-    de: DIRETOR_DO_PRODUTO,
-    para: GERENTE_DO_PRODUTO,
+    //
+    // ⭐ E os nomes são os do DIRETÓRIO CORPORATIVO, não os do organograma
+    // interno. Ver `conector/foocci/traducao.ts`: são dois registros do mesmo
+    // cargo, e mandar o slug de dentro é `remetente_desconhecido` na porta.
+    de: REMETENTE_NO_NUCLEO,
+    para: DESTINATARIO_NO_NUCLEO,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
     caso: pedido.caso,
+    /**
+     * ⭐ O QUE ESTÁ FORA DA ALÇADA, CLASSIFICADO — e não descrito em prosa.
+     *
+     * ⚠️ O núcleo **recusa** o despacho sem este campo, e recusa de propósito:
+     * ele não deduz assunto lendo texto corrido. Quem classifica é o produto,
+     * em código (`foraDaAlcadaNaMensagem`), antes do modelo — e é a mesma
+     * doutrina que já vale deste lado: a decisão de escalar não é do modelo.
+     *
+     * ⛔ E ele NÃO é substituível pelo `assunto`. `assunto` é uma linha de
+     * metadado, com teto de 300 caracteres, que junta os nomes por vírgula para
+     * caber numa coluna. Este campo é a lista estruturada, com o MOTIVO de cada
+     * item — que é sobre o que o gerente decide, item a item. Mandar só o
+     * `assunto` obrigaria o outro lado a desmontar a frase de volta em itens, e
+     * a primeira vírgula dentro de um motivo quebraria a conta em silêncio.
+     */
+    foraDaAlcada: pedido.foraDaAlcada,
+    // ⭐ O endereço de volta. Ver `PedidoDeConsulta.protocolo`.
+    //
+    // ⚠️ Vai como campo próprio, e não enfiado dentro da mensagem: a resposta
+    // precisa achar a conversa por comparação exata, e um protocolo que o outro
+    // lado tem que extrair de um parágrafo é um protocolo que um dia sai errado.
+    ...(pedido.protocolo ? { protocolo: pedido.protocolo } : {}),
   };
 
   const controle = new AbortController();
