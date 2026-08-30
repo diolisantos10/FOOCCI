@@ -6,7 +6,6 @@
   "aviso": "null = NAO MEDIDO. 0 = medido e deu zero. Nenhum numero abaixo foi estimado, salvo onde diz ESTIMADO.",
   "ficha_lida": false,
   "ficha_observacao": "Nao alcanco o repositorio control_room. Montei pelas oito secoes nomeadas na chamada, igual a ontem.",
-
   "saude": {
     "app_no_ar": true,
     "origem": "GET https://foocci.com.br/api/health as 11:07 UTC",
@@ -26,12 +25,13 @@
     "indisponibilidade_do_banco_segundos": 70,
     "origem_indisponibilidade": "deploy a70ecd3f: createdAt 01:24:54Z, log 'ready to accept connections' 01:26:04Z"
   },
-
   "cliente": {
     "clientes_sem_resposta_hoje": null,
     "motivo_null": "exige leitura do banco de producao; nao tenho credencial nem rota de contagem",
     "templates_meta_aprovados": 84,
-    "templates_meta_por_status": {"APPROVED": 84},
+    "templates_meta_por_status": {
+      "APPROVED": 84
+    },
     "templates_ontem": "84 submetidos em 23/08, todos PENDING",
     "origem_templates": "meta-raiox.yml run 33308216777, 30/08 11:09 UTC, lido da propria Graph API",
     "limite_de_conversas_meta": "TIER_250",
@@ -49,33 +49,44 @@
     "crm_campanhas_na_parede": 16,
     "origem_crm": "diagnostico-crm-instagram.yml run 33308217860, 30/08 11:09 UTC: 16 campanhas com 'audiencia: total 500 · novos elegiveis 500'; a 17a ('Cliente quente esfriando') tem audiencia 16 e esta ACTIVE, barrada so pela janela de horario",
     "retorno_automatico_da_ia_ligado": false,
-    "origem_retorno": "sem mudanca de codigo no caminho desde 28/08; ver secao qualidade"
+    "origem_retorno": "sem mudanca de codigo no caminho desde 28/08; ver secao qualidade",
+    "agente_solto_1_em_21_ainda_vale": null,
+    "agente_solto_observacao": "O 1-em-21 NAO e numero vivo: e um comentario em LiveStageHealth.ts:28-42 registrando uma medicao de 25/08/2026 (5.866 turnos em 90 dias, 273 chegando ao raciocinio livre em 64 dias), travado por LiveStageHealth.test.ts:201. Nem o arquivo nem o teste foram tocados pelo #176, e nenhuma condicao do funil mudou (WhatsAppBrainRuntimeService.ts byte-identico entre 476c1ac e 60c48c4). Medir HOJE exige o banco de producao. Se este numero subir sem data, o CEO decide em cima de dado de cinco dias atras."
   },
-
   "produtividade": {
     "prs_mergeados_24h": 1,
-    "lista_mergeados": ["#176 CRM nao fala por cima de pedido em andamento"],
+    "lista_mergeados": [
+      "#176 CRM nao fala por cima de pedido em andamento"
+    ],
     "mergeado_por_mim": 0,
     "observacao_merge": "O #176 foi produzido por outra sessao, autorizado pelo Diretor Geral. Eu nao mergeei nada nas 24h.",
     "prs_abertos_mergeaveis": 4,
-    "lista_abertos": ["#169 financeiro", "#170 medidor de custo de IA", "#175 diagnostico CRM", "#132 sonda de suporte (aberto desde 15/08)"],
+    "lista_abertos": [
+      "#169 financeiro",
+      "#170 medidor de custo de IA",
+      "#175 diagnostico CRM",
+      "#132 sonda de suporte (aberto desde 15/08)"
+    ],
     "prs_abertos_que_nunca_mergeiam": 1,
     "observacao_abertos": "Ontem reportei 3 abertos e eram 4: o #132 esta aberto desde 15/08 e eu nao o contei. Numero de hoje conferido em list_pull_requests.",
     "origem": "GitHub list_pull_requests as 11:12 UTC e git log origin/claude/remove-legacy-runner-q8iXa"
   },
-
   "qualidade": {
-    "suite_total": null,
-    "suite_falhando": null,
-    "tsc_limpo": null,
-    "motivo_null_qualidade": "medicao despachada ao agente `qualidade` sobre o commit de producao; nao voltou ate o fechamento das 11h35",
+    "suite_total": 7651,
+    "suite_passando": 7613,
+    "suite_pulados": 38,
+    "suite_falhando": 0,
+    "arquivos_de_teste": 568,
+    "tsc_limpo": true,
+    "duracao_suite_segundos": 104.09,
+    "origem": "agente `qualidade` rodou npx vitest run e npx tsc --noEmit sobre 60c48c4e extraido com git archive, 30/08 ate 11:40 UTC. Exit 0 nos dois.",
     "ontem_suite_total": 7538,
-    "ontem_suite_falhando": 0,
+    "testes_novos_do_176": 23,
     "mutacoes_rodadas_24h_por_mim": 0,
     "mutacoes_declaradas_no_176": 8,
-    "origem_mutacoes": "corpo do commit 60c48c4e. NAO conferi essas 8 — sao declaracao de outra sessao, nao medicao minha."
+    "origem_mutacoes": "corpo do commit 60c48c4e. NAO conferi essas 8 — sao declaracao de outra sessao, nao medicao minha.",
+    "ressalva": "Verde nao e prova de cobertura, so de que nada quebrou. Os tres defeitos listados em `defeitos_medidos_hoje` passam com a suite inteira verde."
   },
-
   "dinheiro": {
     "infra_railway_foocci_usd_mes": 20.65,
     "infra_railway_casa_usd_mes": 40.99,
@@ -90,7 +101,6 @@
     "saldo_anthropic": null,
     "motivo_null_dinheiro": "receita, assinantes e custo de IA exigem banco de producao. Medidor de IA pronto no PR #170, nao mergeado. Saldo de credito pre-pago nao tem vigia — ver docs/financeiro-foocci.md secao 9."
   },
-
   "risco": {
     "cve_id": "CVE-2026-15741",
     "cve_aplicado": true,
@@ -118,7 +128,6 @@
     "bancos_expostos_na_internet": 2,
     "instagram_do_sushi_cazza_fora_do_ar": true
   },
-
   "bloqueio_do_ceo": {
     "itens": 7,
     "lista": [
@@ -133,18 +142,41 @@
     "pagina": "https://claude.ai/code/artifact/3979d19f-795f-469a-9a6d-072da20ce210",
     "observacao_pagina": "A pagina cobre os seis com duas saidas cada. O item do Instagram entrou hoje e ainda nao esta nela."
   },
-
   "nao_medido": [
-    "Quantos clientes ficaram sem resposta hoje — exige banco. Terceiro dia seguido em null.",
+    "Quantos clientes ficaram sem resposta hoje — exige banco ou grep de [BrainDecision] nos logs do Railway. Terceiro dia seguido em null.",
+    "O 1-em-21 de HOJE — o que existe e o registro estatico de 25/08. Exige banco.",
+    "Quantas conversas DISTINTAS chegam ao agente livre — nunca foi medido por ninguem; o 4,3/dia sao respostas, nao conversas.",
     "Receita, MRR e assinantes ativos — exige banco.",
     "Custo de IA do mes — medidor pronto no PR #170, nao mergeado.",
     "Saldo de credito da OpenAI e da Anthropic — ninguem vigia. Quando zerar, o atendimento para.",
-    "Suite de testes e tsc no commit de producao — despachado, nao voltou a tempo.",
     "As 8 mutacoes declaradas no #176 — declaracao de outra sessao, nao conferida por mim.",
+    "Se os 23 testes novos do #176 provam que o LEGITIMO passa (cliente sem pedido em voo entra no publico), e nao so que o ilegitimo barra — nao auditado; e auditoria separada.",
+    "Efeito em producao do #176 — no ar ha ~12h, nenhum dado de campo colhido.",
     "Quem criou o agendamento de copia de ontem as 21:23 UTC — o comando nao devolve autor.",
     "Se as 16 campanhas paradas em 500 voltam a mandar agora que os 84 templates foram aprovados — exige disparo real, que eu nao faco sem ordem.",
     "Prova de RESTAURACAO de qualquer copia — o restore e in-place e sobrescreve o destino.",
     "O que tem dentro do Postgres-76OG — 0,35 GB, trafego zero, exposto na internet, conteudo desconhecido.",
     "Se o Postgres-76OG tambem ganhou agendamento de copia — conferi so o banco vivo."
-  ]
+  ],
+  "defeitos_medidos_hoje": {
+    "silencio_saidas_totais": 14,
+    "silencio_saidas_com_log": 11,
+    "silencio_saidas_sem_log": 3,
+    "silencio_saidas_sem_log_quais": [
+      "WhatsAppBrainRuntimeService.ts:185 — catch do respond(), so console.error com prefixo diferente",
+      "WhatsAppBrainRuntimeService.ts:324 — free-form disabled cai no recepcionista SEM log nenhum; e o caminho padrao de quem nao esta na allowlist",
+      "WhatsAppBrainRuntimeService.ts:482 — HANDOFF, aceitavel: a resposta ja saiu na 447"
+    ],
+    "correcao_ao_numero_de_ontem": "Ontem reportei 12 pontos de log cobrindo as saidas. Sao 12 linhas [BrainDecision], mas a da linha 379 e um gate no meio do fluxo, nao uma saida. A cobertura real e 11 de 14. O numero que eu subi estava alto em um.",
+    "order_support_tem_escritor": false,
+    "order_support_evidencia": "grep ORDER_SUPPORT em src/prisma/scripts/tests no commit de producao: 10 ocorrencias, ZERO escritas. Pior: assignConversationContext (AgentRoutingService.ts:54), a unica funcao capaz de gravar, tem ZERO chamadores fora do proprio arquivo — a funcao inteira e codigo morto. O #176 tapou o buraco por outro caminho (orders.count em :118); a trava sem fechadura continua onde estava.",
+    "ai_return_policy_tem_chamador_automatico": false,
+    "ai_return_policy_evidencia": "evaluateAiReturn (WhatsAppAiReturnPolicy.ts:53) tem UM chamador nao-teste: WhatsAppAiReturnDiagnostic.ts:77, que declara na linha 6 que nao muda nada. Conta e nao age.",
+    "escritores_de_aiEnabled_true": 3,
+    "correcao_escritores": "Ontem reportei UM escritor de aiEnabled:true (a rota manual de release). Sao TRES: release/route.ts:51, ConversationAiPolicyService.ts:177 (unlockAiForConversation, chamada so pela rota manual de classify) e ConversationLogService.ts:138 (criacao de conversa nova). Nenhum e automatico, entao a conclusao nao muda — mas o numero estava errado.",
+    "max_audience": 500,
+    "consultas_com_take_max_audience": 19,
+    "exclusao_de_ja_contatados_roda_depois_do_take": true,
+    "exclusao_evidencia": "resolveAudience corta em 500 (CrmCampaignService.ts:113, :504); o gate autoritativo roda no laco de envio (:684 -> :686 ContactSafetyService.assertSendable) e o dedupe de 24h em :650. O #176 acrescentou o filtro de pedido em voo DENTRO da consulta (:142) e o activeOrderGuard.ts:186-191 explica por escrito por que tem de ser assim — reconhecendo o defeito da parede e corrigindo so para o filtro novo dele."
+  }
 }
