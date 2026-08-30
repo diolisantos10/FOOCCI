@@ -60,10 +60,23 @@ import {
   VARIAVEL_DO_SEGREDO,
   segredoDaPorta,
 } from "@/services/connect/porta";
+/**
+ * ⚠️ DOIS NAMESPACES, E SÃO DOIS DE VERDADE.
+ *
+ * `cadastro.ts` tem os slugs do **organograma interno** do Foocci
+ * (`diretor-foocci`, `agente-gerente-produto`), e é com eles que a porta de
+ * ENTRADA deste produto trabalha. O **diretório corporativo** do Dioli Connect
+ * conhece os mesmos cargos por outras chaves (`diretor`,
+ * `gerente-de-produto-e-ia`) — e é para ele que este despacho vai.
+ *
+ * Medido contra produção em 30/08/2026: mandar o slug interno responde
+ * `remetente_desconhecido`, e a escalada morre na porta sem gravar nada. A
+ * ponte entre os dois registros mora no conector local, em um lugar só.
+ */
 import {
-  DIRETOR_DO_PRODUTO,
-  GERENTE_DO_PRODUTO,
-} from "@/services/connect/cadastro";
+  DESTINATARIO_NO_NUCLEO,
+  REMETENTE_NO_NUCLEO,
+} from "@/services/connect/conector/foocci/traducao";
 import { MODO_DE_PRODUCAO, type CasoDoLead } from "@/services/connect/contrato";
 
 /** A variável que diz ONDE a porta do Connect atende. */
@@ -259,8 +272,12 @@ export async function consultarGerente(
     // produto. Então o despacho sai em nome do Diretor da Foocci, e a origem
     // verdadeira (o TA) vai escrita na PERGUNTA e no CASO, para o rastro não
     // dizer que o Diretor perguntou sozinho.
-    de: DIRETOR_DO_PRODUTO,
-    para: GERENTE_DO_PRODUTO,
+    //
+    // ⭐ E os nomes são os do DIRETÓRIO CORPORATIVO, não os do organograma
+    // interno. Ver `conector/foocci/traducao.ts`: são dois registros do mesmo
+    // cargo, e mandar o slug de dentro é `remetente_desconhecido` na porta.
+    de: REMETENTE_NO_NUCLEO,
+    para: DESTINATARIO_NO_NUCLEO,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
     caso: pedido.caso,
     /**

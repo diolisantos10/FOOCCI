@@ -57,7 +57,12 @@
  *   MENOR  → somou coisa nova, opcional. Compatível para trás.
  *   REMENDO→ correção que não muda o formato.
  */
-export const VERSAO_DO_CONTRATO = "1.0.0" as const;
+/**
+ * ⚠️ 1.1.0 desde 30/08/2026: `ASSUNTOS_DE_DECISAO` entrou no contrato comum —
+ * o vocabulário fechado de assuntos de decisão, gêmeo do núcleo. É MENOR
+ * (aditivo): quem não conhece a lista não deixa de funcionar por causa dela.
+ */
+export const VERSAO_DO_CONTRATO = "1.1.0" as const;
 
 export interface VersaoLida {
   maior: number;
@@ -131,7 +136,7 @@ export const ARQUIVOS_DO_CONTRATO: Readonly<Record<string, string>> = {
   "atendimento.ts": "ba1f766ff2f046fa843b10876d0a024f94c5a74bae76fef149b690adab8757eb",
   "aviso.ts": "067cd4b4278c59772ef3827f2426845c1e71469f982d7890299d33526bb36f66",
   "barreira.ts": "5d2abb11de7bed15bbc43ff945b467ab5f00ca4f5efe098003e68261452e15f3",
-  "contrato.ts": "fa85dc360c084727f864299dca2efd2ed9fedcdde18b92e0f91ededee6ce4b0e",
+  "contrato.ts": "0cdca76db48d138b77169a194d06b8bd04aa7d1affc18425b26beb1b0ac49325",
   "ligacaoLocal.ts": "55c4f18bcd041e33716652f2b61c3c0ca4dec4c06ac93a3173d35d8c671b5455",
   "pendencias.ts": "822706440b87b97c89d73d7840ea41c367419170e0a5e86a6b4d74dee7dff282",
   "politicas.ts": "812bfb266cc3e9d404de61be37eff55e133e3548f920905ef2868b956b077f28",

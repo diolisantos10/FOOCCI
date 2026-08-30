@@ -71,6 +71,7 @@ import {
   type ResultadoDoConector,
 } from "@/services/connect/conector/atendimento";
 import { ligacaoDoFoocci } from "@/services/connect/conector/foocci/ligacao";
+import { traduzirAssuntos } from "@/services/connect/conector/foocci/traducao";
 import type { ArmazemDePendencias } from "@/services/connect/conector/pendencias";
 import { foraDaAlcadaNaMensagem } from "../precos";
 import { extrairSinais, juntarSinais } from "./sondagem";
@@ -393,8 +394,21 @@ async function executarTurno(
     //
     // ⛔ Nenhuma política é guardada aqui. A memória de decisão mora na Control
     // Room; este produto só pergunta, recebe e entrega.
+    // ── ⭐ A TRADUÇÃO, ANTES DE QUALQUER COISA IR PARA O FIO ───────────────
+    //
+    // O núcleo tem vocabulário FECHADO de assuntos de decisão, e as palavras da
+    // Sala não estão nele. Medido contra produção em 30/08/2026: **zero
+    // interseção** — toda escalada real do Foocci morria em
+    // `assunto_fora_do_vocabulario`, e o cliente ficava esperando um gerente
+    // que nunca foi perguntado.
+    //
+    // ⚠️ Traduz-se só o que VAI NO FIO. A fila humana continua lendo as palavras
+    // da Sala (`foraDaAlcada`, logo abaixo, no dossiê): quem pega a fila é gente
+    // daqui, e "permuta" diz mais a ela do que `forma_de_pagamento_nao_padrao`.
+    const traduzidos = traduzirAssuntos(foraDaAlcada);
+
     const conector =
-      foraDaAlcada.length > 0
+      traduzidos.paraONucleo.length > 0
         ? await atenderComOConector(
             ligacaoDoFoocci(db, {
               assinaUserId: assina,
@@ -407,7 +421,7 @@ async function executarTurno(
               // pergunta só para distinguir exceção de regra, e um identificador
               // opaco resolve isso inteiro.
               referenciaDoCliente: lead.id,
-              assuntos: foraDaAlcada,
+              assuntos: traduzidos.paraONucleo,
               pergunta: pedido.mensagem,
               agora,
             },
@@ -416,10 +430,14 @@ async function executarTurno(
             // No Foocci ela é `consultarGerente`, pela porta do Dioli Connect,
             // com o caso do lead junto — o mesmo caminho provado no PR #178. O
             // conector não sabe o que é um lead; ele só precisa saber se abriu.
-            async ({ protocolo, politicaRecusada }) => {
+            async ({ protocolo, assuntos, politicaRecusada }) => {
               const r = await consultarGerente({
                 protocolo,
-                foraDaAlcada,
+                // ⭐ Os assuntos que vêm do conector — já no vocabulário da
+                // casa. Usar a lista local aqui seria traduzir para a consulta
+                // de política e mandar o nome de dentro no despacho: as duas
+                // portas do núcleo leem o mesmo vocabulário fechado.
+                foraDaAlcada: assuntos,
                 caso: {
                   leadId: lead.id,
                   nome: lead.nome,
@@ -459,7 +477,7 @@ async function executarTurno(
       };
     }
 
-    const consulta = resumoDaConsulta(conector);
+    const consulta = resumoDaConsulta(conector, traduzidos.semTraducao);
 
     const h = await passarParaGente(db, {
       leadId: lead.id,
@@ -607,8 +625,25 @@ async function executarTurno(
  * o gerente foi acionado faz a pessoa da fila acionar de novo, ou pior, achar
  * que já foi.
  */
-function resumoDaConsulta(conector: ResultadoDoConector | null): { paraODossie: string } | null {
-  return conector ? { paraODossie: conector.paraORastro } : null;
+function resumoDaConsulta(
+  conector: ResultadoDoConector | null,
+  semTraducao: string[],
+): { paraODossie: string } | null {
+  // ⚠️ O que não tem par no vocabulário fechado da casa **não some**. Sai
+  // nomeado no dossiê, porque a diferença entre "o gerente não respondeu ainda"
+  // e "esta parte nem chegou a ser perguntada" é a diferença entre esperar e
+  // agir — e quem pega a fila é a única pessoa que pode agir.
+  const naoPerguntado =
+    semTraducao.length > 0
+      ? ` ⚠️ Estes assuntos NÃO foram perguntados ao gerente porque não têm par no vocabulário de ` +
+        `decisão da casa: ${semTraducao.join(", ")}. Quem pegar esta fila decide isso aqui dentro, ou ` +
+        "pede ao Diretor Geral que o vocabulário ganhe o assunto."
+      : "";
+
+  if (!conector) {
+    return naoPerguntado ? { paraODossie: naoPerguntado.trim() } : null;
+  }
+  return { paraODossie: `${conector.paraORastro}${naoPerguntado}` };
 }
 
 /** O conector já avisou o cliente de que a decisão está pendente? */

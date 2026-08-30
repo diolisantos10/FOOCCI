@@ -34,7 +34,31 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { atenderComOTA } from "@/services/salaDeVendas/ta/atender";
 import { receberRetorno } from "../retorno";
 import { ligacaoDoFoocci } from "../foocci/ligacao";
-import { CAMINHO_DA_CONSULTA_DE_POLITICA, CAMINHO_DO_DESPACHO } from "../contrato";
+import {
+  ASSUNTOS_DE_DECISAO,
+  CAMINHO_DA_CONSULTA_DE_POLITICA,
+  CAMINHO_DO_DESPACHO,
+} from "../contrato";
+import {
+  DESTINATARIO_NO_NUCLEO,
+  REMETENTE_NO_NUCLEO,
+} from "../foocci/traducao";
+
+/**
+ * ⭐ O DIRETÓRIO CORPORATIVO DO FOOCCI, no recorte que este teste usa.
+ *
+ * Os nomes são os que o diretório de verdade tem (`consolidar.ts` da Control
+ * Room): a sala `direcao` tem o crachá `diretor`, e a sala `produto` tem o
+ * `gerente-de-produto-e-ia`. ⛔ `diretor-foocci` e `agente-gerente-produto` são
+ * os slugs do organograma INTERNO do produto, e não existem aqui — que é
+ * exatamente o defeito medido em produção.
+ */
+const DIRETORIO_DO_FOOCCI: readonly string[] = [
+  "diretor",
+  "gerente-de-produto-e-ia",
+  "gerente-de-crescimento",
+  "waiter",
+];
 import { VERSAO_DO_CONTRATO } from "../versao";
 import { armazemEmMemoria } from "./armazemEmMemoria";
 import type { FalaAoCliente, LigacaoLocal } from "../ligacaoLocal";
@@ -137,11 +161,32 @@ function nucleoDeMentira() {
    * mesmo caminho de produção, um campo a menos.
    */
   let podar: string | null = null;
+  /**
+   * ⭐ As duas sabotagens que reproduzem NO FIO os defeitos medidos contra
+   * produção em 30/08/2026 — o remetente do organograma interno e o vocabulário
+   * da Sala. São a "outra metade" de cada conserto: sem elas, o verde provaria
+   * apenas que o código de hoje concorda consigo mesmo.
+   */
+  let voltarAoSlugInterno = false;
+  let voltarAoVocabularioDaSala = false;
+
+  /** O caminho inverso da tradução — existe só para a sabotagem. */
+  const DE_VOLTA_AO_LOCAL: Record<string, string> = {
+    forma_de_pagamento_nao_padrao: "permuta",
+    volume_acima_da_capacidade: "escopoAcimaDaCapacidade",
+    prazo_de_entrega: "prazoDeImplantacao",
+  };
 
   const buscar = (async (url: string, init: RequestInit) => {
     if (foraDoAr) throw new Error("ECONNREFUSED");
     const corpo = JSON.parse(String(init.body)) as Record<string, unknown>;
     if (podar) delete corpo[podar];
+    if (voltarAoSlugInterno) corpo.de = "diretor-foocci";
+    if (voltarAoVocabularioDaSala && Array.isArray(corpo.foraDaAlcada)) {
+      corpo.foraDaAlcada = (corpo.foraDaAlcada as Array<{ assunto: string; motivo: string }>).map(
+        (f) => ({ ...f, assunto: DE_VOLTA_AO_LOCAL[f.assunto] ?? f.assunto }),
+      );
+    }
 
     if (String(url).endsWith(CAMINHO_DA_CONSULTA_DE_POLITICA)) {
       const assuntos = (corpo.assuntos as Array<{ assunto: string }>).map((a) => a.assunto);
@@ -153,22 +198,62 @@ function nucleoDeMentira() {
     }
 
     if (String(url).endsWith(CAMINHO_DO_DESPACHO)) {
-      // ── ⭐ A EXIGÊNCIA DO NÚCLEO REAL (PR #13 da Control Room) ───────────
+      // ── ⭐ 1. QUEM FALA E QUEM RECEBE EXISTEM NO DIRETÓRIO? ──────────────
+      //
+      // Medido contra produção em 30/08/2026: `de: "diretor-foocci"` responde
+      // `remetente_desconhecido`. O diretório corporativo conhece o Diretor da
+      // Foocci pela chave `diretor`; o slug do organograma interno é outro
+      // registro, de outra lista.
+      for (const [campo, codigo] of [
+        ["de", "remetente_desconhecido"],
+        ["para", "destinatario_desconhecido"],
+      ] as const) {
+        const chave = corpo[campo];
+        if (typeof chave !== "string" || !DIRETORIO_DO_FOOCCI.includes(chave)) {
+          const motivo =
+            `${codigo}: não existe crachá de chave "${String(chave)}" no produto "foocci". A busca é ` +
+            "recortada pelo produto do portão.";
+          recusas.push(motivo);
+          return new Response(JSON.stringify({ estado: "recusado", codigo, motivo }), {
+            status: 422,
+            headers: { "content-type": "application/json" },
+          });
+        }
+      }
+
+      // ── ⭐ 2. A EXIGÊNCIA DO NÚCLEO REAL (PR #13 da Control Room) ────────
       //
       // O núcleo **não deduz assunto lendo prosa**, e por isso recusa o
-      // despacho que chega sem a classificação estruturada. Este núcleo de
-      // mentira faz a mesma recusa, para que a suíte do Foocci meça o contrato
-      // de verdade em vez de um núcleo complacente que aceitaria qualquer coisa.
+      // despacho que chega sem a classificação estruturada.
       const fora = corpo.foraDaAlcada;
       if (!Array.isArray(fora) || fora.length === 0) {
         const motivo =
-          "despacho sem `foraDaAlcada`: o núcleo não deduz assunto lendo texto corrido. Quem classifica " +
+          "sem_assuntos_fora_da_alcada: o núcleo não deduz assunto lendo texto corrido. Quem classifica " +
           "é o produto, em código, antes do modelo.";
         recusas.push(motivo);
         return new Response(JSON.stringify({ estado: "recusado", motivo }), {
           status: 422,
           headers: { "content-type": "application/json" },
         });
+      }
+
+      // ── ⭐ 3. O VOCABULÁRIO É FECHADO ───────────────────────────────────
+      //
+      // Medido contra produção: `permuta`, `escopoAcimaDaCapacidade` e
+      // `prazoDeImplantacao` têm **zero interseção** com o vocabulário da casa,
+      // e toda escalada real do Foocci morria em `assunto_fora_do_vocabulario`.
+      const desconhecidos = (fora as Array<{ assunto?: unknown }>)
+        .map((f) => String(f?.assunto ?? ""))
+        .filter((a) => !(ASSUNTOS_DE_DECISAO as readonly string[]).includes(a));
+      if (desconhecidos.length > 0) {
+        const motivo =
+          `assunto_fora_do_vocabulario: ${desconhecidos.join(", ")} não está no vocabulário fechado ` +
+          `(${ASSUNTOS_DE_DECISAO.join(", ")}). Nada foi gravado.`;
+        recusas.push(motivo);
+        return new Response(
+          JSON.stringify({ estado: "recusado", codigo: "assunto_fora_do_vocabulario", motivo }),
+          { status: 422, headers: { "content-type": "application/json" } },
+        );
       }
 
       despachos.push(corpo);
@@ -193,6 +278,14 @@ function nucleoDeMentira() {
     recusas,
     podarDoCorpo: (campo: string) => {
       podar = campo;
+    },
+    /** Reproduz no fio o defeito 1: `de` com o slug do organograma interno. */
+    sabotarRemetente: () => {
+      voltarAoSlugInterno = true;
+    },
+    /** Reproduz no fio o defeito 2: assuntos nas palavras da Sala. */
+    sabotarVocabulario: () => {
+      voltarAoVocabularioDaSala = true;
     },
     cair: () => {
       foraDoAr = true;
@@ -250,8 +343,10 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
 
     // ⭐ RESPONSÁVEL CORRETO ENCONTRADO — o Agente Gerente do departamento dono
     // do agente, derivado do organograma, não digitado à mão.
-    expect(despacho.para).toBe("agente-gerente-produto");
-    expect(despacho.de).toBe("diretor-foocci");
+    // ⭐ E pelos nomes do DIRETÓRIO CORPORATIVO. Medido contra produção em
+    // 30/08/2026: o slug do organograma interno é `remetente_desconhecido`.
+    expect(despacho.para).toBe(DESTINATARIO_NO_NUCLEO);
+    expect(despacho.de).toBe(REMETENTE_NO_NUCLEO);
 
     // ⭐ E O ENDEREÇO DE VOLTA EXISTE. É o que o PR #178 não tinha.
     const protocolo = despacho.protocolo as string;
@@ -339,7 +434,10 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
       revogadaEm: null,
       respostaAoCliente: RESPOSTA_DO_GERENTE,
       fundamentacaoInterna: "margem aprovada pelo Diretor em 25/08",
-      assunto: "permuta",
+      // ⭐ A política é registrada no vocabulário FECHADO da casa — é assim
+      // que o núcleo a guarda, e é por isso que a tradução do conector local
+      // tem de acontecer ANTES da pergunta, e não depois dela.
+      assunto: "forma_de_pagamento_nao_padrao",
     });
 
     const db = banco({ id: "lead-segundo", nome: "Renata" });
@@ -384,7 +482,10 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
       vigenteAte: null,
       revogadaEm: "2026-08-24T00:00:00Z",
       respostaAoCliente: RESPOSTA_DO_GERENTE,
-      assunto: "permuta",
+      // ⭐ A política é registrada no vocabulário FECHADO da casa — é assim
+      // que o núcleo a guarda, e é por isso que a tradução do conector local
+      // tem de acontecer ANTES da pergunta, e não depois dela.
+      assunto: "forma_de_pagamento_nao_padrao",
     });
 
     const db = banco({ id: "lead-terceiro", nome: "Paulo" });
@@ -422,7 +523,10 @@ describe("⭐⭐⭐ A JORNADA DO MARCOS — ida e volta, pelo caminho de produç
       vigenteAte: null,
       revogadaEm: null,
       respostaAoCliente: "Permuta integral, 100% em troca de serviço, por 90 dias.",
-      assunto: "permuta",
+      // ⭐ A política é registrada no vocabulário FECHADO da casa — é assim
+      // que o núcleo a guarda, e é por isso que a tradução do conector local
+      // tem de acontecer ANTES da pergunta, e não depois dela.
+      assunto: "forma_de_pagamento_nao_padrao",
     });
 
     const db = banco({ id: "lead-quarto", nome: "Bia" });
@@ -611,7 +715,12 @@ describe("⭐⭐ `foraDaAlcada` NO CORPO — sem ele o núcleo real recusa", () 
 
     const fora = ambiente.despachos[0]!.foraDaAlcada as Array<{ assunto: string; motivo: string }>;
     // Os DOIS assuntos do caso do Marcos, cada um com o motivo escrito.
-    expect(fora.map((f) => f.assunto).sort()).toEqual(["escopoAcimaDaCapacidade", "permuta"]);
+    // ⭐ E no VOCABULÁRIO FECHADO da casa, não nas palavras da Sala.
+    expect(fora.map((f) => f.assunto).sort()).toEqual([
+      "forma_de_pagamento_nao_padrao",
+      "volume_acima_da_capacidade",
+    ]);
+    for (const f of fora) expect(ASSUNTOS_DE_DECISAO).toContain(f.assunto);
     for (const f of fora) expect(f.motivo).toMatch(/Decide:/);
 
     // ⛔ E ele NÃO é o `assunto`: aquele é uma linha de metadado, este é a lista.
@@ -655,6 +764,118 @@ describe("⭐⭐ `foraDaAlcada` NO CORPO — sem ele o núcleo real recusa", () 
 
     const dossie = (db.leadHandoff.create.mock.calls[0]![0] as { data: { objecoes: string } }).data;
     expect(dossie.objecoes).toMatch(/Ninguém do outro lado foi acionado/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe("⭐⭐ OS DOIS DEFEITOS MEDIDOS CONTRA PRODUÇÃO (30/08/2026)", () => {
+  /**
+   * ─── O QUE FOI MEDIDO, COM CHAMADA HTTP DE VERDADE ───────────────────────
+   *
+   *   1. `de: "diretor-foocci"` → `{"estado":"recusado","codigo":
+   *      "remetente_desconhecido"}`. O diretório corporativo chama o Diretor da
+   *      Foocci de `diretor`; `diretor-foocci` é o slug do organograma INTERNO.
+   *   2. `permuta` / `escopoAcimaDaCapacidade` → `assunto_fora_do_vocabulario`.
+   *      **Zero interseção** com o vocabulário fechado da casa.
+   *
+   * ⚠️ E a suíte estava verde. O núcleo de mentira aceitava qualquer `de` e
+   * qualquer assunto — a mesma classe de falha do `foraDaAlcada`, dois campos
+   * adiante. O conserto de verdade é este bloco: **o gêmeo passou a exigir o que
+   * o real exige**, e é isso que impede o terceiro campo de passar batido.
+   */
+
+  it("⭐⭐ COM a correção: o despacho ATRAVESSA o núcleo exigente", async () => {
+    const db = banco();
+    await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem: armazemEmMemoria() },
+    });
+
+    expect(ambiente.recusas).toEqual([]);
+    expect(ambiente.despachos).toHaveLength(1);
+    expect(ambiente.despachos[0]!.de).toBe(REMETENTE_NO_NUCLEO);
+    expect(ambiente.despachos[0]!.para).toBe(DESTINATARIO_NO_NUCLEO);
+  });
+
+  /**
+   * ⭐⭐ A OUTRA METADE DO DEFEITO 1 — `de` de volta ao slug interno.
+   *
+   * MUTAÇÃO: trocar `REMETENTE_NO_NUCLEO` de volta para `"diretor-foocci"` em
+   * `traducao.ts` → o produto passa a fazer sozinho o que esta sabotagem faz no
+   * fio, e o teste de cima fica vermelho.
+   */
+  it("⭐⭐ A OUTRA METADE — `de` com o slug interno é `remetente_desconhecido`", async () => {
+    ambiente.sabotarRemetente();
+
+    const db = banco();
+    const armazem = armazemEmMemoria();
+    const turno = await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem },
+    });
+
+    expect(ambiente.recusas).toHaveLength(1);
+    expect(ambiente.recusas[0]).toMatch(/remetente_desconhecido/);
+    expect(ambiente.recusas[0]).toMatch(/diretor-foocci/);
+    expect(ambiente.despachos).toEqual([]);
+
+    // ⭐ Nenhuma pendência: ninguém foi perguntado, e uma pendência aqui seria
+    // um cliente esperando resposta que nunca volta.
+    expect(armazem.todas()).toEqual([]);
+    // ⚠️ E o chão não sai do lugar.
+    expect(turno.falou).toBe(false);
+    expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
+    expect(ditoAoCliente(db).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * ⭐⭐ A OUTRA METADE DO DEFEITO 2 — os assuntos de volta às palavras da Sala.
+   *
+   * MUTAÇÃO: apagar `traduzirAssuntos` de `atender.ts` e mandar `foraDaAlcada`
+   * direto → o produto passa a fazer sozinho o que esta sabotagem faz no fio.
+   */
+  it("⭐⭐ A OUTRA METADE — assunto na língua da Sala é `assunto_fora_do_vocabulario`", async () => {
+    ambiente.sabotarVocabulario();
+
+    const db = banco();
+    const armazem = armazemEmMemoria();
+    await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem },
+    });
+
+    expect(ambiente.recusas).toHaveLength(1);
+    expect(ambiente.recusas[0]).toMatch(/assunto_fora_do_vocabulario/);
+    expect(ambiente.recusas[0]).toMatch(/permuta|escopoAcimaDaCapacidade/);
+    expect(ambiente.despachos).toEqual([]);
+    expect(armazem.todas()).toEqual([]);
+    expect(db.leadHandoff.create).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ⚠️ E a fila humana lê as palavras DA SALA, não as da casa.
+   *
+   * A tradução é do que vai no fio. Quem pega a fila é gente daqui, e "permuta"
+   * diz mais a ela do que `forma_de_pagamento_nao_padrao`.
+   */
+  it("⚠️ o dossiê da fila continua em português da Sala, e não no vocabulário da casa", async () => {
+    const db = banco();
+    await atenderComOTA(db as never, {
+      leadId: "lead-marcos",
+      mensagem: MENSAGEM_DO_MARCOS,
+      agora: AGORA,
+      conector: { armazem: armazemEmMemoria() },
+    });
+
+    const dossie = (db.leadHandoff.create.mock.calls[0]![0] as { data: { objecoes: string } }).data;
+    expect(dossie.objecoes).toContain("permuta");
+    expect(dossie.objecoes).toContain("escopoAcimaDaCapacidade");
   });
 });
 

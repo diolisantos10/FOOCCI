@@ -22,6 +22,10 @@ import {
   type PedidoDeConsulta,
 } from "./consultarGerente";
 import { CABECALHO_DO_SEGREDO, VARIAVEL_DO_SEGREDO } from "@/services/connect/porta";
+import {
+  DESTINATARIO_NO_NUCLEO,
+  REMETENTE_NO_NUCLEO,
+} from "@/services/connect/conector/foocci/traducao";
 import { DIRETOR_DO_PRODUTO, GERENTE_DO_PRODUTO } from "@/services/connect/cadastro";
 import { conferirPedido } from "@/services/connect/contrato";
 
@@ -124,9 +128,21 @@ describe("⭐ a consulta sai, e sai pelo contrato da porta", () => {
     //
     // O que este teste continua medindo — e é o que lhe dá valor — é que tudo o
     // que as duas portas têm em comum atravessa a conferência REAL.
+    // ── ⚠️ E `de`/`para` ESTÃO EM NAMESPACES DIFERENTES NAS DUAS PORTAS ────
+    //
+    // A porta de entrada fala os slugs do organograma interno do Foocci
+    // (`diretor-foocci`); o diretório corporativo, para onde este despacho vai,
+    // chama o mesmo cargo de `diretor`. Não é um erro de um dos lados: são dois
+    // registros do mesmo cargo, e a ponte é `conector/foocci/traducao.ts`.
+    //
+    // Então eles são TROCADOS para o namespace de entrada antes da conferência,
+    // e não apagados: assim a forma continua sendo medida (papel conhecido,
+    // destinatário conhecido) em vez de sair do teste junto com o problema.
     const SO_DA_PORTA_DO_NUCLEO = ["protocolo", "foraDaAlcada"];
     const comum: Record<string, unknown> = { ...corpo };
     for (const campo of SO_DA_PORTA_DO_NUCLEO) delete comum[campo];
+    comum.de = DIRETOR_DO_PRODUTO;
+    comum.para = GERENTE_DO_PRODUTO;
 
     const c = conferirPedido(comum);
     expect(c.ok, JSON.stringify(c)).toBe(true);
@@ -144,8 +160,15 @@ describe("⭐ a consulta sai, e sai pelo contrato da porta", () => {
 
     expect(c.pedido.modo).toBe("producao");
     expect(c.pedido.sintetico).toBe(false);
-    expect(c.pedido.de).toBe(DIRETOR_DO_PRODUTO);
-    expect(c.pedido.para).toBe(GERENTE_DO_PRODUTO);
+    // ⭐ Os nomes do DIRETÓRIO CORPORATIVO, e não os do organograma interno.
+    // Medido contra produção em 30/08/2026: o slug interno é recusado com
+    // `remetente_desconhecido`, e a escalada morre na porta sem gravar nada.
+    expect(corpo.de).toBe(REMETENTE_NO_NUCLEO);
+    expect(corpo.para).toBe(DESTINATARIO_NO_NUCLEO);
+    // ⭐ E são DIFERENTES dos slugs internos — se um dia os dois registros
+    // convergirem, esta linha cai junto com a necessidade da tradução.
+    expect(corpo.de).not.toBe(DIRETOR_DO_PRODUTO);
+    expect(corpo.para).not.toBe(GERENTE_DO_PRODUTO);
     // O caso do lead chegou inteiro do outro lado.
     expect(c.pedido.caso?.leadId).toBe("lead-1");
     expect(c.pedido.caso?.nome).toBe("Marcos");

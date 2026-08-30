@@ -86,7 +86,44 @@ export const TETO_DA_CONSULTA_MS = 3_000;
 // 1) PRODUTO → NÚCLEO: "existe política válida para isto?"
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Um assunto que o agente não pode decidir sozinho, com o motivo já escrito. */
+/**
+ * ⭐⭐ O VOCABULÁRIO FECHADO DE ASSUNTOS DE DECISÃO — e ele é da CASA.
+ *
+ * ⚠️ Esta lista é **gêmea** da do núcleo (`connect/consulta.ts`, com `CHECK` na
+ * migração 027). Divergindo as duas, **a do núcleo vence**: ele recusa o
+ * despacho com `assunto_fora_do_vocabulario` e nada é gravado.
+ *
+ * ─── POR QUE FECHADO, E POR QUE ISTO É DO CONTRATO COMUM ───────────────────
+ *
+ * Texto livre produz cinco jeitos de escrever "pagamento diferente" e **nenhum
+ * jeito de contar quantas vezes cada um subiu ao diretor** — que é a pergunta
+ * que decide se a alçada do gerente está apertada ou frouxa demais. Um
+ * vocabulário por produto tornaria essa contagem impossível na empresa inteira.
+ *
+ * ⭐ **Cada produto fala o nome que quiser lá dentro e TRADUZ no conector
+ * local** (decisão D3). O Foocci faz isso em `conector/foocci/traducao.ts`:
+ * `permuta` → `forma_de_pagamento_nao_padrao`, e por aí. ⛔ Ninguém acrescenta
+ * palavra aqui para acomodar um produto — é assim que um contrato vira quatro.
+ */
+export const ASSUNTOS_DE_DECISAO = [
+  "volume_dentro_da_capacidade",
+  "volume_acima_da_capacidade",
+  "preco_ou_desconto",
+  "forma_de_pagamento_nao_padrao",
+  "prazo_de_entrega",
+  "escopo_fora_do_contratado",
+] as const;
+export type AssuntoDeDecisao = (typeof ASSUNTOS_DE_DECISAO)[number];
+
+/**
+ * Um assunto que o agente não pode decidir sozinho, com o motivo já escrito.
+ *
+ * ⚠️ Quando isto vai para o fio, `assunto` **tem** que estar em
+ * `ASSUNTOS_DE_DECISAO`. O tipo continua `string` de propósito — o produto monta
+ * a lista com os nomes dele e traduz na saída —, e quem garante a tradução é o
+ * conector local, com teste. O `motivo` é texto livre e atravessa intacto: o
+ * vocabulário fechado é do ASSUNTO, que é o que se conta.
+ */
 export interface AssuntoForaDaAlcada {
   assunto: string;
   motivo: string;
