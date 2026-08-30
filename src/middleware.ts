@@ -72,6 +72,26 @@ const PUBLIC_PATHS: RegExp[] = [
   // Só o caminho exato: /api/sdr/entrevista e /api/sdr/plano continuam exigindo
   // tenant ou admin, como sempre exigiram.
   /^\/api\/sdr\/diario$/,             // Diário do SDR (GET) — fail-closed via SDR_DIARIO_SECRET
+  // ── DIOLI CONNECT — a porta corporativa por onde a Control Room fala com o
+  // agente deste produto. "Público" aqui significa exatamente o que significa
+  // para /api/cron e para o diário do SDR: **não exige sessão de LOJISTA**. Quem
+  // chama é máquina, não navegador — não tem cookie, e nunca terá.
+  //
+  // ⚠️ SEM ESTAS DUAS LINHAS AS ROTAS FICAM MORTAS, E DE UM JEITO TRAIÇOEIRO.
+  // O middleware derruba no NextAuth tudo que não está nesta lista. Para um
+  // caminho `/api/`, o que ele devolve é o 401 genérico dele
+  // (`{"success":false,"error":"Unauthorized"}`) — que PARECE a recusa da porta,
+  // mas é o contrário: o handler nunca rodou, e portanto nenhuma trava dele
+  // rodou. Sem segredo configurado a porta deveria responder 503; com pedido
+  // malformado, 400; com acionamento não comprovado, 502. Nada disso chega a
+  // existir. O portão da porta é o segredo próprio dela (`DIOLI_CONNECT_SECRET`,
+  // fail-closed, ADMIN_SECRET proibido pela ADR-003) — e ele só pode barrar o
+  // que chega até ele.
+  //
+  // O caminho é EXATO nas duas: `/api/connect/qualquer-outra-coisa` continua
+  // exigindo sessão, como sempre exigiu.
+  /^\/api\/connect\/despacho$/,       // Dioli Connect — despacho (POST), fail-closed via DIOLI_CONNECT_SECRET
+  /^\/api\/connect\/cadastro$/,       // Dioli Connect — cadastro do produto (GET, somente leitura), mesmo segredo
   // Área de ATENDIMENTO — a sala saiu de dentro do /admin em 26/08/2026.
   // "Público" aqui significa exatamente o mesmo que significa para o /admin: não
   // exige sessão de LOJISTA. O portão é o layout de `/comercial/(area)`, que

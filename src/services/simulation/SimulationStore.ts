@@ -10,8 +10,24 @@
 import { prisma } from "@/lib/prisma";
 import type { OpportunityStatus, SimulationRunResult } from "./types";
 
-/** Persists a finished run and returns the new runId. */
-export async function persistSimulationRun(result: SimulationRunResult): Promise<string> {
+/**
+ * Persists a finished run and returns the new runId.
+ *
+ * ── `metadataExtra`, e por que ele NÃO pode apagar `runtimeTouched` ──────────
+ *
+ * O segundo parâmetro é aditivo e opcional: quem chama pode anexar contexto seu
+ * aos metadados da rodada (o Dioli Connect anexa o registro da caixa postal —
+ * fio, turno, quem falou). Nenhum chamador existente muda de comportamento.
+ *
+ * A ordem do spread é a trava: `runtimeTouched: false` vem DEPOIS e por isso
+ * sempre vence. Um chamador não consegue, nem por engano nem de propósito,
+ * gravar uma rodada que se declare tendo tocado o runtime — a garantia do
+ * laboratório não é negociável por quem escreve nele.
+ */
+export async function persistSimulationRun(
+  result: SimulationRunResult,
+  metadataExtra: Record<string, unknown> = {},
+): Promise<string> {
   const run = await prisma.agentSimulationRun.create({
     data: {
       agentSlug: result.agentSlug,
@@ -32,7 +48,7 @@ export async function persistSimulationRun(result: SimulationRunResult): Promise
       p1Count: result.p1Count,
       p2Count: result.p2Count,
       opportunityCount: result.opportunityCount,
-      metadata: JSON.stringify({ runtimeTouched: false }),
+      metadata: JSON.stringify({ ...metadataExtra, runtimeTouched: false }),
     },
     select: { id: true },
   });
