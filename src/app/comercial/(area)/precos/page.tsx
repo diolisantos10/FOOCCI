@@ -44,6 +44,8 @@ export const metadata = { title: "Preços · Sala de Vendas" };
 /** O nome da pergunta, do jeito que o lead faz. Não o nome da chave. */
 const COMO_O_LEAD_PERGUNTA: Record<AssuntoEmAberto, string> = {
   prazoDeImplantacao: "“Em quanto tempo fica pronto?”",
+  escopoAcimaDaCapacidade: "“Vocês conseguem um volume maior do que o do plano?”",
+  permuta: "“Dá pra fechar em permuta/parceria, sem dinheiro?”",
 };
 
 /**

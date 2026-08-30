@@ -456,10 +456,15 @@ describe("⭐ B-3 · o corpo é allowlist: campo desconhecido é recusa NOMEADA"
     expect(memoria.runs).toHaveLength(0);
   });
 
-  it("⭐ A OUTRA METADE — os DEZ campos aceitos atravessam juntos, num pedido só", async () => {
+  it("⭐ A OUTRA METADE — TODOS os campos aceitos atravessam juntos, num pedido só", async () => {
+    // ⚠️ O corpo é de PRODUÇÃO desde 30/08/2026, e por uma razão de contrato:
+    // `caso` entrou na allowlist e ele **só** é aceito em `producao` — em
+    // homologação a presença dele é recusa nomeada. Um corpo de homologação não
+    // tem mais como exercitar a lista inteira, e escrever a lista "menos um"
+    // faria o teste parar de cobrar exatamente o campo novo.
     const completo: Record<string, unknown> = {
-      modo: "homologacao",
-      sintetico: true,
+      modo: "producao",
+      sintetico: false,
       acao: "receber",
       de: DIRETOR_GERAL,
       para: GERENTE_DO_PRODUTO,
@@ -468,6 +473,7 @@ describe("⭐ B-3 · o corpo é allowlist: campo desconhecido é recusa NOMEADA"
       mensagem: "a mensagem que chegou",
       assunto: "o assunto declarado",
       cenarios: 2,
+      caso: { resumo: "o lead pediu um volume acima do plano e propôs permuta" },
     };
     // O teste é sobre a allowlist: o corpo usa TODOS os nomes dela, e nenhum outro.
     expect(Object.keys(completo).sort()).toEqual([...CAMPOS_ACEITOS].sort());

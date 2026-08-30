@@ -183,6 +183,57 @@ const EM_ABERTO = {
       "configuração como item sob consulta, e prometer data aqui seria inventar.",
     decideQuem: "CEO, com o Gerente de Operações do Cliente",
   },
+
+  /**
+   * ── ESCOPO ACIMA DO QUE A TABELA ENTREGA (30/08/2026) ─────────────────────
+   *
+   * O caso que abriu esta linha: um cliente pediu, por escrito e na terceira
+   * tentativa sem retorno, "28–30 posts/mês, 3 carrosséis/semana, ciclo de 30
+   * dias". O agente respondeu — corretamente — que aquilo está acima da
+   * capacidade e disse que ia chamar o gerente. E não havia gerente nenhum
+   * sendo chamado: o lead caía numa fila humana e ficava lá.
+   *
+   * ⚠️ O que está em aberto NÃO é "qual é a nossa capacidade": é se a empresa
+   * faz, por quanto e em que prazo, um escopo que não é nenhum dos planos da
+   * tabela publicada. Nenhum número de capacidade é escrito aqui, de propósito
+   * — escrever um seria a quinta tabela de que o cabeçalho deste arquivo fala,
+   * só que de entrega em vez de preço, e o vendedor prometeria um volume que
+   * nenhum sistema confere.
+   */
+  escopoAcimaDaCapacidade: {
+    motivo:
+      "o que a empresa vende são os planos da tabela publicada. Volume, " +
+      "cadência ou entregável fora deles não tem preço, prazo nem capacidade " +
+      "decidida — não existe escopo sob medida contratável hoje, e dizer 'a " +
+      "gente consegue' seria prometer entrega que ninguém dimensionou.",
+    decideQuem: "CEO, com o Gerente de Operações do Cliente",
+  },
+
+  /**
+   * ── PERMUTA / PARCERIA / PAGAMENTO SEM DINHEIRO (30/08/2026) ──────────────
+   *
+   * ⚠️ Isto NÃO é `formaDePagamento`, e confundir os dois daria ao cliente uma
+   * resposta errada com cara de resposta certa.
+   *
+   * `formaDePagamento` é mecânica: o checkout cria uma assinatura recorrente no
+   * Mercado Pago, que aceita cartão e mais nada. A pergunta "vocês aceitam
+   * boleto?" morre ali, porque não há alavanca — e por isso ela é respondida.
+   *
+   * Permuta é outra coisa: é **não passar pelo checkout**. É acordo comercial —
+   * serviço por serviço, mídia por mensalidade — e a pergunta não é se o sistema
+   * aceita, é se a EMPRESA aceita. Ninguém decidiu, e o agente não pode decidir:
+   * dizer "não" fecha negócio que talvez o dono quisesse, e dizer "vejo com o
+   * time" sem ver com ninguém é exatamente o defeito que abriu este trabalho.
+   */
+  permuta: {
+    motivo:
+      "não há decisão sobre aceitar permuta, parceria ou qualquer " +
+      "contrapartida que não seja dinheiro. Isto não é forma de pagamento que " +
+      "falte configurar — o checkout cobra assinatura recorrente no cartão e " +
+      "permuta não passa por ele. É acordo comercial fora do checkout, e a " +
+      "empresa não decidiu se faz.",
+    decideQuem: "CEO",
+  },
 } as const;
 
 /**
@@ -256,7 +307,10 @@ export type AssuntoDePreco =
   | "comoFecha"
   | "descontoAlemDaTabela"
   | "formaDePagamento"
-  | "prazoDeImplantacao";
+  | "prazoDeImplantacao"
+  // Os dois que o caso real de 30/08/2026 destampou. Ver `EM_ABERTO`.
+  | "escopoAcimaDaCapacidade"
+  | "permuta";
 
 export interface RespostaSobrePreco {
   /** Pode falar? */
@@ -332,4 +386,91 @@ export function responderSobrePreco(assunto: AssuntoDePreco): RespostaSobrePreco
 export function motivoDeHandoffPorPreco(assunto: AssuntoDePreco): string | null {
   const r = responderSobrePreco(assunto);
   return r.podeResponder ? null : `${r.motivo} Decide: ${r.decideQuem}.`;
+}
+
+// ── ⭐ O CHAMADOR QUE FALTAVA: DO TEXTO DO LEAD ATÉ O ASSUNTO ────────────────
+
+/**
+ * ⭐⭐ A PEÇA QUE FALTAVA, E O DEFEITO-ASSINATURA DESTA CASA.
+ *
+ * `motivoDeHandoffPorPreco` foi escrita, testada, revisada — e **nunca teve um
+ * chamador de produção**. Medido em 30/08/2026: nenhum caminho que saísse de uma
+ * mensagem de cliente chegava até ela. Foi o quarto caso do mesmo defeito no
+ * mesmo dia: peça pronta, correta, e desligada.
+ *
+ * O motivo de ela ficar órfã é banal e vale ser dito: ela recebe um
+ * `AssuntoDePreco`, e **ninguém sabia transformar o texto do cliente num
+ * assunto**. O elo que falta entre o mundo e a peça é sempre este — a peça pede
+ * um tipo que só existe depois de alguém decidir. Esta função é esse alguém.
+ *
+ * ─── POR QUE DETERMINÍSTICA, E NÃO UMA PERGUNTA AO MODELO ──────────────────
+ *
+ * Mesma doutrina de `responder.ts`: a decisão de escalar é tomada em código,
+ * antes do modelo. Um modelo simpático lê "topam permuta?" e tenta resolver — e
+ * "tentar resolver" aqui significa combinar forma de pagamento que a empresa não
+ * decidiu. A trava não pode morar na peça que erra sob pressão.
+ *
+ * ─── E POR QUE ELA DEVOLVE UMA LISTA ───────────────────────────────────────
+ *
+ * O caso real que abriu isto trouxe **duas** perguntas na mesma mensagem —
+ * volume acima do plano E permuta. Devolver só a primeira faria o gerente
+ * responder metade, e o cliente voltar com a outra metade três dias depois. É
+ * exatamente a espera que este trabalho existe para acabar.
+ */
+export const GATILHOS_DE_ASSUNTO: ReadonlyArray<{
+  assunto: AssuntoDePreco;
+  padrao: RegExp;
+  /** O que este gatilho está lendo, para o teste e para quem depurar. */
+  le: string;
+}> = [
+  {
+    assunto: "permuta",
+    // "parceria" e "troca" sozinhas são palavras de conversa boa ("parceria de
+    // longo prazo") e disparariam à toa. Só contam quando estão perto de
+    // dinheiro/pagamento — ou quando a palavra já é inequívoca (permuta, escambo).
+    padrao:
+      /\b(permuta|permutar|escambo|barter)\b|\bsem\s+(dinheiro|grana|pagar)\b|\b(parceria|troca|contrapartida)\b[^.?!]{0,60}\b(pagamento|pagar|dinheiro|mensalidade|valor)\b|\b(pagamento|pagar|dinheiro|mensalidade)\b[^.?!]{0,60}\b(parceria|troca|permuta|contrapartida)\b/i,
+    le: "permuta, escambo, ou parceria/troca dita perto de pagamento/dinheiro",
+  },
+  {
+    assunto: "escopoAcimaDaCapacidade",
+    // Volume pedido em número + unidade de entrega, ou a frase de capacidade dita
+    // com todas as letras. O número não é comparado com teto nenhum aqui de
+    // propósito: não existe teto publicado, e inventar um seria a quinta tabela.
+    padrao:
+      /\b\d{1,4}\s*(a|-|–|até)?\s*\d{0,4}\s*(posts?|publica[çc][õo]es|pe[çc]as|artes|carross[ée]is|carrossel|reels|v[íi]deos|stories)\b|\b(acima|fora|al[ée]m)\s+d[ao]s?\s+(nossa\s+|sua\s+)?(capacidade|plano|pacote|escopo)\b|\b(escopo|volume|cad[êe]ncia)\s+(maior|acima|customizad[oa]|sob medida|personalizad[oa])\b/i,
+    le: "volume pedido em peças/posts/carrosséis, ou escopo dito acima do plano",
+  },
+  {
+    assunto: "prazoDeImplantacao",
+    padrao:
+      /\b(prazo de implanta[çc][ãa]o|implanta[çc][ãa]o leva|quanto tempo (leva|demora)|em quantos dias|quando fica pronto|prazo (de|para) entrega)\b/i,
+    le: "pergunta de prazo de implantação",
+  },
+];
+
+/** Todos os assuntos de preço que a mensagem levanta, na ordem dos gatilhos. */
+export function assuntosDePrecoNaMensagem(mensagem: string): AssuntoDePreco[] {
+  if (!mensagem?.trim()) return [];
+  return GATILHOS_DE_ASSUNTO.filter((g) => g.padrao.test(mensagem)).map((g) => g.assunto);
+}
+
+/**
+ * O que ESCALA nesta mensagem, já com o motivo escrito.
+ *
+ * Vazio quer dizer "nada aqui está fora da alçada do agente" — e é diferente de
+ * "não li a mensagem". Um assunto que a Sala SABE responder (a tabela, o
+ * desconto publicado, quem fecha) não entra aqui, mesmo tendo sido reconhecido:
+ * escalar o que o agente pode responder sozinho é o jeito mais rápido de entupir
+ * a fila e fazer o time desligar o agente.
+ */
+export function foraDaAlcadaNaMensagem(
+  mensagem: string,
+): Array<{ assunto: AssuntoDePreco; motivo: string }> {
+  const fora: Array<{ assunto: AssuntoDePreco; motivo: string }> = [];
+  for (const assunto of assuntosDePrecoNaMensagem(mensagem)) {
+    const motivo = motivoDeHandoffPorPreco(assunto);
+    if (motivo) fora.push({ assunto, motivo });
+  }
+  return fora;
 }

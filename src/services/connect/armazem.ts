@@ -58,6 +58,20 @@ export interface RegistroDaCaixa {
   mensagem: string | null;
   assunto: string | null;
   em: string;
+  /**
+   * ⭐ O modo do despacho, GRAVADO na caixa — `homologacao` ou `producao`.
+   *
+   * Sem isto o rastro não distingue um ensaio de uma consulta que vale, e quem
+   * abrisse a caixa amanhã leria as duas do mesmo jeito. Registro que não diz se
+   * conta é registro que ninguém pode usar para decidir nada.
+   */
+  modo?: string;
+  /**
+   * O caso do lead, quando o despacho é de produção e o carrega — é o que o
+   * gerente lê para decidir. `null`/ausente em ensaio, sempre.
+   * Ver `CASO_DO_LEAD_POR_QUE_ELE_PASSA` no contrato.
+   */
+  caso?: unknown;
 }
 
 export interface ArmazemDoConnect {

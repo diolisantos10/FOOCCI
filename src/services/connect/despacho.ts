@@ -90,7 +90,7 @@ import {
 } from "./caixa";
 import { fioNovo, type PedidoConferido } from "./contrato";
 import { medicaoConfiavel, medindoRede, CANAL_OBRIGATORIO, type MedicaoDeRede } from "./sentinela";
-import { SELO_DE_RASCUNHO, artefatoDaRodada, type SeloDeRascunho } from "./rascunho";
+import { artefatoDaRodada, seloDoModo, type SeloDoDespacho } from "./rascunho";
 
 /** O fio continua sendo cunhado aqui para quem já importava daqui. */
 export { fioNovo };
@@ -166,7 +166,7 @@ export type ResultadoDoDespacho =
       prova: ProvaDaExecucao;
       medicao: MedicaoDaExecucao;
       artefato: string;
-    } & SeloDeRascunho)
+    } & SeloDoDespacho)
   | {
       estado: "recusado";
       produto: typeof PRODUTO_ID;
@@ -476,6 +476,12 @@ export async function despachar(
     mensagem: pedido.mensagem,
     assunto: pedido.assunto,
     em: deps.agora().toISOString(),
+    // ⭐ O modo entra no registro: sem ele, o rastro não distingue um ensaio de
+    // uma consulta que vale, e quem abrisse a caixa amanhã leria as duas igual.
+    modo: pedido.modo,
+    // O caso do lead, quando ele veio. É o que o gerente lê para decidir.
+    // `null` em ensaio, sempre — o contrato recusa `caso` fora de `producao`.
+    caso: pedido.caso,
   };
 
   // A trava do carimbo, no CAMINHO DE ESCRITA e não sobre uma constante.
@@ -560,7 +566,7 @@ export async function despachar(
     estado: "executado",
     // O selo vem no primeiro nível: quem lê a resposta não precisa abrir o
     // artefato para saber que isto é rascunho.
-    ...SELO_DE_RASCUNHO,
+    ...seloDoModo(pedido.modo),
     produto: PRODUTO_ID,
     acao: pedido.acao,
     de: pedido.de,

@@ -179,13 +179,49 @@ describe("trava 1 — o segredo desta porta, e só ele", () => {
 
 // ───────────────────────────────────────────────────────────────────────────
 describe("travas 2 e 3 — homologação com dado sintético, sem normalizar nada", () => {
-  it('modo "producao" é recusado com o motivo, e nunca executa', async () => {
+  /**
+   * ⚠️ ESTE TESTE MUDOU DE LADO EM 30/08/2026, POR ORDEM DO CEO.
+   *
+   * Ele cobrava que `modo: "producao"` fosse RECUSADO — e estava certo enquanto
+   * a porta era um piloto em auditoria. O CEO mandou ligar a operação real
+   * ("se o sistema tem que ser instalado, já colocar pra valer"), e agora os
+   * dois modos existem.
+   *
+   * O que NÃO mudou de lado, e está logo abaixo: um modo que não é nenhum dos
+   * dois continua sendo recusa nomeada, e `sintetico` continua sendo literal
+   * obrigatório nos dois modos.
+   */
+  it('⭐ modo "producao" ATRAVESSA — com `sintetico: false`, que é o que ele exige', async () => {
+    const r = await POST(
+      pedir(corpoLimpo({ modo: "producao", sintetico: false }), autorizado),
+    );
+    const corpo = await r.json();
+    expect(r.status, JSON.stringify(corpo)).toBe(200);
+    expect(corpo.estado).toBe("executado");
+    // E ele se declara operação real — sem carimbo de rascunho por cima.
+    expect(corpo.rascunho).toBe(false);
+    expect(corpo.natureza).toBe("OPERACAO_REAL");
+    // ⭐ E não promete o que não faz: a porta entrega, não colhe resposta.
+    expect(corpo.resposta_do_gerente).toBeNull();
+  });
+
+  it("⭐ A OUTRA METADE — `producao` com `sintetico: true` é recusado, e nunca executa", async () => {
     const r = await POST(pedir(corpoLimpo({ modo: "producao" }), autorizado));
+    expect(r.status).toBe(400);
+    const corpo = await r.json();
+    expect(corpo.estado).toBe("recusado");
+    expect(corpo.motivo).toMatch(/sintetico inválido/i);
+    expect(memoria.runs).toHaveLength(0);
+  });
+
+  it("um modo que não é nenhum dos dois continua sendo recusa NOMEADA", async () => {
+    const r = await POST(pedir(corpoLimpo({ modo: "producaozinha" }), autorizado));
     expect(r.status).toBe(400);
     const corpo = await r.json();
     expect(corpo.estado).toBe("recusado");
     expect(corpo.motivo).toMatch(/modo inválido/i);
     expect(corpo.motivo).toMatch(/homologacao/);
+    expect(corpo.motivo).toMatch(/producao/);
     expect(memoria.runs).toHaveLength(0);
   });
 

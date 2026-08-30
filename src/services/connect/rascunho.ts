@@ -47,6 +47,53 @@ export const SELO_DE_RASCUNHO: SeloDeRascunho = {
     "acionamento e o rastro; a redação sobe quando o dono configurar um provedor.",
 };
 
+/**
+ * ⭐ O SELO DE PRODUÇÃO — e o que ele afirma, que é MENOS do que parece.
+ *
+ * ─── A LINHA QUE ESTE SELO NÃO PODE ATRAVESSAR ─────────────────────────────
+ *
+ * Em `producao` a **entrega é real**: a consulta foi gravada na caixa do gerente
+ * como operação que vale, com o caso do lead junto, e a linha foi relida do
+ * banco. Isso é verdade e o selo diz.
+ *
+ * O que o selo **não** diz, porque não é verdade: que o gerente respondeu. Esta
+ * porta não tem canal de resposta — ela carimba `entregue`, e nunca `acionado`
+ * nem `respondido` (ver `caixa.ts`). Quem quiser ler nela uma resposta do
+ * gerente está lendo o que não está escrito.
+ *
+ * E o ensaio determinístico que roda junto continua sendo ensaio: ele existe
+ * para produzir a linha auditável que serve de prova da entrega, e **não** vira
+ * a fala do gerente por o modo ter mudado de nome. É por isso que este selo
+ * carrega `resposta_do_gerente: null` no primeiro nível, em vez de simplesmente
+ * omitir o assunto: ausência de informação não é informação.
+ */
+export interface SeloDeProducao {
+  rascunho: false;
+  natureza: "OPERACAO_REAL";
+  aviso: string;
+  /** `null`, sempre. Esta porta entrega; ela não colhe resposta. */
+  resposta_do_gerente: null;
+}
+
+export const SELO_DE_PRODUCAO: SeloDeProducao = {
+  rascunho: false,
+  natureza: "OPERACAO_REAL",
+  aviso:
+    "OPERAÇÃO REAL — a consulta foi gravada na caixa do gerente como operação que vale, com o caso do lead " +
+    "junto, e a linha foi relida do banco. ⚠️ O que isto NÃO é: a resposta do gerente. Esta porta carimba " +
+    "'entregue' e não tem canal de resposta — quem responde é o gerente, do lado dele, e o retorno ao cliente " +
+    "continua saindo pela fila humana. O ensaio determinístico anexo serve de âncora de auditoria da entrega; " +
+    "ele não é, e nunca foi, a fala do gerente.",
+  resposta_do_gerente: null,
+};
+
+export type SeloDoDespacho = SeloDeRascunho | SeloDeProducao;
+
+/** O selo que o modo do pedido manda usar. Um lugar só, para não divergirem. */
+export function seloDoModo(modo: string): SeloDoDespacho {
+  return modo === "producao" ? SELO_DE_PRODUCAO : SELO_DE_RASCUNHO;
+}
+
 export const ORIGEM_DO_RASCUNHO =
   "motor determinístico do Foocci (WaiterBrainV2.decide, função pura) rodado pelo laboratório de simulação " +
   "em modo sandbox — homologação com catálogo sintético, sem provedor de IA e sem credencial. Rascunho " +

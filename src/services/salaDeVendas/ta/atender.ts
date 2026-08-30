@@ -64,6 +64,8 @@ import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
+import { consultarGerente } from "./consultarGerente";
+import { foraDaAlcadaNaMensagem } from "../precos";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
 import { escreverOScore, type SinaisDoLead } from "../score";
@@ -75,6 +77,21 @@ import { escreverOScore, type SinaisDoLead } from "../score";
  * escrever fora da identidade, que é onde a trava do banco não enxerga.
  */
 type Cliente = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * O aviso que sai quando quem parou o TA foi o gatilho de preço.
+ *
+ * Curto e fixo, pela mesma razão que a fala de handoff de `falar()` é curta e
+ * fixa: quem pediu uma condição fora da tabela quer saber que alguém vai
+ * responder, não quer uma última tentativa de contornar.
+ *
+ * ⚠️ E ele **não promete prazo**. "Volto ainda hoje" seria inventar um SLA que
+ * não existe em lugar nenhum do sistema — e a mensagem de um agente é o pior
+ * lugar do mundo para uma promessa que ninguém confere.
+ */
+export const AVISO_DE_QUE_VEM_GENTE =
+  "Entendi o que você precisa. Isso aí é decisão que eu não posso tomar sozinho, " +
+  "então já passei pro time com tudo o que você me contou — alguém vem falar com você.";
 
 export type MotivoDeCalar =
   | "taDesligado"
@@ -302,17 +319,70 @@ async function executarTurno(
     posturaDoLead(lead.temperatura),
   );
 
-  // ── 7a. É caso de gente: chama e PARA ───────────────────────────────────
-  if (r.handoff.deve && r.handoff.motivo) {
+  // ── ⭐ 6b. O GATILHO DE PREÇO GANHA CHAMADOR ────────────────────────────
+  //
+  // `motivoDeHandoffPorPreco` estava escrita, testada e **órfã**: nenhum caminho
+  // de produção chegava até ela. Medido em 30/08/2026, e foi o quarto caso do
+  // mesmo defeito no mesmo dia. Esta linha é o chamador que faltava.
+  //
+  // O elo que faltava não era a peça: era traduzir o texto do cliente em
+  // assunto. `foraDaAlcadaNaMensagem` faz isso, em código e antes do modelo —
+  // mesma doutrina de `falar.ts`: a decisão de escalar não é do modelo.
+  //
+  // ⚠️ Repare que ele escala por conta própria: mesmo que `falar()` não tenha
+  // visto motivo nenhum, um assunto fora da alçada PARA o agente. Era esse o
+  // buraco — uma mensagem que não usasse as palavras de `PEDE_PROPOSTA` mas
+  // pedisse permuta passaria batida e o agente responderia por cima.
+  const foraDaAlcada = foraDaAlcadaNaMensagem(pedido.mensagem);
+
+  const deveChamarGente = (r.handoff.deve && r.handoff.motivo) || foraDaAlcada.length > 0;
+
+  // ── 7a. É caso de gente: consulta o gerente, chama a fila, e PARA ───────
+  if (deveChamarGente) {
+    // O motivo enumerado. Quando quem disparou foi só o gatilho de preço, o
+    // motivo é `PEDIU_PROPOSTA`: o lead pediu uma condição que a empresa precisa
+    // decidir, que é o que essa etiqueta quer dizer na fila.
+    const motivoExplicito = r.handoff.motivo ?? "PEDIU_PROPOSTA";
+
+    // ── ⭐ 7a-i. A CONSULTA AO GERENTE, PELO DIOLI CONNECT ────────────────
+    //
+    // Aqui é onde "vou chamar o gerente" deixa de ser uma frase na mensagem e
+    // vira uma chamada. Ver `consultarGerente.ts` — inclusive para o que ela
+    // NÃO consegue: a porta entrega e não colhe resposta.
+    //
+    // ⚠️ E ela roda ANTES de `passarParaGente` de propósito, para que o
+    // resultado — sucesso OU falha — entre no dossiê que a fila vai ler. Um
+    // dossiê que não diz se o gerente foi acionado faz a pessoa da fila acionar
+    // de novo, ou pior, achar que já foi.
+    const consulta =
+      foraDaAlcada.length > 0
+        ? await consultarGerente({
+            foraDaAlcada,
+            caso: {
+              leadId: lead.id,
+              nome: lead.nome,
+              resumo: `O lead escreveu: "${pedido.mensagem}"`,
+              historico: (historico ?? []).map((t) => ({ deQuem: t.deQuem, texto: t.texto })),
+              oQueTrava: foraDaAlcada.map((f) => `${f.assunto}: ${f.motivo}`).join(" | "),
+            },
+          })
+        : null;
+
     const h = await passarParaGente(db, {
       leadId: lead.id,
       motivoEscrito: r.porque,
-      motivoExplicito: r.handoff.motivo,
+      motivoExplicito,
       dossie: {
         // O resumo é o que `validarDossie` exige, e por um motivo prático:
         // quem pegar a fila lê ISTO antes de abrir a conversa. A frase literal
         // do cliente vale mais que qualquer paráfrase — é o que fez o TA parar.
         resumo: `O cliente escreveu: "${pedido.mensagem}"`,
+        // ⭐ O que trava, e o que já foi feito a respeito. As duas coisas na
+        // mesma frase de propósito: a fila precisa saber que existe uma consulta
+        // em curso (ou que ela falhou) antes de decidir o que fazer.
+        objecoes: consulta
+          ? `${foraDaAlcada.map((f) => `${f.assunto}: ${f.motivo}`).join("\n")}\n\n${consulta.paraODossie}`
+          : undefined,
         proximaAcao: "responder a esta mensagem — o TA parou e não respondeu nada",
       },
       agora,
@@ -331,9 +401,21 @@ async function executarTurno(
       // A fala do handoff é gravada como qualquer outra mensagem e entregue
       // pelo mesmo caminho. Se falhar, o handoff CONTINUA valendo: o bastão já
       // passou, e desfazê-lo por causa da mensagem deixaria o lead sem ninguém.
+      //
+      // ── ⚠️ E O TEXTO NÃO PODE SER A FALA DE VENDA ────────────────────────
+      //
+      // Quando quem disparou foi SÓ o gatilho de preço, `falar()` não sabia que
+      // ia haver handoff: `r.texto` é a resposta comercial que ele compôs. Mandá-la
+      // aqui daria ao cliente uma resposta de venda logo depois de ele ter
+      // pedido uma condição que a empresa não decidiu — e ele responderia à
+      // pergunta errada, exatamente o que o cabeçalho deste arquivo proíbe.
+      //
+      // Nesse caso o texto é o aviso determinístico, curto e verdadeiro.
+      const texto = r.handoff.deve ? r.texto : AVISO_DE_QUE_VEM_GENTE;
+
       const avisoGravado = await registrarSaida(db, {
         leadId: lead.id,
-        texto: r.texto,
+        texto,
         autor: "IA",
         // Assina igual à fala de venda: o cliente acabou de conversar com
         // "Agente Maria" e o aviso de que vem gente não pode chegar anônimo.
