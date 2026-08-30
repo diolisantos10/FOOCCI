@@ -28,6 +28,7 @@ import { despachar, type DependenciasDoDespacho } from "@/services/connect/despa
 import { sementeDoTurno, type ArmazemDoConnect, type LinhaDeRodadaLida } from "@/services/connect/armazem";
 import { DIRETOR_GERAL, GERENTE_DO_PRODUTO } from "@/services/connect/cadastro";
 import { CABECALHO_DO_SEGREDO } from "@/services/connect/porta";
+import { SIMULATION_SAFE_MODE, assertSimulationSafeMode } from "@/services/simulation/SimulationSafeMode";
 
 // ── O banco de mentira da metade HTTP (só o laboratório, como sempre). ─────
 const memoria = vi.hoisted(() => ({
@@ -65,7 +66,12 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 import { POST } from "@/app/api/connect/despacho/route";
 
 const SEGREDO = "segredo-do-dioli-connect-no-foocci";
-const FIO = "connect:foocci:fio-de-teste";
+/**
+ * ⚠️ O fio tem FORMA desde o achado B-5: `connect:foocci:<uuid>`. Este aqui é um
+ * UUID de verdade, fixo para o teste ser determinístico — antes era
+ * `connect:foocci:fio-de-teste`, que a porta hoje recusa no contrato.
+ */
+const FIO = "connect:foocci:11111111-2222-4333-8444-555555555555";
 
 /** O pedido, conferido de verdade — nada de montar `PedidoConferido` à mão. */
 function pedidoLimpo(extra: Record<string, unknown> = {}) {
@@ -411,14 +417,14 @@ describe("⭐ o mesmo corte, agora medido na rota HTTP: e ele NÃO é 2xx", () =
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe("a trava de sandbox — sem ela fechada, nada roda", () => {
-  it("⭐ `assertSimulationSafeMode` barrando é RECUSA, e o agente nem é chamado", async () => {
+describe("a Trava 0 — o CONTRATO do laboratório, dito pelo que ele é", () => {
+  it("⭐ o contrato adulterado é RECUSA, e o agente nem é chamado", async () => {
     const executar = vi.fn(async () => rodadaBoa());
     const r = await despachar(
       pedidoLimpo(),
       deps({
         executar,
-        assegurarSandbox: () => {
+        conferirContratoDoLaboratorio: () => {
           throw new Error("Simulation SafeMode violated: allowMessaging must be false");
         },
       }),
@@ -427,17 +433,44 @@ describe("a trava de sandbox — sem ela fechada, nada roda", () => {
     expect(r.estado).toBe("recusado");
     if (r.estado === "recusado") {
       expect(r.motivo).toMatch(/allowMessaging must be false/);
-      expect(r.motivo).toMatch(/Zero envio real é trava/i);
+      expect(r.motivo).toMatch(/contrato congelado do laboratório não confere/i);
       expect(r.caixa.gravado).toBe(false);
     }
     // A prova de que a trava é ANTERIOR: o agente não chegou a ser chamado.
     expect(executar).not.toHaveBeenCalled();
   });
 
-  it("a outra metade — com o sandbox fechado (o padrão de verdade), executa", async () => {
-    // Sem `assegurarSandbox` injetado: quem roda é a `assertSimulationSafeMode`
-    // de verdade, contra o SIMULATION_SAFE_MODE congelado da casa.
+  it("a outra metade — com o contrato íntegro (o padrão de verdade), executa", async () => {
+    // Sem nada injetado: quem roda é a `assertSimulationSafeMode` de verdade,
+    // contra o SIMULATION_SAFE_MODE congelado da casa.
     const r = await despachar(pedidoLimpo(), deps());
     expect(r.estado).toBe("executado");
+  });
+
+  /**
+   * ⭐⭐ O ACHADO B-1, ESCRITO COMO TESTE PARA NÃO VOLTAR.
+   *
+   * O comentário antigo da Trava 0 dizia que ela "LANÇA se qualquer efeito
+   * colateral estiver ligado — envio, pagamento, pedido". Este teste mede que
+   * isso é falso, e é de propósito que ele mede a FALSIDADE: enquanto a função
+   * for um assert de uma constante congelada contra si mesma, nenhum ambiente
+   * pode fazê-la lançar, e o comentário não pode prometer que pode.
+   *
+   * Se um dia a trava passar mesmo a ler o ambiente, este teste fica vermelho —
+   * e aí o conserto é reescrever o comentário de volta, com o mecanismo junto.
+   */
+  it("⭐⭐ B-1: nenhum ambiente faz a Trava 0 lançar — por isso ela não promete ambiente", () => {
+    const ambientesHostis: Record<string, string>[] = [
+      { ALLOW_SIDE_EFFECTS: "1", ALLOW_PAYMENTS: "1", ALLOW_MESSAGING: "1" },
+      { SIMULATION_MODE: "false", DRY_RUN: "false" },
+      { NODE_ENV: "production", EVOLUTION_API_URL: "https://envio.example", MERCADOPAGO_ACCESS_TOKEN: "x" },
+      { OPENAI_API_KEY: "sk-existe", ANTHROPIC_API_KEY: "sk-ant-existe" },
+    ];
+    for (const ambiente of ambientesHostis) {
+      for (const [chave, valor] of Object.entries(ambiente)) vi.stubEnv(chave, valor);
+      expect(() => assertSimulationSafeMode(), JSON.stringify(ambiente)).not.toThrow();
+    }
+    // E o que ela realmente confere: o contrato, quando ele vem adulterado.
+    expect(() => assertSimulationSafeMode({ ...SIMULATION_SAFE_MODE, allowMessaging: true } as never)).toThrow();
   });
 });

@@ -112,3 +112,64 @@ export function registroDaLinha(linha: LinhaDeRodadaLida): RegistroDaCaixa | nul
     return null;
   }
 }
+
+/**
+ * ⭐ QUEM ABRIU O FIO — lido do turno mais antigo, e nunca do pedido em curso.
+ *
+ * ─── O DEFEITO QUE ORIGINOU ESTA FUNÇÃO (achado B-4, 30/08/2026) ───────────
+ *
+ * A releitura já conferia que a LINHA pertence ao FIO (`linhaPertenceAoFio`).
+ * Ninguém conferia que o FIO pertence a quem despacha. Medido: `diretor-geral`
+ * abriu o fio com `iniciar`; `diretor-foocci` mandou `responder` no fio dele e
+ * recebeu `executado`, turno 2, com o registro gravado em nome dele. Um fio sem
+ * dono é uma conversa que qualquer autorizado continua no lugar do outro.
+ *
+ * O dono é o `de` do turno de menor número — o turno em que a conversa nasceu.
+ * Não é o `de` do pedido que está chegando (isso seria o despachante assinando o
+ * próprio recibo, de novo) e não é o da linha mais recente (senão bastaria um
+ * turno intruso para o intruso virar dono).
+ *
+ * `null` quer dizer "não deu para saber quem abriu", e é diferente de "não tem
+ * dono": ausência de informação não é informação, e quem chama tem que tratar os
+ * dois casos diferente.
+ */
+export function donoDoFio(antecedentes: LinhaDeRodadaLida[]): string | null {
+  let dono: string | null = null;
+  let menorTurno = Number.POSITIVE_INFINITY;
+  for (const linha of antecedentes) {
+    const registro = registroDaLinha(linha);
+    if (!registro) continue;
+    if (typeof registro.de !== "string" || !registro.de.trim()) continue;
+    if (registro.turno < menorTurno) {
+      menorTurno = registro.turno;
+      dono = registro.de;
+    }
+  }
+  return dono;
+}
+
+/**
+ * ⭐ A GARANTIA DE SANDBOX, RELIDA DO BANCO — e não afirmada pela porta.
+ *
+ * ─── O DEFEITO QUE ORIGINOU ESTA FUNÇÃO (achado B-2, 30/08/2026) ───────────
+ *
+ * A resposta trazia `runtime_tocado: false` como LITERAL escrito à mão, dentro
+ * de um bloco que se declara `relido_do_banco: true`. Era o despachante
+ * assinando o próprio recibo dentro do objeto que existe para provar que ele não
+ * faz isso.
+ *
+ * Quem escreve esse campo no banco é o armazém do laboratório
+ * (`persistSimulationRun`), que o reimpõe DEPOIS do que o chamador anexou — a
+ * porta não consegue gravá-lo. Então ele pode ser LIDO de volta, e é isso que
+ * esta função faz: devolve o que a linha diz, não o que a porta gostaria que ela
+ * dissesse. `null` = a linha não declarou nada, que não é o mesmo que `false`.
+ */
+export function runtimeTocadoDaLinha(linha: LinhaDeRodadaLida): boolean | null {
+  if (!linha.metadata) return null;
+  try {
+    const bruto = JSON.parse(linha.metadata) as { runtimeTouched?: unknown };
+    return typeof bruto?.runtimeTouched === "boolean" ? bruto.runtimeTouched : null;
+  } catch {
+    return null;
+  }
+}

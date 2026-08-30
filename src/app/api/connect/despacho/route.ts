@@ -22,16 +22,28 @@
  * 1. SEGREDO PRÓPRIO E ÚNICO (`DIOLI_CONNECT_SECRET`), conferido em tempo
  *    constante. Sem ele configurado a porta responde **503 e permanece
  *    fechada**; ⛔ `ADMIN_SECRET` não abre nada aqui (ADR-003). Ver `porta.ts`.
- * 2. SANDBOX. `assertSimulationSafeMode()` roda ANTES do agente e LANÇA se
- *    qualquer efeito colateral estiver ligado — envio, pagamento, pedido.
+ * 2. CONTRATO DO LABORATÓRIO. `assertSimulationSafeMode()` roda ANTES do agente
+ *    e confere que as seis capacidades do laboratório continuam desligadas NO
+ *    CONTRATO congelado. ⚠️ Ela **não lê o ambiente** e não pode falhar por
+ *    causa dele — o comentário que dizia isso aqui era falso (achado B-1) e a
+ *    promessa foi movida para a trava 9, que mede.
  * 3. MODO e 4. SINTÉTICO. `modo: "homologacao"` e `sintetico: true`, literais,
  *    sem padrão e sem normalização. Ver `contrato.ts`.
  * 5. AUTORIDADE. `de` tem que ser um papel da lista fechada; `para` tem que ser
  *    o Agente Gerente cadastrado.
  * 6. AGENTE. Lista de um: só `waiter`, o único que executa sem chave de IA.
  * 7. AÇÃO. Lista de três: `receber`, `responder`, `iniciar` — sem padrão.
- * 8. ⭐ O DOMÍNIO OPERACIONAL NÃO TEM ENTRADA. `restaurantId`, `orderId`,
- *    `telefone` e companhia são recusa nomeada, não campo ignorado.
+ * 8. ⭐ ALLOWLIST DE CORPO. Só os dez campos que esta porta consome atravessam;
+ *    qualquer outro é recusa NOMEADA — `restaurantId` e companhia com a
+ *    explicação inteira, o resto com "não conheço este campo". Era uma denylist
+ *    de treze nomes, e a variante vizinha (`restaurant_id`, `tenantId`,
+ *    `email`) passava ignorada em silêncio (achado B-3).
+ * 9. ⭐ SENTINELA DE REDE. As saídas de rede são CONTADAS enquanto o agente
+ *    roda; contagem diferente de zero derruba para `nao_verificavel`. É aqui
+ *    que a promessa de "acionamento sem credencial e sem rede" vira número em
+ *    vez de frase. Ver `sentinela.ts`.
+ * 10. ⭐ O DONO DO FIO. Conversa aberta por um papel não é continuada por
+ *    outro, em nenhum dos verbos que emendam turno (achado B-4).
  *
  * ─── E A TRAVA CENTRAL, QUE É DE SAÍDA ─────────────────────────────────────
  *

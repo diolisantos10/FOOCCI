@@ -31,6 +31,26 @@
  * registro de caixa deste kit, ele fixa `entregue` no literal, e
  * `recusarCarimboIndevido()` **lança** se algum código futuro tentar escrever
  * outro estado. Guardrail 4 da casa: prompt é aviso; código é trava.
+ *
+ * ─── ⚠️ ONDE ESSA TRAVA VALE, E ONDE ELA É REDUNDANTE ──────────────────────
+ *
+ * Dito com precisão, porque a auditoria de 30/08/2026 pegou exatamente este
+ * formato de imprecisão em outro arquivo (achado B-1: um assert de uma constante
+ * contra si mesma, vendido como trava que "LANÇA se…"):
+ *
+ *   • A chamada de `recusarCarimboIndevido()` DENTRO de `carimboDeEntrega()` é
+ *     redundante por construção. O valor que ela confere acaba de ser lido da
+ *     constante uma linha acima; não existe entrada, ambiente ou estado que a
+ *     faça lançar ali. Ela é um cinto de segurança contra uma edição futura
+ *     daquelas duas linhas, e nada mais do que isso.
+ *
+ *   • A trava que PODE falhar é a função exportada, chamada sobre um valor que
+ *     não é o literal — e é assim que `despacho.ts` a usa, sobre o `estado` do
+ *     registro que está indo para o banco (onde `acionado` causaria o dano), e
+ *     é assim que o teste a exercita, passando outro estado de propósito.
+ *
+ * O que garante hoje que `acionado` não é gravado não é o assert: é não existir
+ * caminho que produza outro valor. O assert é o que cobra o dia em que existir.
  */
 
 /** Os quatro estados da caixa postal do Dioli Connect. */

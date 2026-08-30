@@ -80,6 +80,8 @@ import { CABECALHO_DO_SEGREDO } from "@/services/connect/porta";
 const SEGREDO = "segredo-do-dioli-connect-no-foocci";
 /** O segredo de OUTRA finalidade. Existe no ambiente — e não abre nada. */
 const SEGREDO_DO_ADMIN = "senha-antiga-do-painel-inteiro-da-empresa";
+/** Um fio com a forma que a porta cunha (achado B-5) e que não existe no banco. */
+const FIO_BEM_FORMADO = "connect:foocci:99999999-8888-4777-8666-555555555555";
 
 function pedir(corpo: unknown, cabecalhos: Record<string, string> = {}): NextRequest {
   return new NextRequest("http://localhost/api/connect/despacho", {
@@ -366,8 +368,10 @@ describe("os três verbos — receber, responder e iniciar", () => {
   });
 
   it('⭐ "responder" num fio que não existe no banco é RECUSA, não conversa nova', async () => {
+    // Um fio com a FORMA certa (ver B-5) e que simplesmente não existe: o ponto
+    // aqui é o "não tem turno gravado", e não a forma.
     const r = await POST(
-      pedir(corpoLimpo({ acao: "responder", fio: "connect:foocci:fio-que-nunca-existiu" }), autorizado),
+      pedir(corpoLimpo({ acao: "responder", fio: FIO_BEM_FORMADO }), autorizado),
     );
     expect(r.status).toBe(422);
     const corpo = await r.json();
@@ -470,11 +474,52 @@ describe("⭐ a prova é relida do banco, e o acionamento é grátis", () => {
     expect(corpo.prova.cenarios).toBeGreaterThan(0);
   });
 
-  it("nenhuma chave de IA foi usada, e o runtime não foi tocado", async () => {
+  /**
+   * ⭐⭐ O ACHADO B-2, VIRADO DO AVESSO.
+   *
+   * Estes dois campos eram literais escritos à mão DENTRO do bloco `prova`, que
+   * se declara `relido_do_banco: true`. O que este teste cobra agora é a
+   * separação: o que está em `prova` veio do banco, o que está em `medicao` foi
+   * medido aqui e diz isso na cara.
+   */
+  it("⭐ o `runtime_tocado` da prova veio dos METADADOS DA LINHA relida, não da porta", async () => {
     const r = await POST(pedir(corpoLimpo(), autorizado));
     const corpo = await r.json();
-    expect(corpo.prova.usou_ia).toBe(false);
+
+    expect(corpo.prova.relido_do_banco).toBe(true);
     expect(corpo.prova.runtime_tocado).toBe(false);
+
+    // E a prova de que veio de lá: é o mesmo valor que está gravado na linha, e
+    // quem o escreveu foi o armazém do laboratório, não esta porta.
+    const gravado = JSON.parse(String(memoria.runs[0]!.metadata));
+    expect(gravado.runtimeTouched).toBe(false);
+    expect(corpo.prova.runtime_tocado).toBe(gravado.runtimeTouched);
+
+    // O que NÃO é relido não mora mais no bloco que diz "relido do banco".
+    expect(corpo.prova.usou_ia).toBeUndefined();
+  });
+
+  it("⭐ o que foi MEDIDO mora em `medicao`, e o bloco declara que não é relido", async () => {
+    const r = await POST(pedir(corpoLimpo(), autorizado));
+    const corpo = await r.json();
+
+    expect(corpo.medicao.relido_do_banco).toBe(false);
+    expect(corpo.medicao.fonte).toMatch(/não lido do banco/i);
+    expect(corpo.medicao.usou_ia).toBe(false);
+    expect(corpo.medicao.cenarios_com_ia).toBe(0);
+    expect(corpo.medicao.runtime_tocado_declarado).toBe(false);
+  });
+
+  it("⭐ e a rede foi CONTADA durante o acionamento: zero chamadas, com o canal medido", async () => {
+    const r = await POST(pedir(corpoLimpo(), autorizado));
+    const corpo = await r.json();
+
+    expect(corpo.medicao.rede.chamadas).toBe(0);
+    expect(corpo.medicao.rede.destinos).toEqual([]);
+    // O canal por onde sairia a chamada de IA foi realmente instrumentado — sem
+    // isto, "zero" seria só a ausência de medição.
+    expect(corpo.medicao.rede.canais).toContain("fetch");
+    expect(corpo.medicao.rede.fonte).toMatch(/medido no processo/i);
   });
 
   it("os cenários foram gravados junto — a rodada não é uma linha vazia", async () => {
