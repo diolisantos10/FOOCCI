@@ -7056,3 +7056,60 @@ model LeadAvaliacaoCriterio {
   @@index([criterio, nota])
   @@map("lead_avaliacao_criterios")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// O CONECTOR PADRÃO DO DIOLI CONNECT — o livro de pendências do produto.
+//
+// ⭐ É a tabela que faz a resposta do gerente achar a conversa certa do cliente.
+// Sem ela, `respostaDoGerente` continuaria sendo `null` para sempre: a decisão
+// chegaria ao produto e não teria onde pousar.
+//
+// ⛔ E repare no que NÃO tem aqui: nenhuma coluna de política, de decisão, de
+// deliberação. A memória de decisão mora na Control Room, e uma cópia local
+// seria a segunda verdade — ela divergiria do núcleo na primeira revogação, e a
+// divergência não viraria erro. Aqui só mora a correlação.
+//
+// ⚠️ É tabela, e não memória de processo, por causa de um corte específico: o
+// produto perde conexão com o Connect, o deploy reinicia, e a resposta chega
+// depois. Uma pendência em memória some no restart e o cliente vira órfão sem
+// ninguém perceber.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Uma consulta aberta ao Dioli Connect, esperando decisão.
+model ConnectPendencia {
+  id String @id @default(cuid())
+
+  /// `produto:conversa:sufixo`. Chave de correlação com o núcleo, e única.
+  protocolo String @unique
+  /// Qual produto. Redundante com o prefixo do protocolo de propósito: é a
+  /// coluna que se consulta, e a conferência das duas é o que recusa um
+  /// protocolo bem-formado vindo de outro lugar.
+  produto   String
+  /// A conversa DENTRO do produto. No Foocci, o `SiteLead.id`.
+  conversa  String
+  /// Qual canal/tela abriu. Ligação local: `sala-de-vendas`.
+  canal     String
+  /// Qual agente do produto abriu. Ligação local: `ta`.
+  agente    String
+
+  /// O fio da conversa interna com o gerente, quando a consulta saiu.
+  fio     String?
+  assunto String  @db.Text
+
+  /// PENDENTE | RESPONDIDA | ENCERRADA
+  estado String @default("PENDENTE")
+
+  /// Quando o cliente foi avisado de que a decisão está pendente. `null` = ele
+  /// ainda não sabe, e é isso que `deveAvisar` lê.
+  avisadoEm    DateTime?
+  respondidaEm DateTime?
+
+  criadaEm     DateTime @default(now())
+  atualizadaEm DateTime @updatedAt
+
+  /// A busca do retorno é sempre por protocolo (já é `@unique`); estes dois
+  /// índices servem à outra pergunta: o que este cliente está esperando.
+  @@index([conversa, estado])
+  @@index([estado, criadaEm])
+  @@map("connect_pendencias")
+}

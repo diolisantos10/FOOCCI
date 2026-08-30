@@ -88,10 +88,15 @@ const PUBLIC_PATHS: RegExp[] = [
   // fail-closed, ADMIN_SECRET proibido pela ADR-003) — e ele só pode barrar o
   // que chega até ele.
   //
-  // O caminho é EXATO nas duas: `/api/connect/qualquer-outra-coisa` continua
+  // O caminho é EXATO nas três: `/api/connect/qualquer-outra-coisa` continua
   // exigindo sessão, como sempre exigiu.
   /^\/api\/connect\/despacho$/,       // Dioli Connect — despacho (POST), fail-closed via DIOLI_CONNECT_SECRET
   /^\/api\/connect\/cadastro$/,       // Dioli Connect — cadastro do produto (GET, somente leitura), mesmo segredo
+  // ⭐ O caminho de VOLTA. Sem esta linha a resposta do gerente nunca entra na
+  // conversa do cliente: o núcleo recebe o 401 genérico do middleware, lê como
+  // "segredo errado", e o lead espera para sempre — que é exatamente o defeito
+  // de quatro dias que este conector existe para matar.
+  /^\/api\/connect\/retorno$/,        // Dioli Connect — a resposta do gerente voltando (POST), mesmo segredo
   // Área de ATENDIMENTO — a sala saiu de dentro do /admin em 26/08/2026.
   // "Público" aqui significa exatamente o mesmo que significa para o /admin: não
   // exige sessão de LOJISTA. O portão é o layout de `/comercial/(area)`, que

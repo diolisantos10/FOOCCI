@@ -65,6 +65,13 @@ import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
 import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
 import { consultarGerente } from "./consultarGerente";
+import {
+  atenderComOConector,
+  type DependenciasDoConector,
+  type ResultadoDoConector,
+} from "@/services/connect/conector/atendimento";
+import { ligacaoDoFoocci } from "@/services/connect/conector/foocci/ligacao";
+import type { ArmazemDePendencias } from "@/services/connect/conector/pendencias";
 import { foraDaAlcadaNaMensagem } from "../precos";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
@@ -114,8 +121,29 @@ export type ResultadoDoTurno =
    * `entregue` diz se ela chegou a SAIR. Falso é o estado normal enquanto o dono
    * não ligar a entrega — e a distinção existe porque "o TA respondeu" e "o
    * cliente recebeu" são coisas diferentes que pareciam a mesma.
+   *
+   * ⚠️ `porPolitica: false` é escrito, e não omitido, para que as duas formas de
+   * "ele falou" sejam separáveis em código — quem lê `resposta` precisa saber
+   * que está no ramo em que ela existe.
    */
-  | { falou: true; mensagemId: string; resposta: FalaFinal; entregue: boolean }
+  | { falou: true; porPolitica: false; mensagemId: string; resposta: FalaFinal; entregue: boolean }
+  /**
+   * ⭐ PASSO 3: ele respondeu SOZINHO, por uma política que a empresa já tinha
+   * decidido — e **não chamou ninguém**.
+   *
+   * É variante à parte, e não um campo a mais na de cima, porque o que saiu para
+   * o cliente **não é** `resposta.texto`: é o texto da política, que veio do
+   * núcleo. Enfiar as duas no mesmo formato faria a auditoria contar como fala
+   * composta pelo modelo uma frase que o modelo não escreveu.
+   */
+  | {
+      falou: true;
+      porPolitica: true;
+      politicaId: string;
+      mensagemId: string | null;
+      texto: string;
+      entregue: boolean;
+    }
   /** Ele parou e chamou gente. Não há resposta de venda a enviar. */
   | { falou: false; chamouGente: true; handoffId: string; motivo: string }
   /** Ele calou, e o motivo é sempre nomeado. */
@@ -126,6 +154,12 @@ export interface PedidoDeTurno {
   /** O que o cliente acabou de escrever. */
   mensagem: string;
   agora?: Date;
+  /**
+   * Injetável **só para o teste**. No caminho de produção nada disto é passado:
+   * o `fetch` é o do runtime, o ambiente é o `process.env`, o armazém é a
+   * tabela. Está aqui para que o passo 2 seja provável sem rede e sem Postgres.
+   */
+  conector?: DependenciasDoConector & { armazem?: ArmazemDePendencias };
 }
 
 /**
@@ -344,29 +378,88 @@ async function executarTurno(
     // decidir, que é o que essa etiqueta quer dizer na fila.
     const motivoExplicito = r.handoff.motivo ?? "PEDIU_PROPOSTA";
 
-    // ── ⭐ 7a-i. A CONSULTA AO GERENTE, PELO DIOLI CONNECT ────────────────
+    // ── ⭐⭐ 7a-i. O CONECTOR PADRÃO — CONSULTA A POLÍTICA ANTES DE ESCALAR ─
     //
-    // Aqui é onde "vou chamar o gerente" deixa de ser uma frase na mensagem e
-    // vira uma chamada. Ver `consultarGerente.ts` — inclusive para o que ela
-    // NÃO consegue: a porta entrega e não colhe resposta.
+    // Este é o passo que o PR #178 não deu. Lá, todo assunto fora da alçada
+    // subia ao gerente — **inclusive quando a empresa já tinha decidido aquilo
+    // na semana passada**. O gerente virava pombo-correio da própria decisão,
+    // uma vez por cliente.
     //
-    // ⚠️ E ela roda ANTES de `passarParaGente` de propósito, para que o
-    // resultado — sucesso OU falha — entre no dossiê que a fila vai ler. Um
-    // dossiê que não diz se o gerente foi acionado faz a pessoa da fila acionar
-    // de novo, ou pior, achar que já foi.
-    const consulta =
+    // `atenderComOConector` faz, nesta ordem: consulta a política no núcleo; se
+    // houver uma **válida** (viva, vigente, e que valha para ESTE cliente),
+    // responde agora e não escala; não havendo, escala pelo caminho abaixo,
+    // grava a pendência que faz a resposta voltar, e **avisa o cliente** de que
+    // a decisão está pendente.
+    //
+    // ⛔ Nenhuma política é guardada aqui. A memória de decisão mora na Control
+    // Room; este produto só pergunta, recebe e entrega.
+    const conector =
       foraDaAlcada.length > 0
-        ? await consultarGerente({
-            foraDaAlcada,
-            caso: {
-              leadId: lead.id,
-              nome: lead.nome,
-              resumo: `O lead escreveu: "${pedido.mensagem}"`,
-              historico: (historico ?? []).map((t) => ({ deQuem: t.deQuem, texto: t.texto })),
-              oQueTrava: foraDaAlcada.map((f) => `${f.assunto}: ${f.motivo}`).join(" | "),
+        ? await atenderComOConector(
+            ligacaoDoFoocci(db, {
+              assinaUserId: assina,
+              armazem: pedido.conector?.armazem,
+            }),
+            {
+              conversa: lead.id,
+              // ⚠️ O id do lead, e nunca o telefone ou o e-mail. A pergunta que
+              // sai daqui não carrega dado pessoal: o núcleo precisa saber QUEM
+              // pergunta só para distinguir exceção de regra, e um identificador
+              // opaco resolve isso inteiro.
+              referenciaDoCliente: lead.id,
+              assuntos: foraDaAlcada,
+              pergunta: pedido.mensagem,
+              agora,
             },
-          })
+            // ── A ESCALADA É DO PRODUTO ───────────────────────────────────
+            //
+            // No Foocci ela é `consultarGerente`, pela porta do Dioli Connect,
+            // com o caso do lead junto — o mesmo caminho provado no PR #178. O
+            // conector não sabe o que é um lead; ele só precisa saber se abriu.
+            async ({ protocolo, politicaRecusada }) => {
+              const r = await consultarGerente({
+                protocolo,
+                foraDaAlcada,
+                caso: {
+                  leadId: lead.id,
+                  nome: lead.nome,
+                  resumo: `O lead escreveu: "${pedido.mensagem}"`,
+                  historico: (historico ?? []).map((t) => ({ deQuem: t.deQuem, texto: t.texto })),
+                  // ⚠️ Quando existia decisão anterior e ela NÃO valia (revogada,
+                  // exceção de outro cliente), isso vai escrito para o gerente.
+                  // A pergunta que ele recebe é outra quando já houve resposta.
+                  oQueTrava: [
+                    foraDaAlcada.map((f) => `${f.assunto}: ${f.motivo}`).join(" | "),
+                    politicaRecusada,
+                  ]
+                    .filter(Boolean)
+                    .join(" || "),
+                },
+              });
+              return r.consultado
+                ? { aberta: true, fio: r.fio, detalhe: r.paraODossie }
+                : { aberta: false, fio: null, detalhe: r.paraODossie };
+            },
+            pedido.conector,
+          )
         : null;
+
+    // ── ⭐ PASSO 3: havia política. O cliente já foi respondido, e ACABOU ───
+    //
+    // Sem escalada, sem fila, sem espera. É o caso que o CEO descreveu: "se
+    // houver resposta válida, ele responde ao cliente IMEDIATAMENTE".
+    if (conector?.respondeu) {
+      return {
+        falou: true,
+        porPolitica: true,
+        politicaId: conector.politicaId,
+        mensagemId: conector.mensagemId,
+        texto: conector.texto,
+        entregue: conector.entregue,
+      };
+    }
+
+    const consulta = resumoDaConsulta(conector);
 
     const h = await passarParaGente(db, {
       leadId: lead.id,
@@ -411,19 +504,32 @@ async function executarTurno(
       // pergunta errada, exatamente o que o cabeçalho deste arquivo proíbe.
       //
       // Nesse caso o texto é o aviso determinístico, curto e verdadeiro.
-      const texto = r.handoff.deve ? r.texto : AVISO_DE_QUE_VEM_GENTE;
+      //
+      // ── ⭐ E UMA VOZ SÓ, QUANDO O CONECTOR JÁ FALOU ──────────────────────
+      //
+      // O conector avisa o cliente de que a decisão está pendente, e esse aviso
+      // diz a mesma coisa que este: *alguém vai responder, você não precisa
+      // cobrar*. Mandar os dois seguidos entregaria duas frases quase iguais no
+      // mesmo minuto, e a segunda faria o agente parecer travado.
+      //
+      // ⚠️ A escolha é pular ESTE, e não o do conector: o do conector é o que
+      // corresponde a uma consulta REGISTRADA, com protocolo e conversa de
+      // volta. Este aqui é o chão de quando não houve consulta nenhuma.
+      if (!oConectorJaAvisou(conector)) {
+        const texto = r.handoff.deve ? r.texto : AVISO_DE_QUE_VEM_GENTE;
 
-      const avisoGravado = await registrarSaida(db, {
-        leadId: lead.id,
-        texto,
-        autor: "IA",
-        // Assina igual à fala de venda: o cliente acabou de conversar com
-        // "Agente Maria" e o aviso de que vem gente não pode chegar anônimo.
-        autorUserId: assina,
-        agora,
-      });
+        const avisoGravado = await registrarSaida(db, {
+          leadId: lead.id,
+          texto,
+          autor: "IA",
+          // Assina igual à fala de venda: o cliente acabou de conversar com
+          // "Agente Maria" e o aviso de que vem gente não pode chegar anônimo.
+          autorUserId: assina,
+          agora,
+        });
 
-      if (avisoGravado.ok) await entregarMensagem(db, avisoGravado.mensagemId);
+        if (avisoGravado.ok) await entregarMensagem(db, avisoGravado.mensagemId);
+      }
 
       return { falou: false, chamouGente: true, handoffId: h.handoffId, motivo: h.motivo };
     }
@@ -484,7 +590,30 @@ async function executarTurno(
   // e a fila do closer vazia para sempre.
   await qualificar(db, { leadId: lead.id, mensagem: pedido.mensagem, agora });
 
-  return { falou: true, mensagemId: gravada.mensagemId, resposta: r, entregue: entrega.entregue };
+  return {
+    falou: true,
+    porPolitica: false,
+    mensagemId: gravada.mensagemId,
+    resposta: r,
+    entregue: entrega.entregue,
+  };
+}
+
+/**
+ * O que o dossiê da fila precisa saber sobre a consulta — ou `null` quando não
+ * houve consulta nenhuma (nenhum assunto fora da alçada disparou).
+ *
+ * ⚠️ A frase vale nos dois desfechos, e é de propósito: um dossiê que não diz se
+ * o gerente foi acionado faz a pessoa da fila acionar de novo, ou pior, achar
+ * que já foi.
+ */
+function resumoDaConsulta(conector: ResultadoDoConector | null): { paraODossie: string } | null {
+  return conector ? { paraODossie: conector.paraORastro } : null;
+}
+
+/** O conector já avisou o cliente de que a decisão está pendente? */
+function oConectorJaAvisou(conector: ResultadoDoConector | null): boolean {
+  return !!conector && !conector.respondeu && conector.escalou && conector.avisouOCliente;
 }
 
 /**

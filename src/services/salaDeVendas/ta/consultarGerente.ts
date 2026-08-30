@@ -123,6 +123,18 @@ export type ResultadoDaConsulta =
     };
 
 export interface PedidoDeConsulta {
+  /**
+   * ⭐ O PROTOCOLO — e é ele que faz a resposta VOLTAR.
+   *
+   * Antes deste campo a consulta saía sem identidade: a decisão do gerente
+   * chegaria ao produto e não teria como saber de qual cliente ela era. É o
+   * campo que o núcleo devolve no `POST /api/connect/retorno`, e é por ele que
+   * o conector acha a conversa certa (`connect/conector/pendencias.ts`).
+   *
+   * Opcional só porque a consulta continua funcionando sem ele — mas sem ele
+   * ela é o que era no PR #178: um bilhete que sai e não volta.
+   */
+  protocolo?: string;
   /** O caso do lead, como o gerente precisa ler para decidir. */
   caso: CasoDoLead;
   /** Os assuntos que estão fora da alçada do agente, já com o motivo escrito. */
@@ -251,6 +263,12 @@ export async function consultarGerente(
     para: GERENTE_DO_PRODUTO,
     assunto: assuntoDaConsulta(pedido.foraDaAlcada),
     caso: pedido.caso,
+    // ⭐ O endereço de volta. Ver `PedidoDeConsulta.protocolo`.
+    //
+    // ⚠️ Vai como campo próprio, e não enfiado dentro da mensagem: a resposta
+    // precisa achar a conversa por comparação exata, e um protocolo que o outro
+    // lado tem que extrair de um parágrafo é um protocolo que um dia sai errado.
+    ...(pedido.protocolo ? { protocolo: pedido.protocolo } : {}),
   };
 
   const controle = new AbortController();
