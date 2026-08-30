@@ -1,0 +1,150 @@
+{
+  "produto": "Foocci",
+  "data": "2026-08-30",
+  "gerado_em_utc": "2026-08-30T11:35:00Z",
+  "assinado_por": "Diretor do Foocci",
+  "aviso": "null = NAO MEDIDO. 0 = medido e deu zero. Nenhum numero abaixo foi estimado, salvo onde diz ESTIMADO.",
+  "ficha_lida": false,
+  "ficha_observacao": "Nao alcanco o repositorio control_room. Montei pelas oito secoes nomeadas na chamada, igual a ontem.",
+
+  "saude": {
+    "app_no_ar": true,
+    "origem": "GET https://foocci.com.br/api/health as 11:07 UTC",
+    "db_status": "ok",
+    "commit_em_producao": "60c48c4e",
+    "uptime_segundos": 43726,
+    "ultimo_deploy_utc": "2026-08-29T22:58:00Z",
+    "requisicoes_24h": 22859,
+    "erros_5xx_24h": 5,
+    "erro_5xx_24h_pct": 0.0219,
+    "erros_4xx_24h": 63,
+    "origem_erros": "Railway http-error-rate, servico FOOCCI, janela 24h",
+    "ontem_erros_5xx_24h": 2,
+    "ontem_erro_5xx_24h_pct": 0.0056,
+    "ontem_requisicoes_24h": 35853,
+    "comparacao": "Taxa subiu de 0,0056% para 0,0219%. Os CINCO erros caem todos no balde de 12 minutos que comeca 01:24 UTC (857 req nesse balde) — o minuto exato em que o banco reiniciou para a atualizacao de seguranca. Fora desse balde, 45 baldes com ZERO erro. Origem: http-error-rate com 46 baldes sobre 11h.",
+    "indisponibilidade_do_banco_segundos": 70,
+    "origem_indisponibilidade": "deploy a70ecd3f: createdAt 01:24:54Z, log 'ready to accept connections' 01:26:04Z"
+  },
+
+  "cliente": {
+    "clientes_sem_resposta_hoje": null,
+    "motivo_null": "exige leitura do banco de producao; nao tenho credencial nem rota de contagem",
+    "templates_meta_aprovados": 84,
+    "templates_meta_por_status": {"APPROVED": 84},
+    "templates_ontem": "84 submetidos em 23/08, todos PENDING",
+    "origem_templates": "meta-raiox.yml run 33308216777, 30/08 11:09 UTC, lido da propria Graph API",
+    "limite_de_conversas_meta": "TIER_250",
+    "whatsapp_credencial_viva": true,
+    "whatsapp_qualidade_numero": "GREEN",
+    "whatsapp_estado": "CONNECTED · modo LIVE · verificacao VERIFIED",
+    "instagram_token_valido": false,
+    "instagram_expirou_em": "2026-08-24T23:00:00Z",
+    "instagram_ultimo_evento_recebido": "2026-07-23T12:23:20Z",
+    "instagram_webhook_inscrito": false,
+    "instagram_dias_de_vida_do_token": 0,
+    "origem_instagram": "meta-raiox.yml run 33308216777, bloco 5",
+    "crm_teto_de_audiencia_confirmado_em_producao": 500,
+    "crm_campanhas_lidas": 17,
+    "crm_campanhas_na_parede": 16,
+    "origem_crm": "diagnostico-crm-instagram.yml run 33308217860, 30/08 11:09 UTC: 16 campanhas com 'audiencia: total 500 · novos elegiveis 500'; a 17a ('Cliente quente esfriando') tem audiencia 16 e esta ACTIVE, barrada so pela janela de horario",
+    "retorno_automatico_da_ia_ligado": false,
+    "origem_retorno": "sem mudanca de codigo no caminho desde 28/08; ver secao qualidade"
+  },
+
+  "produtividade": {
+    "prs_mergeados_24h": 1,
+    "lista_mergeados": ["#176 CRM nao fala por cima de pedido em andamento"],
+    "mergeado_por_mim": 0,
+    "observacao_merge": "O #176 foi produzido por outra sessao, autorizado pelo Diretor Geral. Eu nao mergeei nada nas 24h.",
+    "prs_abertos_mergeaveis": 4,
+    "lista_abertos": ["#169 financeiro", "#170 medidor de custo de IA", "#175 diagnostico CRM", "#132 sonda de suporte (aberto desde 15/08)"],
+    "prs_abertos_que_nunca_mergeiam": 1,
+    "observacao_abertos": "Ontem reportei 3 abertos e eram 4: o #132 esta aberto desde 15/08 e eu nao o contei. Numero de hoje conferido em list_pull_requests.",
+    "origem": "GitHub list_pull_requests as 11:12 UTC e git log origin/claude/remove-legacy-runner-q8iXa"
+  },
+
+  "qualidade": {
+    "suite_total": null,
+    "suite_falhando": null,
+    "tsc_limpo": null,
+    "motivo_null_qualidade": "medicao despachada ao agente `qualidade` sobre o commit de producao; nao voltou ate o fechamento das 11h35",
+    "ontem_suite_total": 7538,
+    "ontem_suite_falhando": 0,
+    "mutacoes_rodadas_24h_por_mim": 0,
+    "mutacoes_declaradas_no_176": 8,
+    "origem_mutacoes": "corpo do commit 60c48c4e. NAO conferi essas 8 — sao declaracao de outra sessao, nao medicao minha."
+  },
+
+  "dinheiro": {
+    "infra_railway_foocci_usd_mes": 20.65,
+    "infra_railway_casa_usd_mes": 40.99,
+    "origem_infra": "metrica x tarifa publicada, medido 2026-08-28",
+    "confianca_infra": "ESTIMADO",
+    "custo_novo_da_copia_diaria_usd_mes": null,
+    "motivo_null_copia": "o agendamento apareceu hoje e eu nao sei quem o criou nem com que tamanho ele vai cobrar; medir exige a fatura fechar",
+    "receita_mrr": null,
+    "assinantes_ativos": null,
+    "custo_ia_mes": null,
+    "saldo_openai": null,
+    "saldo_anthropic": null,
+    "motivo_null_dinheiro": "receita, assinantes e custo de IA exigem banco de producao. Medidor de IA pronto no PR #170, nao mergeado. Saldo de credito pre-pago nao tem vigia — ver docs/financeiro-foocci.md secao 9."
+  },
+
+  "risco": {
+    "cve_id": "CVE-2026-15741",
+    "cve_aplicado": true,
+    "cve_aplicado_em_utc": "2026-08-30T01:24:54Z",
+    "cve_versao_antes": "18.4",
+    "cve_versao_depois": "18.6",
+    "cve_aviso_ainda_presente": false,
+    "origem_cve": "deploy a70ecd3f reason=autoupdate, SUCCESS 01:26:06Z; log 'starting PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2)'; remediationNotice=null nos DOIS bancos as 11:07 UTC",
+    "dados_intactos": true,
+    "origem_dados": "disco 0,854900736 GB as 11:07 (min 0,852467712 / max 0,855629824 em 48h — cresceu, nunca caiu); health db=ok; log do banco: redo 0/DB7AF6D8 -> 0/DB90CFC8 em 0,13s, checkpoint completo, 'database system is ready to accept connections'",
+    "desligamento_foi_limpo": false,
+    "observacao_desligamento": "O log diz 'database system was not properly shut down; automatic recovery in progress'. A recuperacao automatica funcionou. Se nao tivesse funcionado, nao havia copia FORA do volume para voltar.",
+    "agendamento_de_copia": true,
+    "agendamento_criado_em_utc": "2026-08-29T21:23:37Z",
+    "agendamento_tipo": "DAILY",
+    "agendamento_retencao_dias": 6,
+    "agendamento_criado_por": null,
+    "motivo_null_autor": "o comando 'railway postgres backup schedule list' devolve tipo, nome, data e retencao — nao devolve autor. Nao fui eu.",
+    "ontem_agendamento_de_copia": false,
+    "pitr_ligado": false,
+    "bucket_ligado": false,
+    "origem_backup": "workflow copia-de-seguranca acao=conferir, run 33308166680, 30/08 11:08 UTC: 'Status: disabled', 'Bucket wired: no', 'DAILY Daily 2026-08-29T21:23:37.116+00:00 518400s'",
+    "copias_ficam_no_mesmo_volume": true,
+    "observacao_copia": "O agendamento cobre 'alguem apagou uma tabela' (6 dias de copias diarias em vez de 1 copia manual). NAO cobre 'o volume se perdeu' — sem bucket, as copias moram no mesmo disco do banco. O risco que subiu ao CEO continua aberto.",
+    "bancos_expostos_na_internet": 2,
+    "instagram_do_sushi_cazza_fora_do_ar": true
+  },
+
+  "bloqueio_do_ceo": {
+    "itens": 7,
+    "lista": [
+      "guardar copia dos dados fora do sistema (R$ 2/mes) — segue aberto, e o agendamento de ontem NAO resolve",
+      "reconectar o Instagram do Sushi Cazza — NOVO hoje; so o dono reconecta, com login pessoal",
+      "construir porta do Instagram para o WhatsApp",
+      "retomar custo por restaurante antes de 1 de setembro",
+      "cliente que nao paga: cortar ou nao",
+      "limite de pedidos publicado sem motor",
+      "IA volta sozinha depois do humano assumir"
+    ],
+    "pagina": "https://claude.ai/code/artifact/3979d19f-795f-469a-9a6d-072da20ce210",
+    "observacao_pagina": "A pagina cobre os seis com duas saidas cada. O item do Instagram entrou hoje e ainda nao esta nela."
+  },
+
+  "nao_medido": [
+    "Quantos clientes ficaram sem resposta hoje — exige banco. Terceiro dia seguido em null.",
+    "Receita, MRR e assinantes ativos — exige banco.",
+    "Custo de IA do mes — medidor pronto no PR #170, nao mergeado.",
+    "Saldo de credito da OpenAI e da Anthropic — ninguem vigia. Quando zerar, o atendimento para.",
+    "Suite de testes e tsc no commit de producao — despachado, nao voltou a tempo.",
+    "As 8 mutacoes declaradas no #176 — declaracao de outra sessao, nao conferida por mim.",
+    "Quem criou o agendamento de copia de ontem as 21:23 UTC — o comando nao devolve autor.",
+    "Se as 16 campanhas paradas em 500 voltam a mandar agora que os 84 templates foram aprovados — exige disparo real, que eu nao faco sem ordem.",
+    "Prova de RESTAURACAO de qualquer copia — o restore e in-place e sobrescreve o destino.",
+    "O que tem dentro do Postgres-76OG — 0,35 GB, trafego zero, exposto na internet, conteudo desconhecido.",
+    "Se o Postgres-76OG tambem ganhou agendamento de copia — conferi so o banco vivo."
+  ]
+}
