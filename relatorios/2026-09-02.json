@@ -1,0 +1,157 @@
+{
+  "produto": "Foocci",
+  "data": "2026-09-02",
+  "gerado_em_utc": "2026-09-02T11:40:00Z",
+  "assinado_por": "Diretor do Foocci",
+  "aviso": "null = NAO MEDIDO. 0 = medido e deu zero.",
+  "ficha_lida": false,
+  "ficha_observacao": "Nao alcanco o repositorio control_room. Montei pelas oito secoes nomeadas na chamada.",
+
+  "relatorios_ausentes": {
+    "dias": ["2026-08-31", "2026-09-01"],
+    "motivo": "A sessao caiu no limite semanal de uso enquanto eu media o dia 31, e ficou parada ate hoje. Os dois dias entram no painel como AUSENTE e a falha e minha, nao do produto.",
+    "medicoes_do_dia_31_que_chegaram_a_ser_feitas": {
+      "requisicoes_24h": 29646,
+      "erros_5xx_24h": 0,
+      "erros_4xx_24h": 217,
+      "disco_postgres_gb": 0.855515136,
+      "commit_em_producao": "51b62053",
+      "origem": "Railway http-error-rate e get-service-metrics, 2026-08-31 11:14 UTC"
+    }
+  },
+
+  "saude": {
+    "app_no_ar": true,
+    "origem": "GET https://foocci.com.br/api/health as 11:10 UTC",
+    "db_status": "ok",
+    "commit_em_producao": "51b62053",
+    "uptime_segundos": 214418,
+    "ultimo_deploy_utc": "2026-08-30T23:37:00Z",
+    "dias_sem_deploy": 2.5,
+    "requisicoes_24h": 18291,
+    "erros_5xx_24h": 16,
+    "erro_5xx_24h_pct": 0.0875,
+    "erros_4xx_24h": 71,
+    "origem_erros": "Railway http-error-rate, servico FOOCCI, janela 24h",
+    "janela_dos_erros_utc": "2026-09-01 21:45 as 23:00",
+    "origem_janela": "http-error-rate com 53 baldes sobre 14h: erros nos baldes 21:45 (2), 22:00 (6), 22:15 (6), 22:45 (2). Nos outros 49 baldes, zero.",
+    "houve_deploy_na_janela_dos_erros": false,
+    "serie_erro_5xx_pct": {"2026-08-29": 0.0056, "2026-08-30": 0.0219, "2026-08-31": 0.0, "2026-09-02": 0.0875},
+    "comparacao": "Em 31/08 foram ZERO erros em 29.646 requisicoes — medido, nao ausencia. Hoje sao 16 em 18.291. Piorou, e a piora tem hora marcada: o horario de jantar de ontem."
+  },
+
+  "incidente_do_dia": {
+    "quando_utc": "2026-09-01T22:29:17Z",
+    "restaurante": "cmp30upkp000198i4r8wpxdl1 (Sushi Cazza)",
+    "pedido": "cmtj8nfq315v8uvbvzzhnftl0",
+    "valor_reais": 131.63,
+    "pagamento_aprovado": true,
+    "pedido_confirmado": true,
+    "comanda_entrou_na_fila_de_impressao": false,
+    "erro_literal": "prisma.printJob.createMany() -> PostgresError 22021: invalid byte sequence for encoding \"UTF8\": 0x00",
+    "o_que_o_sistema_fez": "[PrintQueueService] nothing enqueued — stamp released so the order can print later. O carimbo foi solto para o pedido poder imprimir depois; ninguem foi avisado.",
+    "crm_registrou_a_receita": true,
+    "origem": "Railway deploy logs do servico FOOCCI, janela 22:29:10 a 22:29:30 UTC de 01/09",
+    "causa": "um byte nulo (0x00) num texto do pedido chegou ate a consulta. Postgres recusa 0x00 em texto.",
+    "existe_sanitizacao_de_0x00_no_caminho": false,
+    "origem_sanitizacao": "grep por 0x00, \\\\u0000, sanitize, stripNull em src/services/print/ e src/services/order/ no commit em producao: nenhuma ocorrencia.",
+    "severidade": "P1 — cliente pagou e a comanda pode nao ter chegado na cozinha, no unico restaurante pagante."
+  },
+
+  "cliente": {
+    "clientes_sem_resposta_hoje": null,
+    "motivo_null": "exige leitura do banco de producao; quarto dia em null",
+    "instagram_token_valido": false,
+    "instagram_dias_vencido": 8.5,
+    "instagram_ultimo_evento_recebido": "2026-07-23T12:23:20Z",
+    "instagram_webhook_inscrito": false,
+    "instagram_alguem_reconectou": false,
+    "origem_instagram": "meta-raiox.yml run 33623278893, 02/09 11:11 UTC",
+    "templates_meta_aprovados": null,
+    "motivo_null_templates": "o bloco de templates fica acima do corte do log que eu consegui ler hoje. Ultima medicao: 84 APPROVED em 30/08. NAO reconferido hoje.",
+    "crm_teto_de_audiencia": null,
+    "motivo_null_crm": "nao rodei o diagnostico de campanhas hoje. Ultima medicao: 16 de 17 campanhas com audiencia 500 em 30/08.",
+    "agente_solto_1_em_21": null,
+    "motivo_null_agente": "e um registro estatico de 25/08 em LiveStageHealth.ts:28-42, nao numero vivo. Nenhum codigo do caminho mudou desde entao — a branch esta parada ha 2,5 dias. Medir hoje exige o banco."
+  },
+
+  "produtividade": {
+    "commits_na_branch_de_deploy_desde_30_08": 0,
+    "prs_mergeados_desde_30_08": 0,
+    "origem": "git rev-list --count 51b62053..origin/claude/remove-legacy-runner-q8iXa = 0. Ultimo commit: 2026-08-30T23:33Z.",
+    "relatorios_entregues_no_prazo_ultimos_3_dias": 1,
+    "relatorios_devidos_ultimos_3_dias": 3,
+    "prs_abertos": null,
+    "motivo_null_prs": "nao reconferi hoje; em 30/08 eram 4 mergeaveis (#169, #170, #175, #132)"
+  },
+
+  "qualidade": {
+    "suite_total": null,
+    "suite_falhando": null,
+    "tsc_limpo": null,
+    "motivo_null_qualidade": "Rodei npx tsc --noEmit nesta copia e ele devolveu 40.221 erros espalhados por toda a arvore, inclusive prisma/seed.ts e playwright.config.ts. Isso e node_modules incompleto nesta maquina, nao regressao do produto: reportar 40 mil erros de tipo seria alarme falso. A suite nao rodou pelo mesmo motivo. Ultima medicao valida: 30/08, 7.651 testes / 0 falhando / tsc limpo.",
+    "ultima_medicao_valida_data": "2026-08-30",
+    "ultima_medicao_valida_testes": 7651,
+    "ultima_medicao_valida_falhando": 0
+  },
+
+  "dinheiro": {
+    "infra_railway_foocci_usd_mes": 20.65,
+    "confianca_infra": "ESTIMADO",
+    "origem_infra": "metrica x tarifa publicada, medido 2026-08-28. NAO reconferido desde entao.",
+    "receita_mrr": null,
+    "assinantes_ativos": null,
+    "custo_ia_mes": null,
+    "saldo_openai": null,
+    "saldo_anthropic": null,
+    "motivo_null_dinheiro": "exigem banco de producao. Medidor de IA pronto no PR #170, nao mergeado. Saldo de credito pre-pago continua sem vigia.",
+    "observacao": "O limite semanal de uso da conta estourou em 31/08 e so libera em 03/09 08:00 UTC. Isso NAO e o saldo da OpenAI nem da Anthropic — e o teto da assinatura que move estas sessoes. Mas e a primeira vez que um teto de credito parou trabalho do Foocci, e e exatamente o risco que esta escrito em docs/financeiro-foocci.md secao 9."
+  },
+
+  "risco": {
+    "cve_aplicado": true,
+    "cve_aplicado_em_utc": "2026-08-30T01:24:54Z",
+    "cve_versao_depois": "18.6",
+    "dados_intactos": true,
+    "origem_dados": "disco 0,858865664 GB as 11:10 (min 0,854581248 / max 0,858865664 em 72h — cresceu, nunca caiu); health db=ok",
+    "agendamento_de_copia_funcionando": true,
+    "copias_automaticas_ja_geradas": 3,
+    "copias_automaticas_lista": [
+      "Daily Schedule 2026-08-30T12:03:01Z — 26 MB — expira 2026-09-05",
+      "Daily Schedule 2026-08-31T12:03:01Z — 49 MB — expira 2026-09-06",
+      "Daily Schedule 2026-09-01T12:03:02Z — 52 MB — expira 2026-09-07"
+    ],
+    "copia_de_hoje_ja_saiu": false,
+    "observacao_copia_de_hoje": "a rotina roda 12:03 UTC e agora sao 11:11. Nao e falha.",
+    "copia_automatica_antes_do_patch": "Pre-Security-Patch Backup, 2026-08-30T01:24:54Z, 40 MB, expira 2026-09-29 — o proprio Railway tirou uma copia antes de aplicar a atualizacao. Eu nao sabia disso quando reportei o patch em 30/08.",
+    "correcao_de_numero_meu": "A copia manual-20260828-1547 tem 131 MB, nao 5 MB. Em 28/08 eu li o tamanho com a copia ainda em curso e publiquei o numero parcial.",
+    "origem_backup": "workflow copia-de-seguranca acao=listar-copias, run 33623275489, 02/09 11:11 UTC",
+    "pitr_ligado": null,
+    "motivo_null_pitr": "a acao 'listar-copias' nao mostra o estado do PITR. Ultima medicao: desligado e sem bucket, em 30/08. NAO reconferido hoje.",
+    "bancos_expostos_na_internet": 2,
+    "instagram_fora_do_ar": true
+  },
+
+  "bloqueio_do_ceo": {
+    "itens": 7,
+    "pagina": "https://claude.ai/code/artifact/3979d19f-795f-469a-9a6d-072da20ce210",
+    "nenhum_decidido_desde_29_08": true,
+    "mais_urgente_hoje": "reconectar o Instagram — ja sao 8,5 dias vencido, e so o dono consegue"
+  },
+
+  "nao_medido": [
+    "Se a comanda do pedido de R$ 131,63 saiu por algum outro caminho, e se a cozinha viu o pedido — exige banco e a fila de impressao.",
+    "Quantos OUTROS pedidos bateram no mesmo erro de byte nulo — exige banco.",
+    "Quais rotas responderam os 16 erros 5xx — li o log de aplicacao, nao o log HTTP da janela inteira.",
+    "Suite de testes e tsc — node_modules incompleto nesta copia; a medicao que fiz nao presta e nao vai subir como numero.",
+    "Quantos clientes ficaram sem resposta hoje — quarto dia em null.",
+    "Se os 84 templates seguem aprovados — nao reconferido hoje.",
+    "Se as campanhas seguem paradas na parede de 500 — nao reconferido hoje.",
+    "O 1-em-21 de hoje — registro estatico de 25/08.",
+    "Estado do PITR hoje — a acao que rodei nao mostra.",
+    "Receita, MRR, assinantes, custo de IA, saldo dos creditos — exigem banco.",
+    "PRs abertos hoje — nao reconferido.",
+    "As rotas novas do Dioli Connect (PR #177, 49 arquivos) — despachei auditoria de seguranca em 31/08 e ela morreu no limite de uso antes de medir. E porta nova exposta e continua sem auditoria minha.",
+    "O que tem dentro do Postgres-76OG — 0,35 GB, exposto na internet, conteudo desconhecido."
+  ]
+}
