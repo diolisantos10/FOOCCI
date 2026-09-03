@@ -1,0 +1,152 @@
+{
+  "produto": "Foocci",
+  "data": "2026-09-03",
+  "gerado_em_utc": "2026-09-03T11:20:00Z",
+  "assinado_por": "Diretor do Foocci",
+  "aviso": "null = NAO MEDIDO. 0 = medido e deu zero.",
+  "ficha_lida": false,
+  "ficha_observacao": "Nao alcanco o repositorio control_room. Montei pelas oito secoes nomeadas na chamada.",
+
+  "saude": {
+    "app_no_ar": true,
+    "origem": "GET https://foocci.com.br/api/health as 11:06 UTC",
+    "db_status": "ok",
+    "commit_em_producao": "51b62053",
+    "uptime_segundos": 300581,
+    "ultimo_deploy_utc": "2026-08-30T23:37:00Z",
+    "dias_sem_deploy": 3.5,
+    "requisicoes_24h": 21470,
+    "erros_5xx_24h": 0,
+    "erro_5xx_24h_pct": 0.0,
+    "erros_4xx_24h": 295,
+    "origem_erros": "Railway http-error-rate, servico FOOCCI, janela 24h, 25 baldes",
+    "serie_erro_5xx_pct": {"2026-08-29": 0.0056, "2026-08-30": 0.0219, "2026-08-31": 0.0, "2026-09-02": 0.0875, "2026-09-03": 0.0},
+    "comparacao": "Ontem foram 16 erros de servidor em 18.291 requisicoes. Hoje ZERO em 21.470 — medido, nao ausencia. Os 16 de ontem eram do horario de jantar de 01/09 e nao voltaram.",
+    "concentracao_de_4xx": "209 dos 295 erros 4xx cairam nos baldes de 09h e 10h UTC de hoje (124 e 85). Nos outros 23 baldes, entre 0 e 18. NAO investiguei o que sao."
+  },
+
+  "incidente_do_dia": {
+    "titulo": "A comanda que nao imprime nao foi um caso isolado: sao SETE em duas noites",
+    "ocorrencias_conhecidas": 7,
+    "todas_no_mesmo_restaurante": true,
+    "restaurante": "cmp30upkp000198i4r8wpxdl1 (Sushi Cazza)",
+    "carimbos_utc": [
+      "2026-09-01T22:29:17Z",
+      "2026-09-02T21:01:40Z",
+      "2026-09-02T21:19:10Z",
+      "2026-09-02T22:42:25Z",
+      "2026-09-02T22:43:25Z",
+      "2026-09-02T22:50:58Z",
+      "2026-09-03T00:05:02Z"
+    ],
+    "origem": "Railway get-logs do servico FOOCCI, filtro 22021, janela 02/09 11:30 a 03/09 11:10 (6 ocorrencias, sem truncamento) mais a de 01/09 ja reportada",
+    "ocorrencias_abertas_e_confirmadas": 2,
+    "pedidos_confirmados": [
+      {"pedido": "cmtj8nfq315v8uvbvzzhnftl0", "quando_utc": "2026-09-01T22:29:17Z", "valor_reais": 131.63},
+      {"pedido": "cmtkl05881pvcuvbv6j6jn7eo", "quando_utc": "2026-09-02T21:01:40Z", "valor_reais": 169.60}
+    ],
+    "erro_literal": "prisma.printJob.createMany() -> PostgresError 22021: invalid byte sequence for encoding \"UTF8\": 0x00",
+    "o_que_o_sistema_faz": "[PrintQueueService] nothing enqueued — stamp released so the order can print later. Ninguem e avisado.",
+    "crm_registrou_a_receita": true,
+    "existe_sanitizacao_de_0x00_no_caminho": false,
+    "origem_sanitizacao": "grep por 0x00, \\\\u0000, sanitize, stripNull em src/services/print/ e src/services/order/: nenhuma ocorrencia.",
+    "padrao": "Todas no horario de jantar, no unico restaurante pagante. Isso deixou de ser acidente e virou rotina noturna.",
+    "correcao_pronta_para_entrar": false,
+    "motivo": "aguardo autorizacao desde 02/09 — a ordem em vigor e nao abrir frente nova"
+  },
+
+  "cliente": {
+    "clientes_sem_resposta_hoje": null,
+    "motivo_null": "exige leitura do banco de producao; quinto dia em null",
+    "comandas_que_nao_entraram_na_fila_48h": 7,
+    "instagram_token_valido": false,
+    "instagram_dias_vencido": 9.5,
+    "instagram_alguem_reconectou": false,
+    "origem_instagram": "medido em 02/09 11:11 UTC; hoje NAO reconferido, e nenhum deploy ocorreu desde entao",
+    "templates_meta_aprovados": null,
+    "crm_teto_de_audiencia": null,
+    "agente_solto_1_em_21": null,
+    "motivo_null_agente": "registro estatico de 25/08 em LiveStageHealth.ts:28-42. A branch esta parada ha 3,5 dias, entao nenhuma condicao do funil mudou — mas isso e expectativa, nao medicao."
+  },
+
+  "produtividade": {
+    "commits_na_branch_de_deploy_desde_30_08": 0,
+    "prs_mergeados_desde_30_08": 0,
+    "dias_sem_um_commit": 3.5,
+    "origem": "git rev-list --count 51b62053..origin/claude/remove-legacy-runner-q8iXa = 0",
+    "diagnosticos_entregues_24h": 1,
+    "diagnostico_entregue": "alarme sonoro de pedido novo — problema medido, duas solucoes e prazo, entregue 02/09 23:40 UTC. Aguardando ok.",
+    "itens_meus_travados_por_falta_de_ok": 2,
+    "lista_travados": [
+      "conserto do byte nulo que derruba a comanda — pronto para entrar, meio bloco",
+      "alarme sonoro persistente com aceite explicito — diagnostico feito, um bloco"
+    ],
+    "prs_abertos": null,
+    "motivo_null_prs": "nao reconferido hoje; em 30/08 eram 4 mergeaveis"
+  },
+
+  "qualidade": {
+    "suite_total": null,
+    "suite_falhando": null,
+    "tsc_limpo": null,
+    "motivo_null_qualidade": "node_modules incompleto nesta copia — a medicao local devolve 40 mil erros que nao sao do produto. Nao subo alarme falso. Nenhum codigo mudou desde 30/08, entao a ultima medicao valida continua descrevendo o que esta em producao.",
+    "ultima_medicao_valida_data": "2026-08-30",
+    "ultima_medicao_valida_testes": 7651,
+    "ultima_medicao_valida_falhando": 0,
+    "codigo_mudou_desde_a_ultima_medicao": false
+  },
+
+  "dinheiro": {
+    "infra_railway_foocci_usd_mes": 20.65,
+    "confianca_infra": "ESTIMADO",
+    "origem_infra": "medido 2026-08-28, NAO reconferido",
+    "receita_mrr": null,
+    "assinantes_ativos": null,
+    "custo_ia_mes": null,
+    "saldo_openai": null,
+    "saldo_anthropic": null,
+    "receita_em_risco_medida": 301.23,
+    "origem_receita_em_risco": "soma dos DOIS pedidos que eu abri e confirmei (R$ 131,63 + R$ 169,60). Ha mais cinco ocorrencias cujo valor eu nao li — o total real e maior, e eu nao sei quanto."
+  },
+
+  "risco": {
+    "cve_aplicado": true,
+    "cve_versao_depois": "18.6",
+    "dados_intactos": true,
+    "origem_dados": "disco 0,8599552 GB as 11:07 (media 6h 0,8598, min 6h 0,8596, max 24h 0,8604 — cresceu); health db=ok",
+    "anomalia_de_metrica": "A janela de 24h reporta min=0 para o disco, em 1 amostra de 1.441. Na janela de 6h nao ha zero. Atribuo a uma leitura perdida, NAO a perda de dado — mas nao provei isso.",
+    "pitr_ligado": false,
+    "bucket_ligado": false,
+    "agendamento_de_copia": true,
+    "agendamento_retencao_dias": 6,
+    "origem_backup": "workflow copia-de-seguranca acao=conferir, run 33747919019, 03/09 11:07 UTC: 'Status: disabled', 'Bucket wired: no', 'DAILY Daily ... 518400s'",
+    "copia_de_hoje_ja_saiu": null,
+    "motivo_null_copia_hoje": "a rotina roda 12:03 UTC, depois do prazo deste relatorio. As tres anteriores (30/08, 31/08, 01/09) sairam.",
+    "copias_ficam_no_mesmo_volume": true,
+    "bancos_expostos_na_internet": 2,
+    "instagram_fora_do_ar": true
+  },
+
+  "bloqueio_do_ceo": {
+    "itens": 7,
+    "pagina": "https://claude.ai/code/artifact/3979d19f-795f-469a-9a6d-072da20ce210",
+    "nenhum_decidido_desde_29_08": true,
+    "dias_parados": 5,
+    "mais_urgente_hoje": "reconectar o Instagram — 9,5 dias vencido"
+  },
+
+  "nao_medido": [
+    "Se as SETE comandas foram impressas por outro caminho, e se a cozinha viu esses pedidos — exige banco.",
+    "O valor de cinco das sete: li dois. A receita em risco real e maior que os R$ 301,23 que consegui somar.",
+    "Se o defeito atinge outros restaurantes alem do Sushi Cazza — exige banco.",
+    "De onde vem o byte nulo (observacao do cliente? nome? item?) — exige ler o conteudo do pedido, e isso e dado de cliente.",
+    "O que sao os 209 erros 4xx de hoje entre 09h e 11h UTC — nao investiguei.",
+    "A amostra de disco com valor 0 na janela de 24h — atribui a leitura perdida, nao provei.",
+    "Suite e tsc — node_modules incompleto aqui. Nada mudou no codigo desde 30/08.",
+    "Quantos clientes ficaram sem resposta hoje — quinto dia em null.",
+    "Templates da Meta, parede das 500, 1-em-21 — nao reconferidos hoje.",
+    "Receita, MRR, assinantes, custo de IA, saldo dos creditos — exigem banco.",
+    "As rotas do Dioli Connect (PR #177) — continuam sem auditoria de seguranca minha.",
+    "O Postgres-76OG — 0,35 GB, exposto na internet, conteudo desconhecido."
+  ]
+}
