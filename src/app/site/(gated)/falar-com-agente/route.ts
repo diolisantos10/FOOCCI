@@ -50,14 +50,56 @@
  * Não manda mensagem. Quem escreve primeiro é sempre o visitante.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { DEMO_URL } from "@/components/marketing/config";
 
 /** Decidido a cada requisição: nada de resposta guardada em cache de borda. */
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<NextResponse> {
-  const destino = new URL(DEMO_URL, "https://foocci.com.br").toString();
+/**
+ * ── A MARCAÇÃO DE CAMPANHA ATRAVESSA O DESVIO (05/09/2026) ──────────────────
+ *
+ * Esta rota não recebia a requisição — a assinatura era `GET()`, sem parâmetro.
+ * O efeito era silencioso e caro: **toda marcação de campanha morria no primeiro
+ * salto**. Um convite mandado com `?utm_source=sdr` chegava ao formulário sem
+ * nada, o lead nascia sem origem, e a pergunta *"quantos vieram da abordagem?"*
+ * ficava sem resposta possível.
+ *
+ * Não é defeito de quem escreveu: a rota nasceu como desvio fixo, e marcação de
+ * campanha não existia ainda. Vira defeito no dia em que alguém manda 600
+ * convites e não consegue medir um.
+ *
+ * ── POR QUE SÓ OS PARÂMETROS DE CAMPANHA, E NÃO A QUERY INTEIRA ─────────────
+ *
+ * Repassar tudo faria desta porta um redirecionador aberto de parâmetros: quem
+ * montasse o endereço escolheria o que chega na próxima página. A lista fechada
+ * abaixo é o oposto de um `?` livre — o que não está nela não passa, e isso não
+ * quebra nada, porque o formulário só lê estes.
+ */
+const MARCACOES_DE_CAMPANHA = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  // Identificador de clique de anúncio, quando houver.
+  "gclid",
+  "fbclid",
+] as const;
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const alvo = new URL(DEMO_URL, "https://foocci.com.br");
+
+  for (const chave of MARCACOES_DE_CAMPANHA) {
+    const valor = req.nextUrl.searchParams.get(chave);
+    // Vazio não é marcação: `?utm_source=` sujaria o endereço e gravaria uma
+    // origem em branco, que depois seria lida como "veio de algum lugar".
+    if (valor && valor.trim() !== "") {
+      alvo.searchParams.set(chave, valor.trim().slice(0, 120));
+    }
+  }
+
+  const destino = alvo.toString();
 
   // 307 e não 308: o destino pode voltar a mudar — um desvio permanente fica
   // guardado no navegador e no índice de busca, e daria a quem clicou hoje um
