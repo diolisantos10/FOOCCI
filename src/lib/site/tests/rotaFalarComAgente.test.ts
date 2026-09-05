@@ -1,4 +1,16 @@
 /**
+ * ⚠️ ESTA REGRA MUDOU EM 05/09/2026, E A ANTIGA FICA ESCRITA ABAIXO.
+ *
+ * O CEO clicou no botão verde, caiu no formulário e mandou corrigir: o botão do
+ * WhatsApp tem que levar ao WhatsApp. Não é contradição com 27/08 — naquele dia
+ * existia UMA porta, e obrigar todo mundo ao formulário era o menos ruim. Hoje
+ * existem duas: o topo do site leva ao formulário, e o botão verde atende quem
+ * quer falar agora.
+ *
+ * O custo continua real e está registrado: pelo WhatsApp direto o lead chega sem
+ * nome, sem restaurante e sem cidade. Foi uma troca consciente, não um descuido.
+ */
+/**
  * A porta única do agente — e a promessa que ela não pode quebrar.
  *
  * ── A REGRA MUDOU EM 27/08/2026, E ESTE ARQUIVO MUDOU COM ELA ───────────────
@@ -22,7 +34,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { GET } from "@/app/site/(gated)/falar-com-agente/route";
-import { DEMO_URL } from "@/components/marketing/config";
+import { NUMERO_DE_VENDAS } from "@/lib/site/canalDeVendas";
 
 const original = process.env.FOOCCI_SALES_WHATSAPP_ATIVO;
 
@@ -36,8 +48,8 @@ describe("⭐ uma porta só — todo mundo passa pelo formulário", () => {
   it("leva ao FORMULÁRIO, e nunca direto ao WhatsApp", async () => {
     const res = await GET();
     const destino = res.headers.get("location") ?? "";
-    expect(destino).toContain(DEMO_URL);
-    expect(destino, "voltou a pular o formulário").not.toContain("wa.me");
+    expect(destino).toContain(`wa.me/${NUMERO_DE_VENDAS}`);
+    expect(destino, "a porta deixou de levar ao WhatsApp").toContain("wa.me");
   });
 
   it("⭐ e continua no formulário mesmo com o canal LIGADO", async () => {
@@ -53,8 +65,8 @@ describe("⭐ uma porta só — todo mundo passa pelo formulário", () => {
     expect(
       destino,
       "o canal ligado voltou a abrir atalho para o WhatsApp — o lead chega anônimo de novo",
-    ).not.toContain("wa.me");
-    expect(destino).toContain(DEMO_URL);
+    ).toContain("wa.me");
+    expect(destino).toContain(`wa.me/${NUMERO_DE_VENDAS}`);
   });
 
   it("o destino não depende de variável nenhuma — é o mesmo nos dois estados", async () => {

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS, ASSINAR_URL, ASSINAR_CTA_LABEL, AGENTE_URL } from "./config";
+import { LOGIN_URL, NAV_LINKS, ASSINAR_URL, ASSINAR_CTA_LABEL, DEMO_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
@@ -95,7 +95,7 @@ export function MarketingHeader() {
           {/* Primeiro na ordem de leitura, e o mais discreto dos três: é a porta
               de quem ainda não sabe se quer — não pode competir com Assinar. */}
           <Link
-            href={AGENTE_URL}
+            href={DEMO_URL}
             className={`inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS}`}
           >
             Fale com nossos consultores
@@ -140,7 +140,7 @@ export function MarketingHeader() {
             ))}
             <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
               <Link
-                href={AGENTE_URL}
+                href={DEMO_URL}
                 onClick={() => setOpen(false)}
                 className={`rounded-lg px-2 py-3 text-base font-semibold text-ink2 hover:bg-[#FAFAF8] ${FOCUS}`}
               >
