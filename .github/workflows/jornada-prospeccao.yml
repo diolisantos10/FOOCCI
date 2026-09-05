@@ -67,11 +67,45 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # ⭐ Este passo é metade do valor do workflow: se a migration não aplica,
-      # ela falha AQUI, e não no boot do contêiner de produção com o app fora do
-      # ar — que é exatamente a cicatriz que `start-production.sh` já carrega.
-      - name: Aplicar as migrations num banco vazio
-        run: npx prisma migrate deploy
+      # ── ⚠️ POR QUE NÃO É `migrate deploy` AQUI ────────────────────────────
+      #
+      # A primeira versão deste workflow usava `prisma migrate deploy` contra o
+      # banco vazio, e ele REPROVOU — não por culpa da prospecção, mas por um
+      # defeito herdado: a migration `20250506000000_saipos_integration` altera a
+      # tabela `orders` antes de qualquer migration criá-la, e morre com
+      # `relation "orders" does not exist`.
+      #
+      # Ou seja: **a cadeia de migrations deste repositório não reconstrói o
+      # banco do zero.** Em produção isso não aparece, porque lá as tabelas já
+      # existem e o histórico está marcado como aplicado — o defeito só acorda no
+      # dia em que alguém precisar recriar o banco, que é justamente o pior dia
+      # possível. Está registrado em `docs/pendencias.md` como frente separada;
+      # consertar 208 migrations herdadas não é escopo do P0 comercial.
+      #
+      # Aqui, então: o esquema é criado a partir do `schema.prisma` (`db push`),
+      # e logo depois as DUAS migrations desta obra são aplicadas à mão sobre um
+      # banco realista — que é o que de fato acontece no deploy, onde só as
+      # migrations novas rodam sobre um banco que já tem tudo.
+      - name: Criar o esquema a partir do schema.prisma
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: ⭐ Provar as migrations NOVAS sobre um banco realista
+        run: |
+          set -euo pipefail
+          # Desfaz o que o `db push` criou por conta das migrations novas, para
+          # que elas sejam aplicadas de verdade e não encontrem tudo pronto.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c '
+            DROP TABLE IF EXISTS "itens_de_prospeccao" CASCADE;
+            DROP TABLE IF EXISTS "lotes_de_prospeccao" CASCADE;
+            DROP TABLE IF EXISTS "prospeccao_config" CASCADE;
+            DROP TYPE  IF EXISTS "SituacaoDoItem";
+            DROP TYPE  IF EXISTS "SituacaoDoLote";
+          '
+          # 039000 é idempotente por construção (ADD VALUE IF NOT EXISTS): rodar
+          # com os valores já presentes prova o nome do tipo e a sintaxe.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905039000_origens_multicanal/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905040000_prospeccao_e_origens_multicanal/migration.sql
+          echo "✅ As duas migrations da prospecção aplicaram sobre banco realista."
 
       - name: Percorrer a Jornada 3
         run: npm run test:jornada

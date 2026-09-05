@@ -1,6 +1,39 @@
 # Pendências — o que está aberto
 
-> Última atualização: 23/08/2026.
+> Última atualização: 05/09/2026.
+
+## ⛔ 05/09/2026 — A cadeia de migrations NÃO reconstrói o banco do zero
+
+**Achado medido, não suposto**, durante a jornada de CI do Comercial P0: rodar
+`prisma migrate deploy` contra um Postgres 16 vazio **reprova** na migration
+`20250506000000_saipos_integration`, com `relation "orders" does not exist`. Ela
+faz `ALTER TABLE "orders"` antes de qualquer migration criar essa tabela.
+
+**O que isso significa, em uma frase:** hoje a empresa **não consegue recriar
+este banco a partir do código**.
+
+**Por que ninguém tinha percebido:** em produção o defeito é invisível. As
+tabelas já existem, o histórico está marcado como aplicado, e `migrate deploy`
+só roda as migrations novas. O defeito dorme até o único dia em que ele importa —
+o dia de restaurar, montar um ambiente de homologação, ou recriar do zero. O pior
+dia possível é exatamente quando ele acorda.
+
+**⚠️ E ele conversa com um risco já conhecido da casa:** o backup nunca foi
+provado por restauração. Um backup que só se restaura para um banco que não pode
+ser reconstruído a partir do código é meio backup.
+
+**O que NÃO está em risco:** o deploy normal, e as migrations do Comercial P0 —
+elas aplicam sobre banco existente, e isso é provado a cada PR pelo workflow
+`jornada-prospeccao.yml`.
+
+**Frente separada, fora do escopo do P0 comercial:** consertar 208 migrations
+herdadas não é trabalho de uma noite, e não é o que destrava receita. O caminho
+provável é uma migration de linha de base (`baseline`) que descreva o estado
+atual, aposentando a cadeia antiga para efeito de reconstrução.
+
+---
+
+> Última atualização anterior: 23/08/2026.
 
 
 > ⚠️ **Duas numerações de rodada convivem abaixo, e não é engano.** Em 23/08/2026
