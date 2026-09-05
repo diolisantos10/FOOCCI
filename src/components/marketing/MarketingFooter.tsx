@@ -108,10 +108,17 @@ export function MarketingFooter() {
             CNPJ 59.120.811/0001-79 · Rua Itápolis, 1167 — Pacaembu, São Paulo/SP,
             CEP 01245-000
           </p>
+          {/* ⚠️ `tel:` e NÃO `wa.me`, e a diferença não é estética.
+              O site tem UMA porta de WhatsApp — o desvio do servidor
+              (`AGENTE_URL`), que pode ser ligado e desligado sem build novo, e
+              que leva ao formulário para o lead não chegar anônimo. Um `wa.me`
+              solto aqui seria uma segunda porta, fora desse controle: ela
+              continuaria aberta no dia em que a primeira fosse fechada.
+              Aqui o número é IDENTIFICAÇÃO da empresa, não canal de venda. */}
           <p className="text-xs text-muted">
             Contato:{" "}
             <a
-              href="https://wa.me/5511943723316"
+              href="tel:+5511943723316"
               className="underline underline-offset-2 hover:text-ink2"
             >
               +55 11 94372-3316
