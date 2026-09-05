@@ -91,6 +91,22 @@ export function MarketingHeader() {
           ))}
         </nav>
 
+        {/* ── O CONVITE APARECE NO CELULAR TAMBÉM (05/09/2026, mesmo dia) ──
+            Ele nasceu dentro do bloco `hidden … lg:flex`, ou seja, **só no
+            desktop** — no celular ficava atrás do menu de três risquinhos.
+            O CEO procurou no telefone e não achou, e estava certo: o tráfego que
+            o SDR está trazendo hoje é inteiramente de celular, e botão atrás de
+            menu não existe para quem não abre o menu.
+
+            No celular ele vira texto curto ("Consultores") para caber ao lado do
+            hambúrguer sem espremer o logo. É o mesmo destino. */}
+        <Link
+          href={DEMO_URL}
+          className={`ml-auto mr-2 inline-flex items-center whitespace-nowrap rounded-xl px-2 py-2 text-[13px] font-semibold text-ink2 transition-colors hover:text-ink lg:hidden ${FOCUS}`}
+        >
+          Consultores
+        </Link>
+
         <div className="hidden items-center gap-3 lg:flex">
           {/* Primeiro na ordem de leitura, e o mais discreto dos três: é a porta
               de quem ainda não sabe se quer — não pode competir com Assinar. */}
