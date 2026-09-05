@@ -127,12 +127,13 @@ function dbDeImportacao(
         ),
       },
       siteLead: {
-        // O casamento agora é pela cauda de oito dígitos (`contains`), não por
-        // igualdade — o dublê imita isso para o teste medir o código real.
+        // O casamento é por igualdade contra as GRAFIAS possíveis do telefone
+        // (`in`), e não por sufixo — o dublê imita isso para o teste medir o
+        // código real.
         findFirst: vi.fn(async ({ where }: any) => {
-          const cauda = where.whatsappDigits?.endsWith ?? "";
+          const grafias: string[] = where.whatsappDigits?.in ?? [];
           const achado = Object.entries(leadsExistentes).find(([digitos]) =>
-            digitos.endsWith(cauda),
+            grafias.includes(digitos),
           );
           return achado ? { id: achado[1] } : null;
         }),
@@ -586,7 +587,7 @@ describe("o telefone em formato legado", () => {
     expect(fila.barrados[0]!.decisao.reason).toBe("LEAD_OPT_OUT");
   });
 
-  it("a busca é pelo FIM dos oito dígitos — nunca `contains`", async () => {
+  it("a busca enumera as grafias do telefone, e o DDD entra em todas", async () => {
     const { db } = dbDeFila(
       { outboundLigado: true, limiteDiario: 20, pausadoEm: null },
       [ITEM],
@@ -594,7 +595,16 @@ describe("o telefone em formato legado", () => {
     await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
 
     const where = db.siteLead.findFirst.mock.calls[0]![0].where;
-    expect(where.whatsappDigits).toEqual({ endsWith: "87654321" });
+    const grafias: string[] = where.whatsappDigits.in;
+
+    // O formato legado é procurado…
+    expect(grafias).toContain("55011987654321");
+    // …e o canônico também.
+    expect(grafias).toContain("5511987654321");
+    // ⭐ E nenhuma grafia perde o DDD: um número de outro DDD com os mesmos oito
+    // finais não pode casar. Foi o defeito que a jornada pegou contra Postgres.
+    expect(grafias.every((g) => g.includes("11987654321") || g.includes("1187654321"))).toBe(true);
+    expect(grafias).not.toContain("5521987654321");
   });
 });
 

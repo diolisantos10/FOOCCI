@@ -152,10 +152,12 @@ describe("Jornada 3 — prospecção, ponta a ponta", () => {
       },
     });
 
-    // E um segundo lead, de OUTRO DDD, com os mesmos oito dígitos finais: ele
-    // existe para provar que o casamento é pelo FIM da string. Com `contains`,
-    // a cauda casaria no meio de números alheios e este cenário grudaria o
-    // contato na carteira errada.
+    // E um segundo lead, de OUTRO DDD, com os mesmos oito dígitos finais. Ele é
+    // a armadilha: uma régua que compare só o fim do número trata os dois como a
+    // mesma pessoa e gruda o contato na carteira errada. Este lead foi criado
+    // DEPOIS do legado de propósito — quem casa por sufixo e ordena por mais
+    // recente escolhe justamente ele, e reprova aqui. Foi o que aconteceu na
+    // primeira execução desta jornada.
     await prisma.siteLead.create({
       data: {
         nome: "Outra pessoa, outro DDD, mesmos oito finais",
