@@ -87,11 +87,23 @@ const MARCACOES_DE_CAMPANHA = [
   "fbclid",
 ] as const;
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+/**
+ * ⚠️ `req` É OPCIONAL DE PROPÓSITO, e não por desleixo de tipo.
+ *
+ * O Next sempre passa a requisição em produção. Mas esta rota já era chamada
+ * como `GET()` — sem argumento — por testes que existiam antes desta mudança, e
+ * exigir o parâmetro os quebrou na primeira execução da CI.
+ *
+ * Podia-se ter reescrito aqueles testes. Não é o certo: eles descrevem o
+ * contrato de quem chamava, e mudar o contrato dos outros para acomodar uma
+ * adição minha é a forma cara de resolver. Sem requisição, a porta se comporta
+ * exatamente como antes — leva ao formulário, sem marcação.
+ */
+export async function GET(req?: NextRequest): Promise<NextResponse> {
   const alvo = new URL(DEMO_URL, "https://foocci.com.br");
 
   for (const chave of MARCACOES_DE_CAMPANHA) {
-    const valor = req.nextUrl.searchParams.get(chave);
+    const valor = req?.nextUrl?.searchParams?.get(chave) ?? null;
     // Vazio não é marcação: `?utm_source=` sujaria o endereço e gravaria uma
     // origem em branco, que depois seria lida como "veio de algum lugar".
     if (valor && valor.trim() !== "") {

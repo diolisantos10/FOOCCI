@@ -70,6 +70,15 @@ describe("a porta do WhatsApp carrega a marcação de campanha", () => {
     expect([...d.searchParams.keys()]).toHaveLength(0);
   });
 
+  it("⭐ chamada SEM requisição continua funcionando — não quebrei quem já chamava", async () => {
+    // A CI pegou isto na primeira execução: `src/lib/site/tests/` chama `GET()`
+    // sem argumento. Exigir o parâmetro quebrou testes que descrevem o contrato
+    // de quem já chamava. Sem requisição, a porta se comporta como antes.
+    const res = await GET();
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/site/precos");
+  });
+
   it("o desvio continua sendo 307 e sem cache", async () => {
     // 308 ficaria guardado no navegador: quem clicasse hoje ganharia um atalho
     // eterno para uma decisão que não é eterna.
