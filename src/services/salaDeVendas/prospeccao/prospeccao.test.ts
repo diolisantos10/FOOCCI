@@ -130,7 +130,7 @@ function dbDeImportacao(
         // O casamento agora é pela cauda de oito dígitos (`contains`), não por
         // igualdade — o dublê imita isso para o teste medir o código real.
         findFirst: vi.fn(async ({ where }: any) => {
-          const cauda = where.whatsappDigits?.contains ?? "";
+          const cauda = where.whatsappDigits?.endsWith ?? "";
           const achado = Object.entries(leadsExistentes).find(([digitos]) =>
             digitos.endsWith(cauda),
           );
@@ -586,7 +586,7 @@ describe("o telefone em formato legado", () => {
     expect(fila.barrados[0]!.decisao.reason).toBe("LEAD_OPT_OUT");
   });
 
-  it("a busca é pela cauda de oito dígitos, e não por igualdade", async () => {
+  it("a busca é pelo FIM dos oito dígitos — nunca `contains`", async () => {
     const { db } = dbDeFila(
       { outboundLigado: true, limiteDiario: 20, pausadoEm: null },
       [ITEM],
@@ -594,7 +594,7 @@ describe("o telefone em formato legado", () => {
     await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
 
     const where = db.siteLead.findFirst.mock.calls[0]![0].where;
-    expect(where.whatsappDigits).toEqual({ contains: "87654321" });
+    expect(where.whatsappDigits).toEqual({ endsWith: "87654321" });
   });
 });
 

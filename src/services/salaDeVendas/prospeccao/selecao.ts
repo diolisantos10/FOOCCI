@@ -342,10 +342,19 @@ export async function materializarLead(
     // Sem isto, uma falha aqui deixaria o item marcado como VIROU_LEAD sem lead
     // nenhum: um contato que sai da fila para sempre e nunca é abordado — some
     // em silêncio, que é a pior forma de perder alguém da lista.
-    await db.itemDeProspeccao.updateMany({
-      where: { id: item.id, leadId: null },
-      data: { situacao: "PENDENTE", processadoEm: null },
-    });
+    // A compensação vai num try próprio: se `db` for uma transação, a primeira
+    // falha já abortou tudo no Postgres e este update também falha — e o erro
+    // dele SUBSTITUIRIA o original, enterrando o diagnóstico verdadeiro sob um
+    // "current transaction is aborted".
+    try {
+      await db.itemDeProspeccao.updateMany({
+        where: { id: item.id, leadId: null },
+        data: { situacao: "PENDENTE", processadoEm: null },
+      });
+    } catch {
+      // Numa transação, o rollback já devolve o item. Fora dela, o item fica
+      // reservado e aparece na fila de exceções — nunca some calado.
+    }
     throw erro;
   }
 }
@@ -357,6 +366,24 @@ async function contarTentativas(db: Cliente, leadId: string): Promise<number> {
 
 /**
  * Abordagens de prospecção já feitas hoje, lidas do banco.
+ *
+ * ── ⚠️ ESTE CONTADOR AINDA É UMA APROXIMAÇÃO, E ISSO ESTÁ REGISTRADO ────────
+ *
+ * Ele conta LEADS com `fonte: LISTA_PROSPECCAO` contatados hoje, e não EVENTOS
+ * de abordagem. Enquanto nada envia, a diferença é teórica. No dia em que a
+ * entrega for ligada, ela vaza dos dois lados:
+ *
+ *   · o item que casou com um lead que JÁ EXISTIA na base (ramo `DUPLICADO`)
+ *     tem outra `fonte` — abordá-lo não consome teto, e é justamente a fatia
+ *     mais delicada, gente que já nos conhece;
+ *   · uma conversa de CRM com um lead de fonte `LISTA_PROSPECCAO` CONSOME teto
+ *     sem ninguém ter prospectado.
+ *
+ * **Teto só é teto quando conta o evento.** O conserto certo é o caminho de
+ * envio registrar a abordagem (um evento próprio, ou `lastContactedAt` gravado
+ * por ele) e este contador ler o evento. Está em `docs/pendencias.md`, e é
+ * pré-condição para ligar `FOOCCI_SDR_SEND_ENABLED` — não para mergear isto,
+ * que não envia nada.
  *
  * ── O DIA É O DE SÃO PAULO, NÃO O DO SERVIDOR ───────────────────────────────
  *

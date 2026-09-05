@@ -26,6 +26,18 @@
  * aqui trata dois números parecidos como a mesma pessoa e, no pior caso, deixa
  * de abordar alguém. Um falso negativo aborda quem pediu silêncio. Entre errar
  * para o lado de falar demais e para o lado de calar, cala-se.
+ *
+ * ── ⚠️ E É `endsWith`, NUNCA `contains` ─────────────────────────────────────
+ *
+ * A primeira versão usava `contains`, e a diferença não é de estilo. `contains`
+ * casa a cauda em QUALQUER posição: a cauda `11987654` de um telefone casa no
+ * MEIO de `5511987654321`, que é outra pessoa. O dano deixa de ser "não abordo
+ * alguém" e vira **grudar o contato prospectado na carteira de um cliente
+ * alheio** — silencioso, e sem conserto automático.
+ *
+ * Todos os formatos legados que motivaram esta função (zero da operadora, DDI,
+ * nono dígito) são resolvidos pelo FIM da string. `contains` era largueza sem
+ * nenhum ganho.
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
@@ -34,7 +46,16 @@ type Cliente = PrismaClient | Prisma.TransactionClient;
 
 /** Os oito finais, ou `null` quando o telefone não tem o que comparar. */
 export function caudaDoTelefone(digitos: string | null | undefined): string | null {
-  const cauda = (digitos ?? "").replace(/\D/g, "").slice(-8);
+  const bruto = digitos ?? "";
+
+  // As linhas sem telefone utilizável recebem `invalido:<uuid>` como chave. Um
+  // UUID tem dígitos: deixar passar faria a extração produzir oito números
+  // quaisquer e sair procurando lead por eles. Hoje é inalcançável (esses itens
+  // nascem RECUSADO e a fila só lê PENDENTE), e é justamente por isso que a
+  // blindagem é barata agora e cara depois que alguém mudar o filtro.
+  if (bruto.startsWith("invalido:")) return null;
+
+  const cauda = bruto.replace(/\D/g, "").slice(-8);
   return cauda.length === 8 ? cauda : null;
 }
 
@@ -58,7 +79,7 @@ export async function acharLeadPeloTelefone(
   if (!cauda) return null;
 
   return db.siteLead.findFirst({
-    where: { whatsappDigits: { contains: cauda } },
+    where: { whatsappDigits: { endsWith: cauda } },
     orderBy: { createdAt: "desc" },
     select: { id: true, optOutAt: true, lastContactedAt: true },
   });
@@ -73,7 +94,7 @@ export async function existeLeadParaTelefone(
   if (!cauda) return null;
 
   return db.siteLead.findFirst({
-    where: { whatsappDigits: { contains: cauda } },
+    where: { whatsappDigits: { endsWith: cauda } },
     orderBy: { createdAt: "desc" },
     select: { id: true },
   });

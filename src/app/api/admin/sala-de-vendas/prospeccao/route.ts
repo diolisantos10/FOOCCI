@@ -35,6 +35,19 @@ import { canalDeVendasPronto } from "@/services/foocci-sdr/FoocciSalesChannel";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Inteiro não-negativo vindo de corpo de requisição, ou `null`.
+ *
+ * ⚠️ `typeof NaN === "number"` e `typeof Infinity === "number"`. Sem esta
+ * função, `NaN <= 0` é `false` — a trava do teto zero seria CONTORNADA por um
+ * campo em branco — e `Math.max(0, NaN)` é `NaN`, que vai para uma coluna
+ * INTEGER e derruba a rota com 500. Um `2,5` digitado no campo tem o mesmo fim.
+ */
+function inteiroNaoNegativo(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return Math.max(0, Math.floor(v));
+}
+
 interface Corpo {
   acao?: "importar" | "liberar" | "pausarLote" | "interruptor";
   // importar
@@ -171,11 +184,11 @@ export async function POST(req: NextRequest) {
     // (0/0)" e concluiria que o produto está quebrado — quando na verdade ele
     // obedeceu. Recusar aqui é mais honesto que aceitar e não fazer nada.
     if (!pausando && c.ligado === true) {
+      const tetoInformado = inteiroNaoNegativo(c.limiteDiario);
       const tetoAtual =
-        typeof c.limiteDiario === "number"
-          ? c.limiteDiario
-          : ((await prisma.prospeccaoConfig.findUnique({ where: { id: "singleton" } }))
-              ?.limiteDiario ?? 0);
+        tetoInformado ??
+        ((await prisma.prospeccaoConfig.findUnique({ where: { id: "singleton" } }))
+          ?.limiteDiario ?? 0);
 
       if (tetoAtual <= 0) {
         return NextResponse.json(
@@ -198,9 +211,11 @@ export async function POST(req: NextRequest) {
       // alguém vai procurar depois para entender por que a casa parou.
       ...(typeof c.motivo === "string" ? { motivo: c.motivo } : pausando ? { motivo: null } : {}),
       atualizadoPor: quem,
-      ...(typeof c.limiteDiario === "number" ? { limiteDiario: Math.max(0, c.limiteDiario) } : {}),
-      ...(typeof c.horasEntreAbordagens === "number"
-        ? { horasEntreAbordagens: Math.max(0, c.horasEntreAbordagens) }
+      ...(inteiroNaoNegativo(c.limiteDiario) !== null
+        ? { limiteDiario: inteiroNaoNegativo(c.limiteDiario)! }
+        : {}),
+      ...(inteiroNaoNegativo(c.horasEntreAbordagens) !== null
+        ? { horasEntreAbordagens: inteiroNaoNegativo(c.horasEntreAbordagens)! }
         : {}),
     };
 

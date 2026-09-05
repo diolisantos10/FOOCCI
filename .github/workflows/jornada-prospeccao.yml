@@ -20,7 +20,8 @@ on:
       - "src/services/foocci-sdr/LeadContactSafety.ts"
       - "prisma/migrations/**"
       - "prisma/schema.prisma"
-      - "scripts/jornada-prospeccao.ts"
+      - "scripts/jornada-prospeccao.test.ts"
+      - "vitest.jornada.config.ts"
       - ".github/workflows/jornada-prospeccao.yml"
   workflow_dispatch:
 

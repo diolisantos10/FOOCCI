@@ -126,20 +126,70 @@ describe("Jornada 3 — prospecção, ponta a ponta", () => {
     expect(await prisma.siteLead.count()).toBe(1);
   });
 
-  it("6. ⭐ quem pediu silêncio não volta a ser liberado", async () => {
-    const lead = await prisma.siteLead.findFirst({ where: { fonte: "LISTA_PROSPECCAO" } });
-    expect(lead).not.toBeNull();
-
-    await prisma.siteLead.update({
-      where: { id: lead!.id },
-      data: { optOutAt: AGORA, optOutCanal: "jornada-ci" },
+  it("6. ⭐⭐ quem pediu SILÊNCIO em formato legado é barrado — a prova da correção", async () => {
+    // ── POR QUE ESTE TESTE FOI REESCRITO ────────────────────────────────────
+    //
+    // A primeira versão pegava o lead já materializado no passo 5 e conferia que
+    // ele não aparecia liberado. Ele NUNCA apareceria: o item dele saiu de
+    // PENDENTE, e a fila só lê PENDENTE. A asserção passava com o portão
+    // inteiro apagado — verde por ausência, exatamente o defeito que esta casa
+    // nomeia. Uma revisão adversarial pegou.
+    //
+    // Agora o teste monta o caso real: um lead com opt-out gravado no formato
+    // LEGADO (com o zero da operadora, como o backfill antigo gerava) e um item
+    // NOVO, pendente, com o mesmo telefone em formato canônico. Se o casamento
+    // voltar a ser por igualdade exata, este teste reprova.
+    const legado = await prisma.siteLead.create({
+      data: {
+        nome: "Quem pediu silêncio (cadastro antigo)",
+        whatsapp: "(11) 93333-4444",
+        // Formato legado: `55` + `0` da operadora + nacional. É o que o backfill
+        // de 20260805120000 produzia, e é o que a igualdade exata não acha.
+        whatsappDigits: "55011933334444",
+        fonte: "MANUAL",
+        optOutAt: new Date("2026-08-01T12:00:00Z"),
+        optOutCanal: "jornada-ci",
+      },
     });
 
-    // O item já materializado saiu de PENDENTE; o que importa é que, se voltasse
-    // a ser avaliado, o portão o barraria — e é isso que se mede aqui.
+    // E um segundo lead, de OUTRO DDD, com os mesmos oito dígitos finais: ele
+    // existe para provar que o casamento é pelo FIM da string. Com `contains`,
+    // a cauda casaria no meio de números alheios e este cenário grudaria o
+    // contato na carteira errada.
+    await prisma.siteLead.create({
+      data: {
+        nome: "Outra pessoa, outro DDD, mesmos oito finais",
+        whatsapp: "(21) 93333-4444",
+        whatsappDigits: "5521933334444",
+        fonte: "MANUAL",
+      },
+    });
+
+    const lote = await importarLote(prisma, {
+      nome: "Lote com contato que pediu silêncio",
+      proveniencia: "Lista sintética da jornada.",
+      criadoPor: "jornada-ci",
+      limiteDiario: 5,
+      linhas: [{ whatsapp: "11933334444", nome: "Mesmo telefone, formato canônico" }],
+    });
+
+    // A importação já tem que reconhecer que este contato JÁ EXISTE na base,
+    // mesmo com os dígitos gravados em outro formato.
+    expect(lote.jaEramLead).toBe(1);
+    expect(lote.aceitas).toBe(0);
+
+    await liberarLote(prisma, lote.loteId, "jornada-ci");
+
     const fila = await montarFilaDeProspeccao(prisma, { canalPronto: true, agora: AGORA });
-    const liberadoComOptOut = fila.liberados.some((c) => c.leadId === lead!.id);
-    expect(liberadoComOptOut).toBe(false);
+
+    // Ninguém deste lote pode sair liberado.
+    const liberadoIndevido = fila.liberados.some((c) => c.loteId === lote.loteId);
+    expect(liberadoIndevido).toBe(false);
+
+    // E o item tem que estar apontando para o lead CERTO — o que pediu silêncio,
+    // e não o homônimo de outro DDD.
+    const item = await prisma.itemDeProspeccao.findFirst({ where: { loteId: lote.loteId } });
+    expect(item?.leadId).toBe(legado.id);
   });
 
   it("7. o freio do lote esvazia a fila", async () => {
@@ -168,6 +218,10 @@ describe("Jornada 3 — prospecção, ponta a ponta", () => {
 
     const fila = await montarFilaDeProspeccao(prisma, { canalPronto: false, agora: AGORA });
     expect(fila.liberados).toHaveLength(0);
+
+    // Sem esta linha o `for` abaixo passaria com a lista vazia — e uma fila
+    // vazia não prova nada sobre o motivo aparecer.
+    expect(fila.barrados.length).toBeGreaterThan(0);
     for (const barrado of fila.barrados) {
       expect(barrado.decisao.detail.length).toBeGreaterThan(0);
     }

@@ -37,7 +37,8 @@ interface Decisao {
 interface Candidato {
   itemId: string;
   loteId: string;
-  leadId: string;
+  /** `null` enquanto o contato ainda não virou lead — e isso é o normal. */
+  leadId: string | null;
   nome: string | null;
   whatsapp: string;
   decisao: Decisao;
@@ -219,6 +220,7 @@ export function ProspeccaoClient() {
                   <input
                     type="number"
                     min={1}
+                    step={1}
                     value={teto}
                     onChange={(e) => setTeto(e.target.value)}
                     placeholder={String(interruptor.limiteDiario || "")}
