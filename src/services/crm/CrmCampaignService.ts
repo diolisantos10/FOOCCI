@@ -451,7 +451,17 @@ export function personalizeMessage(
   // The exact saved template is rendered — no AI prefix, no rewrite.
   return renderCrmMessage(
     template,
-    { name: customer.name, tier: customer.tier, lastOrderAt: customer.lastOrderAt },
+    {
+      name: customer.name,
+      tier: customer.tier,
+      lastOrderAt: customer.lastOrderAt,
+      id: customer.id,
+      // ⭐ O telefone é o que faz `{link_cardapio}` abrir JÁ IDENTIFICADO. Ele
+      // sempre esteve aqui em `AudienceCustomer` e não era repassado — por isso
+      // o cupom do CRM caía numa tela pedindo "informe seu WhatsApp", do lado de
+      // fora do cadastro que continha o próprio cupom.
+      phone: customer.phone,
+    },
     ctx,
   );
 }

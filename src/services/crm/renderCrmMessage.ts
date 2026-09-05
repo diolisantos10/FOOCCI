@@ -19,6 +19,7 @@
  */
 
 import { buildInstagramUrl, buildTikTokUrl, buildFacebookUrl, buildYouTubeUrl } from "@/lib/social";
+import { signWaToken } from "@/lib/wa-token";
 
 export interface RenderCustomer {
   name:         string;
@@ -26,6 +27,11 @@ export interface RenderCustomer {
   lastOrderAt?: string | null;
   /** Customer id — powers the personal referral link ({link_indicacao}). */
   id?:          string | null;
+  /**
+   * Telefone do destinatário — é o que faz `{link_cardapio}` abrir JÁ
+   * IDENTIFICADO. Sem ele o link continua saindo genérico, como antes.
+   */
+  phone?:       string | null;
 }
 
 export interface RenderContext {
@@ -129,6 +135,54 @@ function lastOrderLabel(dias: number | null): string {
  * Returns the resolved value map for a customer/context, in case a caller wants
  * to build a preview legend or validate which variables are unknown.
  */
+
+/**
+ * O LINK DO CARDÁPIO QUE O CLIENTE RECEBE — e por que ele leva um token.
+ *
+ * ── O DEFEITO, VISTO PELO CEO EM 05/09/2026 ─────────────────────────────────
+ *
+ * Ele recebeu do CRM "você ganhou 20% de desconto, só pelo nosso link" e clicou.
+ * Caiu numa tela pedindo **"informe seu WhatsApp para identificarmos seu
+ * cadastro"** — do lado de fora do próprio cadastro, com um cupom que era dele.
+ *
+ * O link do menu que o robô manda (`/r/{code}`) abre com "Olá, diego"; o link do
+ * CRM abria genérico. A diferença não era sorte: `/r/` gera um `waToken`
+ * assinado e redireciona para `/pedido/{slug}?waToken=…`, e **o CRM não gerava
+ * nenhum** — mandava a URL nua do cardápio.
+ *
+ * ── POR QUE ISSO É PIOR QUE UM LINK FEIO ────────────────────────────────────
+ *
+ * A campanha custa disparo e queima uma chance. Quem recebe um cupom e cai numa
+ * catraca pedindo telefone entende "não é pra mim" e fecha — e o cupom, que
+ * mora no cadastro, **nunca encontra o dono**. A casa paga para mandar e ainda
+ * perde o pedido.
+ *
+ * ── A REGRA ─────────────────────────────────────────────────────────────────
+ *
+ * Com telefone conhecido, o link identifica. Sem telefone, sai como sempre saiu
+ * — nada quebra para quem chama sem o dado.
+ *
+ * ⚠️ E NUNCA DERRUBA A MENSAGEM. Se a assinatura falhar (segredo ausente no
+ * ambiente, por exemplo), volta o link simples: uma campanha que não sai por
+ * causa de um token é pior que uma campanha com link genérico.
+ *
+ * ⚠️ O token vale 7 dias. Um cupom com validade maior que isso volta a pedir o
+ * telefone depois do prazo — melhor que hoje, em que pede sempre, e registrado
+ * aqui para ninguém descobrir isso por acaso.
+ */
+function linkDoCardapio(customer: RenderCustomer, ctx: RenderContext): string {
+  const fone = (customer.phone ?? "").trim();
+  if (!fone) return ctx.pedidoUrl;
+
+  try {
+    const waToken = signWaToken({ phone: fone, name: customer.name?.trim() || undefined });
+    const sep = ctx.pedidoUrl.includes("?") ? "&" : "?";
+    return `${ctx.pedidoUrl}${sep}waToken=${encodeURIComponent(waToken)}&src=crm`;
+  } catch {
+    return ctx.pedidoUrl;
+  }
+}
+
 export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext): Record<string, string> {
   const firstName = (customer.name ?? "").trim().split(/\s+/)[0] || (customer.name ?? "");
   const dias = daysSince(customer.lastOrderAt);
@@ -141,7 +195,7 @@ export function resolveCrmVariables(customer: RenderCustomer, ctx: RenderContext
   return {
     nome:                  firstName,
     restaurante:           ctx.restaurantName,
-    link_cardapio:         ctx.pedidoUrl,
+    link_cardapio:         linkDoCardapio(customer, ctx),
     link_avaliacao_google: ctx.googleReviewUrl ?? ctx.pedidoUrl,
     nivel:                 TIER_LABELS[customer.tier ?? ""] ?? (customer.tier ?? ""),
     dias_sem_pedir:        dias !== null ? String(dias) : "alguns",
