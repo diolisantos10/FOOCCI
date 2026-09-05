@@ -536,8 +536,43 @@ export class ScheduledCampaignRunnerService {
     }
 
     if (permanentlyFailedIds.size > 0) {
-      console.info("[CampaignRunner] falhas permanentes fora da fila — não adianta tentar de novo", {
-        campaignId, clientes: permanentlyFailedIds.size,
+      // ── ⚠️ "PERMANENTE" AQUI NÃO QUER DIZER "PERDIDO" ──────────────────────
+      //
+      // `saiDaFilaParaSempre` tira da fila automática tudo que não é
+      // `RETRYABLE_LATER`. Isso mistura duas coisas MUITO diferentes:
+      //
+      //   · NEVER_RETRY / PERMANENT      → não reenviar. Opt-out, não elegível.
+      //   · RETRYABLE_AFTER_FIX          → **volta a funcionar depois que alguém
+      //                                     conserta**: número recusado pela
+      //                                     Meta, erro de autenticação, mensagem
+      //                                     vazia. O rótulo desses no produto é
+      //                                     literalmente "Precisa corrigir".
+      //
+      // A frase antiga — "não adianta tentar de novo" — dizia ao operador para
+      // desistir dos dois. Medido em produção em 05/09/2026: duas campanhas
+      // repetindo a mesma linha a cada 20 minutos, 5 clientes, e nenhuma pista
+      // do motivo. Quem lesse o log concluiria que aqueles 5 estavam perdidos —
+      // quando parte deles pode ser um template vazio esperando uma correção de
+      // um minuto.
+      //
+      // Log que faz o dono desistir de receita recuperável é pior que log
+      // nenhum: o silêncio deixa a dúvida viva, e a frase errada mata a dúvida.
+      const porMotivo = new Map<string, number>();
+      let precisamDeConserto = 0;
+
+      for (const t of tentativasAnteriores) {
+        if (!permanentlyFailedIds.has(t.customerId)) continue;
+        const cls = classifyExecution(t);
+        porMotivo.set(cls.badge, (porMotivo.get(cls.badge) ?? 0) + 1);
+        if (cls.retryability === "RETRYABLE_AFTER_FIX") precisamDeConserto += 1;
+      }
+
+      console.info("[CampaignRunner] fora da fila automática", {
+        campaignId,
+        clientes: permanentlyFailedIds.size,
+        // O que muda a decisão de quem lê: quantos voltam com uma correção.
+        precisamDeConserto,
+        motivos: Object.fromEntries(porMotivo),
       });
     }
 
