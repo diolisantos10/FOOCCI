@@ -25,6 +25,15 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { COMERCIAL, ROTAS } from "@/lib/sala/rotas";
 
+/**
+ * Onde a senha de administração de fato abre uma porta.
+ *
+ * `/comercial/acessos` é um desvio permanente para `/admin/pessoas` — o
+ * endereço que foi dado por escrito a mais de uma pessoa e por isso continua
+ * respondendo. Apontar para ele mantém o link válido pelos dois caminhos.
+ */
+const ACESSOS_DA_EMPRESA = ROTAS.acessos;
+
 export function EntrarClient() {
   const router = useRouter();
   const [mostrarSenhaDaCasa, setMostrarSenhaDaCasa] = useState(false);
@@ -93,7 +102,27 @@ export function EntrarClient() {
       });
 
       if (r.ok) {
-        router.replace(COMERCIAL);
+        // ── ⚠️ NÃO MANDE PARA `/comercial` DAQUI. ELE VOLTA. ─────────────
+        //
+        // A senha de administração cria um crachá de ADMINISTRADOR. A moldura
+        // de `/comercial/(area)` lê `lerSessaoInterna()`, que enxerga **outro
+        // cookie** — o de pessoa. Sem ele, a moldura redireciona para esta
+        // mesma tela.
+        //
+        // O efeito, medido em 05/09/2026: quem clicava aqui digitava a senha
+        // certa, era aprovado pelo servidor, e **voltava para o login** — sem
+        // erro nenhum na tela, porque erro não houve. A porta prometia entrada
+        // e devolvia o visitante ao corredor.
+        //
+        // E não é caso de abrir a moldura para a senha da casa: o CEO fechou
+        // essa porta em 27/08 depois de ver o resultado — *"é uma tela sem
+        // nada, só com login e senha. Não tem que aparecer os menus"*. Uma sala
+        // cheia de abas em que nenhuma abre ensina que o sistema está quebrado.
+        //
+        // Onde a senha de administração VALE é em `/admin/pessoas`: é lá que
+        // ela concede acesso, e é de lá que sai o login de pessoa que abre a
+        // Comercial de verdade. Levar para lá é levar para onde a chave abre.
+        router.replace(ACESSOS_DA_EMPRESA);
         router.refresh();
         return;
       }
@@ -162,7 +191,7 @@ export function EntrarClient() {
               onClick={() => { setMostrarSenhaDaCasa(true); setErro(""); }}
               className="w-full text-[12.5px] text-muted underline underline-offset-2 hover:text-ink2"
             >
-              Entrar com a senha de administração
+              Sou o administrador — criar meu acesso
             </button>
             {/* ── A SAÍDA PARA O PRIMEIRO ACESSO ───────────────────────────
                 Desde que a moldura passou a exigir sessão de pessoa, quem
