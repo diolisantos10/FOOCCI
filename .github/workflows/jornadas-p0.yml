@@ -11,7 +11,7 @@
 # percorre importar → liberar → fila → materializar → opt-out → freio.
 #
 # ⚠️ Nenhuma mensagem sai: dados sintéticos, canal desligado, telefone de teste.
-name: Jornada 3 — prospecção ponta a ponta
+name: Jornadas do P0 — ponta a ponta contra Postgres
 
 on:
   pull_request:
@@ -21,17 +21,20 @@ on:
       - "prisma/migrations/**"
       - "prisma/schema.prisma"
       - "scripts/jornada-prospeccao.test.ts"
+      - "scripts/jornada-entradas.test.ts"
+      - "src/services/site/SiteLeadService.ts"
+      - "src/services/foocci-sdr/FoocciSalesInbound.ts"
       - "vitest.jornada.config.ts"
-      - ".github/workflows/jornada-prospeccao.yml"
+      - ".github/workflows/jornadas-p0.yml"
   workflow_dispatch:
 
 concurrency:
-  group: jornada-${{ github.ref }}
+  group: jornadas-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   jornada:
-    name: Jornada contra Postgres real
+    name: Jornadas contra Postgres real
     runs-on: ubuntu-latest
 
     services:
@@ -108,5 +111,5 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905040000_prospeccao_e_origens_multicanal/migration.sql
           echo "✅ As duas migrations da prospecção aplicaram sobre banco realista."
 
-      - name: Percorrer a Jornada 3
+      - name: Percorrer as Jornadas 1, 2 e 3
         run: npm run test:jornada

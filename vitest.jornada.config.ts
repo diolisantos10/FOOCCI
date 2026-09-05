@@ -16,7 +16,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["scripts/jornada-prospeccao.test.ts"],
+    include: ["scripts/jornada-*.test.ts"],
     // A jornada fala com Postgres a cada passo; o relógio da bateria unitária
     // seria apertado para ela.
     testTimeout: 60_000,
