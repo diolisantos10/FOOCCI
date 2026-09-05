@@ -88,6 +88,8 @@ export function ProspeccaoClient() {
   const [tentativa, setTentativa] = useState(0);
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Quantas abordagens por dia. Vazio até a tela ler o que está no banco. */
+  const [teto, setTeto] = useState<string>("");
 
   const recarregar = useCallback(() => setTentativa((t) => t + 1), []);
 
@@ -208,13 +210,35 @@ export function ProspeccaoClient() {
                 Pausar agora
               </button>
             ) : (
-              <button
-                disabled={ocupado}
-                onClick={() => agir({ acao: "interruptor", ligado: true })}
-                className="rounded-lg border border-line px-3 py-1.5 text-[13px] font-semibold text-ink disabled:opacity-50"
-              >
-                Ligar prospecção
-              </button>
+              <div className="flex items-center gap-2">
+                {/* O teto vem ANTES do botão, e não numa tela de configuração
+                    escondida: ligar sem dizer quantos é o gesto que produz uma
+                    prospecção ligada que não aborda ninguém. */}
+                <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                  <span>Máx./dia</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={teto}
+                    onChange={(e) => setTeto(e.target.value)}
+                    placeholder={String(interruptor.limiteDiario || "")}
+                    className="w-16 rounded-lg border border-line bg-canvas px-2 py-1 text-[13px] text-ink"
+                  />
+                </label>
+                <button
+                  disabled={ocupado}
+                  onClick={() =>
+                    agir({
+                      acao: "interruptor",
+                      ligado: true,
+                      ...(teto.trim() !== "" ? { limiteDiario: Number(teto) } : {}),
+                    })
+                  }
+                  className="rounded-lg border border-line px-3 py-1.5 text-[13px] font-semibold text-ink disabled:opacity-50"
+                >
+                  Ligar prospecção
+                </button>
+              </div>
             )}
           </div>
         </div>

@@ -350,6 +350,15 @@ export interface ProspeccaoSafetyInput
   baseLegalDeclarada: string | null;
   /** A prospecção está ligada, não pausada, e ainda cabe no teto do dia? */
   prospeccaoLiberada: boolean;
+  /**
+   * Descanso entre abordagens, quando o dono configurou um diferente do padrão.
+   *
+   * Existe porque o campo estava na tela e no banco e **ninguém lia**: o dono
+   * ajustava o número, salvava, e o portão continuava usando o valor fixo. Botão
+   * que não faz nada é pior que botão ausente — ele ensina que a configuração
+   * não vale.
+   */
+  descansoHoras?: number | null;
 }
 
 /**
@@ -437,11 +446,16 @@ export function avaliarAbordagemDeProspeccao(
     );
   }
   if (input.ultimoContatoEm) {
+    // O configurado manda; o padrão do desenho é a rede de segurança de quem
+    // nunca configurou. Zero é um valor legítimo ("sem descanso"), então a
+    // pergunta é sobre existir, não sobre ser verdadeiro.
+    const descanso =
+      typeof input.descansoHoras === "number" ? input.descansoHoras : REGRA.descansoHoras;
     const horas = (agora.getTime() - input.ultimoContatoEm.getTime()) / 3_600_000;
-    if (horas < REGRA.descansoHoras) {
+    if (horas < descanso) {
       return bloqueia(
         "DESCANSO_ATIVO",
-        `Falamos há ${Math.floor(horas)}h (descanso de ${REGRA.descansoHoras}h).`,
+        `Falamos há ${Math.floor(horas)}h (descanso de ${descanso}h).`,
       );
     }
   }

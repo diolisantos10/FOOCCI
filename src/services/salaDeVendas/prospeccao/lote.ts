@@ -19,6 +19,7 @@
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
@@ -48,6 +49,8 @@ export interface ResultadoDaImportacao {
   aceitas: number;
   /** Telefone repetido dentro da própria planilha. */
   repetidasNoArquivo: number;
+  /** Telefone que já está esperando abordagem em outro lote. */
+  repetidasEmOutroLote: number;
   /** Telefone que não é telefone. */
   invalidas: number;
   /** Já existe como lead na base — entra marcado, não vira carteira nova. */
@@ -84,8 +87,11 @@ export class ProvenienciaAusente extends Error {
  *
  *   1. **dentro do arquivo** — a mesma planilha costuma repetir a mesma loja em
  *      duas linhas; sem isto o mesmo telefone seria abordado duas vezes;
- *   2. **contra o próprio lote no banco** — reimportar o mesmo arquivo não pode
- *      duplicar, e a trava real é o índice único `(loteId, whatsappDigits)`;
+ *   2. **contra os outros lotes ainda pendentes** — reimportar a mesma planilha
+ *      cria um lote NOVO, então o índice único `(loteId, whatsappDigits)` não
+ *      pega nada entre importações. Sem a consulta explícita, o mesmo telefone
+ *      ficaria pendente em dois lotes e seria abordado duas vezes por pessoas
+ *      diferentes, cada uma achando que era a primeira;
  *   3. **contra a base de leads** — quem já é lead não vira carteira nova. Ele
  *      entra como `DUPLICADO`, com o `leadId` apontando para a carteira que já
  *      existe, e é justamente isso que impede dois donos para a mesma pessoa.
@@ -116,6 +122,7 @@ export async function importarLote(
   const vistos = new Set<string>();
   let aceitas = 0;
   let repetidasNoArquivo = 0;
+  let repetidasEmOutroLote = 0;
   let invalidas = 0;
   let jaEramLead = 0;
 
@@ -130,7 +137,7 @@ export async function importarLote(
           whatsapp: String(linha.whatsapp ?? ""),
           // Sem dígitos válidos não há chave; o id mantém a linha única e
           // rastreável sem fingir um telefone que não existe.
-          whatsappDigits: `invalido:${cryptoIdCurto()}`,
+          whatsappDigits: `invalido:${idUnicoDeLinhaInvalida()}`,
           empresa: texto(linha.empresa),
           cidade: texto(linha.cidade),
           estado: texto(linha.estado),
@@ -156,7 +163,17 @@ export async function importarLote(
       select: { id: true },
     });
 
+    // O mesmo telefone esperando abordagem em outro lote. Não é lead ainda, e
+    // por isso a busca acima não o encontra — mas abordar seria em duplicidade.
+    const pendenteEmOutroLote = leadExistente
+      ? null
+      : await db.itemDeProspeccao.findFirst({
+          where: { whatsappDigits: digitos, situacao: "PENDENTE" },
+          select: { id: true },
+        });
+
     if (leadExistente) jaEramLead += 1;
+    else if (pendenteEmOutroLote) repetidasEmOutroLote += 1;
     else aceitas += 1;
 
     await db.itemDeProspeccao.create({
@@ -169,10 +186,14 @@ export async function importarLote(
         cidade: texto(linha.cidade),
         estado: texto(linha.estado),
         tipo: texto(linha.tipo),
-        situacao: leadExistente ? "DUPLICADO" : "PENDENTE",
+        situacao: leadExistente || pendenteEmOutroLote ? "DUPLICADO" : "PENDENTE",
         leadId: leadExistente?.id ?? null,
-        motivo: leadExistente ? "Já existe como lead na base." : null,
-        processadoEm: leadExistente ? new Date() : null,
+        motivo: leadExistente
+          ? "Já existe como lead na base."
+          : pendenteEmOutroLote
+            ? "Já está pendente em outro lote de prospecção."
+            : null,
+        processadoEm: leadExistente || pendenteEmOutroLote ? new Date() : null,
       },
     });
   }
@@ -182,6 +203,7 @@ export async function importarLote(
     recebidas: pedido.linhas.length,
     aceitas,
     repetidasNoArquivo,
+    repetidasEmOutroLote,
     invalidas,
     jaEramLead,
   };
@@ -226,16 +248,28 @@ export async function liberarLote(
   return { ok: true };
 }
 
-/** Pausa imediata de um lote. Efeito na próxima seleção, sem deploy. */
+/**
+ * Pausa imediata de um lote. Efeito na próxima seleção, sem deploy.
+ *
+ * Devolve `{ok:false}` para lote inexistente em vez de deixar o P2025 do Prisma
+ * subir: um freio que responde 500 é um freio que a pessoa não sabe se pegou.
+ */
 export async function pausarLote(
   db: Cliente,
   loteId: string,
   quem: string,
-): Promise<void> {
+): Promise<{ ok: boolean; motivo?: string }> {
+  const existe = await db.loteDeProspeccao.findUnique({
+    where: { id: loteId },
+    select: { id: true },
+  });
+  if (!existe) return { ok: false, motivo: "Lote não encontrado." };
+
   await db.loteDeProspeccao.update({
     where: { id: loteId },
     data: { situacao: "PAUSADO", pausadoEm: new Date(), pausadoPor: quem },
   });
+  return { ok: true };
 }
 
 function texto(v: string | null | undefined): string | null {
@@ -243,7 +277,14 @@ function texto(v: string | null | undefined): string | null {
   return t === "" ? null : t;
 }
 
-/** Sufixo curto e único para linhas sem telefone utilizável. */
-function cryptoIdCurto(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+/**
+ * Sufixo único para linhas sem telefone utilizável.
+ *
+ * `randomUUID` e não `Math.random()`: o índice único `(loteId, whatsappDigits)`
+ * transforma colisão em P2002, e P2002 aqui derruba a importação inteira por
+ * causa de duas linhas inválidas. O nome antigo ainda dizia "crypto" usando
+ * `Math.random()` — nome que mente sobre garantia é como a garantia se perde.
+ */
+function idUnicoDeLinhaInvalida(): string {
+  return randomUUID();
 }

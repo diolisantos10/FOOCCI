@@ -180,7 +180,12 @@ export async function middleware(req: NextRequest) {
       req.headers.get("x-forwarded-host") ?? host ?? req.nextUrl.host,
       req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol,
     );
-    return NextResponse.redirect(new URL(DESTINO_DA_COMERCIAL, origem), 307);
+    // A query vai junto: quem chega com `?erro=sessao` ou com marcação de
+    // campanha perderia o contexto exatamente na porta de entrada.
+    return NextResponse.redirect(
+      new URL(`${DESTINO_DA_COMERCIAL}${req.nextUrl.search}`, origem),
+      307,
+    );
   }
 
   if (raizVaiParaVitrine(pathname)) {

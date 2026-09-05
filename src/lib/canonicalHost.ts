@@ -132,7 +132,12 @@ export function raizVaiParaVitrine(pathname: string): boolean {
  * tela errada.
  */
 export function ehHostDaComercial(hostHeader: string): boolean {
-  return hostSemPorta(hostHeader).toLowerCase().startsWith("vendas.");
+  // Lista fechada, e não `startsWith("vendas.")`: aquele prefixo aceitaria
+  // `vendas.qualquercoisa.com` — um domínio de outra pessoa apontado para cá
+  // entraria direto na sala de vendas. Host é identidade; identidade se compara
+  // inteira.
+  const h = hostSemPorta(hostHeader).toLowerCase();
+  return h === "vendas.foocci.com.br" || h === "vendas.localhost";
 }
 
 /** Onde o host comercial pousa quando alguém digita só o domínio. */

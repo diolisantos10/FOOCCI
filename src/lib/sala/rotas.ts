@@ -174,13 +174,14 @@ export function abasDoComercial(papel: InternalRole | null): Aba[] {
     // é o pior jeito possível.
     ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.agente, rotulo: "O agente" }] : []),
     ...(tudo || PAPEIS_DO_WHATSAPP.has(papel) ? [{ href: ROTAS.whatsapp, rotulo: "WhatsApp" }] : []),
-    // A prospecção aparece para a Sala inteira LER — quem vai abordar precisa
-    // ver a fila do dia e por que alguém foi barrado. Mas liberar lote e mexer
-    // no interruptor a rota recusa a quem não responde pela marca: a aba mostra
-    // o estado, ela não distribui a autorização.
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel)
-      ? [{ href: ROTAS.prospeccao, rotulo: "Prospecção" }]
-      : []),
+    // A prospecção aparece para a Sala inteira LER, **o SDR humano incluído** —
+    // é ele quem vai abordar, e ele precisa ver a fila do dia e por que alguém
+    // foi barrado. Esconder dele a fila que ele mesmo executa seria folclore.
+    //
+    // Liberar lote e mexer no interruptor a rota recusa a quem não responde
+    // pela marca (`autorizacao.test.ts` prova as duas metades). A aba mostra o
+    // estado; ela não distribui autorização.
+    { href: ROTAS.prospeccao, rotulo: "Prospecção" },
     ...(tudo || PAPEIS_DOS_ACESSOS.has(papel) ? [{ href: ROTAS.acessos, rotulo: "Criar acesso" }] : []),
   ];
 }

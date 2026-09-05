@@ -1,17 +1,11 @@
--- Prospecção (Jornada 3) e as origens multicanal que faltavam.
+-- Prospecção (Jornada 3) — lotes, itens e o interruptor.
 --
--- Tudo aqui é ADITIVO: novos valores de enum e três tabelas novas. Nenhuma
+-- As origens multicanal entram na migration anterior, sozinhas: ADD VALUE de
+-- enum e CREATE TABLE na mesma transação é aposta na versão do PostgreSQL.
+--
+-- Tudo aqui é ADITIVO: três tabelas novas. Nenhuma
 -- coluna existente muda de tipo, nenhuma linha é apagada, nada é renomeado.
 -- Uma base já em produção aceita esta migration sem perder nada.
-
--- ── As origens que a operação multicanal exige ──────────────────────────────
--- Sem LISTA_PROSPECCAO não existe como distinguir quem nos procurou de quem
--- nós procuramos — e essa diferença governa consentimento, tom e cadência.
-ALTER TYPE "SiteLeadSource" ADD VALUE IF NOT EXISTS 'INSTAGRAM';
-ALTER TYPE "SiteLeadSource" ADD VALUE IF NOT EXISTS 'FACEBOOK';
-ALTER TYPE "SiteLeadSource" ADD VALUE IF NOT EXISTS 'CAMPANHA_PAGA';
-ALTER TYPE "SiteLeadSource" ADD VALUE IF NOT EXISTS 'LISTA_PROSPECCAO';
-ALTER TYPE "SiteLeadSource" ADD VALUE IF NOT EXISTS 'IMPORTACAO';
 
 -- ── Os estados do lote e do item ────────────────────────────────────────────
 CREATE TYPE "SituacaoDoLote" AS ENUM ('RASCUNHO', 'LIBERADO', 'PAUSADO', 'ENCERRADO');

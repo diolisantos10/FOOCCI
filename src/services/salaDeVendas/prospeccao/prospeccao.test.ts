@@ -15,7 +15,7 @@ import {
   ProvenienciaAusente,
   MAX_LINHAS_POR_IMPORTACAO,
 } from "./lote";
-import { montarFilaDeProspeccao } from "./selecao";
+import { montarFilaDeProspeccao, materializarLead } from "./selecao";
 import { avaliarAbordagemDeProspeccao } from "@/services/foocci-sdr/LeadContactSafety";
 
 /** Quarta-feira, 14h em São Paulo — dentro da janela, para não misturar causas. */
@@ -103,7 +103,10 @@ describe("portão da abordagem fria", () => {
 // IMPORTAÇÃO
 // ═══════════════════════════════════════════════════════════════════════════
 
-function dbDeImportacao(leadsExistentes: Record<string, string> = {}) {
+function dbDeImportacao(
+  leadsExistentes: Record<string, string> = {},
+  pendentesEmOutroLote: string[] = [],
+) {
   const itensCriados: any[] = [];
   return {
     itensCriados,
@@ -119,6 +122,9 @@ function dbDeImportacao(leadsExistentes: Record<string, string> = {}) {
           return { id: `i${itensCriados.length}` };
         }),
         update: vi.fn().mockResolvedValue({}),
+        findFirst: vi.fn(async ({ where }: any) =>
+          pendentesEmOutroLote.includes(where.whatsappDigits) ? { id: "outro-item" } : null,
+        ),
       },
       siteLead: {
         findFirst: vi.fn(async ({ where }: any) => {
@@ -179,6 +185,24 @@ describe("importar a lista", () => {
     expect(r.aceitas).toBe(0);
     expect(itensCriados[0].situacao).toBe("DUPLICADO");
     expect(itensCriados[0].leadId).toBe("lead-existente");
+  });
+
+  it("⭐ o mesmo telefone pendente em OUTRO lote não é abordado duas vezes", async () => {
+    // Reimportar a planilha cria um lote NOVO, então o índice único
+    // `(loteId, whatsappDigits)` não pega nada entre importações. Sem esta
+    // consulta, o mesmo contato ficaria pendente em dois lotes e receberia duas
+    // abordagens de pessoas diferentes, cada uma achando que era a primeira.
+    const { db, itensCriados } = dbDeImportacao({}, ["5511987654321"]);
+
+    const r = await importarLote(db, {
+      nome: "Curitiba (de novo)",
+      proveniencia: "Lista pública, 08/2026",
+      linhas: [{ whatsapp: "11987654321" }],
+    });
+
+    expect(r.repetidasEmOutroLote).toBe(1);
+    expect(r.aceitas).toBe(0);
+    expect(itensCriados[0].situacao).toBe("DUPLICADO");
   });
 
   it("telefone impossível é RECUSADO com motivo, e não some", async () => {
@@ -313,18 +337,93 @@ describe("a fila do dia", () => {
     expect(fila.motivoDaFilaVazia).toContain("20/20");
   });
 
-  it("⭐ o lead criado pela prospecção NUNCA nasce com consentimento", async () => {
-    // A mentira que este teste impede: gravar `consentAt` faria o sistema
-    // afirmar, para sempre, que esta pessoa nos procurou. Ela não procurou.
+  it("⛔⛔ MONTAR A FILA NÃO ESCREVE NADA — o defeito que quase queimou a lista", async () => {
+    // A primeira versão criava o lead e tirava o item de PENDENTE enquanto
+    // montava a lista. Efeito medido na revisão: cada abertura da tela consumia
+    // um pedaço da base, inclusive dos BARRADOS, inclusive com o canal
+    // desligado, sem falar com ninguém — e o teto nunca subia, porque nada
+    // gravava `lastContactedAt`. Cinco recarregamentos queimavam cem contatos.
+    //
+    // Este é o teste que impede a volta disso.
     const { db, leadsCriados } = dbDeFila(
       { outboundLigado: true, limiteDiario: 20, pausadoEm: null },
       [ITEM],
     );
+
     await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
 
+    expect(leadsCriados).toHaveLength(0);
+    expect(db.siteLead.create).not.toHaveBeenCalled();
+    expect(db.itemDeProspeccao.update).not.toHaveBeenCalled();
+  });
+
+  it("⭐ o lead materializado NUNCA nasce com consentimento", async () => {
+    // A mentira que este teste impede: gravar `consentAt` faria o sistema
+    // afirmar, para sempre, que esta pessoa nos procurou. Ela não procurou.
+    const leadsCriados: any[] = [];
+    const db = {
+      itemDeProspeccao: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...ITEM,
+          situacao: "PENDENTE",
+          lote: { situacao: "LIBERADO" },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      siteLead: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn(async ({ data }: any) => {
+          leadsCriados.push(data);
+          return { id: "novo-lead" };
+        }),
+      },
+    } as any;
+
+    const r = await materializarLead(db, "i1");
+
+    expect(r.ok).toBe(true);
     expect(leadsCriados).toHaveLength(1);
     expect(leadsCriados[0].consentAt).toBeUndefined();
     expect(leadsCriados[0].fonte).toBe("LISTA_PROSPECCAO");
+  });
+
+  it("materializar duas vezes não cria dois leads", async () => {
+    const db = {
+      itemDeProspeccao: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...ITEM,
+          situacao: "VIROU_LEAD",
+          leadId: "lead-ja-criado",
+          lote: { situacao: "LIBERADO" },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      siteLead: { findFirst: vi.fn(), create: vi.fn() },
+    } as any;
+
+    const r = await materializarLead(db, "i1");
+
+    expect(r).toEqual({ ok: true, leadId: "lead-ja-criado" });
+    expect(db.siteLead.create).not.toHaveBeenCalled();
+  });
+
+  it("⛔ não materializa contato de lote que não está liberado", async () => {
+    const db = {
+      itemDeProspeccao: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...ITEM,
+          situacao: "PENDENTE",
+          lote: { situacao: "PAUSADO" },
+        }),
+        update: vi.fn(),
+      },
+      siteLead: { findFirst: vi.fn(), create: vi.fn() },
+    } as any;
+
+    const r = await materializarLead(db, "i1");
+
+    expect(r.ok).toBe(false);
+    expect(db.siteLead.create).not.toHaveBeenCalled();
   });
 
   it("o barrado aparece na fila com motivo — não é filtrado para a tela ficar bonita", async () => {
@@ -346,6 +445,45 @@ describe("a fila do dia", () => {
     );
     const fila = await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
     expect(fila.liberados).toHaveLength(1);
-    expect(fila.liberados[0]!.leadId).toBe("novo-lead");
+    // `null` porque o contato ainda não é lead — e não virar lead só por
+    // aparecer numa lista é exatamente o ponto.
+    expect(fila.liberados[0]!.leadId).toBeNull();
+  });
+});
+
+
+describe("o descanso configurável", () => {
+  it("o valor do banco manda sobre o padrão do desenho", () => {
+    // O campo existia na tela e no banco e ninguém lia: o dono ajustava, salvava,
+    // e o portão continuava usando 48h fixas.
+    const doisDiasAtras = new Date(AGORA.getTime() - 50 * 3_600_000);
+
+    // Com o padrão (48h), 50h de intervalo passa.
+    expect(
+      avaliarAbordagemDeProspeccao({ ...BASE, tentativas: 1, ultimoContatoEm: doisDiasAtras })
+        .sendable,
+    ).toBe(true);
+
+    // Com 72h configuradas, a mesma situação é barrada.
+    const d = avaliarAbordagemDeProspeccao({
+      ...BASE,
+      tentativas: 1,
+      ultimoContatoEm: doisDiasAtras,
+      descansoHoras: 72,
+    });
+    expect(d.sendable).toBe(false);
+    expect(d.reason).toBe("DESCANSO_ATIVO");
+  });
+
+  it("zero é 'sem descanso', e não 'use o padrão'", () => {
+    // A diferença entre `?? REGRA` e checar o tipo: com `??`, zero cairia no
+    // padrão de 48h e o dono nunca conseguiria desligar o descanso.
+    const d = avaliarAbordagemDeProspeccao({
+      ...BASE,
+      tentativas: 1,
+      ultimoContatoEm: new Date(AGORA.getTime() - 60_000),
+      descansoHoras: 0,
+    });
+    expect(d.sendable).toBe(true);
   });
 });

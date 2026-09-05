@@ -151,13 +151,40 @@ export async function POST(req: NextRequest) {
     if (!c.loteId) {
       return NextResponse.json({ ok: false, error: "loteId é obrigatório." }, { status: 400 });
     }
-    await pausarLote(prisma, c.loteId, quem);
-    return NextResponse.json({ ok: true });
+    const r = await pausarLote(prisma, c.loteId, quem);
+    return NextResponse.json(r.ok ? { ok: true } : { ok: false, error: r.motivo }, {
+      status: r.ok ? 200 : 404,
+    });
   }
 
   if (c.acao === "interruptor") {
     const agora = new Date();
     const pausando = c.pausar === true;
+
+    // ── LIGAR COM TETO ZERO É LIGAR NADA ──
+    //
+    // O padrão do campo é 0, e uma prospecção "ligada" com teto 0 devolve fila
+    // vazia para sempre. O dono clicaria em Ligar, veria "Teto do dia atingido
+    // (0/0)" e concluiria que o produto está quebrado — quando na verdade ele
+    // obedeceu. Recusar aqui é mais honesto que aceitar e não fazer nada.
+    if (!pausando && c.ligado === true) {
+      const tetoAtual =
+        typeof c.limiteDiario === "number"
+          ? c.limiteDiario
+          : ((await prisma.prospeccaoConfig.findUnique({ where: { id: "singleton" } }))
+              ?.limiteDiario ?? 0);
+
+      if (tetoAtual <= 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Informe quantas abordagens por dia antes de ligar. Ligar com teto zero não aborda ninguém.",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     const dados = {
       outboundLigado: pausando ? false : Boolean(c.ligado),
