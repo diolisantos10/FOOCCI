@@ -94,11 +94,15 @@ export function MarketingHeader() {
         <div className="hidden items-center gap-3 lg:flex">
           {/* Primeiro na ordem de leitura, e o mais discreto dos três: é a porta
               de quem ainda não sabe se quer — não pode competir com Assinar. */}
+          {/* ⚠️ RÓTULO CURTO, e não é escolha de gosto: com "Fale com nossos
+              consultores" por extenso a barra estourou a largura e o LOGO
+              colidiu com o primeiro item do menu — visto pelo CEO em 05/09.
+              O cabeçalho já carrega 5 itens de navegação; o sexto só cabe curto. */}
           <Link
             href={DEMO_URL}
-            className={`inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS}`}
+            className={`inline-flex items-center whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS}`}
           >
-            Fale com nossos consultores
+            Consultores
           </Link>
           <Link
             href={LOGIN_URL}
