@@ -60,8 +60,12 @@ describe("o cabeçalho: Entrar, Assinar e o convite de conversa", () => {
    *   · "Assinar" continua sendo o único botão de destaque no topo.
    */
   it("o convite de conversa voltou ao topo — e aponta para a PÁGINA DE LEADS", () => {
+    // `DEMO_URL` é o formulário. O topo aponta para ELE, e não para
+    // `AGENTE_URL` — que desde 05/09 leva direto ao WhatsApp e é a porta do
+    // botão verde. As duas portas servem estados diferentes: quem quer ser
+    // ATENDIDO escreve; quem quer ser ENTENDIDO preenche.
     const codigo = semComentarios(ler(HEADER));
-    expect(codigo).toContain("AGENTE_URL");
+    expect(codigo).toContain("DEMO_URL");
   });
 
   it("⛔ e o topo NUNCA manda direto para o WhatsApp", () => {
@@ -71,7 +75,8 @@ describe("o cabeçalho: Entrar, Assinar e o convite de conversa", () => {
     // que decide o destino — o topo não escolhe.
     const codigo = semComentarios(ler(HEADER));
     expect(codigo).not.toMatch(/wa\.me|api\.whatsapp\.com/);
-    expect(codigo).not.toContain("DEMO_URL");
+    // E não usa `AGENTE_URL`, que hoje É o atalho direto para o WhatsApp.
+    expect(codigo).not.toContain("AGENTE_URL");
     expect(codigo).not.toContain("chamada.href");
   });
 
@@ -83,7 +88,7 @@ describe("o cabeçalho: Entrar, Assinar e o convite de conversa", () => {
     const linhasComMarca = codigo.split("\n").filter((l) => /bg-brand-500/.test(l));
     for (const linha of linhasComMarca) {
       expect(linha, "outro botão do topo ganhou o mesmo destaque de Assinar")
-        .not.toMatch(/AGENTE_URL/);
+        .not.toMatch(/DEMO_URL/);
     }
   });
 
