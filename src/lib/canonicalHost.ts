@@ -108,3 +108,37 @@ export function origemPublica(hostHeader: string, proto: string): string {
 export function raizVaiParaVitrine(pathname: string): boolean {
   return pathname === "/";
 }
+
+/**
+ * O HOST DA COMERCIAL — `vendas.foocci.com.br`.
+ *
+ * ── POR QUE UM SUBDOMÍNIO, E NÃO SÓ UM CAMINHO ──────────────────────────────
+ *
+ * `/comercial` já funciona e continua funcionando. O subdomínio existe para a
+ * decisão que o CEO fixou no P0: *"o time comercial não percorre Admin para
+ * trabalhar"*. Um vendedor que digita o endereço da empresa e cai na vitrine do
+ * produto precisa aprender um caminho; um que digita `vendas.` já está no lugar
+ * de trabalho dele.
+ *
+ * ── ⚠️ ISTO É INERTE ATÉ O DNS EXISTIR, E É DE PROPÓSITO ────────────────────
+ *
+ * Enquanto `vendas.foocci.com.br` não apontar para o serviço, nenhuma requisição
+ * chega com esse host e esta função nunca devolve `true`. Não há o que quebrar:
+ * o código entra hoje e passa a valer no minuto em que o domínio for criado —
+ * sem deploy novo, sem alguém precisar lembrar de ligar uma chave.
+ *
+ * Escrever isto só depois do DNS seria a ordem errada: o domínio ficaria de pé
+ * apontando para a vitrine, e a primeira impressão do time comercial seria a
+ * tela errada.
+ */
+export function ehHostDaComercial(hostHeader: string): boolean {
+  // Lista fechada, e não `startsWith("vendas.")`: aquele prefixo aceitaria
+  // `vendas.qualquercoisa.com` — um domínio de outra pessoa apontado para cá
+  // entraria direto na sala de vendas. Host é identidade; identidade se compara
+  // inteira.
+  const h = hostSemPorta(hostHeader).toLowerCase();
+  return h === "vendas.foocci.com.br" || h === "vendas.localhost";
+}
+
+/** Onde o host comercial pousa quando alguém digita só o domínio. */
+export const DESTINO_DA_COMERCIAL = "/comercial";

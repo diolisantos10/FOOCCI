@@ -1,0 +1,112 @@
+# A JORNADA 3 DO P0 CONTRA POSTGRES DE VERDADE.
+#
+# ── POR QUE ESTE WORKFLOW EXISTE, SEPARADO DO CI ────────────────────────────
+#
+# O CI roda typecheck e testes unitários, e os testes da prospecção usam dublê
+# de banco. Dublê prova a REGRA e não prova o ENCAIXE: migration que não aplica,
+# enum que o banco não conhece, `where` malformado — nada disso aparece com mock,
+# e tudo isso aparece na primeira vez que alguém abre a tela em produção.
+#
+# Aqui o banco é criado do zero, as migrations rodam de verdade, e a jornada
+# percorre importar → liberar → fila → materializar → opt-out → freio.
+#
+# ⚠️ Nenhuma mensagem sai: dados sintéticos, canal desligado, telefone de teste.
+name: Jornada 3 — prospecção ponta a ponta
+
+on:
+  pull_request:
+    paths:
+      - "src/services/salaDeVendas/prospeccao/**"
+      - "src/services/foocci-sdr/LeadContactSafety.ts"
+      - "prisma/migrations/**"
+      - "prisma/schema.prisma"
+      - "scripts/jornada-prospeccao.test.ts"
+      - "vitest.jornada.config.ts"
+      - ".github/workflows/jornada-prospeccao.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: jornada-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jornada:
+    name: Jornada contra Postgres real
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foocci_jornada
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/foocci_jornada
+      # A chave de envio fica DESLIGADA de propósito: a jornada mede a máquina,
+      # e uma jornada que pudesse enviar seria uma jornada que um dia envia.
+      FOOCCI_SDR_SEND_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # ── ⚠️ POR QUE NÃO É `migrate deploy` AQUI ────────────────────────────
+      #
+      # A primeira versão deste workflow usava `prisma migrate deploy` contra o
+      # banco vazio, e ele REPROVOU — não por culpa da prospecção, mas por um
+      # defeito herdado: a migration `20250506000000_saipos_integration` altera a
+      # tabela `orders` antes de qualquer migration criá-la, e morre com
+      # `relation "orders" does not exist`.
+      #
+      # Ou seja: **a cadeia de migrations deste repositório não reconstrói o
+      # banco do zero.** Em produção isso não aparece, porque lá as tabelas já
+      # existem e o histórico está marcado como aplicado — o defeito só acorda no
+      # dia em que alguém precisar recriar o banco, que é justamente o pior dia
+      # possível. Está registrado em `docs/pendencias.md` como frente separada;
+      # consertar 208 migrations herdadas não é escopo do P0 comercial.
+      #
+      # Aqui, então: o esquema é criado a partir do `schema.prisma` (`db push`),
+      # e logo depois as DUAS migrations desta obra são aplicadas à mão sobre um
+      # banco realista — que é o que de fato acontece no deploy, onde só as
+      # migrations novas rodam sobre um banco que já tem tudo.
+      - name: Criar o esquema a partir do schema.prisma
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: ⭐ Provar as migrations NOVAS sobre um banco realista
+        run: |
+          set -euo pipefail
+          # Desfaz o que o `db push` criou por conta das migrations novas, para
+          # que elas sejam aplicadas de verdade e não encontrem tudo pronto.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c '
+            DROP TABLE IF EXISTS "itens_de_prospeccao" CASCADE;
+            DROP TABLE IF EXISTS "lotes_de_prospeccao" CASCADE;
+            DROP TABLE IF EXISTS "prospeccao_config" CASCADE;
+            DROP TYPE  IF EXISTS "SituacaoDoItem";
+            DROP TYPE  IF EXISTS "SituacaoDoLote";
+          '
+          # 039000 é idempotente por construção (ADD VALUE IF NOT EXISTS): rodar
+          # com os valores já presentes prova o nome do tipo e a sintaxe.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905039000_origens_multicanal/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905040000_prospeccao_e_origens_multicanal/migration.sql
+          echo "✅ As duas migrations da prospecção aplicaram sobre banco realista."
+
+      - name: Percorrer a Jornada 3
+        run: npm run test:jornada

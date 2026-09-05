@@ -45,7 +45,11 @@ export type LeadBlockReason =
   /** Já falamos com esta pessoa há pouco — dê espaço. */
   | "DESCANSO_ATIVO"
   /** O canal de vendas não está configurado, ou o envio está desligado. */
-  | "CANAL_INDISPONIVEL";
+  | "CANAL_INDISPONIVEL"
+  /** Prospecção fria sem base legal declarada por quem responde pela marca. */
+  | "PROSPECCAO_SEM_BASE_LEGAL"
+  /** A prospecção está desligada, ou pausada, ou o teto do dia acabou. */
+  | "PROSPECCAO_DESLIGADA";
 
 export interface LeadSafetyDecision {
   /** true → pode falar. false → não pode, e o motivo está ao lado. */
@@ -326,4 +330,143 @@ export function pediuSilencio(optOutAt: Date | null | undefined): boolean {
  */
 export function bloqueioPassaSozinho(reason: LeadBlockReason): boolean {
   return reason === "FORA_DA_JANELA" || reason === "DESCANSO_ATIVO" || reason === "CANAL_INDISPONIVEL";
+}
+
+// ─── PROSPECÇÃO FRIA ────────────────────────────────────────────────────────────
+
+/**
+ * A entrada do portão da prospecção.
+ *
+ * É quase a mesma de `LeadSafetyInput`, e a diferença é a única que importa:
+ * aqui não existe `consentimentoEm`, porque **não existe consentimento**. Quem
+ * está numa lista de prospecção não preencheu formulário nenhum.
+ */
+export interface ProspeccaoSafetyInput
+  extends Omit<LeadSafetyInput, "consentimentoEm"> {
+  /**
+   * A frase que quem liberou o lote escreveu para responder "por que temos o
+   * contato desta pessoa?". Vazio = ninguém respondeu = não aborda.
+   */
+  baseLegalDeclarada: string | null;
+  /** A prospecção está ligada, não pausada, e ainda cabe no teto do dia? */
+  prospeccaoLiberada: boolean;
+  /**
+   * Descanso entre abordagens, quando o dono configurou um diferente do padrão.
+   *
+   * Existe porque o campo estava na tela e no banco e **ninguém lia**: o dono
+   * ajustava o número, salvava, e o portão continuava usando o valor fixo. Botão
+   * que não faz nada é pior que botão ausente — ele ensina que a configuração
+   * não vale.
+   */
+  descansoHoras?: number | null;
+}
+
+/**
+ * O PORTÃO DA ABORDAGEM FRIA.
+ *
+ * ── POR QUE ELE MORA NESTE ARQUIVO ──────────────────────────────────────────
+ *
+ * Porque o próprio arquivo já diz, sobre o opt-out, que a semântica de contato
+ * precisa ter **um** dono: *"um `if (lead.optOutAt)` solto em outro arquivo é a
+ * segunda definição — e é a que ninguém lembra de mudar no dia em que a regra
+ * mudar"*. Escrever a prospecção em `services/salaDeVendas/` criaria exatamente
+ * essa segunda definição, com a agravante de ser a que fala com estranhos.
+ *
+ * ── O QUE MUDA EM RELAÇÃO A `avaliarContatoDeLead` ──────────────────────────
+ *
+ * Uma coisa só, e ela é substituição, não afrouxamento:
+ *
+ *   · lá, a pergunta é **"esta pessoa entregou os dados, e há quanto tempo?"**;
+ *   · aqui, é **"quem mandou abordar declarou por que temos este contato?"**.
+ *
+ * Passar `liberadoEm` do lote no campo `consentimentoEm` do outro portão teria
+ * funcionado, passado nos testes e sido **mentira**: registraria como
+ * consentimento da pessoa um ato da empresa. No dia em que alguém perguntasse
+ * "onde está o consentimento dele?", o sistema apontaria para a data em que nós
+ * mesmos decidimos abordá-lo.
+ *
+ * ── O QUE NÃO MUDA, E É DE PROPÓSITO ────────────────────────────────────────
+ *
+ * Opt-out, telefone plausível, canal pronto, histórico conhecido, teto de
+ * tentativas, descanso e janela de horário valem **iguais**. Abordar quem nunca
+ * pediu nada é mais delicado que responder quem escreveu, não menos — nenhuma
+ * dessas travas afrouxa aqui.
+ */
+export function avaliarAbordagemDeProspeccao(
+  input: ProspeccaoSafetyInput,
+): LeadSafetyDecision {
+  const agora = input.agora ?? new Date();
+
+  // 1. Silêncio pedido — inviolável, terminal, igual ao outro portão.
+  if (input.optOutAt) {
+    return bloqueia("LEAD_OPT_OUT", "Esta pessoa pediu para não receber mensagens.");
+  }
+
+  // 2. Dá para entregar?
+  if (!input.telefone || input.telefone.trim() === "") {
+    return bloqueia("LEAD_SEM_TELEFONE", "Contato sem telefone.");
+  }
+  if (!telefonePlausivel(input.telefone)) {
+    return bloqueia("LEAD_TELEFONE_INVALIDO", "Telefone com formato improvável.");
+  }
+  if (!input.canalPronto) {
+    return bloqueia("CANAL_INDISPONIVEL", "O canal de vendas da Foocci não está pronto para enviar.");
+  }
+
+  // 3. A chave da prospecção. Desligada por padrão, e pausar tem efeito imediato.
+  if (!input.prospeccaoLiberada) {
+    return bloqueia(
+      "PROSPECCAO_DESLIGADA",
+      "A prospecção está desligada, pausada, ou o teto do dia já foi atingido.",
+    );
+  }
+
+  // 4. A pergunta que substitui o consentimento — e não a finge.
+  const base = (input.baseLegalDeclarada ?? "").trim();
+  if (base === "") {
+    return bloqueia(
+      "PROSPECCAO_SEM_BASE_LEGAL",
+      "O lote não declara por que temos este contato — sem isso não se aborda ninguém.",
+    );
+  }
+
+  // 5. O que NÃO se sabe continua sendo não.
+  if (!input.historicoConhecido) {
+    return bloqueia(
+      "HISTORICO_DESCONHECIDO",
+      "Não foi possível apurar quantas vezes já falamos com esta pessoa — reprovado por precaução.",
+    );
+  }
+
+  // 6. Insistência e descanso: idênticos ao outro portão, de propósito.
+  if (input.tentativas >= REGRA.maxTentativas) {
+    return bloqueia(
+      "TETO_DE_TENTATIVAS",
+      `Já foram ${input.tentativas} tentativas (teto ${REGRA.maxTentativas}: uma abertura e um lembrete).`,
+    );
+  }
+  if (input.ultimoContatoEm) {
+    // O configurado manda; o padrão do desenho é a rede de segurança de quem
+    // nunca configurou. Zero é um valor legítimo ("sem descanso"), então a
+    // pergunta é sobre existir, não sobre ser verdadeiro.
+    const descanso =
+      typeof input.descansoHoras === "number" ? input.descansoHoras : REGRA.descansoHoras;
+    const horas = (agora.getTime() - input.ultimoContatoEm.getTime()) / 3_600_000;
+    if (horas < descanso) {
+      return bloqueia(
+        "DESCANSO_ATIVO",
+        `Falamos há ${Math.floor(horas)}h (descanso de ${descanso}h).`,
+      );
+    }
+  }
+
+  // 7. Horário, por último, pelo mesmo motivo do outro portão.
+  if (foraDaJanela(agora)) {
+    return bloqueia(
+      "FORA_DA_JANELA",
+      `Fora da janela de abordagem (${REGRA.janela.inicioHora}h–${REGRA.janela.fimHora}h, dias úteis, horário de São Paulo).`,
+    );
+  }
+
+  return { sendable: true, reason: null, detail: "Liberado." };
 }

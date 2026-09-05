@@ -28,6 +28,7 @@ import {
   raizVaiParaVitrine,
   origemPublica,
   DESTINO_DA_RAIZ,
+  ehHostDaComercial,
 } from "./canonicalHost";
 
 /** O jeito antigo, preservado aqui só para provar que ele produz o defeito. */
@@ -146,5 +147,29 @@ describe("o espelho não pode envelhecer sozinho", () => {
         "responde 307 SEM `Location`: robô de busca, prévia de link e monitor param " +
         "de chegar em /site. Medido em produção em 23/08/2026.",
     ).toBe(true);
+  });
+});
+
+describe("o host da Comercial", () => {
+  it("reconhece vendas.foocci.com.br", () => {
+    expect(ehHostDaComercial("vendas.foocci.com.br")).toBe(true);
+  });
+
+  it("reconhece mesmo com a porta interna do contêiner colada", () => {
+    // O `:8080` do Railway já causou um defeito real neste arquivo. Um host
+    // comparado com a porta junto nunca bate, e a Comercial cairia na vitrine
+    // em produção — funcionando perfeitamente em desenvolvimento.
+    expect(ehHostDaComercial("vendas.foocci.com.br:8080")).toBe(true);
+  });
+
+  it("não confunde o domínio principal com a Comercial", () => {
+    expect(ehHostDaComercial("foocci.com.br")).toBe(false);
+    expect(ehHostDaComercial("www.foocci.com.br")).toBe(false);
+  });
+
+  it("não basta conter 'vendas' — tem que ser o subdomínio", () => {
+    // `minhasvendas.com.br` não é nossa sala comercial. Um `includes` teria
+    // dito que sim.
+    expect(ehHostDaComercial("minhasvendas.com.br")).toBe(false);
   });
 });
