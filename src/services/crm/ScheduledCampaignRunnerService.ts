@@ -477,13 +477,15 @@ export class ScheduledCampaignRunnerService {
     // diário continua sendo `dailyLimit` + o orçamento global.
     const batchCap       = Math.min(remainingToday, limit ?? remainingToday, META_CLOUD_MAX_PER_RUN);
 
-    // Resolve full eligible audience at execution time
-    const allEligible = await resolveAudience(
-      campaign.restaurantId,
-      campaign.targetSegment ?? "",
-      campaign.templateId ?? undefined,
-      { triggerDays: cfg.triggerDays },
-    );
+    // ⚠️ A ORDEM DESTE BLOCO É O CONSERTO, e inverter de volta reabre o defeito.
+    //
+    // A audiência é resolvida DEPOIS das exclusões, porque `resolveAudience`
+    // corta em 500 ordenando pelos mais antigos — os frios e os perdidos.
+    // Excluir depois do corte fazia as mesmas 500 pessoas ocuparem a lista para
+    // sempre: contatadas todas, a campanha ficava ACTIVE e muda, com o resto da
+    // base nunca alcançado, e sem alerta em lugar nenhum.
+    //
+    // Diagnóstico de 28/08/2026 ("21 mil de audiência e 10 mensagens").
 
     // Exclude customers already sent this campaign. Campaigns with a recontactDays
     // window (e.g. "Mimo mensal") only exclude sends INSIDE the window — the same
@@ -556,13 +558,28 @@ export class ScheduledCampaignRunnerService {
       ]);
     }
 
+    // A união das cinco exclusões vai para dentro da consulta.
+    const jaAlcancados = new Set<string>([
+      ...alreadySentIds,
+      ...recentlyAttemptedIds,
+      ...permanentlyFailedIds,
+      ...impactedByConcept,
+      ...impactedByMessage,
+    ]);
+
+    const allEligible = await resolveAudience(
+      campaign.restaurantId,
+      campaign.targetSegment ?? "",
+      campaign.templateId ?? undefined,
+      { triggerDays: cfg.triggerDays, excluirIds: [...jaAlcancados] },
+    );
+
+    // O filtro em memória PERMANECE — não como rede principal, mas porque a
+    // consulta e este ponto não são o mesmo instante: entre um e outro pode
+    // entrar uma linha nova de execução. Com a exclusão já feita no banco, aqui
+    // ele passa a tirar quase nada, em vez de tirar tudo.
     const newEligible = allEligible.filter(
-      (c) =>
-        !alreadySentIds.has(c.id) &&
-        !recentlyAttemptedIds.has(c.id) &&
-        !permanentlyFailedIds.has(c.id) &&
-        !impactedByConcept.has(c.id) &&
-        !impactedByMessage.has(c.id),
+      (c) => !jaAlcancados.has(c.id),
     );
 
     if (newEligible.length === 0) {

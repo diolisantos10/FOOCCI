@@ -115,7 +115,29 @@ export async function resolveAudience(
   targetSegment: string,
   templateId?: string,
   /** Event-based tuning: how many days after the event to target (review, 2nd purchase). */
-  opts?: { triggerDays?: number }
+  opts?: {
+    triggerDays?: number;
+    /**
+     * QUEM JÁ FOI CONTATADO — e por que isto entra AQUI, e não depois.
+     *
+     * ── O DEFEITO, medido no diagnóstico de 28/08/2026 ────────────────────
+     *
+     * A audiência é cortada em `MAX_AUDIENCE` (500) **ordenada por
+     * `lastOrderAt asc`** — ou seja, os mais antigos primeiro, que são
+     * exatamente os frios e os perdidos. A exclusão de quem já recebeu
+     * acontecia **depois**, em memória, no runner.
+     *
+     * O efeito é uma parede: **as mesmas 500 pessoas mais antigas ocupam a
+     * lista para sempre.** Contatadas todas, o filtro em memória zera a fila,
+     * a campanha devolve "sem novos elegíveis", fica ACTIVE e MUDA — com o
+     * resto da base **nunca alcançado**. E não vira alerta em lugar nenhum.
+     *
+     * ⚠️ E o número 500 não é o defeito. Subir para 5.000 só move a parede
+     * 4.500 pessoas adiante e recria o mesmo silêncio depois. O defeito é a
+     * ORDEM das duas operações.
+     */
+    excluirIds?: readonly string[];
+  }
 ): Promise<AudienceCustomer[]> {
   // Resolve canonical segment — template IDs (e.g. "recuperar-frios") may arrive in targetSegment
   const rawSeg = (targetSegment ?? "").trim();
@@ -125,7 +147,12 @@ export async function resolveAudience(
   const rid = restaurantId;
   const now = new Date();
 
+  // A exclusão entra na CONSULTA, para que o `take` conte 500 pessoas que ainda
+  // não foram contatadas — e não 500 que já foram.
+  const excluir = opts?.excluirIds ?? [];
+
   const baseWhere = {
+    ...(excluir.length > 0 ? { id: { notIn: [...excluir] } } : {}),
     restaurantId:   rid,
     isGuest:        false,
     isActive:       true,
