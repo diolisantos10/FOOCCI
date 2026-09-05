@@ -136,6 +136,22 @@ describe("Jornada 2 — quem chama direto no WhatsApp", () => {
     expect(await prisma.siteLead.count()).toBe(antes);
   });
 
+  it("⭐ a origem NÃO desaparece quando o cliente converge para o WhatsApp", async () => {
+    // Critério de aceite do P0: "nenhuma origem desaparece ao convergir no
+    // WhatsApp". O canal é o fio principal — quase todo mundo acaba nele. Se
+    // chamar no WhatsApp reescrevesse a origem, em um mês a base inteira diria
+    // "veio do WhatsApp" e a pergunta que paga a próxima campanha — *de onde
+    // vêm os clientes que fecham?* — ficaria sem resposta para sempre.
+    //
+    // O dado não some com um apagamento: some por sobrescrita silenciosa.
+    const lead = await prisma.siteLead.findFirst({
+      where: { whatsappDigits: { endsWith: "55550001" } },
+    });
+
+    expect(lead!.fonte).toBe("FORMULARIO_DEMONSTRACAO");
+    expect(lead!.utmCampaign).toBe("setembro");
+  });
+
   it("⭐ a reentrega da Meta não duplica a conversa", async () => {
     // A Meta reentrega a MESMA mensagem quando não recebe o 200 a tempo. Sem a
     // trava de idempotência, a conversa do cliente enche de mensagens repetidas
