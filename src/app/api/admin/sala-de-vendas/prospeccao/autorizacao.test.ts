@@ -25,6 +25,7 @@ const autorizarInterno = vi.fn();
 const criarEvento = vi.fn();
 const liberarLote = vi.fn();
 const upsertConfig = vi.fn();
+const lerConfig = vi.fn();
 
 vi.mock("@/lib/internal-auth", async () => {
   const real = await vi.importActual<typeof import("@/lib/internal-auth")>("@/lib/internal-auth");
@@ -34,7 +35,10 @@ vi.mock("@/lib/internal-auth", async () => {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     internalAuditEvent: { create: (...a: unknown[]) => criarEvento(...a) },
-    prospeccaoConfig: { upsert: (...a: unknown[]) => upsertConfig(...a) },
+    prospeccaoConfig: {
+      upsert: (...a: unknown[]) => upsertConfig(...a),
+      findUnique: (...a: unknown[]) => lerConfig(...a),
+    },
   },
 }));
 
@@ -82,6 +86,9 @@ beforeEach(() => {
   criarEvento.mockReset().mockResolvedValue({});
   liberarLote.mockReset().mockResolvedValue({ ok: true });
   upsertConfig.mockReset().mockResolvedValue({ id: "singleton", outboundLigado: true });
+  // Teto já configurado: o caso comum. Os testes que exercitam o teto zero
+  // sobrescrevem este valor explicitamente.
+  lerConfig.mockReset().mockResolvedValue({ id: "singleton", limiteDiario: 20 });
 });
 
 describe("liberar lote", () => {
@@ -140,6 +147,31 @@ describe("o interruptor da prospecção", () => {
     const dados = upsertConfig.mock.calls[0]![0].update;
     expect(dados.outboundLigado).toBe(true);
     expect(dados.atualizadoPor).toContain("Diretor");
+  });
+
+  it("⛔ ligar com teto zero é recusado — ligar nada não é ligar", async () => {
+    // O padrão do campo é 0. Aceitar ligar assim devolveria fila vazia para
+    // sempre, e o dono concluiria que o produto está quebrado quando ele estaria
+    // obedecendo. A recusa explica o que fazer.
+    autorizarInterno.mockReturnValue({ ok: true, sessao: DIRETOR });
+    lerConfig.mockResolvedValue({ id: "singleton", limiteDiario: 0 });
+    const { POST } = await import("./route");
+
+    const res = await POST(pedido({ acao: "interruptor", ligado: true }));
+
+    expect(res.status).toBe(400);
+    expect(upsertConfig).not.toHaveBeenCalled();
+  });
+
+  it("ligar informando o teto no mesmo pedido passa, mesmo com o banco em zero", async () => {
+    autorizarInterno.mockReturnValue({ ok: true, sessao: DIRETOR });
+    lerConfig.mockResolvedValue({ id: "singleton", limiteDiario: 0 });
+    const { POST } = await import("./route");
+
+    const res = await POST(pedido({ acao: "interruptor", ligado: true, limiteDiario: 10 }));
+
+    expect(res.status).toBe(200);
+    expect(upsertConfig.mock.calls[0]![0].update.limiteDiario).toBe(10);
   });
 
   it("⭐ pausar DESLIGA, mesmo se o corpo pedir para ligar ao mesmo tempo", async () => {
