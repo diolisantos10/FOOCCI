@@ -1,0 +1,77 @@
+# A JORNADA 3 DO P0 CONTRA POSTGRES DE VERDADE.
+#
+# ── POR QUE ESTE WORKFLOW EXISTE, SEPARADO DO CI ────────────────────────────
+#
+# O CI roda typecheck e testes unitários, e os testes da prospecção usam dublê
+# de banco. Dublê prova a REGRA e não prova o ENCAIXE: migration que não aplica,
+# enum que o banco não conhece, `where` malformado — nada disso aparece com mock,
+# e tudo isso aparece na primeira vez que alguém abre a tela em produção.
+#
+# Aqui o banco é criado do zero, as migrations rodam de verdade, e a jornada
+# percorre importar → liberar → fila → materializar → opt-out → freio.
+#
+# ⚠️ Nenhuma mensagem sai: dados sintéticos, canal desligado, telefone de teste.
+name: Jornada 3 — prospecção ponta a ponta
+
+on:
+  pull_request:
+    paths:
+      - "src/services/salaDeVendas/prospeccao/**"
+      - "src/services/foocci-sdr/LeadContactSafety.ts"
+      - "prisma/migrations/**"
+      - "prisma/schema.prisma"
+      - "scripts/jornada-prospeccao.ts"
+      - ".github/workflows/jornada-prospeccao.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: jornada-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jornada:
+    name: Jornada contra Postgres real
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foocci_jornada
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/foocci_jornada
+      # A chave de envio fica DESLIGADA de propósito: a jornada mede a máquina,
+      # e uma jornada que pudesse enviar seria uma jornada que um dia envia.
+      FOOCCI_SDR_SEND_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # ⭐ Este passo é metade do valor do workflow: se a migration não aplica,
+      # ela falha AQUI, e não no boot do contêiner de produção com o app fora do
+      # ar — que é exatamente a cicatriz que `start-production.sh` já carrega.
+      - name: Aplicar as migrations num banco vazio
+        run: npx prisma migrate deploy
+
+      - name: Percorrer a Jornada 3
+        run: npm run test:jornada

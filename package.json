@@ -33,7 +33,8 @@
     "db:seed-sala": "tsx scripts/seed-sala-de-vendas.ts",
     "db:conferir-v3": "tsx scripts/conferir-v3.ts",
     "test:unit": "vitest run",
-    "test:unit:watch": "vitest"
+    "test:unit:watch": "vitest",
+    "test:jornada": "vitest run --config vitest.jornada.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
