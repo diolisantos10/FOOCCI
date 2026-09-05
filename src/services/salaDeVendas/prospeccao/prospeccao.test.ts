@@ -127,9 +127,14 @@ function dbDeImportacao(
         ),
       },
       siteLead: {
+        // O casamento agora é pela cauda de oito dígitos (`contains`), não por
+        // igualdade — o dublê imita isso para o teste medir o código real.
         findFirst: vi.fn(async ({ where }: any) => {
-          const id = leadsExistentes[where.whatsappDigits];
-          return id ? { id } : null;
+          const cauda = where.whatsappDigits?.contains ?? "";
+          const achado = Object.entries(leadsExistentes).find(([digitos]) =>
+            digitos.endsWith(cauda),
+          );
+          return achado ? { id: achado[1] } : null;
         }),
       },
     } as any,
@@ -269,7 +274,7 @@ describe("liberar o lote", () => {
 // A FILA DO DIA
 // ═══════════════════════════════════════════════════════════════════════════
 
-function dbDeFila(config: any, itens: any[] = [], abordagensHoje = 0) {
+function dbDeFila(config: any, itens: any[] = [], abordagensHoje = 0, leadNaBase: any = null) {
   const leadsCriados: any[] = [];
   return {
     leadsCriados,
@@ -282,7 +287,7 @@ function dbDeFila(config: any, itens: any[] = [], abordagensHoje = 0) {
       siteLead: {
         count: vi.fn().mockResolvedValue(abordagensHoje),
         findUnique: vi.fn().mockResolvedValue(null),
-        findFirst: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(leadNaBase),
         create: vi.fn(async ({ data }: any) => {
           leadsCriados.push(data);
           return { id: "novo-lead", optOutAt: null, lastContactedAt: null };
@@ -382,7 +387,7 @@ describe("a fila do dia", () => {
 
     const r = await materializarLead(db, "i1");
 
-    expect(r.ok).toBe(true);
+    expect(r.materializado).toBe(true);
     expect(leadsCriados).toHaveLength(1);
     expect(leadsCriados[0].consentAt).toBeUndefined();
     expect(leadsCriados[0].fonte).toBe("LISTA_PROSPECCAO");
@@ -405,7 +410,7 @@ describe("a fila do dia", () => {
 
     const r = await materializarLead(db, "i1");
 
-    expect(r).toEqual({ ok: true, leadId: "lead-ja-criado" });
+    expect(r).toEqual({ materializado: true, leadId: "lead-ja-criado" });
     expect(db.siteLead.create).not.toHaveBeenCalled();
   });
 
@@ -425,7 +430,7 @@ describe("a fila do dia", () => {
 
     const r = await materializarLead(db, "i1");
 
-    expect(r.ok).toBe(false);
+    expect(r.materializado).toBe(false);
     expect(db.siteLead.create).not.toHaveBeenCalled();
   });
 
@@ -519,7 +524,7 @@ describe("a corrida dos dois SDRs", () => {
 
     const r = await materializarLead(db, "i1");
 
-    expect(r).toEqual({ ok: true, leadId: "lead-do-vencedor" });
+    expect(r).toEqual({ materializado: true, leadId: "lead-do-vencedor" });
     expect(db.siteLead.create).not.toHaveBeenCalled();
   });
 
@@ -548,5 +553,66 @@ describe("a corrida dos dois SDRs", () => {
     const devolucao = db.itemDeProspeccao.updateMany.mock.calls.at(-1)![0];
     expect(devolucao.data.situacao).toBe("PENDENTE");
     expect(devolucao.where.leadId).toBeNull();
+  });
+});
+
+
+describe("o telefone em formato legado", () => {
+  it("⛔⛔ quem pediu SILÊNCIO é encontrado mesmo gravado no formato antigo", async () => {
+    // O defeito, achado em revisão: a prospecção casava item↔lead por igualdade
+    // exata de dígitos. Os leads antigos vieram de um backfill em SQL cru que
+    // não tirava o zero da operadora — o mesmo telefone existe como
+    // `5511987654321` e como `55011987654321`.
+    //
+    // Com igualdade, o lead com opt-out NÃO era encontrado: o item entrava como
+    // novo, o portão recebia `optOutAt: null` com `historicoConhecido: true`, e
+    // liberava a abordagem COM CONVICÇÃO. Trava que destrava.
+    const leadLegado = {
+      id: "lead-legado",
+      optOutAt: new Date("2026-01-01"),
+      lastContactedAt: null,
+    };
+
+    const { db } = dbDeFila(
+      { outboundLigado: true, limiteDiario: 20, pausadoEm: null },
+      [ITEM], // dígitos "5511987654321"
+      0,
+      leadLegado, // gravado como "55011987654321" — cauda igual
+    );
+
+    const fila = await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
+
+    expect(fila.liberados).toHaveLength(0);
+    expect(fila.barrados[0]!.decisao.reason).toBe("LEAD_OPT_OUT");
+  });
+
+  it("a busca é pela cauda de oito dígitos, e não por igualdade", async () => {
+    const { db } = dbDeFila(
+      { outboundLigado: true, limiteDiario: 20, pausadoEm: null },
+      [ITEM],
+    );
+    await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
+
+    const where = db.siteLead.findFirst.mock.calls[0]![0].where;
+    expect(where.whatsappDigits).toEqual({ contains: "87654321" });
+  });
+});
+
+describe("o descanso configurável só aperta", () => {
+  it("⛔ configurar descanso MENOR que o padrão não afrouxa a abordagem fria", async () => {
+    // A única trava que poderia afrouxar nesta obra é a de insistência — e ela
+    // vive no portão que fala com ESTRANHOS. Quem quiser insistir mais que o
+    // desenho permite muda o desenho, não a configuração.
+    const { db } = dbDeFila(
+      { outboundLigado: true, limiteDiario: 20, pausadoEm: null, horasEntreAbordagens: 1 },
+      [ITEM],
+      0,
+      { id: "lead1", optOutAt: null, lastContactedAt: new Date(AGORA.getTime() - 3 * 3_600_000) },
+    );
+
+    const fila = await montarFilaDeProspeccao(db, { canalPronto: true, agora: AGORA });
+
+    expect(fila.liberados).toHaveLength(0);
+    expect(fila.barrados[0]!.decisao.reason).toBe("DESCANSO_ATIVO");
   });
 });

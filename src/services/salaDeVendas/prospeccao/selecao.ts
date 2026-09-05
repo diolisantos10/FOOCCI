@@ -26,8 +26,10 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
 import {
   avaliarAbordagemDeProspeccao,
+  REGRA,
   type LeadSafetyDecision,
 } from "@/services/foocci-sdr/LeadContactSafety";
+import { acharLeadPeloTelefone } from "./casamento";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -73,7 +75,16 @@ export async function montarFilaDeProspeccao(
   // Sem configuração nenhuma a resposta é "desligada" — e não "sem limite".
   const ligada = Boolean(config?.outboundLigado) && !config?.pausadoEm;
   const tetoDoDia = config?.limiteDiario ?? 0;
-  const descansoHoras = config?.horasEntreAbordagens;
+  // ── O CONFIGURÁVEL SÓ APERTA, NUNCA AFROUXA ──
+  //
+  // Deixar o dono baixar o descanso abaixo do padrão faria a única trava que
+  // afrouxa nesta obra ser justamente a de insistência — no portão que fala com
+  // ESTRANHOS, que é o mais delicado dos dois. Quem quiser insistir mais que o
+  // desenho permite precisa mudar o desenho, não a configuração.
+  const descansoHoras = Math.max(
+    REGRA.descansoHoras,
+    config?.horasEntreAbordagens ?? REGRA.descansoHoras,
+  );
 
   const usadosHoje = await contarAbordagensDeHoje(db, agora);
   const cabeNoTeto = Math.max(0, tetoDoDia - usadosHoje);
@@ -119,11 +130,14 @@ export async function montarFilaDeProspeccao(
     // dele; se não é, avaliamos com histórico zero — que é a verdade.
     const lead = await lerLeadDoItem(db, item);
 
+    // Zero é "nada sai", igual ao teto global. A leitura oposta ("0 = sem
+    // limite") inverteria a semântica entre dois campos com o mesmo nome — e é
+    // o tipo de inversão que só aparece no dia em que alguém importa com 0.
     const tetoDoLote = item.lote.limiteDiario ?? 0;
     const jaNoLote = porLote.get(item.loteId) ?? 0;
 
     const decisao =
-      tetoDoLote > 0 && jaNoLote >= tetoDoLote
+      jaNoLote >= tetoDoLote
         ? {
             sendable: false as const,
             reason: "PROSPECCAO_DESLIGADA" as const,
@@ -174,6 +188,16 @@ export async function montarFilaDeProspeccao(
   };
 }
 
+/**
+ * O resultado de materializar.
+ *
+ * `materializado` fala só da gravação. **Permissão para abordar é outra
+ * pergunta**, e quem responde é `avaliarAbordagemDeProspeccao` na hora do envio.
+ */
+export type ResultadoDaMaterializacao =
+  | { materializado: true; leadId: string }
+  | { materializado: false; motivo: string };
+
 interface LeadDoItem {
   id: string;
   optOutAt: Date | null;
@@ -191,10 +215,9 @@ async function lerLeadDoItem(
         where: { id: item.leadId },
         select: { id: true, optOutAt: true, lastContactedAt: true },
       })
-    : await db.siteLead.findFirst({
-        where: { whatsappDigits: item.whatsappDigits },
-        select: { id: true, optOutAt: true, lastContactedAt: true },
-      });
+    : // Pela cauda de oito dígitos, e não por igualdade: a base tem telefones em
+      // formato legado, e igualdade exata não acharia quem pediu silêncio.
+      await acharLeadPeloTelefone(db, item.whatsappDigits);
 
   if (!achado) return null;
   return { ...achado, tentativas: await contarTentativas(db, achado.id) };
@@ -216,25 +239,33 @@ async function lerLeadDoItem(
  * nada, e gravar a data de hoje ali faria o sistema afirmar, para sempre e para
  * qualquer auditor, que esta pessoa nos procurou. O lead nasce com
  * `fonte: LISTA_PROSPECCAO`, que é a verdade: nós fomos atrás dele.
+ *
+ * ── ⚠️ E `materializado: true` NÃO QUER DIZER "PODE ABORDAR" ────────────────
+ *
+ * O retorno se chama `materializado`, e não `ok`, de propósito. Um `ok: true`
+ * convidaria quem chamar a tratar o sucesso da gravação como permissão de
+ * falar — e o lead encontrado pode ser justamente alguém que PEDIU SILÊNCIO, ou
+ * que já está em atendimento de outra pessoa. Quem decide se pode falar é o
+ * portão, sempre, e ele é chamado por quem vai enviar.
  */
 export async function materializarLead(
   db: Cliente,
   itemId: string,
-): Promise<{ ok: boolean; leadId?: string; motivo?: string }> {
+): Promise<ResultadoDaMaterializacao> {
   const item = await db.itemDeProspeccao.findUnique({
     where: { id: itemId },
     include: { lote: { select: { situacao: true } } },
   });
 
-  if (!item) return { ok: false, motivo: "Item não encontrado." };
+  if (!item) return { materializado: false, motivo: "Item não encontrado." };
   if (item.lote.situacao !== "LIBERADO") {
-    return { ok: false, motivo: "O lote deste contato não está liberado." };
+    return { materializado: false, motivo: "O lote deste contato não está liberado." };
   }
   if (item.situacao !== "PENDENTE") {
     // Idempotente: materializar duas vezes devolve o mesmo lead, não cria outro.
     return item.leadId
-      ? { ok: true, leadId: item.leadId }
-      : { ok: false, motivo: `Item em situação ${item.situacao}.` };
+      ? { materializado: true, leadId: item.leadId }
+      : { materializado: false, motivo: `Item em situação ${item.situacao}.` };
   }
 
   // ── ⚠️ RESERVAR ANTES DE CRIAR — A CORRIDA DOS DOIS SDRs ──────────────────
@@ -260,15 +291,15 @@ export async function materializarLead(
       select: { leadId: true },
     });
     return jaFeito?.leadId
-      ? { ok: true, leadId: jaFeito.leadId }
-      : { ok: false, motivo: "Outro atendimento está materializando este contato." };
+      ? { materializado: true, leadId: jaFeito.leadId }
+      : {
+          materializado: false,
+          motivo: "Outro atendimento está materializando este contato.",
+        };
   }
 
   try {
-    const existente = await db.siteLead.findFirst({
-      where: { whatsappDigits: item.whatsappDigits },
-      select: { id: true },
-    });
+    const existente = await acharLeadPeloTelefone(db, item.whatsappDigits);
 
     if (existente) {
       await db.itemDeProspeccao.update({
@@ -279,7 +310,7 @@ export async function materializarLead(
           motivo: "Já existe como lead na base.",
         },
       });
-      return { ok: true, leadId: existente.id };
+      return { materializado: true, leadId: existente.id };
     }
 
     const criado = await db.siteLead.create({
@@ -304,7 +335,7 @@ export async function materializarLead(
       data: { leadId: criado.id },
     });
 
-    return { ok: true, leadId: criado.id };
+    return { materializado: true, leadId: criado.id };
   } catch (erro) {
     // ── DEVOLVER A RESERVA ──
     //
@@ -324,12 +355,43 @@ async function contarTentativas(db: Cliente, leadId: string): Promise<number> {
   return db.leadMensagem.count({ where: { leadId, direcao: "SAIDA" } });
 }
 
-/** Abordagens de prospecção já feitas hoje, lidas do banco. */
+/**
+ * Abordagens de prospecção já feitas hoje, lidas do banco.
+ *
+ * ── O DIA É O DE SÃO PAULO, NÃO O DO SERVIDOR ───────────────────────────────
+ *
+ * `setHours(0,0,0,0)` usa o fuso do processo, que em produção é UTC. O teto
+ * viraria às 21h de Brasília: quem gastasse o teto durante a tarde ganharia um
+ * teto novo no fim do expediente, dentro da janela de abordagem. Toda a janela
+ * de horário desta obra já é medida em `America/Sao_Paulo`; o teto tem que
+ * concordar com ela.
+ */
 async function contarAbordagensDeHoje(db: Cliente, agora: Date): Promise<number> {
-  const inicioDoDia = new Date(agora);
-  inicioDoDia.setHours(0, 0, 0, 0);
+  const inicioDoDia = inicioDoDiaEmSaoPaulo(agora);
 
   return db.siteLead.count({
     where: { fonte: "LISTA_PROSPECCAO", lastContactedAt: { gte: inicioDoDia } },
   });
+}
+
+/** Meia-noite de São Paulo do dia de `agora`, devolvida em UTC. */
+export function inicioDoDiaEmSaoPaulo(agora: Date): Date {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: REGRA.fusoHorario,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(agora);
+
+  const p = (tipo: string) => Number(partes.find((x) => x.type === tipo)?.value ?? "0");
+
+  // Quanto do dia local já passou, subtraído do instante atual: chega-se à
+  // meia-noite local sem precisar saber o deslocamento do fuso (que muda com
+  // horário de verão).
+  const segundosDesdeAMeiaNoite = p("hour") * 3600 + p("minute") * 60 + p("second");
+  return new Date(agora.getTime() - segundosDesdeAMeiaNoite * 1000);
 }

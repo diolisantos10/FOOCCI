@@ -21,6 +21,7 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
+import { existeLeadParaTelefone } from "./casamento";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -109,12 +110,19 @@ export async function importarLote(
     throw new ListaGrandeDemais(pedido.linhas.length);
   }
 
+  // O teto do lote vem do corpo da requisição, e corpo de requisição não valida
+  // a si mesmo: negativo vira zero, e ausente vira o padrão conservador.
+  const limiteDiario =
+    typeof pedido.limiteDiario === "number" && Number.isFinite(pedido.limiteDiario)
+      ? Math.max(0, Math.floor(pedido.limiteDiario))
+      : 20;
+
   const lote = await db.loteDeProspeccao.create({
     data: {
       nome: pedido.nome.trim() || "Lote sem nome",
       proveniencia,
       criadoPor: pedido.criadoPor ?? null,
-      limiteDiario: pedido.limiteDiario ?? 20,
+      limiteDiario,
     },
     select: { id: true },
   });
@@ -158,10 +166,10 @@ export async function importarLote(
     }
     vistos.add(digitos);
 
-    const leadExistente = await db.siteLead.findFirst({
-      where: { whatsappDigits: digitos },
-      select: { id: true },
-    });
+    // Pela cauda de oito dígitos: a base tem telefones em formato legado, e
+    // igualdade exata deixaria passar como "novo" quem já é lead — inclusive
+    // quem pediu silêncio. Ver `casamento.ts`.
+    const leadExistente = await existeLeadParaTelefone(db, digitos);
 
     // O mesmo telefone esperando abordagem em outro lote. Não é lead ainda, e
     // por isso a busca acima não o encontra — mas abordar seria em duplicidade.

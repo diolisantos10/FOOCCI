@@ -56,7 +56,10 @@ export async function GET(req: NextRequest) {
   if (!portao.ok) return portao.resposta;
 
   const [fila, lotes, config] = await Promise.all([
-    montarFilaDeProspeccao(prisma, { canalPronto: canalDeVendasPronto() }),
+    // Teto de leitura: sem ele, um teto diário alto faria cada abertura da tela
+    // varrer a fila inteira, com uma consulta de lead por item. A tela mostra
+    // uma página; o teto do dia continua sendo o do banco.
+    montarFilaDeProspeccao(prisma, { canalPronto: canalDeVendasPronto(), limite: 50 }),
     prisma.loteDeProspeccao.findMany({
       orderBy: { criadoEm: "desc" },
       take: 20,
@@ -190,7 +193,10 @@ export async function POST(req: NextRequest) {
       outboundLigado: pausando ? false : Boolean(c.ligado),
       pausadoEm: pausando ? agora : null,
       pausadoPor: pausando ? quem : null,
-      motivo: c.motivo ?? null,
+      // Só mexe no motivo quando ele vem: ligar sem informar motivo estava
+      // apagando a explicação da pausa anterior, que é justamente o texto que
+      // alguém vai procurar depois para entender por que a casa parou.
+      ...(typeof c.motivo === "string" ? { motivo: c.motivo } : pausando ? { motivo: null } : {}),
       atualizadoPor: quem,
       ...(typeof c.limiteDiario === "number" ? { limiteDiario: Math.max(0, c.limiteDiario) } : {}),
       ...(typeof c.horasEntreAbordagens === "number"
