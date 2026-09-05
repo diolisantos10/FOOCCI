@@ -5216,6 +5216,11 @@ enum SiteLeadSource {
   WHATSAPP_DIRETO // chamou no WhatsApp comercial
   INDICACAO // veio por indicação de alguém
   MANUAL // cadastrado à mão no admin
+  INSTAGRAM // veio da conta do Instagram
+  FACEBOOK // veio da página do Facebook
+  CAMPANHA_PAGA // anúncio pago; a peça exata mora nos campos utm*
+  LISTA_PROSPECCAO // saiu de um lote de prospecção nosso, não procurou a gente
+  IMPORTACAO // entrou por importação autorizada de uma base
   OUTRO
 }
 
@@ -7112,4 +7117,121 @@ model ConnectPendencia {
   @@index([conversa, estado])
   @@index([estado, criadaEm])
   @@map("connect_pendencias")
+}
+
+// ─── PROSPECÇÃO (Jornada 3) ──────────────────────────────────────────────────
+//
+// A lista existente é o ativo mais valioso e o mais fácil de queimar. Estes três
+// modelos existem para que abordar alguém seja um ato REGISTRADO, reversível e
+// com dono — nunca um disparo anônimo em massa.
+//
+// A separação entre LOTE e ITEM é deliberada: o lote é a unidade de decisão do
+// CEO ("libere estes 20"), o item é a unidade de responsabilidade ("este número
+// foi abordado por quem, quando, e o que aconteceu").
+
+enum SituacaoDoLote {
+  RASCUNHO // carregado, conferido, e ainda sem autorização para abordar
+  LIBERADO // autorizado; os itens podem virar lead e ser abordados
+  PAUSADO // travado no meio; nenhum item novo avança até alguém retomar
+  ENCERRADO // acabou, por conclusão ou por decisão
+}
+
+enum SituacaoDoItem {
+  PENDENTE // ainda não virou lead
+  VIROU_LEAD // gerou (ou encontrou) um SiteLead, com proveniência preservada
+  DUPLICADO // já existia na base; não cria segunda carteira
+  RECUSADO // não entra: opt-out anterior, telefone inválido, fora de critério
+}
+
+/// O interruptor da prospecção, no banco e não no ambiente.
+///
+/// A chave `FOOCCI_SDR_SEND_ENABLED` desliga TODO envio, inclusive a resposta a
+/// quem escreveu para a gente. Pausar a prospecção é outra decisão: parar de
+/// procurar estranhos sem calar o atendimento de quem já está falando conosco.
+/// Uma chave só para as duas coisas obrigaria a escolher entre ficar mudo com
+/// cliente e continuar abordando gente nova.
+model ProspeccaoConfig {
+  id String @id @default("singleton")
+
+  /// Falso por padrão: prospecção nasce desligada, e ligar é um ato explícito.
+  outboundLigado Boolean @default(false)
+
+  /// Teto por dia para a operação inteira. Zero significa "nada sai".
+  limiteDiario Int @default(0)
+
+  /// Intervalo mínimo entre duas abordagens ao MESMO lead.
+  horasEntreAbordagens Int @default(72)
+
+  pausadoEm  DateTime?
+  pausadoPor String?
+  motivo     String?
+
+  atualizadoEm DateTime @updatedAt
+  atualizadoPor String?
+
+  @@map("prospeccao_config")
+}
+
+/// Um lote de prospecção: a unidade que o CEO libera, pausa e acompanha.
+model LoteDeProspeccao {
+  id   String @id @default(cuid())
+  nome String
+
+  /// De ONDE esta lista veio, em texto de quem carregou. Proveniência sem isto
+  /// é só um monte de telefone: no dia da dúvida, é esta frase que responde
+  /// "por que temos o contato desta pessoa?".
+  proveniencia String
+
+  situacao SituacaoDoLote @default(RASCUNHO)
+
+  /// Teto próprio do lote, além do teto diário global.
+  limiteDiario Int @default(20)
+
+  criadoPor   String?
+  criadoEm    DateTime  @default(now())
+  liberadoEm  DateTime?
+  liberadoPor String?
+  pausadoEm   DateTime?
+  pausadoPor  String?
+  encerradoEm DateTime?
+
+  itens ItemDeProspeccao[]
+
+  @@index([situacao, criadoEm])
+  @@map("lotes_de_prospeccao")
+}
+
+/// Uma linha da lista. Vira lead uma única vez, e guarda por que não virou.
+model ItemDeProspeccao {
+  id     String           @id @default(cuid())
+  loteId String
+  lote   LoteDeProspeccao @relation(fields: [loteId], references: [id], onDelete: Cascade)
+
+  nome     String?
+  whatsapp String
+
+  /// Só dígitos, no mesmo formato do `SiteLead.whatsappDigits` — é por este
+  /// campo que a duplicidade é detectada antes de criar carteira nova.
+  whatsappDigits String
+
+  empresa String?
+  cidade  String?
+  estado  String?
+  tipo    String?
+
+  situacao SituacaoDoItem @default(PENDENTE)
+
+  /// Preenchido quando o item vira (ou encontra) um lead.
+  leadId String?
+
+  motivo String?
+
+  criadoEm     DateTime  @default(now())
+  processadoEm DateTime?
+
+  /// O mesmo telefone não entra duas vezes no mesmo lote.
+  @@unique([loteId, whatsappDigits])
+  @@index([situacao])
+  @@index([whatsappDigits])
+  @@map("itens_de_prospeccao")
 }

@@ -19,6 +19,8 @@ import {
   raizVaiParaVitrine,
   origemPublica,
   DESTINO_DA_RAIZ,
+  ehHostDaComercial,
+  DESTINO_DA_COMERCIAL,
 } from "@/lib/canonicalHost";
 
 // Routes that do NOT require authentication
@@ -167,6 +169,20 @@ export async function middleware(req: NextRequest) {
   // no cabeçalho → `ERR_INVALID_URL`, 500) — e é montado por `origemPublica`,
   // que descarta a porta interna do contêiner sem quebrar o `localhost` do
   // desenvolvimento. Foi assim que o `:8080` entrou na primeira vez.
+  // ── A ENTRADA CANÔNICA DA COMERCIAL ──────────────────────────────────────
+  //
+  // Vem ANTES da vitrine porque as duas disputam a mesma raiz: quem chega em
+  // `vendas.foocci.com.br/` quer a sala de vendas, não a página de marketing do
+  // produto. Depois desta linha, `raizVaiParaVitrine` continua valendo para
+  // todos os outros hosts, sem mudança nenhuma.
+  if (raizVaiParaVitrine(pathname) && ehHostDaComercial(host)) {
+    const origem = origemPublica(
+      req.headers.get("x-forwarded-host") ?? host ?? req.nextUrl.host,
+      req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol,
+    );
+    return NextResponse.redirect(new URL(DESTINO_DA_COMERCIAL, origem), 307);
+  }
+
   if (raizVaiParaVitrine(pathname)) {
     const origem = origemPublica(
       req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host,

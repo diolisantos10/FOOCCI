@@ -59,6 +59,14 @@ export const ROTAS = {
   painel: `${COMERCIAL}/painel`,
   agente: `${COMERCIAL}/agente`,
   whatsapp: `${COMERCIAL}/whatsapp`,
+  /**
+   * A prospecção — os lotes da lista, o interruptor e a fila do dia.
+   *
+   * Fica separada das Filas de propósito: "Filas" é quem já fala com a gente;
+   * "Prospecção" é quem ainda não sabe que existimos. Misturar as duas telas
+   * faria o vendedor tratar estranho e interessado com o mesmo tom.
+   */
+  prospeccao: `${COMERCIAL}/prospeccao`,
   acessos: `${COMERCIAL}/acessos`,
 } as const;
 
@@ -166,6 +174,13 @@ export function abasDoComercial(papel: InternalRole | null): Aba[] {
     // é o pior jeito possível.
     ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.agente, rotulo: "O agente" }] : []),
     ...(tudo || PAPEIS_DO_WHATSAPP.has(papel) ? [{ href: ROTAS.whatsapp, rotulo: "WhatsApp" }] : []),
+    // A prospecção aparece para a Sala inteira LER — quem vai abordar precisa
+    // ver a fila do dia e por que alguém foi barrado. Mas liberar lote e mexer
+    // no interruptor a rota recusa a quem não responde pela marca: a aba mostra
+    // o estado, ela não distribui a autorização.
+    ...(tudo || PAPEIS_DO_PAINEL.has(papel)
+      ? [{ href: ROTAS.prospeccao, rotulo: "Prospecção" }]
+      : []),
     ...(tudo || PAPEIS_DOS_ACESSOS.has(papel) ? [{ href: ROTAS.acessos, rotulo: "Criar acesso" }] : []),
   ];
 }
