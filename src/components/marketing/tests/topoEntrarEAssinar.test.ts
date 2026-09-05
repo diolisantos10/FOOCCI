@@ -1,5 +1,5 @@
 /**
- * O TOPO DO SITE: DOIS BOTÕES, E O DE ASSINAR PRECISA ASSINAR DE VERDADE.
+ * O TOPO DO SITE: OS BOTÕES, E O DE ASSINAR PRECISA ASSINAR DE VERDADE.
  *
  * Ordem do CEO (24/08/2026): *"O botão laranja lá em cima (…) tem que ser banido
  * do site. No lugar disso, colocar pro cliente já assinar. (…) E o contato com
@@ -33,7 +33,7 @@ function semComentarios(fonte: string): string {
 
 const HEADER = "src/components/marketing/MarketingHeader.tsx";
 
-describe("o cabeçalho tem dois botões, e são estes", () => {
+describe("o cabeçalho: Entrar, Assinar e o convite de conversa", () => {
   it("Entrar e Assinar — os dois presentes", () => {
     const codigo = semComentarios(ler(HEADER));
     expect(codigo).toContain("LOGIN_URL");
@@ -41,17 +41,54 @@ describe("o cabeçalho tem dois botões, e são estes", () => {
     expect(codigo).toContain("ASSINAR_CTA_LABEL");
   });
 
-  it("a conversa com o agente SAIU do topo", () => {
+  /**
+   * ── A REGRA DE 24/08 MUDOU EM 05/09, E O REGISTRO FICA ────────────────────
+   *
+   * Estes dois casos travavam a ordem do CEO de 24/08: nada de convite para
+   * conversar no topo, porque isso ensina o visitante DECIDIDO a pedir reunião
+   * em vez de assinar. A trava estava certa e fez o trabalho dela — reprovou na
+   * primeira tentativa de acrescentar o botão.
+   *
+   * O que mudou não foi a opinião: foi o PÚBLICO. Em 05/09 o SDR começou a
+   * abordar restaurantes um a um e convidá-los ao site. Quem chega assim não é
+   * visitante decidido — é alguém que recebeu uma mensagem e veio olhar. A regra
+   * antiga protegia contra desviar quem já ia assinar; ela não previa gente que
+   * ainda não sabe o que o Foocci é.
+   *
+   * O que NÃO afrouxou, e é o que estes casos passam a guardar:
+   *   · o convite continua fora do WhatsApp direto — vai para a página de leads;
+   *   · "Assinar" continua sendo o único botão de destaque no topo.
+   */
+  it("o convite de conversa voltou ao topo — e aponta para a PÁGINA DE LEADS", () => {
+    // `DEMO_URL` é o formulário. O topo aponta para ELE, e não para
+    // `AGENTE_URL` — que desde 05/09 leva direto ao WhatsApp e é a porta do
+    // botão verde. As duas portas servem estados diferentes: quem quer ser
+    // ATENDIDO escreve; quem quer ser ENTENDIDO preenche.
     const codigo = semComentarios(ler(HEADER));
-    expect(codigo).not.toContain("AGENTE_URL");
-    expect(codigo).not.toContain("chamada.href");
-    expect(codigo).not.toContain("DEMO_URL");
+    expect(codigo).toContain("DEMO_URL");
   });
 
-  it("nenhum convite de conversa escrito à mão volta para o topo", () => {
+  it("⛔ e o topo NUNCA manda direto para o WhatsApp", () => {
+    // A razão de 27/08, que não mudou: número anônimo chega sem nome, sem
+    // restaurante e sem cidade, e o agente gasta as três primeiras mensagens
+    // descobrindo com quem fala. `AGENTE_URL` é um desvio no servidor, e é ele
+    // que decide o destino — o topo não escolhe.
     const codigo = semComentarios(ler(HEADER));
-    for (const proibido of [/fale com/i, /especialista/i, /demonstra/i, /consultor/i, /agende/i]) {
-      expect(codigo, `voltou "${proibido}" para o topo`).not.toMatch(proibido);
+    expect(codigo).not.toMatch(/wa\.me|api\.whatsapp\.com/);
+    // E não usa `AGENTE_URL`, que hoje É o atalho direto para o WhatsApp.
+    expect(codigo).not.toContain("AGENTE_URL");
+    expect(codigo).not.toContain("chamada.href");
+  });
+
+  it("⭐ o convite não pode competir com Assinar", () => {
+    // O medo de 24/08 continua legítimo: se o convite virar botão laranja do
+    // mesmo peso, ele rouba quem já tinha decidido. Só `Assinar` usa a cor da
+    // marca no topo.
+    const codigo = semComentarios(ler(HEADER));
+    const linhasComMarca = codigo.split("\n").filter((l) => /bg-brand-500/.test(l));
+    for (const linha of linhasComMarca) {
+      expect(linha, "outro botão do topo ganhou o mesmo destaque de Assinar")
+        .not.toMatch(/DEMO_URL/);
     }
   });
 

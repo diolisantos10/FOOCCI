@@ -51,13 +51,34 @@
  */
 
 import { NextResponse } from "next/server";
-import { DEMO_URL } from "@/components/marketing/config";
+import { linkDoWhatsAppDeVendas } from "@/lib/site/canalDeVendas";
 
 /** Decidido a cada requisição: nada de resposta guardada em cache de borda. */
 export const dynamic = "force-dynamic";
 
+/**
+ * ── 05/09/2026: O BOTÃO VERDE VOLTA A IR DIRETO PARA O WHATSAPP ────────────
+ *
+ * O CEO clicou no botão verde do site, caiu no formulário e mandou corrigir:
+ * *"o botão do WhatsApp tem que mandar direto pro WhatsApp"*.
+ *
+ * Isso desfaz a decisão dele de 27/08, e o motivo daquela decisão fica escrito
+ * porque continua verdadeiro: pelo formulário o agente recebe nome, restaurante,
+ * cidade e o desafio; pelo WhatsApp direto chega um número desconhecido e o
+ * agente gasta as três primeiras mensagens descobrindo com quem fala.
+ *
+ * ── POR QUE MUDOU, E POR QUE NÃO É CONTRADIÇÃO ─────────────────────────────
+ *
+ * Porque agora existem DUAS portas, e em 27/08 existia uma. No mesmo dia o topo
+ * ganhou "Fale com nossos consultores", que leva ao formulário. O botão verde
+ * passa a ser a porta de quem quer falar AGORA — e essa pessoa, obrigada a
+ * preencher formulário, desiste.
+ *
+ * Quem quer ser ATENDIDO escreve; quem quer ser ENTENDIDO preenche. Ter as duas
+ * é o que faltava.
+ */
 export async function GET(): Promise<NextResponse> {
-  const destino = new URL(DEMO_URL, "https://foocci.com.br").toString();
+  const destino = linkDoWhatsAppDeVendas();
 
   // 307 e não 308: o destino pode voltar a mudar — um desvio permanente fica
   // guardado no navegador e no índice de busca, e daria a quem clicou hoje um

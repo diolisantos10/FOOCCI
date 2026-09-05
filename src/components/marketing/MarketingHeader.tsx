@@ -9,22 +9,35 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { LOGIN_URL, NAV_LINKS, ASSINAR_URL, ASSINAR_CTA_LABEL } from "./config";
+import { LOGIN_URL, NAV_LINKS, ASSINAR_URL, ASSINAR_CTA_LABEL, DEMO_URL } from "./config";
 import { MenuIcon, CloseIcon } from "./icons";
 
 const FOCUS = "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2";
 
 /**
- * DOIS BOTÕES NO TOPO, E SÓ DOIS: **Entrar** (quem já é cliente) e **Assinar**
- * (quem quer virar). Ordem do CEO em 24/08/2026 — ver `ASSINAR_URL` no config.
+ * TRÊS BOTÕES NO TOPO, desde 05/09/2026 — e a regra anterior fica escrita, com o
+ * porquê de ter mudado.
  *
- * A conversa com o agente SAIU daqui de propósito. Quem tem dúvida usa o botão
- * verde do canto da tela, que fala com o SDR no WhatsApp. Topo que convida para
- * conversar ensina o visitante decidido a pedir reunião em vez de assinar — e
- * quem ainda não decidiu não some: o botão do canto está em toda página.
+ * ── A REGRA DE 24/08: DOIS, E SÓ DOIS ───────────────────────────────────────
  *
- * Este componente não recebe mais a chamada comercial: o topo deixou de depender
- * do canal de vendas estar aceso ou apagado.
+ * Ordem do CEO: **Entrar** (quem já é cliente) e **Assinar** (quem quer virar).
+ * A conversa com o agente saiu daqui de propósito, e o motivo era bom: topo que
+ * convida para conversar ensina o visitante DECIDIDO a pedir reunião em vez de
+ * assinar. Quem tinha dúvida não ficava sem porta — o botão verde do canto está
+ * em toda página.
+ *
+ * ── POR QUE MUDOU: O TRÁFEGO DEIXOU DE SER O MESMO ──────────────────────────
+ *
+ * Em 05/09 o SDR começou a abordar restaurantes um a um e a convidá-los para o
+ * site. **Quem chega assim não é visitante decidido — é alguém que recebeu uma
+ * mensagem e veio olhar.** A regra de 24/08 protegia contra desviar quem já ia
+ * assinar; ela não previa um público que ainda não sabe o que o Foocci é.
+ *
+ * ⚠️ E o botão NÃO vai para o WhatsApp direto, embora tenha sido pedido assim
+ * primeiro. O CEO corrigiu na mesma conversa: vai para a página de leads. É a
+ * mesma razão de 27/08 — número anônimo chega sem nome, sem restaurante e sem
+ * cidade, e o agente gasta as três primeiras mensagens descobrindo com quem
+ * fala. Quem quiser falar AGORA tem o botão verde do canto, que continua lá.
  */
 export function MarketingHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -79,6 +92,14 @@ export function MarketingHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          {/* Primeiro na ordem de leitura, e o mais discreto dos três: é a porta
+              de quem ainda não sabe se quer — não pode competir com Assinar. */}
+          <Link
+            href={DEMO_URL}
+            className={`inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold text-ink2 transition-colors hover:text-ink ${FOCUS}`}
+          >
+            Fale com nossos consultores
+          </Link>
           <Link
             href={LOGIN_URL}
             className={`inline-flex items-center rounded-xl border border-line2 bg-paper px-5 py-2 text-sm font-semibold text-ink shadow-[0_1px_2px_rgba(11,11,11,.03)] transition-colors hover:bg-[#FAFAF8] ${FOCUS}`}
@@ -118,6 +139,13 @@ export function MarketingHeader() {
               </Link>
             ))}
             <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
+              <Link
+                href={DEMO_URL}
+                onClick={() => setOpen(false)}
+                className={`rounded-lg px-2 py-3 text-base font-semibold text-ink2 hover:bg-[#FAFAF8] ${FOCUS}`}
+              >
+                Fale com nossos consultores
+              </Link>
               <Link
                 href={LOGIN_URL}
                 onClick={() => setOpen(false)}

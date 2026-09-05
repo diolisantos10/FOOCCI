@@ -93,7 +93,9 @@ export const PROPOSTA_URL = "/site/sobre";
  * MENU DE PRODUTO (decisão do CEO, 04/08): cada item vira PÁGINA própria — nada de
  * âncora que pula pro meio da home. Os dois carros-chefe (o atendimento por IA e o
  * CRM) têm página dedicada com os prints reais; "Soluções" reúne todo o resto
- * (cardápio, loja, cozinha, pagamento, entrega, nota fiscal, gestão/PDV). As antigas
+ * (cardápio, loja, cozinha, pagamento, entrega, gestão/PDV). "Nota fiscal" saiu da
+ * lista em 05/09/2026, por ordem do CEO: a casa não emite mais, e comentário que
+ * lista capacidade inexistente vira a próxima promessa copiada para a vitrine. As antigas
  * âncoras `/site#solucoes` e `/site#crm` estavam órfãs desde a repaginação de 02/08 —
  * apontavam para seções que a home não renderiza mais.
  */

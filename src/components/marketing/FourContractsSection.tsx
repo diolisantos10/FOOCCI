@@ -14,7 +14,10 @@ import { planByIdOrNull } from "@/lib/site/plans";
 
 const SEPARATE = [
   { name: "Cardápio digital", note: "seu pedido, fora do marketplace" },
-  { name: "PDV / gestão", note: "comanda, caixa e nota fiscal" },
+  // ⚠️ "nota fiscal" saiu daqui em 05/09/2026, por ordem do CEO: a casa NÃO
+  // emite mais. Promessa em tabela comparativa não é detalhe de texto — é o que
+  // o lojista compara com o que ele paga hoje, e é onde ele vai cobrar depois.
+  { name: "PDV / gestão", note: "comanda e caixa" },
   { name: "Atendimento por IA", note: "quem responde o cliente" },
   { name: "CRM de fidelidade", note: "quem faz ele voltar" },
 ];

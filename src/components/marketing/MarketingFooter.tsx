@@ -93,7 +93,37 @@ export function MarketingFooter() {
           <Column title="Legal" links={LEGAL} />
         </div>
 
-        <div className="mt-8 border-t border-line pt-5 lg:mt-12">
+        {/* ── A IDENTIFICAÇÃO DA EMPRESA (05/09/2026) ────────────────────────
+            Quem vende pela internet precisa se identificar com CNPJ e endereço —
+            é exigência do Código de Defesa do Consumidor, e é também o que faz o
+            visitante frio, vindo de uma mensagem no WhatsApp, entender que do
+            outro lado existe uma empresa.
+
+            ⚠️ O QUE NÃO ENTRA AQUI, e é decisão do CEO: o NOME EMPRESARIAL. A
+            empresa é MEI, e no MEI o nome empresarial é o nome civil da pessoa
+            seguido do número — publicar isso é publicar o dono, não a marca. O
+            CPF, por razão óbvia, também nunca entra. */}
+        <div className="mt-8 space-y-2 border-t border-line pt-5 lg:mt-12">
+          <p className="text-xs leading-relaxed text-muted">
+            CNPJ 59.120.811/0001-79 · Rua Itápolis, 1167 — Pacaembu, São Paulo/SP,
+            CEP 01245-000
+          </p>
+          {/* ⚠️ `tel:` e NÃO `wa.me`, e a diferença não é estética.
+              O site tem UMA porta de WhatsApp — o desvio do servidor
+              (`AGENTE_URL`), que pode ser ligado e desligado sem build novo, e
+              que leva ao formulário para o lead não chegar anônimo. Um `wa.me`
+              solto aqui seria uma segunda porta, fora desse controle: ela
+              continuaria aberta no dia em que a primeira fosse fechada.
+              Aqui o número é IDENTIFICAÇÃO da empresa, não canal de venda. */}
+          <p className="text-xs text-muted">
+            Contato:{" "}
+            <a
+              href="tel:+5511943723316"
+              className="underline underline-offset-2 hover:text-ink2"
+            >
+              +55 11 94372-3316
+            </a>
+          </p>
           <p className="text-xs text-muted">© {year} Foocci. Todos os direitos reservados.</p>
         </div>
       </div>

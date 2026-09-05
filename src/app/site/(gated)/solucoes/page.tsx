@@ -5,7 +5,7 @@
  *
  * Os dois carros-chefe têm página própria: o atendimento por IA (/atendimento-com-ia)
  * e o CRM (/crm). ESTA página reúne as demais soluções — loja própria, cardápio
- * digital, cozinha/comanda, pagamento, entrega, nota fiscal, gestão/PDV e custo do
+ * digital, cozinha/comanda, pagamento, entrega, gestão/PDV e custo do
  * prato — organizadas por tema. Conteúdo consolidado do que a home e a página de
  * planos já descreviam (ProductModulesSection + grupos de recursos de /precos).
  *
@@ -29,7 +29,6 @@ import {
   PrinterIcon,
   CreditCardIcon,
   TruckIcon,
-  ReceiptIcon,
   ChartIcon,
   TrendingUpIcon,
   ChatIcon,
@@ -41,7 +40,7 @@ import { ATENDIMENTO_IA_URL, CRM_URL } from "@/components/marketing/config";
 
 const TITLE = "Soluções do Foocci | Loja, cardápio, cozinha, pagamento e gestão";
 const DESCRIPTION =
-  "Loja própria, cardápio digital, comanda que não some, pagamento, entrega, nota fiscal e gestão/PDV — todas as soluções do Foocci num sistema só, conversando entre si.";
+  "Loja própria, cardápio digital, comanda que não some, pagamento, entrega e gestão/PDV — todas as soluções do Foocci num sistema só, conversando entre si.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -116,16 +115,6 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    icon: ReceiptIcon,
-    title: "Nota fiscal",
-    desc: "NFC-e emitida junto do pedido, sem sistema à parte.",
-    items: [
-      "Emissão de NFC-e integrada ao pedido",
-      "Certificado digital do lojista",
-      "Custo por documento transparente",
-    ],
-  },
-  {
     icon: ChartIcon,
     title: "Gestão e PDV",
     desc: "Os números do restaurante num painel só — e integração com quem você já usa.",
@@ -170,7 +159,7 @@ export default function SolucoesPage() {
       <PageHero
         badge="Soluções"
         title="Todo o resto que faz o restaurante rodar — num sistema só."
-        subtitle="Do cardápio à nota fiscal, tudo conversa entre si e nada é ferramenta solta. O atendimento por IA e o CRM, os dois carros-chefe, têm página própria."
+        subtitle="Do cardápio à gestão, tudo conversa entre si e nada é ferramenta solta. O atendimento por IA e o CRM, os dois carros-chefe, têm página própria."
         /* O hero NÃO convida para o formulário (05/08): quem abre "Soluções" veio
            ver O QUE está incluído, e o convite antes da lista chega antes do motivo.
            O botão desce para a lista; o convite é a `CtaBand`, no fim. */
