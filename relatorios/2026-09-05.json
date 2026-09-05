@@ -1,0 +1,152 @@
+{
+  "produto": "Foocci",
+  "data": "2026-09-05",
+  "gerado_em_utc": "2026-09-05T11:20:00Z",
+  "assinado_por": "Diretor do Foocci",
+  "aviso": "null = NAO MEDIDO. 0 = medido e deu zero.",
+  "ficha_lida": false,
+
+  "relatorio_ausente": {
+    "dia": "2026-09-04",
+    "motivo": "a sessao ficou parada entre 03/09 e hoje. Falha minha, nao do produto. E o terceiro dia ausente em uma semana (31/08, 01/09, 04/09)."
+  },
+
+  "saude": {
+    "app_no_ar": true,
+    "origem": "GET https://foocci.com.br/api/health as 11:06 UTC",
+    "db_status": "ok",
+    "commit_em_producao": "61a28c9c",
+    "uptime_segundos": 1235,
+    "ultimo_deploy_utc": "2026-09-05T10:44:00Z",
+    "requisicoes_24h": 42734,
+    "erros_5xx_24h": 20,
+    "erro_5xx_24h_pct": 0.0468,
+    "erros_4xx_24h": 333,
+    "origem_erros": "Railway http-error-rate, servico FOOCCI, 24h, 13 baldes",
+    "janela_dos_erros_utc": "04/09 20:00 as 05/09 04:00 — 1, 4, 8 e 7 erros nos quatro baldes. Nos outros nove baldes, zero.",
+    "serie_erro_5xx_pct": {"2026-08-29": 0.0056, "2026-08-30": 0.0219, "2026-08-31": 0.0, "2026-09-02": 0.0875, "2026-09-03": 0.0, "2026-09-05": 0.0468},
+    "comparacao": "O trafego DOBROU (21.470 -> 42.734) e os erros voltaram: de zero anteontem para 20. Todos na mesma janela noturna em que as comandas falham. NAO afirmo que sao a mesma causa — a falha de impressao e capturada e nao devolve 5xx."
+  },
+
+  "incidente_do_dia": {
+    "titulo": "Sao 26 comandas, nao 7. E treze foram so na noite de ontem.",
+    "ocorrencias_totais_conhecidas_desde_01_09": 26,
+    "ocorrencias_nas_ultimas_48h": 19,
+    "ocorrencias_so_na_noite_de_04_09": 13,
+    "janela_da_noite_de_ontem_utc": "04/09 21:02 as 05/09 00:16",
+    "carimbos_das_19_novas_utc": [
+      "2026-09-03T14:08:43Z", "2026-09-03T23:59:25Z",
+      "2026-09-04T00:04:01Z", "2026-09-04T00:24:04Z", "2026-09-04T00:25:41Z", "2026-09-04T00:36:59Z",
+      "2026-09-04T21:02:35Z", "2026-09-04T21:20:25Z", "2026-09-04T21:40:17Z", "2026-09-04T21:44:52Z",
+      "2026-09-04T21:55:19Z", "2026-09-04T22:02:36Z", "2026-09-04T22:32:32Z", "2026-09-04T22:55:07Z",
+      "2026-09-04T23:15:30Z", "2026-09-04T23:30:47Z", "2026-09-04T23:47:17Z",
+      "2026-09-05T00:08:05Z", "2026-09-05T00:16:26Z"
+    ],
+    "origem": "Railway get-logs no deployment 87f11dd1, filtro 'enqueue failed', janela 03/09 11:10 a 05/09 11:00. 19 resultados, sem truncamento (limite 60).",
+    "todas_no_mesmo_restaurante": true,
+    "restaurante": "cmp30upkp000198i4r8wpxdl1 (Sushi Cazza)",
+    "erro_literal": "prisma.printJob.createMany() -> PostgresError 22021: invalid byte sequence for encoding \"UTF8\": 0x00",
+    "ocorrencias_abertas_e_confirmadas": 3,
+    "pedidos_confirmados": [
+      {"pedido": "cmtj8nfq315v8uvbvzzhnftl0", "quando_utc": "2026-09-01T22:29:17Z", "valor_reais": 131.63},
+      {"pedido": "cmtkl05881pvcuvbv6j6jn7eo", "quando_utc": "2026-09-02T21:01:40Z", "valor_reais": 169.60},
+      {"pedido": "cmtnfwviu2yieuvbvdvy0pf9p", "quando_utc": "2026-09-04T21:02:35Z", "valor_reais": 119.80}
+    ],
+    "valor_lido_reais": 421.03,
+    "pedidos_lidos": 3,
+    "pedidos_nao_lidos": 23,
+    "ticket_medio_dos_tres_lidos": 140.34,
+    "observacao_valor": "NAO multipliquei 140,34 por 26. Tres pedidos nao sao amostra. O que esta medido e R$ 421,03 em tres pedidos; o resto e desconhecido.",
+    "existe_sanitizacao_de_0x00_no_caminho": false,
+    "correcao_entrou": false,
+    "dias_aguardando_autorizacao": 3
+  },
+
+  "cliente": {
+    "clientes_sem_resposta_hoje": null,
+    "motivo_null": "exige banco; setimo dia em null",
+    "comandas_que_nao_entraram_na_fila_48h": 19,
+    "instagram_token_valido": false,
+    "instagram_dias_vencido": 11.5,
+    "origem_instagram": "medido em 02/09; hoje NAO reconferido",
+    "templates_meta_aprovados": null,
+    "crm_teto_de_audiencia": null,
+    "agente_solto_1_em_21": null,
+    "motivo_null_agente": "registro estatico de 25/08. Os 16 commits de ontem NAO tocaram nenhum caminho do WhatsApp, CRM, pedido ou impressao (git diff --name-only 51b62053..61a28c9c filtrado por services/(print|order|whatsapp|crm)/ = vazio), entao nada do funil mudou. Isso e ausencia de mudanca, nao medicao do numero."
+  },
+
+  "produtividade": {
+    "commits_na_branch_de_deploy_24h": 16,
+    "prs_mergeados_24h": 2,
+    "lista_mergeados": ["#180 Comercial Foocci P0 — prospeccao com freio e proveniencia", "#181 Jornadas 1 e 2 com a mesma prova da 3"],
+    "mergeado_por_mim": 0,
+    "area_dos_16_commits": "salaDeVendas, comercial, foocci-sdr, middleware, jornadas — TODOS do produto comercial",
+    "commits_que_tocaram_o_restaurante": 0,
+    "origem_area": "git diff --name-only 51b62053 61a28c9c agrupado por area; zero arquivos em services/print, services/order, services/whatsapp, services/crm",
+    "itens_meus_travados_por_falta_de_ok": 2,
+    "lista_travados": [
+      "conserto do byte nulo que derruba a comanda — desenhado em 02/09, meio bloco, aguardando ok ha 3 dias",
+      "alarme sonoro persistente com aceite explicito — diagnostico entregue 02/09 23:40, aguardando ok"
+    ],
+    "prs_abertos": null
+  },
+
+  "qualidade": {
+    "suite_total": null,
+    "suite_falhando": null,
+    "tsc_limpo": null,
+    "motivo_null_qualidade": "node_modules incompleto nesta copia. E agora a ultima medicao valida (30/08) NAO descreve mais producao: entraram 16 commits e 2 PRs desde entao. O que eu tinha como ponte quebrou.",
+    "ultima_medicao_valida_data": "2026-08-30",
+    "codigo_mudou_desde_a_ultima_medicao": true,
+    "ci_rodou_nos_dois_prs": null,
+    "motivo_null_ci": "nao li o resultado do CI dos PRs #180 e #181"
+  },
+
+  "dinheiro": {
+    "infra_railway_foocci_usd_mes": 20.65,
+    "confianca_infra": "ESTIMADO",
+    "origem_infra": "medido 2026-08-28, NAO reconferido em 8 dias",
+    "receita_mrr": null,
+    "assinantes_ativos": null,
+    "custo_ia_mes": null,
+    "saldo_openai": null,
+    "saldo_anthropic": null,
+    "receita_medida_em_pedidos_sem_comanda": 421.03,
+    "origem": "tres pedidos abertos no log de producao"
+  },
+
+  "risco": {
+    "cve_aplicado": true,
+    "dados_intactos": true,
+    "origem_dados": "disco 0,86441984 GB as 11:10 (min 24h 0,862134272, max 0,86441984 — cresceu, sem zero desta vez); health db=ok",
+    "pitr_ligado": null,
+    "agendamento_de_copia": null,
+    "motivo_null_copia": "NAO rodei o workflow de conferencia hoje. Em 03/09: agendamento DAILY de pe, retencao 6 dias, PITR desligado e sem bucket.",
+    "copias_ficam_no_mesmo_volume": true,
+    "bancos_expostos_na_internet": 2,
+    "instagram_fora_do_ar": true,
+    "risco_novo": "O PR #180 mexeu em src/middleware.ts e abriu rotas em src/app/comercial e src/app/api. Middleware e onde mora a autenticacao de borda. NAO auditei — soma-se ao PR #177, que tambem segue sem auditoria minha."
+  },
+
+  "bloqueio_do_ceo": {
+    "itens": 7,
+    "pagina": "https://claude.ai/code/artifact/3979d19f-795f-469a-9a6d-072da20ce210",
+    "nenhum_decidido_desde_29_08": true,
+    "dias_parados": 7
+  },
+
+  "nao_medido": [
+    "O valor de 23 das 26 comandas. Li tres. NAO extrapolei — tres pedidos nao sao amostra.",
+    "Se alguma das 26 comandas foi impressa por outro caminho, e se a cozinha viu esses pedidos.",
+    "De onde vem o byte nulo — exige ler conteudo de pedido, que e dado de cliente.",
+    "Se os 20 erros 5xx da noite tem a ver com as comandas — a falha de impressao e capturada e nao devolve 5xx, entao provavelmente NAO. Nao investiguei.",
+    "Suite e tsc — node_modules incompleto, e a ponte da ultima medicao valida quebrou com os 16 commits novos.",
+    "Se o CI passou nos PRs #180 e #181 — nao li.",
+    "Auditoria de seguranca do middleware alterado pelo #180, e das rotas do #177.",
+    "Clientes sem resposta hoje — setimo dia em null.",
+    "Estado da copia de seguranca HOJE — nao rodei o workflow.",
+    "Templates da Meta, parede das 500, 1-em-21 — nao reconferidos.",
+    "Receita, MRR, assinantes, custo de IA, saldo dos creditos — exigem banco.",
+    "O Postgres-76OG — 0,35 GB, exposto, conteudo desconhecido."
+  ]
+}
