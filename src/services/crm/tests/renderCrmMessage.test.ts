@@ -177,3 +177,86 @@ describe("couponValidadeLabel — real wallet expiry (cupom-vencendo)", () => {
     expect(couponValidadeLabel({ type: "PERCENTAGE", value: 10, validityDays: 5, expiresAt: "not-a-date" })).toBe(expected);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// O CUPOM QUE NÃO ENCONTRAVA O DONO — achado pelo CEO em 05/09/2026
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("{link_cardapio} identifica quem recebe", () => {
+  // O CEO recebeu "você ganhou 20% de desconto, só pelo nosso link", clicou, e
+  // caiu numa tela pedindo "informe seu WhatsApp para identificarmos seu
+  // cadastro" — do lado de fora do cadastro que continha o cupom dele.
+  //
+  // O link do robô (`/r/{code}`) abria com "Olá, diego" porque gera um waToken
+  // assinado. O do CRM mandava a URL nua. A campanha custa disparo, e quem cai
+  // numa catraca pedindo telefone entende "não é pra mim" e fecha.
+
+  const base: RenderContext = {
+    restaurantName: "Sushi Cazza",
+    pedidoUrl: "https://foocci.com.br/pedido/sushi-cazza",
+  };
+
+  it("⭐ com telefone conhecido, o link leva o waToken assinado", () => {
+    const v = resolveCrmVariables(
+      { name: "Diego Santos", phone: "5511999998888" },
+      base,
+    );
+
+    expect(v.link_cardapio).toContain("waToken=");
+    expect(v.link_cardapio).toContain("src=crm");
+    expect(v.link_cardapio.startsWith("https://foocci.com.br/pedido/sushi-cazza?")).toBe(true);
+  });
+
+  it("⛔ sem telefone, sai como sempre saiu — nada quebra para quem não tem o dado", () => {
+    const v = resolveCrmVariables({ name: "Diego Santos" }, base);
+    expect(v.link_cardapio).toBe("https://foocci.com.br/pedido/sushi-cazza");
+  });
+
+  it("⭐ a mensagem real do cupom sai com o link identificado", () => {
+    // O template exato que o CEO recebeu.
+    const texto = renderCrmMessage(
+      "Oi, {nome}! 🍽️ Você ganhou {cupom} pra voltar a pedir. Aproveite até {validade}, só pelo nosso link: {link_cardapio}",
+      { name: "Diego Santos", phone: "5511999998888" },
+      { ...base, coupon: { type: "PERCENTAGE", value: 20, validityDays: 15 } },
+    );
+
+    expect(texto).toContain("waToken=");
+    // E o link nu NÃO pode sobrar no fim da frase.
+    expect(texto.endsWith("/pedido/sushi-cazza")).toBe(false);
+  });
+
+  it("não confunde com {link_indicacao}, que é outra coisa", () => {
+    // Indicação é o link que o cliente COMPARTILHA (ref=<id>); cardápio é o que
+    // ELE abre. Misturar os dois faria o amigo dele entrar como se fosse ele.
+    const v = resolveCrmVariables(
+      { name: "Diego", phone: "5511999998888", id: "cus_1" },
+      base,
+    );
+
+    expect(v.link_indicacao).toContain("ref=cus_1");
+    expect(v.link_indicacao).not.toContain("waToken=");
+    expect(v.link_cardapio).not.toContain("ref=");
+  });
+
+  it("o caminho de envio real (personalizeMessage) leva o telefone adiante", () => {
+    // A trava contra o conserto inerte: `AudienceCustomer` sempre teve o
+    // telefone e ele não era repassado. Se alguém tirar o campo de novo, aqui
+    // reprova.
+    const texto = personalizeMessage(
+      "Pedido novo? {link_cardapio}",
+      {
+        id: "cus_1",
+        name: "Diego Santos",
+        phone: "5511999998888",
+        tier: "OURO",
+        segment: "VIP",
+        totalOrders: 3,
+        totalSpend: 300,
+        lastOrderAt: null,
+      },
+      base,
+    );
+
+    expect(texto).toContain("waToken=");
+  });
+});
