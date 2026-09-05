@@ -237,47 +237,86 @@ export async function materializarLead(
       : { ok: false, motivo: `Item em situação ${item.situacao}.` };
   }
 
-  const existente = await db.siteLead.findFirst({
-    where: { whatsappDigits: item.whatsappDigits },
-    select: { id: true },
+  // ── ⚠️ RESERVAR ANTES DE CRIAR — A CORRIDA DOS DOIS SDRs ──────────────────
+  //
+  // Ler "está PENDENTE" e só depois criar o lead deixa uma janela entre as duas
+  // operações. Dois SDRs clicando ao mesmo tempo (ou um clique duplo, ou duas
+  // instâncias do app) passam os dois pela leitura, não encontram lead nenhum, e
+  // criam **dois leads para o mesmo telefone** — dois donos para a mesma pessoa,
+  // que é exatamente o que este desenho inteiro existe para impedir. E
+  // `SiteLead.whatsappDigits` é índice, não único: o banco não segura.
+  //
+  // `updateMany` com o estado no `where` é comparar-e-trocar: **um** dos dois
+  // recebe `count: 1` e segue; o outro recebe `count: 0` e lê o resultado de
+  // quem ganhou. Trava de banco, não boa intenção de código.
+  const reserva = await db.itemDeProspeccao.updateMany({
+    where: { id: item.id, situacao: "PENDENTE" },
+    data: { situacao: "VIROU_LEAD", processadoEm: new Date() },
   });
 
-  if (existente) {
-    await db.itemDeProspeccao.update({
+  if (reserva.count === 0) {
+    const jaFeito = await db.itemDeProspeccao.findUnique({
       where: { id: item.id },
-      data: {
-        situacao: "DUPLICADO",
-        leadId: existente.id,
-        motivo: "Já existe como lead na base.",
-        processadoEm: new Date(),
-      },
+      select: { leadId: true },
     });
-    return { ok: true, leadId: existente.id };
+    return jaFeito?.leadId
+      ? { ok: true, leadId: jaFeito.leadId }
+      : { ok: false, motivo: "Outro atendimento está materializando este contato." };
   }
 
-  const criado = await db.siteLead.create({
-    data: {
-      nome: item.nome ?? item.empresa ?? "Contato de prospecção",
-      whatsapp: item.whatsapp,
-      whatsappDigits: item.whatsappDigits,
-      restaurante: item.empresa,
-      cidade: item.cidade,
-      tipo: item.tipo,
-      fonte: "LISTA_PROSPECCAO",
-      origem: "prospeccao",
-      stage: "NOVO",
-      atendidoPor: "NINGUEM",
-      // consentAt fica NULO de propósito — ver o comentário acima.
-    },
-    select: { id: true },
-  });
+  try {
+    const existente = await db.siteLead.findFirst({
+      where: { whatsappDigits: item.whatsappDigits },
+      select: { id: true },
+    });
 
-  await db.itemDeProspeccao.update({
-    where: { id: item.id },
-    data: { situacao: "VIROU_LEAD", leadId: criado.id, processadoEm: new Date() },
-  });
+    if (existente) {
+      await db.itemDeProspeccao.update({
+        where: { id: item.id },
+        data: {
+          situacao: "DUPLICADO",
+          leadId: existente.id,
+          motivo: "Já existe como lead na base.",
+        },
+      });
+      return { ok: true, leadId: existente.id };
+    }
 
-  return { ok: true, leadId: criado.id };
+    const criado = await db.siteLead.create({
+      data: {
+        nome: item.nome ?? item.empresa ?? "Contato de prospecção",
+        whatsapp: item.whatsapp,
+        whatsappDigits: item.whatsappDigits,
+        restaurante: item.empresa,
+        cidade: item.cidade,
+        tipo: item.tipo,
+        fonte: "LISTA_PROSPECCAO",
+        origem: "prospeccao",
+        stage: "NOVO",
+        atendidoPor: "NINGUEM",
+        // consentAt fica NULO de propósito — ver o comentário acima.
+      },
+      select: { id: true },
+    });
+
+    await db.itemDeProspeccao.update({
+      where: { id: item.id },
+      data: { leadId: criado.id },
+    });
+
+    return { ok: true, leadId: criado.id };
+  } catch (erro) {
+    // ── DEVOLVER A RESERVA ──
+    //
+    // Sem isto, uma falha aqui deixaria o item marcado como VIROU_LEAD sem lead
+    // nenhum: um contato que sai da fila para sempre e nunca é abordado — some
+    // em silêncio, que é a pior forma de perder alguém da lista.
+    await db.itemDeProspeccao.updateMany({
+      where: { id: item.id, leadId: null },
+      data: { situacao: "PENDENTE", processadoEm: null },
+    });
+    throw erro;
+  }
 }
 
 /** Mensagens que a casa mandou para este lead. Saída, não entrada. */

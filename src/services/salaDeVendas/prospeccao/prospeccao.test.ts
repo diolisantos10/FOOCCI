@@ -369,6 +369,7 @@ describe("a fila do dia", () => {
           lote: { situacao: "LIBERADO" },
         }),
         update: vi.fn().mockResolvedValue({}),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       siteLead: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -397,6 +398,7 @@ describe("a fila do dia", () => {
           lote: { situacao: "LIBERADO" },
         }),
         update: vi.fn().mockResolvedValue({}),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       siteLead: { findFirst: vi.fn(), create: vi.fn() },
     } as any;
@@ -416,6 +418,7 @@ describe("a fila do dia", () => {
           lote: { situacao: "PAUSADO" },
         }),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       siteLead: { findFirst: vi.fn(), create: vi.fn() },
     } as any;
@@ -485,5 +488,65 @@ describe("o descanso configurável", () => {
       descansoHoras: 0,
     });
     expect(d.sendable).toBe(true);
+  });
+});
+
+
+describe("a corrida dos dois SDRs", () => {
+  it("⭐⭐ quem perde a corrida NÃO cria um segundo lead — devolve o de quem ganhou", async () => {
+    // Sem a reserva por comparar-e-trocar, dois cliques simultâneos passariam
+    // os dois pela leitura de "está PENDENTE", nenhum encontraria lead, e os
+    // dois criariam carteira para o mesmo telefone. `whatsappDigits` é índice e
+    // não único: o banco não segura isso sozinho.
+    const db = {
+      itemDeProspeccao: {
+        findUnique: vi
+          .fn()
+          // 1ª leitura: o item ainda parece disponível para os dois.
+          .mockResolvedValueOnce({
+            ...ITEM,
+            situacao: "PENDENTE",
+            lote: { situacao: "LIBERADO" },
+          })
+          // 2ª leitura, já depois de perder a reserva: quem ganhou gravou o lead.
+          .mockResolvedValueOnce({ leadId: "lead-do-vencedor" }),
+        // count 0 = outro processo reservou primeiro.
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        update: vi.fn(),
+      },
+      siteLead: { findFirst: vi.fn(), create: vi.fn() },
+    } as any;
+
+    const r = await materializarLead(db, "i1");
+
+    expect(r).toEqual({ ok: true, leadId: "lead-do-vencedor" });
+    expect(db.siteLead.create).not.toHaveBeenCalled();
+  });
+
+  it("⭐ falha ao criar o lead DEVOLVE o item para a fila", async () => {
+    // Sem devolver, o contato sairia da fila para sempre sem nunca ter sido
+    // abordado — some em silêncio, que é a pior forma de perder alguém da lista.
+    const db = {
+      itemDeProspeccao: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...ITEM,
+          situacao: "PENDENTE",
+          lote: { situacao: "LIBERADO" },
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        update: vi.fn(),
+      },
+      siteLead: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(new Error("banco fora do ar")),
+      },
+    } as any;
+
+    await expect(materializarLead(db, "i1")).rejects.toThrow("banco fora do ar");
+
+    // A última chamada tem que ser a devolução para PENDENTE.
+    const devolucao = db.itemDeProspeccao.updateMany.mock.calls.at(-1)![0];
+    expect(devolucao.data.situacao).toBe("PENDENTE");
+    expect(devolucao.where.leadId).toBeNull();
   });
 });
