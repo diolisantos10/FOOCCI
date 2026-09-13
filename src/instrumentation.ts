@@ -30,6 +30,13 @@ export async function register() {
     );
     AgendadorDaProspeccao.start();
 
+    // A Supervisora em INTERVENTION precisa agir mesmo quando nenhuma mensagem
+    // está saindo. O próprio interruptor faz os outros modos custarem quase zero.
+    const { AgendadorDaSupervisora } = await import(
+      "./services/salaDeVendas/supervisora/agendador"
+    );
+    AgendadorDaSupervisora.start();
+
     // Antes daqui saía um re-registro do webhook da Evolution a cada deploy. A
     // Evolution foi eliminada em 04/08/2026 e a Meta NÃO precisa disso: o webhook
     // é registrado uma vez no aplicativo e não é marcado como falho por downtime.

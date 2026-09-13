@@ -22,6 +22,7 @@ import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
 import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import type { MotivoDoHandoff } from "@prisma/client";
 import type { ContextoDaRevisao } from "./contexto";
+import { conhecimentoComercialParaPrompt } from "./conhecimentoComercial";
 import type { ResultadoDaCamada } from "./camadaRapida";
 
 export const AGENTE_CAMADA_PROFUNDA = "supervisora-camada-profunda";
@@ -68,6 +69,8 @@ function instrucao(ctx: ContextoDaRevisao, motivoDoAcionamento: string, turnos: 
     "Você é a SUPERVISORA DE QUALIDADE, na sua REVISÃO PROFUNDA — mais cara,",
     "acionada porque algo concreto já apontou problema nesta conversa:",
     `"${motivoDoAcionamento}"`,
+    "",
+    conhecimentoComercialParaPrompt(),
     "",
     "Sua tarefa: confirmar (ou não) o problema com a CONVERSA inteira à vista, e",
     "decidir se esta conversa precisa ir para uma PESSOA agora — não só se a",
