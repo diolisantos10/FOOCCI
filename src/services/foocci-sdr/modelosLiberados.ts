@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { foocciSalesPhoneNumberId } from "./FoocciSalesChannel";
+import { modeloAprovadoDaSala } from "./sincronizarModelos";
 import {
   aplicarPadraoUltimosSeisDaMeta,
   selecaoJaFoiConfigurada,
@@ -140,6 +141,33 @@ async function lerLiberados(db: Cliente): Promise<ModeloLiberadoParaEnvio[]> {
 }
 
 /**
+ * Reserva exclusiva para ambiente em que o ENVIO REAL está desligado.
+ *
+ * As jornadas e diagnósticos antigos simulam a entrega com a chave global de
+ * outbound desligada; eles precisam de um corpo de template para atravessar a
+ * lógica sem jamais alcançar cliente. Nessa condição — e SOMENTE nela — pode-se
+ * reaproveitar o modelo legado já APPROVED no espelho local quando a Meta não
+ * está acessível. Com `FOOCCI_SDR_SEND_ENABLED=true`, esta função sempre devolve
+ * vazio: produção continua fail-closed e nunca cai naquela frase fixa.
+ */
+async function modeloSomenteParaDryRun(db: Cliente): Promise<ModeloLiberadoParaEnvio[]> {
+  if (process.env.FOOCCI_SDR_SEND_ENABLED === "true") return [];
+
+  const nome = (process.env.FOOCCI_SDR_MODELO_ABORDAGEM ?? "").trim();
+  const idioma = (process.env.FOOCCI_SDR_MODELO_IDIOMA ?? "pt_BR").trim();
+  if (!nome) return [];
+
+  const modelo = await modeloAprovadoDaSala(db, nome, idioma);
+  if (!modelo?.corpo) return [];
+  return [{
+    nome: modelo.nome,
+    idioma: modelo.idioma,
+    variaveis: modelo.variaveis,
+    corpo: modelo.corpo,
+  }];
+}
+
+/**
  * Somente modelos que passam pelas DUAS autorizações entram no sorteio:
  * 1) APPROVED na Meta; 2) Pode enviar ligado na Sala.
  *
@@ -155,7 +183,7 @@ export async function modelosLiberadosParaEnvio(
     const inicializacao = await aplicarPadraoUltimosSeisDaMeta(db, {
       somenteSeNaoConfigurado: true,
     });
-    if (!inicializacao.ok) return [];
+    if (!inicializacao.ok) return modeloSomenteParaDryRun(db);
   }
 
   return lerLiberados(db);
