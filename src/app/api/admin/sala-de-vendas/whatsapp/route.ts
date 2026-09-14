@@ -1,9 +1,9 @@
 /**
  * O WHATSAPP DA SALA, DESCOBERTO POR API — número, conta, teto e modelos.
  *
- * `GET` só lê o retrato atual. `POST` sincroniza a conta da Meta e, ao final de
- * uma leitura completa, reaplica o padrão executivo dos seis templates mais
- * recentemente editados para abordagem fria.
+ * `GET` só lê o retrato atual. `POST` sincroniza a conta da Meta. A sincronização
+ * não escolhe, liga nem desliga template: a única decisão operacional é o toggle
+ * "Pode enviar" da própria Sala.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,12 +11,10 @@ import { guardarSalaDeVendas, vePelaOperacaoToda, somenteLeitura } from "../_gua
 import { prisma } from "@/lib/prisma";
 import { comOTokenDeVendas } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { detalhesDoNumeroDeVendas, type DetalhesDoNumero } from "@/services/foocci-sdr/modelosDaMeta";
-import { modeloConfigurado } from "@/services/salaDeVendas/abordar";
 import {
   sincronizarModelosDeVendas,
   modelosSincronizadosDaSala,
 } from "@/services/foocci-sdr/sincronizarModelos";
-import { aplicarPadraoUltimosSeisDaMeta } from "@/services/foocci-sdr/padraoModelosRecentes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,13 +47,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    data: {
-      numero,
-      modelos,
-      // Mantido apenas para compatibilidade de consumidores antigos desta rota.
-      // O envio real não usa mais uma frase fixa: usa o conjunto liberado.
-      selecionado: modeloConfigurado(),
-    },
+    data: { numero, modelos },
   });
 }
 
@@ -82,18 +74,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: r.erro ?? "Falha ao sincronizar." }, { status: 502 });
   }
 
-  const padrao = await aplicarPadraoUltimosSeisDaMeta(prisma);
-  if (!padrao.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          `Os modelos foram sincronizados, mas não foi seguro definir os seis mais recentes: ${padrao.erro}`,
-      },
-      { status: 502 },
-    );
-  }
-
   const modelos = await modelosSincronizadosDaSala(prisma);
-  return NextResponse.json({ ok: true, data: { resultado: r, modelos, padrao } });
+  return NextResponse.json({ ok: true, data: { resultado: r, modelos } });
 }
