@@ -11,8 +11,14 @@ import { NextRequest } from "next/server";
 
 const rodada = vi.hoisted(() => ({ abordarARodadaDoDia: vi.fn() }));
 vi.mock("@/services/salaDeVendas/prospeccao/abordarDaFila", () => rodada);
-vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+
+const banco = vi.hoisted(() => ({}));
+vi.mock("@/lib/prisma", () => ({ prisma: banco }));
+
 vi.mock("@/services/foocci-sdr/FoocciSalesChannel", () => ({ canalDeVendasPronto: () => true }));
+
+const preVoo = vi.hoisted(() => ({ preVooDosModelosLiberados: vi.fn() }));
+vi.mock("@/services/foocci-sdr/preVooModelosLiberados", () => preVoo);
 
 import { POST } from "./route";
 
@@ -31,6 +37,11 @@ function bater(auth?: string, corpo: unknown = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = "segredo";
+  preVoo.preVooDosModelosLiberados.mockResolvedValue({
+    pronto: true,
+    modelo: { nome: "foocci_abordagem_v1", idioma: "pt_BR", status: "APPROVED", variaveis: 1 },
+    parametrosQueMandamos: 1,
+  });
   rodada.abordarARodadaDoDia.mockResolvedValue({
     abordados: 2, pulados: 1, parouPor: "filaAcabou", falha: null, extrato: [],
   });
@@ -97,16 +108,20 @@ describe("a rodada", () => {
  * A doença crônica desta casa é *peça pronta, ninguém chamando* — quatro vezes
  * só em 08/09. O pré-voo é um parâmetro obrigatório, então esquecer não compila;
  * mas passar uma função qualquer compila. Este caso trava que a rota manda **a
- * conferência de verdade**, e não um stub que aprova tudo.
+ * conferência de verdade do pool liberado**, e não um stub que aprova tudo.
  */
-describe("o gatilho leva o pré-voo do modelo — não uma função qualquer", () => {
-  it("passa `preVooDoModelo`, o mesmo que lê a Meta", async () => {
-    const { preVooDoModelo } = await import("@/services/foocci-sdr/modelosDaMeta");
-
+describe("o gatilho leva o pré-voo dos modelos liberados — não uma função qualquer", () => {
+  it("o preVoo da rodada chama a conferência do mesmo pool que o envio usa", async () => {
     await bater("Bearer segredo");
 
-    const params = rodada.abordarARodadaDoDia.mock.calls[0][1] as { preVoo: unknown };
-    expect(params.preVoo, "a rodada das 9h roda sem conferir o modelo").toBe(preVooDoModelo);
+    const params = rodada.abordarARodadaDoDia.mock.calls[0][1] as { preVoo: () => Promise<unknown> };
+    expect(typeof params.preVoo, "a rodada das 9h ficou sem pré-voo").toBe("function");
+
+    const resultado = await params.preVoo();
+
+    expect(preVoo.preVooDosModelosLiberados).toHaveBeenCalledTimes(1);
+    expect(preVoo.preVooDosModelosLiberados).toHaveBeenCalledWith(banco);
+    expect(resultado).toMatchObject({ pronto: true });
   });
 });
 

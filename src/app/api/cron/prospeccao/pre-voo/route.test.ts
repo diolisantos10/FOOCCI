@@ -12,8 +12,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const modelos = vi.hoisted(() => ({ preVooDoModelo: vi.fn() }));
-vi.mock("@/services/foocci-sdr/modelosDaMeta", () => modelos);
+const preVoo = vi.hoisted(() => ({ preVooDosModelosLiberados: vi.fn() }));
+vi.mock("@/services/foocci-sdr/preVooModelosLiberados", () => preVoo);
 
 const canal = vi.hoisted(() => ({ canalDeVendasPronto: vi.fn(() => true) }));
 vi.mock("@/services/foocci-sdr/FoocciSalesChannel", () => canal);
@@ -38,10 +38,8 @@ function bater(auth?: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = "segredo";
-  process.env.FOOCCI_SDR_MODELO_ABORDAGEM = "foocci_abordagem_v1";
-  process.env.FOOCCI_SDR_MODELO_IDIOMA = "pt_BR";
   canal.canalDeVendasPronto.mockReturnValue(true);
-  modelos.preVooDoModelo.mockResolvedValue({
+  preVoo.preVooDosModelosLiberados.mockResolvedValue({
     pronto: true,
     modelo: { nome: "foocci_abordagem_v1", idioma: "pt_BR", status: "APPROVED", variaveis: 1 },
     parametrosQueMandamos: 1,
@@ -55,33 +53,37 @@ describe("a guarda", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await bater("Bearer qualquer");
     expect(res.status).toBe(503);
-    expect(modelos.preVooDoModelo).not.toHaveBeenCalled();
+    expect(preVoo.preVooDosModelosLiberados).not.toHaveBeenCalled();
   });
 
   it("segredo errado: 401", async () => {
     const res = await bater("Bearer errado");
     expect(res.status).toBe(401);
-    expect(modelos.preVooDoModelo).not.toHaveBeenCalled();
+    expect(preVoo.preVooDosModelosLiberados).not.toHaveBeenCalled();
   });
 });
 
 describe("o veredito", () => {
-  it("devolve a conferência inteira, com o modelo configurado ao lado", async () => {
+  it("devolve a conferência inteira dos modelos liberados", async () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
     const res = await bater("Bearer segredo");
     const json = (await res.json()) as { data: Record<string, unknown> };
 
     expect(res.status).toBe(200);
     expect(json.data).toMatchObject({
-      modeloConfigurado: { nome: "foocci_abordagem_v1", idioma: "pt_BR" },
       canalPronto: true,
-      conferencia: { pronto: true },
+      conferencia: {
+        pronto: true,
+        modelo: { nome: "foocci_abordagem_v1", idioma: "pt_BR", status: "APPROVED", variaveis: 1 },
+        parametrosQueMandamos: 1,
+      },
     });
+    expect(preVoo.preVooDosModelosLiberados).toHaveBeenCalledTimes(1);
   });
 
   it("reprovação sobe inteira — causa e detalhe, não só 'não pronto'", async () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
-    modelos.preVooDoModelo.mockResolvedValue({
+    preVoo.preVooDosModelosLiberados.mockResolvedValue({
       pronto: false,
       causa: "variaveisNaoBatem",
       detalhe: "o modelo espera 3 variáveis e o envio manda 1",
@@ -96,14 +98,15 @@ describe("o veredito", () => {
     });
   });
 
-  it("modelo sem nome configurado aparece como `null`, e não como string vazia", async () => {
+  it("não depende mais do nome legado de modelo no ambiente", async () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
     delete process.env.FOOCCI_SDR_MODELO_ABORDAGEM;
+    delete process.env.FOOCCI_SDR_MODELO_IDIOMA;
 
     const res = await bater("Bearer segredo");
-    const json = (await res.json()) as { data: { modeloConfigurado: { nome: unknown } } };
 
-    expect(json.data.modeloConfigurado.nome).toBeNull();
+    expect(res.status).toBe(200);
+    expect(preVoo.preVooDosModelosLiberados).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1,50 +1,12 @@
 /**
  * O AGENDADOR DA RODADA DAS 9h — dentro do processo, medido, e com reserva.
  *
- * ── POR QUE ELE EXISTE, com os números ──────────────────────────────────────
+ * A rodada automática roda no próprio servidor (Railway) e usa reserva atômica
+ * no banco para impedir duplicidade com o cron de contingência.
  *
- * A rodada das 9h nasceu (#218–#229) presa ao cron do GitHub Actions
- * (`prospeccao-rodada.yml`, `0 12 * * 1-5`). Medido:
- *
- *   · 09/09/2026 — disparou às 15:43 UTC: **3h43 de atraso**;
- *   · 10/09/2026 — **não disparou**.
- *
- * O cron do GitHub é "melhor esforço" por contrato e atrasa quando a fila deles
- * está cheia — exatamente às 9h de segunda a sexta. Uma operação comercial que
- * promete abordar de manhã não pode depender disso.
- *
- * Este agendador roda no próprio servidor (Railway), no padrão dos outros dois
- * da casa (`CartRecoveryScheduler`, `ScheduledCampaignScheduler`), ligado em
- * `src/instrumentation.ts`. Ele confere a cada minuto e dispara **uma vez por
- * dia útil**, na hora configurada (9h de São Paulo).
- *
- * ── A RESERVA, e por que ela é atômica ──────────────────────────────────────
- *
- * Com o GitHub continuando como reserva, existem DOIS agendadores para a mesma
- * rodada. Sem uma trava no banco, o atrasado dispara por cima do pontual e o
- * dia manda o dobro. A reserva é um `updateMany` condicional em
- * `prospeccao_config` — *"se a última rodada automática foi antes de hoje,
- * carimbe agora"* — e só quem carimbou (count = 1) roda. Não é "ler e depois
- * escrever": é uma instrução só, e o Postgres decide quem ganhou.
- *
- * ⚠️ Só a rodada AUTOMÁTICA reserva. `workflow_dispatch` com teto (alguém
- * mandando dez à mão) e o botão da tela não passam por aqui: o teto do dia,
- * contado no banco, já é o freio deles.
- *
- * ── O QUE ELE NÃO AFROUXA ───────────────────────────────────────────────────
- *
- * Nada. Ele chama `abordarARodadaDoDia` com o MESMO pré-voo e o MESMO
- * `canalPronto` da rota de cron. Interruptor da prospecção desligado → fila
- * vazia → zero abordados, com o motivo no log. Disparar na hora certa não é
- * disparar sem permissão: a permissão continua sendo o interruptor, que é a
- * mão do "vai" do CEO (ordem do Diretor Geral, 10/09/2026).
- *
- * ── MEDIÇÃO ─────────────────────────────────────────────────────────────────
- *
- * Toda decisão vira log com o caso concreto (guardrail 6): "reservou e rodou",
- * "já rodou hoje por X às Y", "fora da hora", "sem configuração". E o carimbo
- * (`ultimaRodadaAutomaticaEm/Por`) sai no raio-x do pré-voo — dá para saber
- * de fora se a rodada de hoje aconteceu, sem abrir log nenhum.
+ * O disparo não afrouxa nenhuma trava: fila, canal, teto, portão de lead e
+ * pré-voo continuam obrigatórios. O pré-voo valida o mesmo conjunto de templates
+ * APPROVED/liberados que o envio real pode escolher.
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
@@ -53,7 +15,7 @@ import { REGRA, agendaLocal } from "@/services/foocci-sdr/LeadContactSafety";
 import { inicioDoDiaEmSaoPaulo } from "./selecao";
 import { abordarARodadaDoDia, type ResultadoDaRodada } from "./abordarDaFila";
 import { canalDeVendasPronto } from "@/services/foocci-sdr/FoocciSalesChannel";
-import { preVooDoModelo } from "@/services/foocci-sdr/modelosDaMeta";
+import { preVooDosModelosLiberados } from "@/services/foocci-sdr/preVooModelosLiberados";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -61,9 +23,8 @@ type Cliente = PrismaClient | Prisma.TransactionClient;
 const INTERVALO_MS = 60_000;
 
 /**
- * Hora do dia (São Paulo) em que a rodada automática dispara. 9h por padrão —
- * o horário que o CEO nomeou ("a rodada das 9h"). `FOOCCI_PROSPECCAO_HORA`
- * troca sem deploy; fora de 0–23 vale o padrão, nunca "nunca".
+ * Hora do dia (São Paulo) em que a rodada automática dispara. 9h por padrão.
+ * `FOOCCI_PROSPECCAO_HORA` troca sem deploy; fora de 0–23 vale o padrão.
  */
 export function horaDaRodada(env: NodeJS.ProcessEnv = process.env): number {
   const n = parseInt((env.FOOCCI_PROSPECCAO_HORA ?? "").trim(), 10);
@@ -72,10 +33,7 @@ export function horaDaRodada(env: NodeJS.ProcessEnv = process.env): number {
 
 /**
  * É agora? Dia útil, e a hora local de São Paulo é a da rodada.
- *
- * Não confere o minuto de propósito: se o processo reiniciou às 9h00m30s (um
- * deploy, por exemplo), o tick das 9h01 ainda é "agora". Quem impede dois
- * disparos na mesma manhã é a reserva, não o relógio.
+ * A reserva — não o minuto — impede disparo duplicado.
  */
 export function ehHoraDaRodada(agora: Date, hora: number = horaDaRodada()): boolean {
   const local = agendaLocal(agora, REGRA.fusoHorario);
@@ -87,14 +45,7 @@ export type Reserva =
   | { reservou: true }
   | { reservou: false; motivo: "jaRodouHoje" | "semConfiguracao"; detalhe: string };
 
-/**
- * ⭐ A reserva atômica da rodada automática de hoje.
- *
- * `updateMany` com a condição dentro do `where`: ou a última rodada automática
- * é nula, ou é anterior à meia-noite de São Paulo de hoje. Quem devolve
- * `count: 1` ganhou; quem devolve `0` chegou depois — ou não há configuração,
- * e sem configuração a prospecção está desligada de qualquer forma.
- */
+/** Reserva atômica da rodada automática de hoje. */
 export async function reservarRodadaAutomaticaDoDia(
   db: Cliente,
   agora: Date,
@@ -198,11 +149,7 @@ export class AgendadorDaProspeccao {
     }
   }
 
-  /**
-   * Um tick. Exposto para teste, com as dependências injetáveis: o relógio, o
-   * banco e a rodada — para provar a reserva sem falar com a Meta nem com
-   * ninguém.
-   */
+  /** Um tick, com relógio/banco/rodada injetáveis para teste. */
   static async tick(
     deps: {
       agora?: Date;
@@ -234,15 +181,13 @@ export class AgendadorDaProspeccao {
       const r = await rodada(db, {
         autor: "SISTEMA",
         canalPronto: canalDeVendasPronto(),
-        preVoo: preVooDoModelo,
+        preVoo: () => preVooDosModelosLiberados(db),
         agora,
       });
       const resumo = resumoDaRodada(r);
       console.info("[AgendadorDaProspeccao] rodada concluída", resumo);
       return (this.ultimo = { em: agora.toISOString(), decisao: "rodou", rodada: resumo });
     } catch (e) {
-      // A reserva já está carimbada: a rodada de hoje não volta sozinha. O log
-      // carrega o erro para alguém disparar à mão — melhor que rodar duas vezes.
       const detalhe = e instanceof Error ? e.message : String(e);
       console.error("[AgendadorDaProspeccao] o tick quebrou DEPOIS da reserva — a rodada de hoje precisa de disparo manual", { detalhe });
       return (this.ultimo = { em: agora.toISOString(), decisao: "quebrou", detalhe });
