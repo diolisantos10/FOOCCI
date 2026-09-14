@@ -40,7 +40,7 @@ import { varrerConversasEmAndamento } from "@/services/salaDeVendas/supervisora/
 
 const prisma = new PrismaClient();
 
-const AGORA = new Date("2026-09-12T17:00:00Z");
+const AGORA = new Date();
 const ambiente = { ...process.env };
 
 /** As três chaves ligadas — canal configurado, envio ligado, IA pode falar
