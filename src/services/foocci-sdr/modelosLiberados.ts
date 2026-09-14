@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { foocciSalesPhoneNumberId } from "./FoocciSalesChannel";
 import { modeloAprovadoDaSala } from "./sincronizarModelos";
+import { contratoDeParametrosDoCorpo } from "./templateParamFormat";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -19,7 +20,11 @@ export interface ModeloLiberadoParaEnvio {
   idioma: string;
   variaveis: number;
   corpo: string;
+  /** Vazio = template posicional. Preenchido = Meta espera parameter_name. */
+  nomesParametros: string[];
 }
+
+type ModeloLiberadoDoBanco = Omit<ModeloLiberadoParaEnvio, "nomesParametros">;
 
 export type ResultadoDePermissao =
   | { ok: true; podeEnviar: boolean }
@@ -115,11 +120,22 @@ export async function definirPodeEnviar(
   return { ok: true, podeEnviar: params.podeEnviar };
 }
 
+function aplicarContratoDoCorpo(modelo: ModeloLiberadoDoBanco): ModeloLiberadoParaEnvio {
+  const contrato = contratoDeParametrosDoCorpo(modelo.corpo, modelo.variaveis);
+  return {
+    nome: modelo.nome,
+    idioma: modelo.idioma,
+    variaveis: contrato.variaveis,
+    corpo: contrato.corpoRenderizavel,
+    nomesParametros: contrato.nomesParametros,
+  };
+}
+
 async function lerLiberados(db: Cliente): Promise<ModeloLiberadoParaEnvio[]> {
   const phoneNumberId = foocciSalesPhoneNumberId();
   if (!phoneNumberId) return [];
 
-  return db.$queryRaw<ModeloLiberadoParaEnvio[]>(Prisma.sql`
+  const linhas = await db.$queryRaw<ModeloLiberadoDoBanco[]>(Prisma.sql`
     SELECT
       m."nome",
       m."idioma",
@@ -136,6 +152,8 @@ async function lerLiberados(db: Cliente): Promise<ModeloLiberadoParaEnvio[]> {
       AND m."corpo" IS NOT NULL
     ORDER BY m."nome" ASC, m."idioma" ASC
   `);
+
+  return linhas.map(aplicarContratoDoCorpo);
 }
 
 /**
@@ -157,12 +175,12 @@ async function modeloSomenteParaDryRun(db: Cliente): Promise<ModeloLiberadoParaE
 
   const modelo = await modeloAprovadoDaSala(db, nome, idioma);
   if (!modelo?.corpo) return [];
-  return [{
+  return [aplicarContratoDoCorpo({
     nome: modelo.nome,
     idioma: modelo.idioma,
     variaveis: modelo.variaveis,
     corpo: modelo.corpo,
-  }];
+  })];
 }
 
 /**
