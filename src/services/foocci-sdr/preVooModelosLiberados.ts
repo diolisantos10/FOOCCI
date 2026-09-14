@@ -9,6 +9,7 @@ import {
   modelosLiberadosParaEnvio,
   type ModeloLiberadoParaEnvio,
 } from "./modelosLiberados";
+import { registrarParametrosNomeadosDoTemplate } from "@/services/whatsapp/providers/metaPayload";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -65,6 +66,7 @@ export async function conferirModelosLiberadosDeAbordagem(
   }
 
   let primeiroValidado: ModeloNaMeta | null = null;
+  let parametrosDoPrimeiro = 0;
 
   for (const local of liberados) {
     const atual = acharNaMeta(local, lista.modelos);
@@ -84,7 +86,27 @@ export async function conferirModelosLiberadosDeAbordagem(
       };
     }
 
-    if (atual.variaveis !== local.variaveis) {
+    if (local.nomesParametros.length > 0) {
+      // `listarModelosDeVendas` ainda conta apenas {{1}}, {{2}} ao ler a Meta.
+      // Em um template NAMED ela enxerga 0, embora o BODY espelhado traga os
+      // nomes reais. Se a Meta passar a responder >0 aqui, o formato mudou para
+      // posicional e o espelho está velho: bloqueamos em vez de misturar contratos.
+      if (atual.variaveis > 0) {
+        return {
+          pronto: false,
+          causa: "variaveisNaoBatem",
+          detalhe:
+            `"${atual.nome}" (${atual.idioma}) mudou o formato das variáveis na Meta. ` +
+            "Sincronize os modelos antes de disparar.",
+        };
+      }
+
+      registrarParametrosNomeadosDoTemplate(
+        local.nome,
+        local.idioma,
+        local.nomesParametros,
+      );
+    } else if (atual.variaveis !== local.variaveis) {
       return {
         pronto: false,
         causa: "variaveisNaoBatem",
@@ -94,7 +116,10 @@ export async function conferirModelosLiberadosDeAbordagem(
       };
     }
 
-    primeiroValidado ??= atual;
+    if (!primeiroValidado) {
+      primeiroValidado = atual;
+      parametrosDoPrimeiro = local.variaveis;
+    }
   }
 
   // `liberados.length > 0` e cada item achou correspondente na Meta.
@@ -102,7 +127,7 @@ export async function conferirModelosLiberadosDeAbordagem(
   return {
     pronto: true,
     modelo,
-    parametrosQueMandamos: modelo.variaveis,
+    parametrosQueMandamos: parametrosDoPrimeiro,
   };
 }
 

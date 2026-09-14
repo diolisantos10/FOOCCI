@@ -5,7 +5,7 @@
  * POST /{PHONE_NUMBER_ID}/messages on the Graph API.
  *
  * Recipient phone: Graph API accepts an E.164 number; we send digits-only
- * (e.g. "5511999990000") produced by the SAME normalizador de telefone BR do projeto,
+ * (e.g. "5511999990000") produced by the SAME normalizador de telefone BR do project,
  * so phone handling stays consistent across providers.
  */
 
@@ -22,6 +22,8 @@ export interface MetaTextPayload {
 export interface MetaTemplateComponentParameter {
   type:  "text";
   text:  string;
+  /** Obrigatório pela Meta quando o template foi criado com parâmetros nomeados. */
+  parameter_name?: string;
 }
 export interface MetaTemplateComponent {
   type:       "body" | "header" | "button";
@@ -37,6 +39,58 @@ export interface MetaTemplatePayload {
     language:   { code: string };
     components?: MetaTemplateComponent[];
   };
+}
+
+/**
+ * Contrato efêmero dos templates NOMEADOS da Sala Comercial.
+ *
+ * O pré-voo lê o BODY que já veio da Meta e registra aqui os nomes exatos dos
+ * placeholders. A mesma requisição então dispara a rodada e o builder consegue
+ * acrescentar `parameter_name`, que é o pedaço exigido pela Cloud API para um
+ * template criado com formato NAMED.
+ *
+ * O registro expira rápido e só é usado quando a quantidade de nomes bate com a
+ * quantidade de valores. Isso evita contaminar outros envios do produto que
+ * possam usar o mesmo builder com templates posicionais.
+ */
+type RegistroDeParametrosNomeados = { nomes: string[]; expiraEm: number };
+const parametrosNomeadosPorTemplate = new Map<string, RegistroDeParametrosNomeados>();
+const TTL_PARAMETROS_NOMEADOS_MS = 2 * 60 * 1000;
+
+function chaveDoTemplate(nome: string, idioma: string): string {
+  return `${nome.trim()}\u0000${idioma.trim()}`;
+}
+
+export function registrarParametrosNomeadosDoTemplate(
+  nome: string,
+  idioma: string,
+  nomes: readonly string[],
+): void {
+  const chave = chaveDoTemplate(nome, idioma);
+  const limpos = nomes.map((n) => n.trim()).filter(Boolean);
+  if (limpos.length === 0) {
+    parametrosNomeadosPorTemplate.delete(chave);
+    return;
+  }
+  parametrosNomeadosPorTemplate.set(chave, {
+    nomes: [...limpos],
+    expiraEm: Date.now() + TTL_PARAMETROS_NOMEADOS_MS,
+  });
+}
+
+function parametrosNomeadosRegistrados(
+  nome: string,
+  idioma: string,
+  quantidade: number,
+): string[] {
+  const chave = chaveDoTemplate(nome, idioma);
+  const registro = parametrosNomeadosPorTemplate.get(chave);
+  if (!registro) return [];
+  if (registro.expiraEm < Date.now()) {
+    parametrosNomeadosPorTemplate.delete(chave);
+    return [];
+  }
+  return registro.nomes.length === quantidade ? registro.nomes : [];
 }
 
 /** Normalizes a raw phone to Meta's recipient format (digits, E.164 w/o '+'). */
@@ -63,8 +117,16 @@ export function buildMetaTemplatePayload(
   language:  string,
   bodyParams: string[] = [],
 ): MetaTemplatePayload {
+  const nomes = parametrosNomeadosRegistrados(name, language, bodyParams.length);
   const components: MetaTemplateComponent[] = bodyParams.length > 0
-    ? [{ type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) }]
+    ? [{
+        type: "body",
+        parameters: bodyParams.map((text, i) => ({
+          type: "text" as const,
+          text,
+          ...(nomes[i] ? { parameter_name: nomes[i] } : {}),
+        })),
+      }]
     : [];
   return {
     messaging_product: "whatsapp",
