@@ -146,10 +146,18 @@ export async function selecaoJaFoiConfigurada(db: Cliente): Promise<boolean> {
   const phoneNumberId = foocciSalesPhoneNumberId();
   if (!phoneNumberId) return false;
 
+  // Uma linha de controle órfã (template apagado/fora do espelho atual) não pode
+  // impedir a inicialização automática. Ao mesmo tempo, uma linha que ainda
+  // corresponde a um modelo atual conta como configuração mesmo com podeEnviar
+  // FALSE, preservando a decisão explícita de desligar todos os modelos.
   const linhas = await db.$queryRaw<Array<{ total: number }>>(Prisma.sql`
     SELECT COUNT(*)::int AS total
-    FROM "modelos_de_vendas_envio"
-    WHERE "phoneNumberId" = ${phoneNumberId}
+    FROM "modelos_de_vendas_envio" e
+    INNER JOIN "modelos_de_vendas" m
+      ON m."phoneNumberId" = e."phoneNumberId"
+     AND m."nome" = e."nome"
+     AND m."idioma" = e."idioma"
+    WHERE e."phoneNumberId" = ${phoneNumberId}
   `);
   return (linhas[0]?.total ?? 0) > 0;
 }
