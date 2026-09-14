@@ -1,5 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { foocciSalesPhoneNumberId } from "./FoocciSalesChannel";
+import {
+  aplicarPadraoUltimosSeisDaMeta,
+  selecaoJaFoiConfigurada,
+} from "./padraoModelosRecentes";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -112,15 +116,7 @@ export async function definirPodeEnviar(
   return { ok: true, podeEnviar: params.podeEnviar };
 }
 
-/**
- * Somente modelos que passam pelas DUAS autorizações entram no sorteio:
- * 1) APPROVED na Meta; 2) Pode enviar ligado na Sala.
- * Corpo nulo também é excluído — não se manda algo que a própria Sala não consegue
- * renderizar e auditar antes de falar com um lead frio.
- */
-export async function modelosLiberadosParaEnvio(
-  db: Cliente,
-): Promise<ModeloLiberadoParaEnvio[]> {
+async function lerLiberados(db: Cliente): Promise<ModeloLiberadoParaEnvio[]> {
   const phoneNumberId = foocciSalesPhoneNumberId();
   if (!phoneNumberId) return [];
 
@@ -141,6 +137,28 @@ export async function modelosLiberadosParaEnvio(
       AND m."corpo" IS NOT NULL
     ORDER BY m."nome" ASC, m."idioma" ASC
   `);
+}
+
+/**
+ * Somente modelos que passam pelas DUAS autorizações entram no sorteio:
+ * 1) APPROVED na Meta; 2) Pode enviar ligado na Sala.
+ *
+ * Na instalação nova, antes de existir qualquer decisão operacional, o sistema
+ * aplica sozinho o padrão executivo: os seis templates de Marketing pt-BR com
+ * edição mais recente na Meta. Depois que a seleção existe, desligar todos é uma
+ * decisão válida e NÃO é desfeito automaticamente.
+ */
+export async function modelosLiberadosParaEnvio(
+  db: Cliente,
+): Promise<ModeloLiberadoParaEnvio[]> {
+  if (!(await selecaoJaFoiConfigurada(db))) {
+    const inicializacao = await aplicarPadraoUltimosSeisDaMeta(db, {
+      somenteSeNaoConfigurado: true,
+    });
+    if (!inicializacao.ok) return [];
+  }
+
+  return lerLiberados(db);
 }
 
 /** Sorteio uniforme; random injetável deixa a regra verificável em teste. */
