@@ -38,24 +38,6 @@ import {
   GUIA_COMERCIAL_PARA_CONHECIMENTO,
 } from "../guiaComercial";
 
-/**
- * Os capítulos que um prospecto pode conhecer.
- *
- * Cada entrada é uma decisão, não uma conveniência:
- *
- *   · `visao-geral`        — o que o Foocci é. A primeira pergunta de todo lead.
- *   · `waiter-agent`       — o pedido guiado. O coração do produto.
- *   · `crm-agent`          — a recompra. O que separa o Foocci de um cardápio.
- *   · `whatsapp-agent`     — o atendimento. Onde o lojista já vive.
- *   · `integracoes`        — "funciona com o que eu já uso?" — a pergunta que
- *                            mais derruba negócio quando a resposta é chutada.
- *   · `checkout-pagamentos`— como o dinheiro entra.
- *   · `analytics`          — o que ele passa a enxergar.
- *
- * Fora da lista, e de propósito: `arquitetura-do-sistema`, `seguranca-operacional`,
- * `branding`, `ui-ux` e `principios-operacionais` (internos, não são da conta de
- * um estranho), `backlog` e `historico-de-decisoes` (o que não existe).
- */
 export const CAPITULOS_PERMITIDOS = [
   "visao-geral",
   "waiter-agent",
@@ -66,39 +48,18 @@ export const CAPITULOS_PERMITIDOS = [
   "analytics",
 ] as const;
 
-/**
- * Seções que não atravessam, mesmo dentro de capítulo autorizado.
- *
- * "Gaps conhecidos" é a mais importante da lista: ela aparece em quase todo
- * capítulo do Manual e é, literalmente, a lista do que ainda não funciona bem.
- * Um SDR municiado com ela responderia "a busca do cardápio precisa evoluir" a
- * quem está decidindo se compra.
- */
 const SECOES_PROIBIDAS =
   /^(#+\s*)?(gaps?\b|backlog|riscos?\b|d[ée]bito|pend[êe]ncias?\b|hist[óo]rico|decis[õo]es|arquitetura|seguran[çc]a|roadmap|pr[óo]ximos passos)/i;
 
 export interface PedacoDeConhecimento {
-  /** Chave estável: capítulo + seção. Vai na trilha, para auditar a resposta. */
   id: string;
   capitulo: string;
-  /** O título da seção, como o Manual escreveu. */
   secao: string;
   texto: string;
 }
 
-/**
- * Quebra um capítulo nas suas seções `##`.
- *
- * Por seção e não por capítulo inteiro porque o capítulo do CRM tem 150 linhas:
- * mandar isso inteiro ao modelo para responder "vocês mandam mensagem de
- * aniversário?" gasta contexto com noventa por cento de assunto que não é o da
- * pergunta — e contexto gasto é atenção tirada do que importa.
- */
 function secoesDe(slug: string, conteudo: string): PedacoDeConhecimento[] {
   const pedacos: PedacoDeConhecimento[] = [];
-
-  // A primeira quebra são os `##`. O que vem antes do primeiro `##` é a abertura
-  // do capítulo — costuma ser a definição, e é o pedaço mais útil de todos.
   const partes = conteudo.split(/\n(?=##\s)/);
 
   for (const parte of partes) {
@@ -129,16 +90,6 @@ function normalizarChave(s: string): string {
     .replace(/^-|-$/g, "") || "abertura";
 }
 
-/**
- * Tudo que o TA sabe, pronto para virar contexto do modelo.
- *
- * O guia comercial entra junto da base como repertório de condução — não como
- * trava nem como verdade de produto. O Manual continua sendo a fonte do que o
- * Foocci faz; o guia diz como demonstrar e conversar sem robotizar o agente.
- *
- * Função e não constante pelo mesmo motivo de `baseDeVerdade()`: o Manual é
- * dado do produto, e congelá-lo num módulo faria o TA parar no dia do deploy.
- */
 export function baseDeConhecimento(): PedacoDeConhecimento[] {
   const permitidos = new Set<string>(CAPITULOS_PERMITIDOS);
   const guia: PedacoDeConhecimento[] = GUIA_COMERCIAL_PARA_CONHECIMENTO.map((item) => ({ ...item }));
@@ -150,8 +101,6 @@ export function baseDeConhecimento(): PedacoDeConhecimento[] {
       .flatMap((c) => secoesDe(c.slug, c.content)),
   ];
 }
-
-// ── A BUSCA ──────────────────────────────────────────────────────────────────
 
 function normalizar(s: string): string {
   return s
@@ -173,29 +122,16 @@ function palavras(s: string): string[] {
   return normalizar(s).split(" ").filter((p) => p.length > 2 && !VAZIAS.has(p));
 }
 
-/**
- * Quantos pedaços vão junto na pergunta.
- *
- * Seis, e não "todos": o modelo lê melhor cinco parágrafos certos do que
- * quarenta mornos, e enfiar a base inteira em todo turno é o jeito mais caro de
- * piorar a resposta. Quem escolhe é a busca; quem redige é o modelo.
- */
 export const PEDACOS_POR_TURNO = 6;
 
 /**
  * O que a base tem sobre esta pergunta.
  *
- * A orientação-base do guia entra em todo turno com termos úteis. Isso dá ao TA
- * um norte constante ("ferramenta, não script") sem despejar o guia inteiro no
- * prompt; os demais itens do guia competem normalmente por relevância com o
- * Manual e só entram quando a dúvida do lead pede aquele assunto.
- *
- * ⚠️ Diferente de `buscarNaVerdade`, aqui **não há piso de admissão**, e a
- * diferença é o desenho: aquilo ali decide o que o TA pode AFIRMAR, e afirmar
- * com base fraca é inventar. Isto aqui é contexto de leitura — mandar um
- * parágrafo pouco relacionado junto não faz o modelo mentir, faz ele ignorar.
- *
- * A trava contra invenção não mora aqui: mora no verificador, depois.
+ * Regra de segurança: a orientação-base do guia só entra quando já existe pelo
+ * menos um pedaço realmente relevante para a pergunta. Assim ela nunca vira
+ * "prova de conhecimento" para uma pergunta sem fonte (por exemplo prazo de
+ * implantação). E o conteúdo específico vem primeiro; o guia é complemento de
+ * condução, não resposta de produto.
  */
 export function buscarNoConhecimento(
   pergunta: string,
@@ -220,5 +156,6 @@ export function buscarNoConhecimento(
     .slice(0, limiteDeBusca)
     .map((x) => x.p);
 
-  return orientacaoBase ? [orientacaoBase, ...relevantes] : relevantes;
+  if (relevantes.length === 0) return [];
+  return orientacaoBase ? [...relevantes, orientacaoBase] : relevantes;
 }
