@@ -45,7 +45,7 @@ import {
   type ResultadoDaRodada,
 } from "@/services/salaDeVendas/prospeccao/abordarDaFila";
 import { canalDeVendasPronto } from "@/services/foocci-sdr/FoocciSalesChannel";
-import { preVooDoModelo } from "@/services/foocci-sdr/modelosDaMeta";
+import { preVooDosModelosLiberados } from "@/services/foocci-sdr/preVooModelosLiberados";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,17 +83,10 @@ function contarMotivos(extrato: ResultadoDaRodada["extrato"]): Record<string, nu
 /**
  * ⭐ UM CASO CONCRETO POR MOTIVO — e não a lista inteira.
  *
- * ── POR QUE ISTO EXISTE, e é a MESMA lição duas vezes ───────────────────────
- *
  * `porMotivo` sozinho devolveu `portaoRecusou: 10` na rodada de 08/09/2026.
- * Verdadeiro, e inútil: o portão do lead tem **sete regras** (silêncio pedido,
- * telefone, canal, histórico, consentimento, teto de tentativas, descanso,
- * horário) e a linha não dizia qual delas barrou. Foi o guardrail 6 quase
- * cumprido — que é o mesmo que não cumprido.
- *
- * Um exemplo por motivo, e não todos, porque numa rodada de 250 os detalhes
- * repetem: o que muda a investigação é **qual regra**, não quantas vezes a
- * mesma frase apareceu. A contagem já está em `porMotivo`.
+ * Verdadeiro, e inútil: o portão do lead tem várias regras e a linha não dizia
+ * qual delas barrou. Um exemplo por motivo preserva o caso concreto sem repetir
+ * a lista inteira no log.
  */
 function exemploDeCadaMotivo(extrato: ResultadoDaRodada["extrato"]): Record<string, string> {
   const exemplos: Record<string, string> = {};
@@ -119,20 +112,10 @@ export async function POST(req: NextRequest) {
   const r = await abordarARodadaDoDia(prisma, {
     autor: "SISTEMA",
     canalPronto: canalDeVendasPronto(),
-    preVoo: preVooDoModelo,
+    preVoo: () => preVooDosModelosLiberados(prisma),
     ...(teto !== undefined ? { teto } : {}),
   });
 
-  // ⚠️ O resultado vai para o log SEMPRE, e não só quando dá errado. Uma rodada
-  // que manda zero e uma que não rodou são indistinguíveis para quem olha de
-  // fora — e é essa confusão que faz uma lista queimar sem ninguém perceber.
-  //
-  // ⭐ E vai COM OS MOTIVOS. Em 08/09/2026 a primeira rodada real devolveu
-  // `abordados: 0, pulados: 10, parouPor: filaAcabou` — e essa linha, sozinha,
-  // não diz **nada** sobre o que aconteceu com os dez. É o guardrail 6 quebrado
-  // no meu próprio código: *"alerta que diz 'algo falhou' sem o caso concreto é
-  // ruído que ninguém investiga"*. O extrato já trazia a resposta; o log a
-  // jogava fora.
   console.info("[cron/prospeccao/rodada] rodada concluída", {
     abordados: r.abordados,
     pulados: r.pulados,
