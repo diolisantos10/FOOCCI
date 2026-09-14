@@ -61,6 +61,10 @@ function banco() {
             status: "PENDENTE",
             direcao: "SAIDA",
             texto: "oi, tudo bem?",
+            leadId: "lead-1",
+            autor: null,
+            autorUserId: null,
+            papelDoAgente: null,
             lead: { whatsapp: "5511999999999", optOutAt: null },
           };
         },
@@ -68,6 +72,13 @@ function banco() {
           toques.confirmacoes += 1;
           return {};
         },
+      },
+      // Este arquivo testa a SEGUNDA CHAVE de envio, não a Supervisora. Sem uma
+      // linha de configuração, produção interpreta Supervisora como OFF; o mock
+      // reproduz exatamente esse estado em vez de deixar `lerConfig` quebrar por
+      // falta do delegate Prisma no banco mínimo.
+      supervisoraConfig: {
+        findUnique: async () => null,
       },
     } as never,
   };
