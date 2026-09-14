@@ -31,6 +31,7 @@ import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
 import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import type { MotivoDaSupervisora, VeredictoDaSupervisora } from "@prisma/client";
 import type { ContextoDaRevisao } from "./contexto";
+import { conhecimentoComercialParaPrompt } from "./conhecimentoComercial";
 
 /** O nome pelo qual esta camada aparece no roteamento governado do Brain. */
 export const AGENTE_CAMADA_RAPIDA = "supervisora-camada-rapida";
@@ -78,6 +79,8 @@ function falhaTecnica(motivo: string, engine?: { provider: string; model: string
 function instrucao(ctx: ContextoDaRevisao): string {
   return [
     "Você é a SUPERVISORA DE QUALIDADE de uma sala de vendas por WhatsApp.",
+    "",
+    conhecimentoComercialParaPrompt(),
     "Sua função é revisar UMA mensagem que um agente (humano OU inteligência",
     "artificial) está prestes a mandar a um lead/cliente, ANTES de ela sair.",
     "",
