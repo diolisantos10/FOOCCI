@@ -6,6 +6,10 @@
  * uma síntese curada e versionada, usada igualmente pelas camadas rápida e
  * profunda.
  *
+ * O Guia de Conversação e Demonstração entra aqui como NORTE, não como trava:
+ * a Supervisora deve cobrar relevância, continuidade e bom uso das provas do
+ * site, mas nunca reprovar uma fala só porque ela não copiou um exemplo do guia.
+ *
  * Fontes de referência consultadas em 13/09/2026:
  * - WhatsApp Business Messaging Policy: https://business.whatsapp.com/policy
  * - Salesforce Trailhead — Relationship Selling / Collaborate with the Customer:
@@ -19,7 +23,9 @@
  * comercial continuam vindo da configuração publicada do TA.
  */
 
-export const VERSAO_DO_PLAYBOOK_COMERCIAL = "foocci-supervisora-2026-09-13-v1";
+import { guiaComercialParaPrompt } from "../guiaComercial";
+
+export const VERSAO_DO_PLAYBOOK_COMERCIAL = "foocci-supervisora-2026-09-14-v2";
 
 const PRINCIPIOS = [
   "Permissão antes de pressão: a pessoa conserva controle da conversa; recusa, silêncio e pedido de parar encerram a insistência.",
@@ -49,7 +55,11 @@ export function conhecimentoComercialParaPrompt(): string {
     ...PRINCIPIOS.map((p, i) => `${i + 1}. ${p}`),
     "EXEMPLOS DE CALIBRAÇÃO:",
     ...EXEMPLOS.map((e) => "- " + e),
-    "Em conflito, as regras comerciais publicadas e o pedido explícito do cliente vencem o playbook.",
+    "",
+    guiaComercialParaPrompt(),
+    "",
+    "COMO SUPERVISIONAR O GUIA: ele é ferramenta de repertório, não checklist. Não marque erro só porque o agente escolheu palavras, ordem ou pergunta diferentes. Intervenha quando ele ignorar contexto já dado, deixar de responder a dúvida, despejar links sem propósito, inventar fatos ou perder uma oportunidade clara de demonstrar algo relevante.",
+    "Em conflito, as regras comerciais publicadas e o pedido explícito do cliente vencem o playbook e o guia.",
   ].join("\n");
 }
 
