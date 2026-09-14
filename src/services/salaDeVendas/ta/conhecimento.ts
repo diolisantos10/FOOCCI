@@ -33,6 +33,10 @@
  */
 
 import { MANUAL_V01_CONTENT } from "@/services/manual/manualV01Content";
+import {
+  GUIA_COMERCIAL_ORIENTACAO_BASE_ID,
+  GUIA_COMERCIAL_PARA_CONHECIMENTO,
+} from "../guiaComercial";
 
 /**
  * Os capítulos que um prospecto pode conhecer.
@@ -51,14 +55,8 @@ import { MANUAL_V01_CONTENT } from "@/services/manual/manualV01Content";
  * Fora da lista, e de propósito: `arquitetura-do-sistema`, `seguranca-operacional`,
  * `branding`, `ui-ux` e `principios-operacionais` (internos, não são da conta de
  * um estranho), `backlog` e `historico-de-decisoes` (o que não existe).
- *
- * ⚠️ A lista é congelada em runtime, não só `as const`. `as const` protege quem
- * escreve TypeScript, mas desaparece no JavaScript. Como o módulo é importado por
- * uma suíte enorme, uma mutação acidental da referência exportada poderia abrir
- * um capítulo que nunca foi autorizado pelo produto. O allowlist é uma fronteira
- * de segurança e, portanto, precisa ser imutável também em execução.
  */
-export const CAPITULOS_PERMITIDOS = Object.freeze([
+export const CAPITULOS_PERMITIDOS = [
   "visao-geral",
   "waiter-agent",
   "crm-agent",
@@ -66,7 +64,7 @@ export const CAPITULOS_PERMITIDOS = Object.freeze([
   "integracoes",
   "checkout-pagamentos",
   "analytics",
-] as const);
+] as const;
 
 /**
  * Seções que não atravessam, mesmo dentro de capítulo autorizado.
@@ -134,15 +132,23 @@ function normalizarChave(s: string): string {
 /**
  * Tudo que o TA sabe, pronto para virar contexto do modelo.
  *
+ * O guia comercial entra junto da base como repertório de condução — não como
+ * trava nem como verdade de produto. O Manual continua sendo a fonte do que o
+ * Foocci faz; o guia diz como demonstrar e conversar sem robotizar o agente.
+ *
  * Função e não constante pelo mesmo motivo de `baseDeVerdade()`: o Manual é
  * dado do produto, e congelá-lo num módulo faria o TA parar no dia do deploy.
  */
 export function baseDeConhecimento(): PedacoDeConhecimento[] {
   const permitidos = new Set<string>(CAPITULOS_PERMITIDOS);
+  const guia: PedacoDeConhecimento[] = GUIA_COMERCIAL_PARA_CONHECIMENTO.map((item) => ({ ...item }));
 
-  return MANUAL_V01_CONTENT
-    .filter((c) => permitidos.has(c.slug))
-    .flatMap((c) => secoesDe(c.slug, c.content));
+  return [
+    ...guia,
+    ...MANUAL_V01_CONTENT
+      .filter((c) => permitidos.has(c.slug))
+      .flatMap((c) => secoesDe(c.slug, c.content)),
+  ];
 }
 
 // ── A BUSCA ──────────────────────────────────────────────────────────────────
@@ -179,6 +185,11 @@ export const PEDACOS_POR_TURNO = 6;
 /**
  * O que a base tem sobre esta pergunta.
  *
+ * A orientação-base do guia entra em todo turno com termos úteis. Isso dá ao TA
+ * um norte constante ("ferramenta, não script") sem despejar o guia inteiro no
+ * prompt; os demais itens do guia competem normalmente por relevância com o
+ * Manual e só entram quando a dúvida do lead pede aquele assunto.
+ *
  * ⚠️ Diferente de `buscarNaVerdade`, aqui **não há piso de admissão**, e a
  * diferença é o desenho: aquilo ali decide o que o TA pode AFIRMAR, e afirmar
  * com base fraca é inventar. Isto aqui é contexto de leitura — mandar um
@@ -194,14 +205,11 @@ export function buscarNoConhecimento(
   const termos = palavras(pergunta);
   if (termos.length === 0) return [];
 
-  // Defesa em profundidade: mesmo que alguém passe uma base customizada para
-  // esta função, a busca comercial jamais atravessa capítulo fora do allowlist.
-  // Isso também impede um teste/helper de contaminar a referência compartilhada
-  // e, por acidente, transformar material interno em contexto de prospecto.
-  const permitidos = new Set<string>(CAPITULOS_PERMITIDOS);
+  const orientacaoBase = base.find((p) => p.id === GUIA_COMERCIAL_ORIENTACAO_BASE_ID) ?? null;
+  const limiteDeBusca = Math.max(0, quantos - (orientacaoBase ? 1 : 0));
 
-  return base
-    .filter((p) => permitidos.has(p.capitulo))
+  const relevantes = base
+    .filter((p) => p.id !== GUIA_COMERCIAL_ORIENTACAO_BASE_ID)
     .map((p) => {
       const texto = new Set(palavras(`${p.secao} ${p.texto}`));
       const cobertos = termos.filter((t) => texto.has(t)).length;
@@ -209,6 +217,8 @@ export function buscarNoConhecimento(
     })
     .filter((x) => x.nota > 0)
     .sort((a, b) => b.nota - a.nota)
-    .slice(0, quantos)
+    .slice(0, limiteDeBusca)
     .map((x) => x.p);
+
+  return orientacaoBase ? [orientacaoBase, ...relevantes] : relevantes;
 }
