@@ -141,7 +141,7 @@ export type ResultadoDeAlterarModo =
  * já verificou a sessão — chamá-la direto, sem porta na frente, é o erro que a
  * separação rota/serviço existe para impedir enxergar tarde.
  */
-async function alterarModoNoCliente(
+export async function alterarModo(
   db: Cliente,
   params: {
     novoModo?: ModoDaSupervisora;
@@ -259,22 +259,6 @@ async function alterarModoNoCliente(
   }
 
   return { ok: true, modoAnterior, modoNovo };
-}
-
-
-/**
- * Garante atomicidade entre o interruptor e o histórico quando recebeu um
- * PrismaClient real. Se já está dentro de uma transação, reutiliza o cliente.
- */
-export async function alterarModo(
-  db: Cliente,
-  params: Parameters<typeof alterarModoNoCliente>[1],
-): Promise<ResultadoDeAlterarModo> {
-  const comTransacao = db as PrismaClient;
-  if (typeof comTransacao.$transaction === "function") {
-    return comTransacao.$transaction((tx) => alterarModoNoCliente(tx, params));
-  }
-  return alterarModoNoCliente(db, params);
 }
 
 export interface TrocaDeModo {

@@ -58,4 +58,16 @@ jobs:
         run: npm run type-check
 
       - name: Unit tests (inclui o teste arquitetural da Regra de Ouro)
-        run: npm run test:unit
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:unit 2>&1 | tee unit-tests.log
+
+      - name: Preservar diagnóstico da suíte unitária
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests-log
+          path: unit-tests.log
+          if-no-files-found: error
+          retention-days: 1

@@ -57,6 +57,10 @@ function banco(over: { mensagem?: Record<string, unknown> | null } = {}) {
           status: "PENDENTE",
           direcao: "SAIDA",
           texto: "Oi! O Foocci monta o pedido junto com o cliente.",
+          leadId: "lead-1",
+          autor: null,
+          autorUserId: null,
+          papelDoAgente: null,
           lead: { whatsapp: "5511999990000", optOutAt: null },
           ...over.mensagem,
         };
@@ -65,6 +69,12 @@ function banco(over: { mensagem?: Record<string, unknown> | null } = {}) {
     leadMensagem: {
       findUnique: vi.fn().mockResolvedValue(mensagem),
       update: vi.fn().mockResolvedValue({}),
+    },
+    // Estes testes medem a ENTREGA. A Supervisora tem sua suíte própria. Sem
+    // linha no banco, o contrato real da Supervisora é OFF; este delegate faz o
+    // banco mínimo reproduzir esse estado em vez de quebrar antes da asserção.
+    supervisoraConfig: {
+      findUnique: vi.fn().mockResolvedValue(null),
     },
   };
 }

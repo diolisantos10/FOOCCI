@@ -158,23 +158,6 @@ export async function entregarMensagem(
         detalhe: `mensagem está ${m.direcao}/${m.status}`,
       };
     }
-
-    // Quarentena persistente: uma mensagem já bloqueada nunca escapa porque o
-    // modo mudou para OFF ou porque um worker tentou entregá-la novamente.
-    // Para continuar a conversa, compõe-se uma NOVA mensagem corrigida; a fala
-    // reprovada permanece como evidência auditável.
-    const retencaoAnterior = await db.supervisoraAvaliacao.findUnique({
-      where: { mensagemId },
-      select: { bloqueada: true, motivoDetalhe: true },
-    });
-    if (retencaoAnterior?.bloqueada) {
-      return {
-        entregue: false,
-        motivo: "retidaPelaSupervisora",
-        detalhe: retencaoAnterior.motivoDetalhe ?? "mensagem em quarentena pela Supervisora",
-      };
-    }
-
     const texto = m.texto?.trim();
     if (!texto) {
       return { entregue: false, motivo: "semTexto", detalhe: "mensagem sem texto" };
