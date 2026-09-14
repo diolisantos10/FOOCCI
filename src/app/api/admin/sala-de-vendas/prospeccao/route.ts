@@ -73,7 +73,7 @@ import {
   isFoocciSalesChannelConfigured,
   isFoocciSdrSendEnabled,
 } from "@/services/foocci-sdr/FoocciSalesChannel";
-import { preVooDoModelo } from "@/services/foocci-sdr/modelosDaMeta";
+import { preVooDosModelosLiberados } from "@/services/foocci-sdr/preVooModelosLiberados";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -798,7 +798,7 @@ export async function POST(req: NextRequest) {
       autor: "HUMANO",
       autorUserId: portao.sessao.userId,
       canalPronto: canalDeVendasPronto(),
-      preVoo: preVooDoModelo,
+      preVoo: () => preVooDosModelosLiberados(prisma),
       ...(teto !== undefined ? { teto } : {}),
     });
 

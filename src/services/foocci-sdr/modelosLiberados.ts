@@ -1,10 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { foocciSalesPhoneNumberId } from "./FoocciSalesChannel";
 import { modeloAprovadoDaSala } from "./sincronizarModelos";
-import {
-  aplicarPadraoUltimosSeisDaMeta,
-  selecaoJaFoiConfigurada,
-} from "./padraoModelosRecentes";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -30,9 +26,10 @@ export type ResultadoDePermissao =
   | { ok: false; causa: "semNumero" | "naoEncontrado" | "naoAprovado"; detalhe: string };
 
 /**
- * Lista o retrato efetivo da tela: aprovação da Meta + decisão operacional da Foocci.
- * A ausência de uma linha de controle equivale a FALSE. Essa é a trava que impede
- * template antigo de voltar a ser usado só por continuar APPROVED na Meta.
+ * Lista o retrato efetivo da tela: somente modelos APPROVED pela Meta, junto da
+ * decisão operacional da Foocci. A ausência de uma linha de controle equivale a
+ * FALSE. Modelos pendentes, rejeitados ou removidos não aparecem na página e
+ * nunca entram no pool de envio.
  */
 export async function modelosComPermissaoDeEnvio(
   db: Cliente,
@@ -55,7 +52,8 @@ export async function modelosComPermissaoDeEnvio(
      AND e."nome" = m."nome"
      AND e."idioma" = m."idioma"
     WHERE m."phoneNumberId" = ${phoneNumberId}
-    ORDER BY m."situacao" ASC, m."nome" ASC
+      AND m."situacao" = 'APPROVED'
+    ORDER BY m."nome" ASC, m."idioma" ASC
   `);
 }
 
@@ -168,25 +166,17 @@ async function modeloSomenteParaDryRun(db: Cliente): Promise<ModeloLiberadoParaE
 }
 
 /**
- * Somente modelos que passam pelas DUAS autorizações entram no sorteio:
- * 1) APPROVED na Meta; 2) Pode enviar ligado na Sala.
- *
- * Na instalação nova, antes de existir qualquer decisão operacional, o sistema
- * aplica sozinho o padrão executivo: os seis templates de Marketing pt-BR com
- * edição mais recente na Meta. Depois que a seleção existe, desligar todos é uma
- * decisão válida e NÃO é desfeito automaticamente.
+ * A decisão operacional é uma só: APPROVED na Meta + toggle "Pode enviar"
+ * ligado na Sala. Não existe mais regra de "melhores", "últimos seis" ou
+ * seleção automática. Em produção, zero toggles verdes significa zero modelos
+ * liberados e o pré-voo bloqueia o disparo.
  */
 export async function modelosLiberadosParaEnvio(
   db: Cliente,
 ): Promise<ModeloLiberadoParaEnvio[]> {
-  if (!(await selecaoJaFoiConfigurada(db))) {
-    const inicializacao = await aplicarPadraoUltimosSeisDaMeta(db, {
-      somenteSeNaoConfigurado: true,
-    });
-    if (!inicializacao.ok) return modeloSomenteParaDryRun(db);
-  }
-
-  return lerLiberados(db);
+  const liberados = await lerLiberados(db);
+  if (liberados.length > 0) return liberados;
+  return modeloSomenteParaDryRun(db);
 }
 
 /** Sorteio uniforme; random injetável deixa a regra verificável em teste. */
