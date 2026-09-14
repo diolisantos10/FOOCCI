@@ -51,8 +51,14 @@ import { MANUAL_V01_CONTENT } from "@/services/manual/manualV01Content";
  * Fora da lista, e de propósito: `arquitetura-do-sistema`, `seguranca-operacional`,
  * `branding`, `ui-ux` e `principios-operacionais` (internos, não são da conta de
  * um estranho), `backlog` e `historico-de-decisoes` (o que não existe).
+ *
+ * ⚠️ A lista é congelada em runtime, não só `as const`. `as const` protege quem
+ * escreve TypeScript, mas desaparece no JavaScript. Como o módulo é importado por
+ * uma suíte enorme, uma mutação acidental da referência exportada poderia abrir
+ * um capítulo que nunca foi autorizado pelo produto. O allowlist é uma fronteira
+ * de segurança e, portanto, precisa ser imutável também em execução.
  */
-export const CAPITULOS_PERMITIDOS = [
+export const CAPITULOS_PERMITIDOS = Object.freeze([
   "visao-geral",
   "waiter-agent",
   "crm-agent",
@@ -60,7 +66,7 @@ export const CAPITULOS_PERMITIDOS = [
   "integracoes",
   "checkout-pagamentos",
   "analytics",
-] as const;
+] as const);
 
 /**
  * Seções que não atravessam, mesmo dentro de capítulo autorizado.
@@ -188,7 +194,14 @@ export function buscarNoConhecimento(
   const termos = palavras(pergunta);
   if (termos.length === 0) return [];
 
+  // Defesa em profundidade: mesmo que alguém passe uma base customizada para
+  // esta função, a busca comercial jamais atravessa capítulo fora do allowlist.
+  // Isso também impede um teste/helper de contaminar a referência compartilhada
+  // e, por acidente, transformar material interno em contexto de prospecto.
+  const permitidos = new Set<string>(CAPITULOS_PERMITIDOS);
+
   return base
+    .filter((p) => permitidos.has(p.capitulo))
     .map((p) => {
       const texto = new Set(palavras(`${p.secao} ${p.texto}`));
       const cobertos = termos.filter((t) => texto.has(t)).length;
