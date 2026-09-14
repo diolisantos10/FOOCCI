@@ -1,27 +1,13 @@
-# A JORNADA 3 DO P0 CONTRA POSTGRES DE VERDADE.
-#
-# ── POR QUE ESTE WORKFLOW EXISTE, SEPARADO DO CI ────────────────────────────
-#
-# O CI roda typecheck e testes unitários, e os testes da prospecção usam dublê
-# de banco. Dublê prova a REGRA e não prova o ENCAIXE: migration que não aplica,
-# enum que o banco não conhece, `where` malformado — nada disso aparece com mock,
-# e tudo isso aparece na primeira vez que alguém abre a tela em produção.
-#
-# Aqui o banco é criado do zero, as migrations rodam de verdade, e a jornada
-# percorre importar → liberar → fila → materializar → opt-out → freio.
-#
-# ⚠️ Nenhuma mensagem sai: dados sintéticos, canal desligado, telefone de teste.
 name: Jornadas do P0 — ponta a ponta contra Postgres
 
 on:
   pull_request:
     paths:
       - "src/services/salaDeVendas/prospeccao/**"
-      # ⭐ 11/09/2026 — `abordar.ts` é o único caminho de envio e não mora sob
-      # `prospeccao/`; sem esta linha, um PR que só toca `escolherPortaoDoLead`,
-      # `diagnosticarAbordagem` ou a retentativa não disparava esta jornada.
       - "src/services/salaDeVendas/abordar.ts"
       - "src/services/foocci-sdr/LeadContactSafety.ts"
+      - "src/services/foocci-sdr/modelosLiberados.ts"
+      - "src/services/foocci-sdr/padraoModelosRecentes.ts"
       - "prisma/migrations/**"
       - "prisma/schema.prisma"
       - "scripts/jornada-prospeccao.test.ts"
@@ -29,10 +15,6 @@ on:
       - "scripts/jornada-enriquecimento.test.ts"
       - "scripts/jornada-base-fria-ampliada.test.ts"
       - "scripts/jornada-retentativa-prospeccao.test.ts"
-      # ⭐ 12/09/2026 — a Supervisora sobre `abordar.ts` (adequação do
-      # template) mora fora de `prospeccao/` também. `abordar.ts` já está
-      # listado acima, então esta jornada já dispara para o caso comum; a
-      # linha fica aqui para o dia em que um PR toque só a Supervisora.
       - "src/services/salaDeVendas/supervisora/adequacaoDoTemplate.ts"
       - "src/services/salaDeVendas/supervisora/segundoPlano.ts"
       - "scripts/jornada-supervisora-abordagem.test.ts"
@@ -67,8 +49,6 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/foocci_jornada
-      # A chave de envio fica DESLIGADA de propósito: a jornada mede a máquina,
-      # e uma jornada que pudesse enviar seria uma jornada que um dia envia.
       FOOCCI_SDR_SEND_ENABLED: "false"
 
     steps:
@@ -85,75 +65,31 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # ── ⚠️ POR QUE NÃO É `migrate deploy` AQUI ────────────────────────────
-      #
-      # A primeira versão deste workflow usava `prisma migrate deploy` contra o
-      # banco vazio, e ele REPROVOU — não por culpa da prospecção, mas por um
-      # defeito herdado: a migration `20250506000000_saipos_integration` altera a
-      # tabela `orders` antes de qualquer migration criá-la, e morre com
-      # `relation "orders" does not exist`.
-      #
-      # Ou seja: **a cadeia de migrations deste repositório não reconstrói o
-      # banco do zero.** Em produção isso não aparece, porque lá as tabelas já
-      # existem e o histórico está marcado como aplicado — o defeito só acorda no
-      # dia em que alguém precisar recriar o banco, que é justamente o pior dia
-      # possível. Está registrado em `docs/pendencias.md` como frente separada;
-      # consertar 208 migrations herdadas não é escopo do P0 comercial.
-      #
-      # Aqui, então: o esquema é criado a partir do `schema.prisma` (`db push`),
-      # e logo depois as DUAS migrations desta obra são aplicadas à mão sobre um
-      # banco realista — que é o que de fato acontece no deploy, onde só as
-      # migrations novas rodam sobre um banco que já tem tudo.
       - name: Criar o esquema a partir do schema.prisma
         run: npx prisma db push --skip-generate --accept-data-loss
 
       - name: ⭐ Provar as migrations NOVAS sobre um banco realista
         run: |
           set -euo pipefail
-          # Desfaz o que o `db push` criou por conta das migrations novas, para
-          # que elas sejam aplicadas de verdade e não encontrem tudo pronto.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c '
             DROP TABLE IF EXISTS "itens_de_prospeccao" CASCADE;
             DROP TABLE IF EXISTS "lotes_de_prospeccao" CASCADE;
             DROP TABLE IF EXISTS "prospeccao_config" CASCADE;
+            DROP TABLE IF EXISTS "modelos_de_vendas_envio" CASCADE;
             DROP TYPE  IF EXISTS "SituacaoDoItem";
             DROP TYPE  IF EXISTS "SituacaoDoLote";
           '
-          # 039000 é idempotente por construção (ADD VALUE IF NOT EXISTS): rodar
-          # com os valores já presentes prova o nome do tipo e a sintaxe.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905039000_origens_multicanal/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260905040000_prospeccao_e_origens_multicanal/migration.sql
-          # ⭐ 08/09/2026 — `liberadoPorUserId`. Esta linha faltava e o job
-          # reprovou, que é exatamente o trabalho dele: o `db push` cria a coluna
-          # a partir do schema, o DROP acima a leva embora junto com a tabela, e
-          # sem a migration aqui o cliente do Prisma pede uma coluna que o banco
-          # não tem. Migration nova que não entra nesta lista é migration que
-          # ninguém provou.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260908203000_quem_liberou_o_lote/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260908205500_liberado_por_internal_user/migration.sql
-          # ⭐ 10/09/2026 — as duas da entrega consolidada. Faltavam aqui, e o job
-          # reprovou exatamente como o aviso acima previu: o DROP levou
-          # `prospeccao_config` e `lotes_de_prospeccao` embora, e sem estas duas
-          # linhas o cliente do Prisma pediu `salaWabaId` e `importacaoId` a um
-          # banco que não os tinha mais.
-          #
-          # A ordem importa e é a mesma que produção vai aplicar: a WABA (120000),
-          # a reserva da rodada automática (153000), a base contínua (180000), o
-          # backfill de importações legadas (210000, 10/09) e a ampliação da
-          # Base fria com os catorze campos novos (120000 de 11/09).
-          #
-          # ⭐ 11/09/2026 — faltavam duas linhas, e o job reprovou exatamente como
-          # o aviso acima previu: o DROP levou `prospeccao_config` embora, e sem a
-          # linha 153000 o cliente do Prisma pediu `ultimaRodadaAutomaticaEm` a um
-          # banco que não a tinha mais. Migration nova que não entra nesta lista é
-          # migration que ninguém provou — esta mesma frase, ignorada uma vez, é o
-          # que este comentário existe para não deixar acontecer de novo.
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910120000_waba_da_sala_persistido/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910153000_reserva_da_rodada_automatica/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910180000_base_continua_memoria_e_trava/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910210000_backfill_importacoes_legadas/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260911120000_base_fria_campos_completos/migration.sql
-          echo "✅ As nove migrations da prospecção aplicaram sobre banco realista."
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260914100000_modelos_de_vendas_envio/migration.sql
+          echo "✅ As migrations da prospecção e da seleção de templates aplicaram sobre banco realista."
 
       - name: Percorrer as Jornadas 1, 2 e 3
         run: npm run test:jornada
