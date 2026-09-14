@@ -51,7 +51,7 @@ import {
 } from "@/services/foocci-sdr/LeadContactSafety";
 import { contarAbordagensDeHoje } from "./prospeccao/selecao";
 import { parametrosDoEnvioAgora } from "@/services/foocci-sdr/modelosDaMeta";
-import { modeloAprovadoDaSala } from "@/services/foocci-sdr/sincronizarModelos";
+import { escolherModeloLiberado } from "@/services/foocci-sdr/modelosLiberados";
 import {
   canalDeVendasPronto,
   enviarModeloDeVendas,
@@ -87,10 +87,8 @@ export type ResultadoDaAbordagem =
 /**
  * O modelo configurado para abordagem.
  *
- * Vem do ambiente porque o nome e o idioma são registro na Meta, não decisão de
- * código: mudam quando o dono aprova um modelo novo, e não quando alguém faz
- * deploy. Sem configuração, `enviarModeloDeVendas` recusa citando a variável —
- * a mensagem nunca sai "assim mesmo".
+ * Mantido para conferências/rotinas legadas. O envio real não usa mais este
+ * valor: ele sorteia somente entre modelos APPROVED marcados como "Pode enviar".
  */
 export function modeloConfigurado(env: NodeJS.ProcessEnv = process.env): {
   nome: string;
@@ -498,26 +496,20 @@ export async function abordarLead(
     return { abordou: false, motivo: "ritmo", detalhe: ritmo.detalhe };
   }
 
-  const cfg = modeloConfigurado();
+  // ⭐ A escolha fixa do .env não decide mais o que sai. O grupo elegível é
+  // APPROVED na Meta + "Pode enviar" ligado. Sem grupo, falha fechado.
+  const modeloPersistido = await escolherModeloLiberado(db);
+  if (!modeloPersistido) {
+    return {
+      abordou: false,
+      motivo: "semDadoParaOModelo",
+      detalhe: "nenhum modelo aprovado está marcado como Pode enviar; nada foi enviado",
+    };
+  }
 
-  // ⛔ O PAYLOAD TEM DE TER SEMPRE O MESMO TAMANHO — ordem do Diretor Geral,
-  // 10/09/2026: *"impedir que contato sem nome produza payload incompatível."*
-  //
-  // Até hoje era `nome ? [nome] : []`: **o formato do que sai mudava com o
-  // contato**. Contra um modelo de `{{1}}`, quem não tinha nome era recusado
-  // pela Meta — e a rodada só descobria isso queimando contatos, um a um.
-  //
-  // Agora o número vem do contrato (conferido no pré-voo contra o modelo
-  // aprovado) e a montagem é exata. Faltando dado, **não sai**: recusar aqui
-  // custa um contato; mandar payload incompatível custa a reputação do número.
-  //
-  // ⚠️ `parametrosDoEnvioAgora` e NÃO `parametrosQueOEnvioMonta()` seco: desde
-  // 10/09/2026 o número vem do modelo persistido, e o pré-voo confere por essa
-  // mesma fonte. Se aqui continuasse lendo só o ambiente, a conferência
-  // aprovaria um contrato e o disparo montaria outro — o defeito que a P0.2
-  // existe para matar, de volta pela porta dos fundos e com pré-voo verde por
-  // cima. Sem banco, a função cai na reserva do ambiente e nada muda.
-  const montagem = montarParametros(await parametrosDoEnvioAgora(db), {
+  // ⛔ O PAYLOAD TEM DE TER SEMPRE O MESMO TAMANHO — agora usando o contrato do
+  // próprio modelo sorteado, e não o contrato do modelo antigo do ambiente.
+  const montagem = montarParametros(modeloPersistido.variaveis, {
     ...lead,
     proveniencia: await provenienciaDoLead(db, lead),
   });
@@ -526,19 +518,11 @@ export async function abordarLead(
   }
 
   const modelo: ModeloDeAbordagem = {
-    nome: cfg.nome,
-    idioma: cfg.idioma,
+    nome: modeloPersistido.nome,
+    idioma: modeloPersistido.idioma,
     parametros: montagem.parametros,
   };
 
-  const modeloPersistido = await modeloAprovadoDaSala(db, modelo.nome, modelo.idioma);
-  if (!modeloPersistido?.corpo) {
-    return {
-      abordou: false,
-      motivo: "semDadoParaOModelo",
-      detalhe: "o corpo integral do modelo aprovado não está sincronizado; nada foi enviado",
-    };
-  }
   const textoIntegral = renderizarCorpoDoModelo(modeloPersistido.corpo, modelo.parametros);
   if (!textoIntegral.ok) {
     return { abordou: false, motivo: "semDadoParaOModelo", detalhe: textoIntegral.falta };

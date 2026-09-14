@@ -1,36 +1,9 @@
 /**
  * O WHATSAPP DA SALA, DESCOBERTO POR API — número, conta, teto e modelos.
  *
- * ── POR QUE ESTA ROTA EXISTE ────────────────────────────────────────────────
- *
- * Até aqui, três dos dados que mais decidem o dia da operação viviam fora do
- * sistema: a conta (WABA) dependia de alguém colar um id numa variável, o teto
- * de conversas que a Meta concede não aparecia em lugar nenhum, e a quantidade
- * de variáveis do modelo era **digitada à mão** — um número que a API da Meta
- * responde de graça, pedido a uma pessoa.
- *
- * Todo dado que depende de alguém lembrar de atualizar envelhece. Este aqui
- * envelhece caro: teto errado corta a rodada no meio da lista, e contagem de
- * variáveis errada faz a Meta recusar 100% dos envios, contato a contato.
- *
- * ── AS DUAS OPERAÇÕES, E POR QUE SÃO VERBOS DIFERENTES ──────────────────────
- *
- * `GET` só LÊ: pergunta o cadastro do número à Meta e devolve os modelos já
- * gravados. É barato e pode ser aberto sempre que alguém abrir a tela.
- *
- * `POST` VARRE a conta e ESCREVE no banco. É a operação cara — dez páginas de
- * consulta, um upsert por modelo — e por isso é um clique, não um efeito
- * colateral de abrir a página. Uma sincronização disparada por render vira
- * varredura em laço no dia em que a tela ficar aberta num monitor.
- *
- * ── QUEM PODE ───────────────────────────────────────────────────────────────
- *
- * Só quem enxerga a operação inteira, como na conferência do canal. Não é
- * segredo o que ela devolve, mas é chamada externa em nome da empresa: aberta
- * ao vendedor, daria a qualquer sessão um jeito de bater na Meta em laço.
- *
- * 🔒 Nada do token entra na resposta. O que sai é o que a META devolve sobre o
- * número — e é justamente isso que prova que a chave certa está no lugar certo.
+ * `GET` só lê o retrato atual. `POST` sincroniza a conta da Meta e, ao final de
+ * uma leitura completa, reaplica o padrão executivo dos seis templates mais
+ * recentemente editados para abordagem fria.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -43,11 +16,11 @@ import {
   sincronizarModelosDeVendas,
   modelosSincronizadosDaSala,
 } from "@/services/foocci-sdr/sincronizarModelos";
+import { aplicarPadraoUltimosSeisDaMeta } from "@/services/foocci-sdr/padraoModelosRecentes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** A ausência do token vira uma resposta declarada, nunca campos mudos. */
 const SEM_TOKEN: DetalhesDoNumero = {
   phoneNumberId: "",
   wabaId: null,
@@ -69,10 +42,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // As duas leituras são independentes e vão juntas: a Meta responde pelo
-  // número, o banco responde pelos modelos. Encadear uma na outra faria a lista
-  // de modelos sumir da tela sempre que a Graph estivesse lenta — e a lista é
-  // exatamente o que quem opera precisa ver quando a Meta está fora do ar.
   const [numero, modelos] = await Promise.all([
     comOTokenDeVendas<DetalhesDoNumero>(detalhesDoNumeroDeVendas, () => SEM_TOKEN),
     modelosSincronizadosDaSala(prisma),
@@ -83,8 +52,8 @@ export async function GET(req: NextRequest) {
     data: {
       numero,
       modelos,
-      // Qual modelo está escolhido para a abordagem. Sem isto a tabela mostra
-      // cinco modelos aprovados e nenhuma indicação de qual deles o lead recebe.
+      // Mantido apenas para compatibilidade de consumidores antigos desta rota.
+      // O envio real não usa mais uma frase fixa: usa o conjunto liberado.
       selecionado: modeloConfigurado(),
     },
   });
@@ -101,7 +70,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Quem audita não mexe no que auditou — e sincronizar ESCREVE no banco.
   if (somenteLeitura(portao.sessao)) {
     return NextResponse.json(
       { ok: false, error: "O auditor lê e não escreve." },
@@ -110,14 +78,22 @@ export async function POST(req: NextRequest) {
   }
 
   const r = await sincronizarModelosDeVendas(prisma);
-
-  // ⚠️ Falha vira 502 com o motivo, e não 200 com `sincronizados: 0`. Os dois
-  // estados são diferentes: zero modelos manda criar modelo na Meta; "não
-  // consegui perguntar" manda olhar a credencial ou a conta.
   if (!r.ok) {
     return NextResponse.json({ ok: false, error: r.erro ?? "Falha ao sincronizar." }, { status: 502 });
   }
 
+  const padrao = await aplicarPadraoUltimosSeisDaMeta(prisma);
+  if (!padrao.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          `Os modelos foram sincronizados, mas não foi seguro definir os seis mais recentes: ${padrao.erro}`,
+      },
+      { status: 502 },
+    );
+  }
+
   const modelos = await modelosSincronizadosDaSala(prisma);
-  return NextResponse.json({ ok: true, data: { resultado: r, modelos } });
+  return NextResponse.json({ ok: true, data: { resultado: r, modelos, padrao } });
 }
