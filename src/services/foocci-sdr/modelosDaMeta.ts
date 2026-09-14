@@ -263,8 +263,6 @@ async function contaPeloToken(token: string): Promise<ContaPeloToken> {
     }
   }
 
-  // O que EXISTE no token entra na frase: é o que diz se falta permissão ou
-  // se ela está lá sem alvo — dois consertos diferentes.
   const vistos = escopos
     .map((e) => (e as { scope?: unknown }).scope)
     .filter((v): v is string => typeof v === "string");
@@ -316,26 +314,13 @@ export type ConferenciaDoModelo =
       detalhe: string;
     };
 
-/** As causas de reprovação, para quem precisa reagir a cada uma. */
 export type CausaDaConferencia = Extract<ConferenciaDoModelo, { pronto: false }>["causa"];
 
 /**
- * ⭐ A CONFERÊNCIA QUE SE FAZ ANTES DE DISPARAR, e não durante.
- *
- * Responde, numa consulta: o modelo configurado existe na Meta? está aprovado?
- * quantas variáveis ele espera, e isso bate com o que o código manda?
- *
- * `parametrosQueMandamos` é **1** — a saudação (`abordarLead` monta
- * `parametros: [saudação]`, ou `[]` quando o contato não tem nome).
- *
- * ── POR QUE 0 e 1 PASSAM, e 2 NÃO ───────────────────────────────────────────
- *
- * Com `{{1}}`, o contato COM nome vai; o sem nome é recusado pela Meta e a
- * rodada pula (a defesa que o #216 instalou). É perda parcial e conhecida.
- * Com duas ou mais variáveis, **nenhum** contato passa — 100% de recusa, e a
- * rodada só descobriria isso queimando três contatos até bater o limite.
- *
- * Recusar aqui custa uma consulta. Descobrir lá custa a janela do dia.
+ * Conferência legada de UM modelo configurado no ambiente.
+ * Mantida apenas para compatibilidade/testes antigos. A produção não usa mais
+ * este veredito para autorizar a rodada; `preVooDoModelo` usa exclusivamente o
+ * grupo APPROVED + "Pode enviar" persistido pela Sala.
  */
 export async function conferirModeloDeAbordagem(token: string): Promise<ConferenciaDoModelo> {
   const cfg = modeloConfigurado();
@@ -351,8 +336,6 @@ export async function conferirModeloDeAbordagem(token: string): Promise<Conferen
   if (!lista.ok) return { pronto: false, causa: "metaRecusou", detalhe: lista.erro };
 
   const achado = lista.modelos.find((m) => m.nome === cfg.nome && m.idioma === cfg.idioma)
-    // Idioma diferente do configurado ainda é um achado — e o detalhe diz qual,
-    // porque "não achei" mandaria procurar o modelo errado.
     ?? lista.modelos.find((m) => m.nome === cfg.nome);
 
   if (!achado) {
@@ -371,31 +354,6 @@ export async function conferirModeloDeAbordagem(token: string): Promise<Conferen
     };
   }
 
-  // ⛔ CORRESPONDÊNCIA EXATA, e não "no máximo uma".
-  //
-  // ── O DEFEITO, ATÉ 10/09/2026 ─────────────────────────────────────────────
-  //
-  // Esta conferência aceitava 0 OU 1 variável e declarava que o envio manda 1.
-  // Mas `abordarLead` montava `nome ? [nome] : []` — **um payload que muda com
-  // o contato**. Contra um modelo de `{{1}}`, o contato com nome passava e o
-  // sem nome era recusado pela Meta; contra um modelo de zero variáveis, o
-  // contato COM nome é que era recusado.
-  //
-  // Ou seja: o pré-voo dizia "pronto" e a rodada descobria o contrário, contato
-  // a contato. O template aprovado tem contrato FIXO; o payload também precisa
-  // ter. Quem manda no número é a Meta — este código só confere se bate.
-  //
-  // ── ⭐ O QUE MUDOU EM 10/09/2026, E O QUE NÃO MUDOU ────────────────────────
-  //
-  // NÃO mudou a regra: continua sendo igualdade EXATA, e continua bloqueando
-  // antes de sair. Mudou de onde vem o número do nosso lado — do modelo que a
-  // Meta respondeu e nós persistimos, com o ambiente de reserva.
-  //
-  // ⚠️ Isto **não** vira uma comparação de um valor consigo mesmo. `esperados`
-  // vem da Meta consultada AGORA; `monta` vem do retrato gravado na última
-  // sincronização. Quando alguém edita o modelo na Meta e ninguém sincroniza,
-  // os dois discordam — e é justamente esse o caso em que o envio montaria pelo
-  // retrato velho e a Meta recusaria 100% dos contatos.
   const esperados = achado.variaveis;
   const monta = await parametrosDoEnvioAgora();
   if (esperados !== monta) {
@@ -412,44 +370,10 @@ export async function conferirModeloDeAbordagem(token: string): Promise<Conferen
   return { pronto: true, modelo: achado, parametrosQueMandamos: esperados };
 }
 
-/**
- * Quantas variáveis o envio monta — o contrato do NOSSO lado.
- *
- * ── ⭐ A FONTE MUDOU EM 10/09/2026: O BANCO VEM PRIMEIRO, O AMBIENTE É RESERVA ─
- *
- * Até aqui este número vinha **só** de `FOOCCI_SDR_MODELO_VARIAVEIS`: pedia-se a
- * uma pessoa que digitasse, num painel, um número que **a própria API da Meta
- * responde sozinha**. Todo dado que depende de alguém lembrar de atualizar
- * envelhece no dia em que outra pessoa aprova um modelo novo e não avisa — e o
- * preço deste envelhecer específico é 100% de recusa na rodada seguinte.
- *
- * Agora a primeira fonte é o modelo **persistido** por `sincronizarModelosDeVendas`,
- * que grava o que a Meta respondeu, contado por `countBodyVariables` sobre o
- * corpo real. O ambiente continua existindo como **reserva**, e não por
- * simetria: enquanto ninguém tiver sincronizado — primeira subida, banco fora
- * do ar, WABA ainda não resolvida — o número precisa vir de algum lugar
- * declarado, e "não sei" não pode virar zero (ver o bloco do vazio, abaixo).
- *
- * ⚠️ ISTO NÃO AFROUXA O CONTRATO P0.2. O pré-voo continua exigindo
- * correspondência EXATA e continua bloqueando antes de sair. O que mudou é de
- * onde sai o número do nosso lado — e a comparação segue valendo, porque o
- * outro lado da conta é a Meta **consultada agora**, ao vivo, contra um valor
- * persistido na última sincronização. Modelo editado na Meta depois do último
- * sincronismo faz os dois discordarem, e é exatamente aí que o pré-voo tem de
- * reprovar: o envio montaria pelo retrato velho.
- *
- * ⚠️ Valor inválido cai na fonte seguinte em vez de virar zero: um campo em
- * branco no painel não pode, sozinho, mudar o formato do que sai para o cliente.
- */
 export function parametrosQueOEnvioMonta(
   env: NodeJS.ProcessEnv = process.env,
   doModeloPersistido: number | null = null,
 ): number {
-  // ── Fonte 1: o que a Meta respondeu e nós gravamos ──
-  //
-  // O teto de 10 é o mesmo do ambiente e vale aqui também: um número absurdo
-  // vindo do banco é corrupção de dado, não contrato, e seguir com ele mandaria
-  // o pré-voo comparar lixo com lixo.
   if (
     doModeloPersistido !== null &&
     Number.isInteger(doModeloPersistido) &&
@@ -459,13 +383,7 @@ export function parametrosQueOEnvioMonta(
     return doModeloPersistido;
   }
 
-  // ── Fonte 2: o ambiente, agora como RESERVA ──
   const bruto = (env.FOOCCI_SDR_MODELO_VARIAVEIS ?? "").trim();
-
-  // ⚠️ VAZIO NÃO É ZERO, e o teste pegou isto na primeira rodada: `Number("")`
-  // é `0`, e `0` é inteiro — a variável AUSENTE virava "mande zero parâmetros"
-  // silenciosamente, mudando o formato do que sai para o cliente sem ninguém
-  // ter decidido. Ausência cai no padrão; zero só vale escrito.
   if (bruto === "") return 1;
 
   const n = Number(bruto);
@@ -473,39 +391,12 @@ export function parametrosQueOEnvioMonta(
   return n;
 }
 
-/**
- * ⭐ O MESMO NÚMERO, JÁ COM O BANCO CONSULTADO — a versão que a produção usa.
- *
- * `parametrosQueOEnvioMonta` fica pura e síncrona porque é ela que o teste
- * mede; esta busca o modelo persistido e entrega o resultado à função pura.
- *
- * ⛔ **O PRÉ-VOO E O ENVIO PRECISAM CHAMAR ESTA MESMA FUNÇÃO.** Se o pré-voo
- * conferir pelo banco e o envio montar pelo ambiente, a conferência aprova um
- * contrato e o disparo manda outro — e o defeito que a P0.2 existe para matar
- * volta pela porta dos fundos, agora com um pré-voo verde por cima. Régua verde
- * sobre o componente errado é pior que régua nenhuma.
- *
- * ⚠️ **Nunca lança.** Banco indisponível cai na reserva do ambiente: recusar o
- * dia inteiro de abordagem porque o Postgres piscou seria trocar um defeito por
- * outro maior.
- */
 export async function parametrosDoEnvioAgora(db?: unknown): Promise<number> {
   const cfg = modeloConfigurado();
   const doBanco = await variaveisDoModeloPersistido(db, cfg.nome, cfg.idioma);
   return parametrosQueOEnvioMonta(process.env, doBanco);
 }
 
-/**
- * Quantas variáveis o modelo APROVADO e persistido tem, ou `null` na dúvida.
- *
- * `null` em qualquer incerteza — sem nome configurado, sem linha, banco fora do
- * ar — porque `null` manda o chamador para a reserva declarada. Um palpite aqui
- * (zero, por exemplo) mudaria o formato do que sai para o cliente sem ninguém
- * ter decidido: é o guardrail 1 aplicado a um número.
- *
- * ⚠️ O import é dinâmico de propósito: `sincronizarModelos` importa este
- * arquivo para resolver a conta, e um import estático de volta fecharia o ciclo.
- */
 async function variaveisDoModeloPersistido(
   db: unknown,
   nome: string,
@@ -522,64 +413,62 @@ async function variaveisDoModeloPersistido(
 }
 
 /**
- * ⭐ O PRÉ-VOO — a conferência com o token do ambiente, pronta para ser chamada.
+ * Pré-voo de produção.
  *
- * `conferirModeloDeAbordagem` recebe o token porque assim ela é testável sem
- * ambiente. Esta é a versão que a produção usa: o token vem emprestado de
- * `comOTokenDeVendas` e não passa pelas mãos de ninguém.
- *
- * ⚠️ **Sem token, a resposta é `semToken` — e não uma aprovação.** O caminho
- * mudo seria devolver "está tudo bem, não consegui conferir": é exatamente o
- * guardrail 1 (ausência de informação não é informação), e é o que faria a
- * rodada sair achando que passou pela conferência.
+ * REGRA ÚNICA: o que autoriza a rodada é o mesmo conjunto que autoriza o envio:
+ * APPROVED no espelho da Meta + toggle "Pode enviar" ligado. O antigo
+ * `FOOCCI_SDR_MODELO_ABORDAGEM` não participa mais desta decisão.
  */
-export function preVooDoModelo(): Promise<ConferenciaDoModelo> {
-  return comOTokenDeVendas<ConferenciaDoModelo>(conferirModeloDeAbordagem, () => ({
-    pronto: false,
-    causa: "semToken",
-    detalhe: "FOOCCI_SALES_ACCESS_TOKEN não está no ambiente",
-  }));
-}
+export async function preVooDoModelo(): Promise<ConferenciaDoModelo> {
+  try {
+    const [{ prisma }, { modelosLiberadosParaEnvio }] = await Promise.all([
+      import("@/lib/prisma"),
+      import("./modelosLiberados"),
+    ]);
+    const liberados = await modelosLiberadosParaEnvio(prisma);
+    const modelo = liberados[0];
 
+    if (!modelo) {
+      return {
+        pronto: false,
+        causa: "naoAchado",
+        detalhe: "nenhum modelo APPROVED está com o toggle Pode enviar ligado; nada será enviado",
+      };
+    }
+
+    return {
+      pronto: true,
+      modelo: {
+        nome: modelo.nome,
+        idioma: modelo.idioma,
+        status: "APPROVED",
+        variaveis: modelo.variaveis,
+      },
+      parametrosQueMandamos: modelo.variaveis,
+    };
+  } catch (e) {
+    return {
+      pronto: false,
+      causa: "metaRecusou",
+      detalhe: `não consegui ler os templates liberados da Sala: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
 
 // ─── O número, como a Meta o descreve ────────────────────────────────────────
 
-/**
- * O cadastro do número de vendas na Meta — inclusive **o teto que ela concede**.
- *
- * ── POR QUE O TIER ENTRA AQUI, E NÃO NUMA VARIÁVEL ──────────────────────────
- *
- * `messaging_limit_tier` é quantas conversas a Meta deixa a gente INICIAR por
- * dia (`TIER_250`, `TIER_1K`, `TIER_10K`…). Ele sobe e desce sozinho, conforme
- * qualidade e volume, e ninguém do nosso lado é avisado. Um teto de operação
- * escrito à mão acima do que a Meta permite não é teto: é o número que aparece
- * na tela enquanto a plataforma corta os envios no meio da lista.
- *
- * O WABA vem junto porque é a conta de onde os modelos são lidos — mostrar o
- * número sem a conta deixaria de fora metade do que prova que estamos falando
- * da caixa certa (e a caixa errada, aqui, é a de um restaurante cliente).
- *
- * 🔒 O token entra no cabeçalho e não sai no retorno.
- */
 export interface DetalhesDoNumero {
   phoneNumberId: string;
   wabaId: string | null;
-  /** Como a Meta escreve o número. A prova do apontamento. */
   numero: string | null;
   nomeVerificado: string | null;
   qualidade: string | null;
-  /** `TIER_250`, `TIER_1K`, `TIER_10K`, `TIER_UNLIMITED`… como a Meta devolve. */
   tier: string | null;
-  /** Preenchido quando algum dos dois passos falhou. Nunca silencioso. */
   erro: string | null;
 }
 
 export async function detalhesDoNumeroDeVendas(token: string): Promise<DetalhesDoNumero> {
   const phoneNumberId = foocciSalesPhoneNumberId() ?? "";
-
-  // A conta é resolvida primeiro e o erro dela é GUARDADO, não descartado: sem
-  // WABA não há modelo para listar, e "a lista veio vazia" mandaria procurar
-  // modelo perdido em vez de conta não resolvida.
   const conta = await contaDoNumeroDeVendas(token);
   const wabaId = conta.ok ? conta.wabaId : null;
 
@@ -618,16 +507,6 @@ export async function detalhesDoNumeroDeVendas(token: string): Promise<DetalhesD
   };
 }
 
-
-// ─── O WABA aprendido do webhook ─────────────────────────────────────────────
-
-/**
- * O WABA persistido, **se** ele pertencer ao número de vendas de hoje.
- *
- * Devolve `null` em qualquer dúvida — sem registro, registro de outro número,
- * ou banco indisponível. `null` manda o chamador seguir para os outros
- * caminhos; um palpite mandaria a casa consultar a conta errada.
- */
 export async function wabaAprendido(phoneNumberId: string): Promise<string | null> {
   try {
     const { prisma } = await import("@/lib/prisma");
@@ -636,7 +515,6 @@ export async function wabaAprendido(phoneNumberId: string): Promise<string | nul
       select: { salaWabaId: true, salaWabaPhoneNumber: true },
     });
     if (!cfg?.salaWabaId) return null;
-    // O par tem de bater. WABA sem número casado não prova nada.
     if (cfg.salaWabaPhoneNumber !== phoneNumberId) return null;
     return cfg.salaWabaId;
   } catch {
@@ -644,22 +522,6 @@ export async function wabaAprendido(phoneNumberId: string): Promise<string | nul
   }
 }
 
-/**
- * Aprende o WABA a partir de um envelope de webhook do número de vendas.
- *
- * ── ⚠️ SÓ ESCREVE QUANDO TEM CERTEZA DOS DOIS LADOS ────────────────────────
- *
- * Exige que o `phoneNumberId` do envelope seja EXATAMENTE o número de vendas
- * configurado. Sem essa conferência, um envelope de restaurante gravaria o WABA
- * do cliente como se fosse o da Sala — e a partir daí a casa consultaria
- * modelos, limites e qualidade da conta errada.
- *
- * Idempotente e barata: só escreve quando o valor MUDA, então o caminho normal
- * (o mesmo WABA chegando o dia inteiro) não toca o banco.
- *
- * **Nunca lança.** É chamada de dentro do webhook, e um erro aqui não pode
- * derrubar o recebimento de uma mensagem de cliente.
- */
 export async function aprenderWabaDaSala(input: {
   phoneNumberId: string | null | undefined;
   wabaId: string | null | undefined;
