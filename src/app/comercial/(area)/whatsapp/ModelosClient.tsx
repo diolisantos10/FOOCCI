@@ -3,21 +3,9 @@
 /**
  * O QUE O LEAD VAI RECEBER — a tela que mostra a frase, e não o nome dela.
  *
- * ── POR QUE ELA PRECISOU EXISTIR ────────────────────────────────────────────
- *
- * Quem opera a Sala não tem acesso ao painel da Meta. Até aqui, tudo que o
- * sistema dizia sobre a abordagem era o NOME do modelo — `foocci_abordagem_v1`
- * — e um número de variáveis que alguém tinha digitado à mão numa variável de
- * ambiente. Nome de modelo não é frase: dava para operar semanas sem ninguém
- * nunca ter lido o texto que sai em nome da empresa para um estranho.
- *
- * Aqui a frase aparece inteira, com as variáveis marcadas, e o modelo escolhido
- * vem sinalizado. É a diferença entre confiar e conferir.
- *
- * ── A REGRA DESTA TELA, IGUAL À DA CONFERÊNCIA AO LADO ──────────────────────
- *
- * Nenhuma frase daqui pode exigir que quem lê saiba o que é uma variável de
- * ambiente. O nome técnico aparece, mas em segundo plano.
+ * A aprovação da Meta e a decisão operacional da Foocci são coisas diferentes:
+ * APPROVED diz que a Meta aceita o modelo; "Pode enviar" diz se o SDR está
+ * autorizado a usá-lo. O segundo nasce desligado e é controlado aqui.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -39,23 +27,22 @@ interface Modelo {
   situacao: string;
   variaveis: number;
   corpo: string | null;
-}
-
-interface Selecionado {
-  nome: string;
-  idioma: string;
+  podeEnviar: boolean;
 }
 
 type Estado =
   | { fase: "carregando" }
-  | { fase: "pronto"; numero: Numero; modelos: Modelo[]; selecionado: Selecionado }
+  | { fase: "pronto"; numero: Numero; modelos: Modelo[] }
   | { fase: "semAcesso" }
   | { fase: "erro"; detalhe: string | null };
+
+const chaveDoModelo = (m: Pick<Modelo, "nome" | "idioma">) => `${m.nome}::${m.idioma}`;
 
 export function ModelosClient() {
   const [estado, setEstado] = useState<Estado>({ fase: "carregando" });
   const [tentativa, setTentativa] = useState(0);
   const [sincronizando, setSincronizando] = useState(false);
+  const [alterando, setAlterando] = useState<string | null>(null);
   const [recado, setRecado] = useState<{ tom: "bom" | "ruim"; texto: string } | null>(null);
 
   useEffect(() => {
@@ -63,31 +50,47 @@ export function ModelosClient() {
 
     (async () => {
       try {
-        const r = await fetch("/api/admin/sala-de-vendas/whatsapp", { cache: "no-store" });
+        const [rNumero, rSelecao] = await Promise.all([
+          fetch("/api/admin/sala-de-vendas/whatsapp", { cache: "no-store" }),
+          fetch("/api/admin/sala-de-vendas/whatsapp/selecao", { cache: "no-store" }),
+        ]);
         if (!vivo) return;
 
-        if (r.status === 401 || r.status === 403) {
+        if (
+          rNumero.status === 401 ||
+          rNumero.status === 403 ||
+          rSelecao.status === 401 ||
+          rSelecao.status === 403
+        ) {
           setEstado({ fase: "semAcesso" });
           return;
         }
 
-        const j = (await r.json()) as {
+        const jNumero = (await rNumero.json()) as {
           ok: boolean;
-          data?: { numero: Numero; modelos: Modelo[]; selecionado: Selecionado };
+          data?: { numero: Numero };
+          error?: string;
+        };
+        const jSelecao = (await rSelecao.json()) as {
+          ok: boolean;
+          data?: { modelos: Modelo[] };
           error?: string;
         };
         if (!vivo) return;
 
-        if (!j.ok || !j.data) {
-          setEstado({ fase: "erro", detalhe: j.error ?? null });
+        if (!jNumero.ok || !jNumero.data) {
+          setEstado({ fase: "erro", detalhe: jNumero.error ?? null });
+          return;
+        }
+        if (!jSelecao.ok || !jSelecao.data) {
+          setEstado({ fase: "erro", detalhe: jSelecao.error ?? "Não foi possível ler a seleção dos modelos." });
           return;
         }
 
         setEstado({
           fase: "pronto",
-          numero: j.data.numero,
-          modelos: j.data.modelos,
-          selecionado: j.data.selecionado,
+          numero: jNumero.data.numero,
+          modelos: jSelecao.data.modelos,
         });
       } catch (e) {
         if (vivo) setEstado({ fase: "erro", detalhe: e instanceof Error ? e.message : null });
@@ -111,8 +114,6 @@ export function ModelosClient() {
       };
 
       if (!j.ok || !j.data) {
-        // ⚠️ O motivo real da Meta vai para a tela. "Não deu certo" faria quem
-        // opera chamar quem escreve o código para descobrir o que já está escrito.
         setRecado({ tom: "ruim", texto: j.error ?? "Não consegui perguntar à Meta." });
         return;
       }
@@ -123,8 +124,6 @@ export function ModelosClient() {
         texto:
           `${sincronizados} modelo(s) lidos da Meta` +
           (sumiram > 0 ? ` · ${sumiram} sumiram da conta e foram marcados` : "") +
-          // A varredura truncada é DITA. Silenciar isso faria a lista parecer
-          // completa quando ela não é — e o que não foi lido não é "não existe".
           (completa ? "" : " · a conta tem mais modelos do que coube nesta varredura"),
       });
       setTentativa((t) => t + 1);
@@ -132,6 +131,46 @@ export function ModelosClient() {
       setRecado({ tom: "ruim", texto: e instanceof Error ? e.message : "Falha de rede." });
     } finally {
       setSincronizando(false);
+    }
+  }, []);
+
+  const mudarPermissao = useCallback(async (modelo: Modelo, podeEnviar: boolean) => {
+    const chave = chaveDoModelo(modelo);
+    setAlterando(chave);
+    setRecado(null);
+
+    try {
+      const r = await fetch("/api/admin/sala-de-vendas/whatsapp/selecao", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: modelo.nome, idioma: modelo.idioma, podeEnviar }),
+      });
+      const j = (await r.json()) as { ok: boolean; error?: string };
+
+      if (!r.ok || !j.ok) {
+        setRecado({ tom: "ruim", texto: j.error ?? "Não foi possível alterar este modelo." });
+        return;
+      }
+
+      setEstado((anterior) => {
+        if (anterior.fase !== "pronto") return anterior;
+        return {
+          ...anterior,
+          modelos: anterior.modelos.map((m) =>
+            chaveDoModelo(m) === chave ? { ...m, podeEnviar } : m,
+          ),
+        };
+      });
+      setRecado({
+        tom: "bom",
+        texto: podeEnviar
+          ? `${modelo.nome} entrou no grupo que o SDR pode sortear.`
+          : `${modelo.nome} foi retirado dos próximos disparos.`,
+      });
+    } catch (e) {
+      setRecado({ tom: "ruim", texto: e instanceof Error ? e.message : "Falha de rede." });
+    } finally {
+      setAlterando(null);
     }
   }, []);
 
@@ -155,7 +194,8 @@ export function ModelosClient() {
     );
   }
 
-  const { numero, modelos, selecionado } = estado;
+  const { numero, modelos } = estado;
+  const ativos = modelos.filter((m) => m.situacao === "APPROVED" && m.podeEnviar).length;
 
   return (
     <>
@@ -167,10 +207,14 @@ export function ModelosClient() {
             <h2 className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
               O que o lead recebe
             </h2>
-            <p className="mt-1 max-w-[62ch] text-[12.5px] leading-relaxed text-muted">
-              Os modelos aprovados nesta conta da Meta, com o texto exato e
-              quantas informações cada um precisa. A contagem vem da Meta —
-              ninguém digita esse número.
+            <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">
+              Ligue <strong className="font-medium text-ink2">Pode enviar</strong> somente nos modelos que podem sair para leads frios.
+              O SDR sorteia apenas entre os aprovados pela Meta que estiverem ligados.
+            </p>
+            <p className={cx("mt-1 text-[12px]", ativos > 0 ? "text-emerald-700" : "text-amber-700")}>
+              {ativos > 0
+                ? `${ativos} modelo(s) participando do sorteio dos próximos disparos.`
+                : "Nenhum modelo liberado: o SDR não envia abordagem fria até você ligar pelo menos um."}
             </p>
           </div>
 
@@ -197,8 +241,7 @@ export function ModelosClient() {
 
         {modelos.length === 0 ? (
           <p className="mt-3 max-w-[62ch] text-[13px] leading-relaxed text-ink2">
-            Nenhum modelo guardado ainda. Clique em <strong>Buscar modelos na
-            Meta</strong> — isso não manda mensagem para ninguém, só lê a conta.
+            Nenhum modelo guardado ainda. Clique em <strong>Buscar modelos na Meta</strong> — isso não manda mensagem para ninguém, só lê a conta.
           </p>
         ) : (
           <ul className="mt-3.5 space-y-3">
@@ -206,7 +249,8 @@ export function ModelosClient() {
               <Linha
                 key={`${m.nome} ${m.idioma}`}
                 modelo={m}
-                escolhido={m.nome === selecionado.nome && m.idioma === selecionado.idioma}
+                alterando={alterando === chaveDoModelo(m)}
+                onMudar={mudarPermissao}
               />
             ))}
           </ul>
@@ -216,13 +260,6 @@ export function ModelosClient() {
   );
 }
 
-/**
- * O cadastro do número: quem é, de qual conta, e **quanto a Meta deixa falar**.
- *
- * O teto vem primeiro entre os números porque é o único que muda sozinho e
- * derruba a rodada sem avisar. Qualidade vem ao lado porque é a causa: a Meta
- * corta o teto de quem piora.
- */
 function OCadastroDoNumero({ numero }: { numero: Numero }) {
   if (numero.erro && !numero.numero) {
     return (
@@ -246,9 +283,6 @@ function OCadastroDoNumero({ numero }: { numero: Numero }) {
     },
     {
       rotulo: "Conta da Meta (WABA)",
-      // ⚠️ "não resolvida" e "vazia" não são a mesma coisa. Sem a conta, nenhum
-      // modelo pode ser lido — e quem vê um campo em branco supõe que está tudo
-      // certo e o problema é outro.
       valor: numero.wabaId ?? "não resolvida",
       nota: numero.wabaId ? "é dela que os modelos abaixo são lidos" : numero.erro ?? undefined,
     },
@@ -284,17 +318,26 @@ function OCadastroDoNumero({ numero }: { numero: Numero }) {
   );
 }
 
-function Linha({ modelo, escolhido }: { modelo: Modelo; escolhido: boolean }) {
+function Linha({
+  modelo,
+  alterando,
+  onMudar,
+}: {
+  modelo: Modelo;
+  alterando: boolean;
+  onMudar: (modelo: Modelo, podeEnviar: boolean) => Promise<void>;
+}) {
   const aprovado = modelo.situacao === "APPROVED";
+  const ligado = aprovado && modelo.podeEnviar;
 
   return (
     <li
       className={cx(
         "rounded-xl border p-3",
-        escolhido ? "border-emerald-500/40 bg-emerald-500/[.05]" : "border-line2 bg-canvas",
+        ligado ? "border-emerald-500/40 bg-emerald-500/[.05]" : "border-line2 bg-canvas",
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <span className="text-[13.5px] font-medium text-ink">{modelo.nome}</span>
         <span className="text-[11.5px] text-muted">{modelo.idioma}</span>
         {modelo.categoria ? (
@@ -308,16 +351,39 @@ function Linha({ modelo, escolhido }: { modelo: Modelo; escolhido: boolean }) {
         >
           {traduzirSituacao(modelo.situacao)}
         </span>
-        {escolhido ? (
-          <span className="rounded-full bg-emerald-600 px-2 py-[1px] text-[11px] font-medium text-white">
-            é este que sai
+
+        <div className="ml-auto flex items-center gap-2">
+          <span className={cx("text-[12px] font-medium", ligado ? "text-emerald-700" : "text-ink2")}>
+            Pode enviar
           </span>
-        ) : null}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={ligado}
+            aria-label={`Pode enviar ${modelo.nome}`}
+            disabled={!aprovado || alterando}
+            onClick={() => void onMudar(modelo, !ligado)}
+            className={cx(
+              "relative h-6 w-11 shrink-0 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40",
+              ligado ? "border-emerald-600 bg-emerald-600" : "border-line2 bg-chip",
+            )}
+          >
+            <span
+              className={cx(
+                "absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-sm transition",
+                ligado ? "left-[21px]" : "left-[1px]",
+              )}
+            />
+          </button>
+        </div>
       </div>
 
-      {/* ⭐ O CORPO APROVADO, INTEIRO. É o único jeito de quem opera ver o que o
-          lead lê. `whitespace-pre-wrap` porque a quebra de linha faz parte do
-          texto aprovado — remontá-la num parágrafo só mostraria outra mensagem. */}
+      {!aprovado ? (
+        <p className="mt-1.5 text-[11.5px] text-amber-700">
+          A Meta não aprovou este modelo; por segurança ele não pode participar dos disparos.
+        </p>
+      ) : null}
+
       {modelo.corpo ? (
         <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-paper px-3 py-2 text-[13px] leading-relaxed text-ink2">
           {modelo.corpo}
@@ -339,13 +405,6 @@ function Linha({ modelo, escolhido }: { modelo: Modelo; escolhido: boolean }) {
   );
 }
 
-/**
- * O tier em português de gente.
- *
- * ⚠️ Tier ausente NÃO vira "ilimitado" nem some da tela: vira "a Meta não
- * informou". Supor o teto para cima é como a rodada é planejada para 2.000 e
- * cortada em 250 no meio da lista.
- */
 function traduzirTier(tier: string | null): string {
   if (!tier) return "a Meta não informou";
   const mapa: Record<string, string> = {
@@ -377,9 +436,6 @@ function traduzirSituacao(s: string): string {
     REJECTED: "recusado",
     PAUSED: "pausado pela Meta",
     DISABLED: "desativado",
-    // Nosso estado, e não da Meta: ela não reprovou nada, simplesmente não
-    // conhece mais este modelo nesta conta. Dizer "recusado" mandaria alguém
-    // corrigir um texto que não tem defeito.
     MISSING: "sumiu da conta",
   };
   return mapa[s.toUpperCase()] ?? s.toLowerCase();
