@@ -82,18 +82,40 @@ export interface NormalizedMetaWebhook {
   statuses:       NormalizedStatus[];
 }
 
+type RawSharedContact = {
+  name?: {
+    formatted_name?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  phones?: Array<{ phone?: string; wa_id?: string; type?: string }>;
+  emails?: Array<{ email?: string; type?: string }>;
+  org?: { company?: string; department?: string; title?: string };
+};
+
+type RawMessage = {
+  from?: string; id?: string; timestamp?: string; type?: string;
+  text?:     { body?: string };
+  image?:    { id?: string; mime_type?: string; caption?: string };
+  audio?:    { id?: string; mime_type?: string };
+  video?:    { id?: string; mime_type?: string; caption?: string };
+  document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+  sticker?:  { id?: string; mime_type?: string; animated?: boolean };
+  contacts?: RawSharedContact[];
+  location?: { latitude?: number | string; longitude?: number | string; name?: string; address?: string };
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string; description?: string };
+  };
+  button?: { text?: string; payload?: string };
+  reaction?: { message_id?: string; emoji?: string };
+};
+
 interface RawValue {
   metadata?: { phone_number_id?: string; display_phone_number?: string };
   contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
-  messages?: Array<{
-    from?: string; id?: string; timestamp?: string; type?: string;
-    text?:     { body?: string };
-    image?:    { id?: string; mime_type?: string; caption?: string };
-    audio?:    { id?: string; mime_type?: string };
-    video?:    { id?: string; mime_type?: string; caption?: string };
-    document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
-    sticker?:  { id?: string; mime_type?: string };
-  }>;
+  messages?: RawMessage[];
   statuses?: Array<{ id?: string; status?: string; timestamp?: string; errors?: Array<{ code?: number | string }> }>;
 }
 
@@ -103,8 +125,85 @@ function tsToDate(ts?: string): Date | null {
   return Number.isFinite(n) ? new Date(n * 1000) : null;
 }
 
+function textoLimpo(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const s = value.trim();
+  return s || null;
+}
+
+function telefoneExibivel(value: unknown): string | null {
+  const s = textoLimpo(value);
+  if (!s) return null;
+  const digits = s.replace(/\D/g, "");
+  if (!digits) return s;
+  return s.startsWith("+") ? s : `+${digits}`;
+}
+
+function descricaoDoContato(c: RawSharedContact): string {
+  const nome =
+    textoLimpo(c.name?.formatted_name) ??
+    [textoLimpo(c.name?.first_name), textoLimpo(c.name?.last_name)].filter(Boolean).join(" ").trim() ||
+    "Contato";
+  const telefone = telefoneExibivel(c.phones?.[0]?.phone ?? c.phones?.[0]?.wa_id);
+  const empresa = textoLimpo(c.org?.company);
+  const cargo = textoLimpo(c.org?.title);
+  const detalhes = [telefone, cargo, empresa].filter((x): x is string => Boolean(x));
+  return detalhes.length ? `👤 ${nome} — ${detalhes.join(" — ")}` : `👤 ${nome}`;
+}
+
+/**
+ * Structured WhatsApp messages are still human-readable conversation content.
+ * Converting the known shapes here prevents the commercial inbox from showing
+ * a generic "unsupported" bubble for things the seller can act on immediately.
+ */
+function extractStructuredText(m: RawMessage): string | null {
+  const type = (m.type ?? "").toLowerCase();
+
+  if (type === "contacts") {
+    const contacts = m.contacts ?? [];
+    if (contacts.length === 0) return "👤 Contato compartilhado";
+    if (contacts.length === 1) return descricaoDoContato(contacts[0]!);
+    const exibidos = contacts.slice(0, 8).map(descricaoDoContato);
+    const restante = contacts.length - exibidos.length;
+    return [`👥 ${contacts.length} contatos compartilhados`, ...exibidos, ...(restante > 0 ? [`… +${restante}`] : [])].join("\n");
+  }
+
+  if (type === "location") {
+    const nome = textoLimpo(m.location?.name);
+    const endereco = textoLimpo(m.location?.address);
+    const detalhes = [nome, endereco].filter((x): x is string => Boolean(x));
+    if (detalhes.length > 0) return `📍 ${detalhes.join(" — ")}`;
+    const lat = m.location?.latitude;
+    const lon = m.location?.longitude;
+    if (lat != null && lon != null) return `📍 Localização compartilhada (${lat}, ${lon})`;
+    return "📍 Localização compartilhada";
+  }
+
+  if (type === "interactive") {
+    const button = m.interactive?.button_reply;
+    const list = m.interactive?.list_reply;
+    const buttonText = textoLimpo(button?.title) ?? textoLimpo(button?.id);
+    if (buttonText) return buttonText;
+    const listTitle = textoLimpo(list?.title) ?? textoLimpo(list?.id);
+    const listDescription = textoLimpo(list?.description);
+    if (listTitle && listDescription) return `${listTitle} — ${listDescription}`;
+    return listTitle ?? "Resposta interativa recebida";
+  }
+
+  if (type === "button") {
+    return textoLimpo(m.button?.text) ?? textoLimpo(m.button?.payload) ?? "Resposta de botão recebida";
+  }
+
+  if (type === "reaction") {
+    const emoji = textoLimpo(m.reaction?.emoji);
+    return emoji ? `Reagiu ${emoji}` : "Reação removida";
+  }
+
+  return null;
+}
+
 /** Extracts the media descriptor from a raw inbound message (null for text/interactive). */
-function extractMedia(m: NonNullable<RawValue["messages"]>[number]): NormalizedInboundMedia | null {
+function extractMedia(m: RawMessage): NormalizedInboundMedia | null {
   const kinds: NormalizedInboundMedia["kind"][] = ["image", "video", "audio", "document", "sticker"];
   for (const kind of kinds) {
     const obj = m[kind] as { id?: string; mime_type?: string; caption?: string; filename?: string } | undefined;
@@ -148,14 +247,15 @@ export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
       for (const m of value.messages ?? []) {
         if (!m.id || !m.from) continue;
         const media = extractMedia(m);
+        const structuredText = extractStructuredText(m);
         out.messages.push({
           providerMessageId: m.id,
           fromPhone:         m.from,
           phoneNumberId,
           timestamp:         tsToDate(m.timestamp) ?? new Date(),
           type:              m.type ?? "unknown",
-          // Media captions carry the customer's text — surface it as the message body.
-          text:              m.text?.body ?? media?.caption ?? null,
+          // Media captions and known structured messages are conversation content too.
+          text:              m.text?.body ?? media?.caption ?? structuredText,
           profileName:       profileByWaId.get(m.from) ?? null,
           media,
         });
