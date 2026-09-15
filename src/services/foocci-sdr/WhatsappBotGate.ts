@@ -7,7 +7,6 @@ import {
 import {
   canalDeVendasPronto,
   enviarTextoDeVendas,
-  iaRespondeSozinha,
 } from "./FoocciSalesChannel";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
@@ -63,37 +62,35 @@ function extrairOpcoes(texto: string): OpcaoDoMenu[] {
       achadas.push({ chave: c, rotulo: r });
     }
   };
+  const adicionarMatch = (match: RegExpMatchArray | null): boolean => {
+    const chave = match?.[1];
+    const rotulo = match?.[2];
+    if (!chave || !rotulo) return false;
+    adicionar(chave, rotulo);
+    return true;
+  };
 
   for (const linhaCrua of limpo.split(/\r?\n|\s+\|\s+/)) {
     const linha = linhaCrua.trim();
     if (!linha) continue;
 
     let m = linha.match(/^([0-9]{1,2}|[A-D])\s*[-–—.):/]\s*(.+)$/i);
-    if (m) {
-      adicionar(m[1], m[2]);
-      continue;
-    }
+    if (adicionarMatch(m)) continue;
 
     m = linha.match(/^(?:op[cç][aã]o\s*)?([0-9]{1,2}|[A-D])\s+(?:para|pra)\s+(.+)$/i);
-    if (m) {
-      adicionar(m[1], m[2]);
-      continue;
-    }
+    if (adicionarMatch(m)) continue;
 
     m = linha.match(/^(?:digite|tecle|responda|envie)\s+([0-9]{1,2}|[A-D])(?:\s+(?:para|pra))?\s+(.+)$/i);
-    if (m) {
-      adicionar(m[1], m[2]);
-      continue;
-    }
+    if (adicionarMatch(m)) continue;
 
     // Menus de WhatsApp frequentemente vêm apenas como "1 Vendas" / "2 Suporte".
     m = linha.match(/^([0-9]{1,2}|[A-D])\s+(.+)$/i);
-    if (m) adicionar(m[1], m[2]);
+    adicionarMatch(m);
   }
 
   // Também cobre menus escritos numa linha: "1 para Pedidos ou 2 para Vendas".
   const inline = /\b([0-9]{1,2}|[A-D])\s+(?:para|pra)\s+([^,;.]+?)(?=\s+(?:ou\s+)?(?:[0-9]{1,2}|[A-D])\s+(?:para|pra)\s+|$)/gi;
-  for (const m of limpo.matchAll(inline)) adicionar(m[1], m[2]);
+  for (const m of limpo.matchAll(inline)) adicionarMatch(m);
 
   return achadas;
 }
@@ -250,13 +247,14 @@ export async function interceptarAutomacaoAntesDoTA(
     }
   }
 
-  // Navegar no menu também é a máquina falando em nome da Foocci. As duas chaves
-  // existentes continuam soberanas: sem autorização, bloqueia o TA e NÃO envia.
-  if (!canalDeVendasPronto() || !iaRespondeSozinha()) {
+  // O navegador é determinístico: só responde uma chave que o próprio menu exibiu.
+  // Ele usa a autorização do canal de envio, mas NÃO depende da chave que libera
+  // respostas autônomas do SDR/IA; navegar no menu não liga a IA comercial.
+  if (!canalDeVendasPronto()) {
     return {
       intercepted: true,
       status: "MENU_SEM_AUTORIZACAO",
-      detalhe: "menu detectado; navegação automática não autorizada pelas chaves de envio/IA",
+      detalhe: "menu detectado; canal de vendas não está configurado/autorizado para envio",
     };
   }
 
