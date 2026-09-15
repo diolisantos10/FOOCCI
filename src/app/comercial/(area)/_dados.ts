@@ -27,6 +27,25 @@ export type EstadoDaSala =
   | { fase: "semAcesso" }
   | { fase: "erro"; detalhe: string | null };
 
+/**
+ * A coluna de conversas segue a mesma referência de tempo que mostra na tela:
+ * último contato; para quem ainda não teve contato, a entrada do lead.
+ *
+ * A API mantém a ordenação operacional própria de cada fila. Aqui, na camada de
+ * conversa, a decisão de UX é outra: o que acabou de acontecer precisa aparecer
+ * em cima, como em uma caixa de entrada.
+ */
+function instanteVisivel(lead: LeadNaFila): number {
+  const valor = lead.lastContactedAt ?? lead.createdAt;
+  const data = valor instanceof Date ? valor : new Date(valor as unknown as string);
+  const instante = data.getTime();
+  return Number.isNaN(instante) ? 0 : instante;
+}
+
+export function ordenarConversasMaisRecentes(leads: LeadNaFila[]): LeadNaFila[] {
+  return [...leads].sort((a, b) => instanteVisivel(b) - instanteVisivel(a));
+}
+
 export function useSalaDeVendas(fila: NomeDaFila) {
   const [estado, setEstado] = useState<EstadoDaSala>({ fase: "carregando" });
   const [tentativa, setTentativa] = useState(0);
@@ -63,7 +82,15 @@ export function useSalaDeVendas(fila: NomeDaFila) {
           return;
         }
 
-        if (vivo) setEstado({ fase: "pronto", dados: corpo.data });
+        if (vivo) {
+          setEstado({
+            fase: "pronto",
+            dados: {
+              ...corpo.data,
+              leads: ordenarConversasMaisRecentes(corpo.data.leads),
+            },
+          });
+        }
       } catch (e) {
         if (vivo) setEstado({ fase: "erro", detalhe: e instanceof Error ? e.message : null });
       }
