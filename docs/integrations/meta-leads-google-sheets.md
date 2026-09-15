@@ -57,12 +57,10 @@ A rota usa o namespace público de integrações externas já existente (`/api/v
 1. Abra a planilha `Leads Campanha Facebook Ads`.
 2. Vá em **Extensões → Apps Script**.
 3. Cole o conteúdo de `scripts/integrations/meta-leads-google-sheets.gs`.
-4. Em **Configurações do projeto → Propriedades do script**, crie:
-   - `FOOCCI_META_LEADS_URL` = `https://foocci.com.br/api/v1/meta-leads`
-   - `FOOCCI_META_LEADS_KEY` = o mesmo segredo configurado no Railway.
+4. Em **Configurações do projeto → Propriedades do script**, crie somente `FOOCCI_META_LEADS_KEY`, usando o mesmo segredo configurado no Railway.
 5. Execute uma vez `instalarTriggerFoocci` e conceda as permissões do Google.
 
-O instalador remove triggers duplicados do mesmo handler, cria um trigger de 1 minuto e executa uma primeira sincronização imediatamente.
+O endereço `https://foocci.com.br/api/v1/meta-leads` já está fixado no script. O instalador remove triggers duplicados do mesmo handler, cria um trigger de 1 minuto e executa uma primeira sincronização imediatamente.
 
 ## Colunas de controle adicionadas pelo script
 
