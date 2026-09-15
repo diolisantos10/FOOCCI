@@ -6,7 +6,7 @@ Leads enviados pelo formulário da campanha Meta entram automaticamente no CRM c
 
 Fluxo:
 
-`Meta Lead Ads → Leads Campanha Facebook Ads / Página1 → Apps Script → POST /api/integrations/meta-leads → SiteLeadService → Foocci Comercial`
+`Meta Lead Ads → Leads Campanha Facebook Ads / Página1 → Apps Script → POST /api/v1/meta-leads → SiteLeadService → Foocci Comercial`
 
 Esses contatos **não são Base Fria**. O contato que nasce pela campanha entra como `CAMPANHA_PAGA` e permanece no estágio `NOVO`, com precedência sobre prospecção fria.
 
@@ -50,13 +50,15 @@ O segredo fica em dois lugares apenas:
 
 Nunca salvar o segredo em uma célula da planilha nem no repositório.
 
+A rota usa o namespace público de integrações externas já existente (`/api/v1/*`), portanto o middleware deixa a requisição chegar ao handler; o handler continua fail-closed e só aceita o segredo próprio `FOOCCI_META_LEADS_KEY`.
+
 ## Instalação no Google Apps Script
 
 1. Abra a planilha `Leads Campanha Facebook Ads`.
 2. Vá em **Extensões → Apps Script**.
 3. Cole o conteúdo de `scripts/integrations/meta-leads-google-sheets.gs`.
 4. Em **Configurações do projeto → Propriedades do script**, crie:
-   - `FOOCCI_META_LEADS_URL` = `https://foocci.com.br/api/integrations/meta-leads`
+   - `FOOCCI_META_LEADS_URL` = `https://foocci.com.br/api/v1/meta-leads`
    - `FOOCCI_META_LEADS_KEY` = o mesmo segredo configurado no Railway.
 5. Execute uma vez `instalarTriggerFoocci` e conceda as permissões do Google.
 
@@ -91,7 +93,7 @@ Status:
 | `ad_name` | `utmContent` |
 | `adset_name` | `utmTerm` |
 | `form_name` | `origem` |
-| `id` | marcador idempotente `meta-lead:<id>` |
+| `id` | marcador idempotente `meta-lead:<id>` + nota interna de integração |
 | submissão Meta | `consentAt` |
 | campanha Meta nova | `fonte = CAMPANHA_PAGA` |
 | entrada nova | `stage = NOVO` |
@@ -103,7 +105,7 @@ IDs de campanha, conjunto, anúncio e formulário, além do `lead_status`, ficam
 Há duas proteções diferentes:
 
 1. O `SiteLeadService` continua deduplicando pessoas pelo WhatsApp, como já faz com o formulário do site.
-2. A ponte procura o marcador do `id` da Meta antes de importar. Se o Apps Script reenviar a mesma linha depois de um timeout, a chamada retorna o lead já existente e não cria outro contato.
+2. A ponte reconhece o `id` da Meta pelo marcador de atribuição e, quando o telefone já tinha outro primeiro toque, também pela nota interna da integração. Se o Apps Script reenviar a mesma linha depois de um timeout, a chamada devolve o lead existente e não cria nova captura.
 
 Se o mesmo telefone já existia por outra origem, a origem de primeiro toque é preservada; a submissão da Meta vira novo contexto/histórico, não reescreve a aquisição original.
 
