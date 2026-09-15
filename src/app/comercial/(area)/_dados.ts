@@ -38,7 +38,20 @@ export function useSalaDeVendas(fila: NomeDaFila) {
 
     (async () => {
       try {
-        const res = await fetch(`${ROTA_FILAS}?fila=${fila}`, { cache: "no-store" });
+        const params = new URLSearchParams({ fila });
+
+        // Busca e ordenação pertencem à aba Conversas e ficam na URL para serem
+        // copiáveis/recarregáveis. A Sala também usa este hook em outras telas;
+        // por isso só repassamos parâmetros quando eles realmente existem.
+        if (typeof window !== "undefined") {
+          const daPagina = new URLSearchParams(window.location.search);
+          const busca = daPagina.get("busca")?.trim();
+          const ordem = daPagina.get("ordem")?.trim();
+          if (busca) params.set("busca", busca);
+          if (ordem) params.set("ordem", ordem);
+        }
+
+        const res = await fetch(`${ROTA_FILAS}?${params.toString()}`, { cache: "no-store" });
 
         if (res.status === 401 || res.status === 403) {
           if (vivo) setEstado({ fase: "semAcesso" });
