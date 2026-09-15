@@ -90,11 +90,6 @@ async function candidates() {
           origemDaFala: true,
         },
       },
-      itensProspeccao: {
-        orderBy: { criadoEm: 'desc' },
-        take: 1,
-        select: { lote: { select: { proveniencia: true } } },
-      },
     },
   });
 }
@@ -130,8 +125,14 @@ async function sendOne(lead, templates) {
   if (template.vars !== 2) return { leadId: lead.id, ok: false, skipped: true, reason: `template espera ${template.vars} variáveis, não 2` };
   if (template.headerFormat !== 'IMAGE') return { leadId: lead.id, ok: false, skipped: true, reason: `header ${template.headerFormat || 'ausente'}, não IMAGE` };
 
+  const item = await db.itemDeProspeccao.findFirst({
+    where: { leadId: lead.id },
+    orderBy: { criadoEm: 'desc' },
+    select: { lote: { select: { proveniencia: true } } },
+  });
+
   const restaurante = String(lead.restaurante || lead.nome || '').trim();
-  const proveniencia = String(lead.itensProspeccao?.[0]?.lote?.proveniencia || '').trim();
+  const proveniencia = String(item?.lote?.proveniencia || '').trim();
   if (!restaurante || !proveniencia) {
     return { leadId: lead.id, ok: false, skipped: true, reason: 'faltou restaurante ou proveniência' };
   }
@@ -139,6 +140,8 @@ async function sendOne(lead, templates) {
   const to = digits(lead.whatsapp);
   if (to.length < 12 || to.length > 13) return { leadId: lead.id, ok: false, skipped: true, reason: 'telefone inválido' };
 
+  // Contrato confirmado AO VIVO em 15/09/2026 para os cinco templates verdes:
+  // {{1}} = nome do restaurante; {{2}} = proveniência/origem pública da lista.
   const params = [restaurante, proveniencia];
   const texto = render(template.body, params);
   if (/\{\{\d+\}\}/.test(texto)) return { leadId: lead.id, ok: false, skipped: true, reason: 'placeholder não resolvido' };
@@ -234,7 +237,6 @@ async function sendOne(lead, templates) {
     const result = await sendOne(lead, templates);
     results.push(result);
     console.log('RETRY_RESULT=' + JSON.stringify(result));
-    // No modo teste (limit 1), encerra após o primeiro resultado real.
     if (limit === 1) break;
   }
 
