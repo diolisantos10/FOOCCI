@@ -4,15 +4,12 @@
  * Planilha oficial: "Leads Campanha Facebook Ads"
  * Aba: Página1
  *
- * O script trabalha por NOME de cabeçalho, nunca por posição fixa. Assim a Meta
- * pode inserir colunas sem deslocar o mapeamento do Foocci.
- *
- * Script Properties obrigatórias:
- *   FOOCCI_META_LEADS_URL = https://foocci.com.br/api/integrations/meta-leads
- *   FOOCCI_META_LEADS_KEY = <segredo forte configurado no Railway>
+ * O endereço do Foocci é fixo. A única configuração manual é a Script Property
+ * FOOCCI_META_LEADS_KEY, com o mesmo segredo já configurado no Railway.
  */
 
 const FOOCCI_SHEET_NAME = 'Página1';
+const FOOCCI_META_LEADS_URL = 'https://foocci.com.br/api/v1/meta-leads';
 const FOOCCI_MAX_ROWS_PER_RUN = 25;
 
 const FOOCCI_SYNC_HEADERS = [
@@ -28,18 +25,12 @@ function sincronizarLeadsFoocci() {
   if (!lock.tryLock(5000)) return;
 
   try {
-    const props = PropertiesService.getScriptProperties();
-    const endpoint = props.getProperty('FOOCCI_META_LEADS_URL');
-    const secret = props.getProperty('FOOCCI_META_LEADS_KEY');
-
-    if (!endpoint || !secret) {
-      throw new Error(
-        'Configure FOOCCI_META_LEADS_URL e FOOCCI_META_LEADS_KEY em Script Properties.'
-      );
+    const secret = PropertiesService.getScriptProperties().getProperty('FOOCCI_META_LEADS_KEY');
+    if (!secret) {
+      throw new Error('Configure FOOCCI_META_LEADS_KEY em Propriedades do script.');
     }
 
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = spreadsheet.getSheetByName(FOOCCI_SHEET_NAME);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOOCCI_SHEET_NAME);
     if (!sheet) throw new Error('Aba "' + FOOCCI_SHEET_NAME + '" não encontrada.');
 
     garantirColunasDeSync_(sheet);
@@ -51,7 +42,6 @@ function sincronizarLeadsFoocci() {
     const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
     const headers = values[0].map(function (h) { return String(h).trim(); });
     const index = indiceDeCabecalhos_(headers);
-
     validarCabecalhosMeta_(index);
 
     let processed = 0;
@@ -66,28 +56,10 @@ function sincronizarLeadsFoocci() {
 
       processed++;
       const attempts = numero_(row[index.foocci_attempts]) + 1;
-
-      const payload = {
-        metaLeadId: metaLeadId,
-        createdTime: texto_(row[index.created_time]),
-        adId: texto_(row[index.ad_id]),
-        adName: texto_(row[index.ad_name]),
-        adsetId: texto_(row[index.adset_id]),
-        adsetName: texto_(row[index.adset_name]),
-        campaignId: texto_(row[index.campaign_id]),
-        campaignName: texto_(row[index.campaign_name]),
-        formId: texto_(row[index.form_id]),
-        formName: texto_(row[index.form_name]),
-        isOrganic: booleano_(row[index.is_organic]),
-        platform: texto_(row[index.platform]),
-        fullName: texto_(row[index.nome_completo]),
-        email: texto_(row[index.email_comercial]),
-        phone: texto_(row[index.telefone]),
-        leadStatus: texto_(row[index.lead_status]),
-      };
+      const payload = payloadDaLinha_(row, index, metaLeadId);
 
       try {
-        const response = UrlFetchApp.fetch(endpoint, {
+        const response = UrlFetchApp.fetch(FOOCCI_META_LEADS_URL, {
           method: 'post',
           contentType: 'application/json',
           headers: { 'x-foocci-integration-key': secret },
@@ -136,15 +108,9 @@ function sincronizarLeadsFoocci() {
   }
 }
 
-/**
- * Execute UMA vez depois de configurar as Script Properties.
- * Remove triggers antigos do mesmo handler para nunca instalar dois robôs.
- */
 function instalarTriggerFoocci() {
-  const props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('FOOCCI_META_LEADS_URL') || !props.getProperty('FOOCCI_META_LEADS_KEY')) {
-    throw new Error('Configure as duas Script Properties antes de instalar o trigger.');
-  }
+  const secret = PropertiesService.getScriptProperties().getProperty('FOOCCI_META_LEADS_KEY');
+  if (!secret) throw new Error('Configure FOOCCI_META_LEADS_KEY antes de instalar o trigger.');
 
   ScriptApp.getProjectTriggers().forEach(function (trigger) {
     if (trigger.getHandlerFunction() === 'sincronizarLeadsFoocci') {
@@ -160,7 +126,6 @@ function instalarTriggerFoocci() {
   sincronizarLeadsFoocci();
 }
 
-/** Reabre linhas com erro permanente depois de uma correção manual dos dados. */
 function reprocessarErrosPermanentesFoocci() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOOCCI_SHEET_NAME);
   if (!sheet) throw new Error('Aba "' + FOOCCI_SHEET_NAME + '" não encontrada.');
@@ -169,15 +134,34 @@ function reprocessarErrosPermanentesFoocci() {
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return;
 
-  const headers = values[0].map(function (h) { return String(h).trim(); });
-  const index = indiceDeCabecalhos_(headers);
-
+  const index = indiceDeCabecalhos_(values[0].map(function (h) { return String(h).trim(); }));
   for (let i = 1; i < values.length; i++) {
     if (texto_(values[i][index.foocci_sync_status]).toUpperCase() === 'ERRO_PERMANENTE') {
       sheet.getRange(i + 1, index.foocci_sync_status + 1).setValue('');
       sheet.getRange(i + 1, index.foocci_last_error + 1).setValue('');
     }
   }
+}
+
+function payloadDaLinha_(row, index, metaLeadId) {
+  return {
+    metaLeadId: metaLeadId,
+    createdTime: texto_(row[index.created_time]),
+    adId: texto_(row[index.ad_id]),
+    adName: texto_(row[index.ad_name]),
+    adsetId: texto_(row[index.adset_id]),
+    adsetName: texto_(row[index.adset_name]),
+    campaignId: texto_(row[index.campaign_id]),
+    campaignName: texto_(row[index.campaign_name]),
+    formId: texto_(row[index.form_id]),
+    formName: texto_(row[index.form_name]),
+    isOrganic: booleano_(row[index.is_organic]),
+    platform: texto_(row[index.platform]),
+    fullName: texto_(row[index.nome_completo]),
+    email: texto_(row[index.email_comercial]),
+    phone: texto_(row[index.telefone]),
+    leadStatus: texto_(row[index.lead_status]),
+  };
 }
 
 function garantirColunasDeSync_(sheet) {
@@ -203,9 +187,7 @@ function validarCabecalhosMeta_(index) {
   ];
 
   const missing = required.filter(function (header) { return index[header] === undefined; });
-  if (missing.length) {
-    throw new Error('Cabeçalhos da Meta ausentes: ' + missing.join(', '));
-  }
+  if (missing.length) throw new Error('Cabeçalhos da Meta ausentes: ' + missing.join(', '));
 }
 
 function indiceDeCabecalhos_(headers) {
