@@ -110,11 +110,16 @@ function validar(id: Identidade): { papel: string; usuarioId: string } {
  * tarefa, agendar, avaliar, mover no funil) rodam FORA deste embrulho — a
  * escrita deles continua guardada na rota e no serviço, como está escrito na
  * migração.
+ *
+ * `opcoes` existe para fluxos que comprovadamente precisam de uma janela maior
+ * que o padrão do Prisma. O padrão continua intocado para todo o restante da
+ * Sala; aumentar timeout é uma decisão explícita no ponto de uso.
  */
 export async function comIdentidade<T>(
   db: PrismaClient,
   identidade: Identidade,
   trabalho: (tx: Prisma.TransactionClient) => Promise<T>,
+  opcoes?: { maxWait?: number; timeout?: number },
 ): Promise<T> {
   const { papel, usuarioId } = validar(identidade);
 
@@ -128,7 +133,7 @@ export async function comIdentidade<T>(
     }
 
     return trabalho(tx);
-  });
+  }, opcoes);
 }
 
 /** Atalho para o caminho mais comum: uma sessão de pessoa. */
