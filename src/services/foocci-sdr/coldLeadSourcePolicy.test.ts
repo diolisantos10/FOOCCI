@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import {estrategiaDaFonte,prioridadeDaEstrategia} from "./coldLeadSourcePolicy";
+describe("lead source strategy",()=>{it("separa lista fria de formulário",()=>{expect(estrategiaDaFonte("LISTA_PROSPECCAO")).toBe("COLD_OUTBOUND");expect(estrategiaDaFonte("FORMULARIO_DEMONSTRACAO")).toBe("INBOUND_INTENT")});it("prioriza quem pediu contato",()=>expect(prioridadeDaEstrategia("INBOUND_INTENT")).toBeGreaterThan(prioridadeDaEstrategia("COLD_OUTBOUND")));});
