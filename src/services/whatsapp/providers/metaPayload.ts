@@ -19,12 +19,22 @@ export interface MetaTextPayload {
   text:              { body: string; preview_url: boolean };
 }
 
-export interface MetaTemplateComponentParameter {
-  type:  "text";
-  text:  string;
+export interface MetaTemplateTextParameter {
+  type: "text";
+  text: string;
   /** Obrigatório pela Meta quando o template foi criado com parâmetros nomeados. */
   parameter_name?: string;
 }
+
+export interface MetaTemplateImageParameter {
+  type: "image";
+  image: { link: string };
+}
+
+export type MetaTemplateComponentParameter =
+  | MetaTemplateTextParameter
+  | MetaTemplateImageParameter;
+
 export interface MetaTemplateComponent {
   type:       "body" | "header" | "button";
   parameters: MetaTemplateComponentParameter[];
@@ -93,6 +103,36 @@ function parametrosNomeadosRegistrados(
   return registro.nomes.length === quantidade ? registro.nomes : [];
 }
 
+/**
+ * Overrides operacionais exclusivos do número comercial da Foocci.
+ *
+ * A Meta pode exigir componentes que não aparecem no BODY: o caso medido em
+ * produção em 15/09/2026 é um template com HEADER de imagem + BODY posicional.
+ * O builder antigo enviava apenas BODY e recebia #132012.
+ *
+ * As listas abaixo são opt-in por NOME DE TEMPLATE. Sem as variáveis de ambiente,
+ * o comportamento de todos os templates existentes continua exatamente igual.
+ * Isso é importante porque este builder também serve aos restaurantes clientes.
+ */
+function nomesConfigurados(chave: string): Set<string> {
+  return new Set(
+    (process.env[chave] ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean),
+  );
+}
+
+function templateForcadoComoPosicional(nome: string): boolean {
+  return nomesConfigurados("FOOCCI_SALES_POSITIONAL_TEMPLATES").has(nome.trim());
+}
+
+function imagemDeCabecalhoDoTemplate(nome: string): string | null {
+  if (!nomesConfigurados("FOOCCI_SALES_IMAGE_HEADER_TEMPLATES").has(nome.trim())) return null;
+  const url = (process.env.FOOCCI_SALES_TEMPLATE_HEADER_IMAGE_URL ?? "").trim();
+  return url || null;
+}
+
 /** Normalizes a raw phone to Meta's recipient format (digits, E.164 w/o '+'). */
 export function toMetaRecipient(rawPhone: string | null | undefined): string | null {
   const normalized = normalizePhoneBR(rawPhone ?? "");
@@ -117,17 +157,36 @@ export function buildMetaTemplatePayload(
   language:  string,
   bodyParams: string[] = [],
 ): MetaTemplatePayload {
-  const nomes = parametrosNomeadosRegistrados(name, language, bodyParams.length);
-  const components: MetaTemplateComponent[] = bodyParams.length > 0
-    ? [{
-        type: "body",
-        parameters: bodyParams.map((text, i) => ({
-          type: "text" as const,
-          text,
-          ...(nomes[i] ? { parameter_name: nomes[i] } : {}),
-        })),
-      }]
-    : [];
+  // Se a Meta confirma que o template de vendas é posicional, uma fotografia
+  // local antiga de placeholders nomeados jamais pode recolocar parameter_name.
+  const nomes = templateForcadoComoPosicional(name)
+    ? []
+    : parametrosNomeadosRegistrados(name, language, bodyParams.length);
+
+  const components: MetaTemplateComponent[] = [];
+
+  // Templates aprovados com HEADER de mídia exigem o componente no envio. O
+  // exemplo usado na criação do template não é reutilizado automaticamente pela
+  // Cloud API; o envio precisa trazer uma imagem concreta.
+  const headerImageUrl = imagemDeCabecalhoDoTemplate(name);
+  if (headerImageUrl) {
+    components.push({
+      type: "header",
+      parameters: [{ type: "image", image: { link: headerImageUrl } }],
+    });
+  }
+
+  if (bodyParams.length > 0) {
+    components.push({
+      type: "body",
+      parameters: bodyParams.map((text, i) => ({
+        type: "text" as const,
+        text,
+        ...(nomes[i] ? { parameter_name: nomes[i] } : {}),
+      })),
+    });
+  }
+
   return {
     messaging_product: "whatsapp",
     recipient_type:    "individual",
