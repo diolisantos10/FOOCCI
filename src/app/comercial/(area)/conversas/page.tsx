@@ -23,7 +23,7 @@ const ORDENS = ["recentes", "antigas", "nome-az", "nome-za", "prioridade"] as co
 type Ordem = (typeof ORDENS)[number];
 
 function primeiro(valor: string | string[] | undefined): string {
-  return (Array.isArray(valor) ? valor[0] : valor ?? "").trim();
+  return (Array.isArray(valor) ? valor[0] ?? "" : valor ?? "").trim();
 }
 
 export default async function AtendimentoPage({

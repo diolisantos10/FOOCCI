@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node scripts/patch-whatsapp-bot-human-gate.cjs && npx vitest run src/services/foocci-sdr/WhatsappBotGate.test.ts && next build",
     "start": "bash scripts/start-production.sh",
     "lint": "next lint",
     "db:generate": "prisma generate",
@@ -14,7 +14,7 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
     "db:seed:agents": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-agent-profiles.ts",
-    "db:seed:build-projects": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-build-projects.ts",
+    "db:seed-build-projects": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-build-projects.ts",
     "buildos:bootstrap": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/bootstrap-buildos.ts",
     "buildos:verify": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/verify-buildos.ts",
     "buildos:test-command": "TS_NODE_PROJECT=tsconfig.scripts.json ts-node -r tsconfig-paths/register scripts/test-buildos-command.ts",
