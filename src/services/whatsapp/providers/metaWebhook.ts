@@ -63,7 +63,7 @@ export interface NormalizedInboundMessage {
   fromPhone:         string;    // customer wa_id (digits)
   phoneNumberId:     string;    // Meta phone_number_id → restaurant mapping
   timestamp:         Date;
-  type:              string;    // text | image | interactive | ...
+  type:              string;    // normalized display type used by downstream routing
   text:              string | null;
   profileName:       string | null;
   media:             NormalizedInboundMedia | null; // set for image/audio/video/document/sticker
@@ -140,10 +140,11 @@ function telefoneExibivel(value: unknown): string | null {
 }
 
 function descricaoDoContato(c: RawSharedContact): string {
-  const nome =
-    textoLimpo(c.name?.formatted_name) ??
-    [textoLimpo(c.name?.first_name), textoLimpo(c.name?.last_name)].filter(Boolean).join(" ").trim() ||
-    "Contato";
+  const partesDoNome = [textoLimpo(c.name?.first_name), textoLimpo(c.name?.last_name)]
+    .filter((x): x is string => Boolean(x))
+    .join(" ")
+    .trim();
+  const nome = textoLimpo(c.name?.formatted_name) ?? (partesDoNome || "Contato");
   const telefone = telefoneExibivel(c.phones?.[0]?.phone ?? c.phones?.[0]?.wa_id);
   const empresa = textoLimpo(c.org?.company);
   const cargo = textoLimpo(c.org?.title);
@@ -202,6 +203,14 @@ function extractStructuredText(m: RawMessage): string | null {
   return null;
 }
 
+function displayType(rawType: string | undefined, structuredText: string | null): string {
+  const type = (rawType ?? "unknown").toLowerCase();
+  if (structuredText && ["contacts", "location", "interactive", "button", "reaction"].includes(type)) {
+    return "text";
+  }
+  return rawType ?? "unknown";
+}
+
 /** Extracts the media descriptor from a raw inbound message (null for text/interactive). */
 function extractMedia(m: RawMessage): NormalizedInboundMedia | null {
   const kinds: NormalizedInboundMedia["kind"][] = ["image", "video", "audio", "document", "sticker"];
@@ -213,7 +222,10 @@ function extractMedia(m: RawMessage): NormalizedInboundMedia | null {
         mimeType: obj.mime_type ?? null,
         caption:  obj.caption ?? null,
         filename: obj.filename ?? null,
-        kind,
+        // The commercial renderer already knows how to show images. A sticker is
+        // an image payload from the same Meta media endpoint, so classify it as
+        // image while preserving m.type="sticker" at the raw webhook boundary.
+        kind:     kind === "sticker" ? "image" : kind,
       };
     }
   }
@@ -253,7 +265,7 @@ export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
           fromPhone:         m.from,
           phoneNumberId,
           timestamp:         tsToDate(m.timestamp) ?? new Date(),
-          type:              m.type ?? "unknown",
+          type:              displayType(m.type, structuredText),
           // Media captions and known structured messages are conversation content too.
           text:              m.text?.body ?? media?.caption ?? structuredText,
           profileName:       profileByWaId.get(m.from) ?? null,
