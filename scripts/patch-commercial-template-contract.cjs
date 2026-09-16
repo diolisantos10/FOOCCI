@@ -11,7 +11,8 @@
  *
  * Este patch é aplicado no build de produção para alinhar imediatamente o
  * caminho normal da Sala Comercial enquanto a refatoração definitiva é feita
- * em código-fonte revisado. Ele falha fechado se o bloco esperado mudar.
+ * em código-fonte revisado. É idempotente: se a correção já estiver no fonte,
+ * o build segue normalmente.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -65,11 +66,17 @@ const after = `function camposDoModelo(lead: LeadParaOsParametros): Array<{ rotu
   ];
 }`;
 
-if (!source.includes(before)) {
-  console.error('[patch-commercial-template-contract] bloco esperado não encontrado; build interrompido');
-  process.exit(1);
+if (source.includes(before)) {
+  const patched = source.replace(before, after);
+  fs.writeFileSync(file, patched, 'utf8');
+  console.log('[patch-commercial-template-contract] aplicado: lista fria = [restaurante, proveniência]');
+  process.exit(0);
 }
 
-const patched = source.replace(before, after);
-fs.writeFileSync(file, patched, 'utf8');
-console.log('[patch-commercial-template-contract] aplicado: lista fria = [restaurante, proveniência]');
+if (source.includes(after) || source.includes('rotulo: "procedência da lista"')) {
+  console.log('[patch-commercial-template-contract] correção já presente no fonte; nada a aplicar');
+  process.exit(0);
+}
+
+console.error('[patch-commercial-template-contract] contrato esperado não encontrado; build interrompido');
+process.exit(1);
