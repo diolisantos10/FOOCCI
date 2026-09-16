@@ -8,6 +8,12 @@ type SubmitResult = { name: string; action: "submitted" | "existing" | "failed";
 const LABEL: Record<string, string> = { APPROVED: "Aprovado", PENDING: "Em análise", REJECTED: "Rejeitado", PAUSED: "Pausado", DISABLED: "Desativado", NOT_SUBMITTED: "Ainda não submetido" };
 const API = "/api/admin/sala-de-vendas/whatsapp/templates-frios";
 
+function rejectionReason(reason?: string) {
+  const value = reason?.trim();
+  if (!value || value.toUpperCase() === "NONE") return null;
+  return value;
+}
+
 export function TemplatesFriosClient() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +62,7 @@ export function TemplatesFriosClient() {
 
       {message ? <p className="mt-3 text-[12.5px] text-amber-700">{message}</p> : null}
       {loading ? <p className="mt-3 text-[13px] text-muted">Consultando a Meta…</p> : templates.length === 0 ? <p className="mt-3 text-[13px] text-muted">Não foi possível carregar o catálogo oficial.</p> : (
-        <ul className="mt-3.5 space-y-2">{templates.map(t => <li key={`${t.name}-${t.language}`} className="rounded-xl border border-line2 bg-canvas p-3"><div className="flex flex-wrap items-center gap-2"><span className="text-[13.5px] font-medium text-ink">{t.name}</span><span className="text-[11.5px] text-muted">{t.language || "—"}</span><span className="text-[11.5px] text-muted">· {t.category || "—"}</span><span className="rounded-full bg-chip px-2 py-[1px] text-[11px] text-ink2">{LABEL[String(t.status || "").toUpperCase()] || t.status || "—"}</span></div>{t.body ? <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-ink2">{t.body}</p> : null}{t.rejected_reason ? <p className="mt-1.5 text-[11.5px] text-red-600">{t.rejected_reason}</p> : null}</li>)}</ul>
+        <ul className="mt-3.5 space-y-2">{templates.map(t => { const reason = rejectionReason(t.rejected_reason); return <li key={`${t.name}-${t.language}`} className="rounded-xl border border-line2 bg-canvas p-3"><div className="flex flex-wrap items-center gap-2"><span className="text-[13.5px] font-medium text-ink">{t.name}</span><span className="text-[11.5px] text-muted">{t.language || "—"}</span><span className="text-[11.5px] text-muted">· {t.category || "—"}</span><span className="rounded-full bg-chip px-2 py-[1px] text-[11px] text-ink2">{LABEL[String(t.status || "").toUpperCase()] || t.status || "—"}</span></div>{t.body ? <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-ink2">{t.body}</p> : null}{reason ? <p className="mt-1.5 text-[11.5px] text-red-600">{reason}</p> : null}</li>; })}</ul>
       )}
 
       {results.length > 0 ? <div className="mt-3 border-t border-line pt-3"><p className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">Última submissão</p><ul className="mt-2 space-y-1.5">{results.map(r => <li key={r.name} className="text-[12.5px] text-ink2"><strong className="font-medium">{r.name}</strong> — {r.action === "submitted" ? "Enviado" : r.action === "existing" ? "Já existia" : `Falhou: ${r.error || "erro da Meta"}`}{r.status ? ` · ${LABEL[r.status.toUpperCase()] || r.status}` : ""}</li>)}</ul></div> : null}
