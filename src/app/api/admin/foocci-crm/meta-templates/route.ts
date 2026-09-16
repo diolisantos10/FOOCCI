@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (!cfg) return NextResponse.json({ ok: false, error: "Credenciais comerciais da Meta não configuradas." }, { status: 503 });
   try {
     const all = await listMetaTemplates(cfg);
-    const names = new Set(COLD_GREETING_TEMPLATES.map(t => t.name));
+    const names = new Set<string>(COLD_GREETING_TEMPLATES.map(t => t.name));
     return NextResponse.json({ ok: true, templates: all.filter(t => t.name && names.has(t.name)) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Falha ao consultar Meta." }, { status: 502 });
