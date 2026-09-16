@@ -1,8 +1,8 @@
 export const COLD_CONTACT_OBJECTIVE = "FIND_CORRECT_DECISION_MAKER" as const;
 
 export const COLD_GREETING_TEMPLATES = [
-  { name: "foocci_contato_inicial_01", language: "pt_BR", category: "MARKETING" as const, body: "Olá! Tudo bem? Este contato é do {{1}}?", restaurantNameParam: true },
-  { name: "foocci_contato_inicial_02", language: "pt_BR", category: "MARKETING" as const, body: "Olá! Tudo bem? Falo com o {{1}}?", restaurantNameParam: true },
+  { name: "foocci_contato_inicial_01", language: "pt_BR", category: "MARKETING" as const, body: "Olá! Tudo bem? Este contato é do {{1}}, certo?", restaurantNameParam: true },
+  { name: "foocci_contato_inicial_02", language: "pt_BR", category: "MARKETING" as const, body: "Olá! Tudo bem? Falo com o {{1}} por aqui?", restaurantNameParam: true },
   { name: "foocci_contato_inicial_03", language: "pt_BR", category: "MARKETING" as const, body: "Olá! Tudo bem?", restaurantNameParam: false },
 ] as const;
 
