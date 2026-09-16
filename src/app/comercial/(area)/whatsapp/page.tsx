@@ -1,37 +1,14 @@
 /**
  * A CONFERÊNCIA DO CANAL — a tela que responde "as chaves da Meta funcionam?".
  *
- * ── POR QUE ELA É UMA TELA, E NÃO UM COMANDO ────────────────────────────────
- *
- * Quem cola as chaves no Railway é o dono, e ele não abre terminal. Até aqui a
- * única forma de saber se elas serviam era esperar um cliente escrever — e
- * descobrir no silêncio dele que alguma coisa estava errada.
- *
- * ── O QUE ELA MOSTRA, E POR QUE NESTA ORDEM ─────────────────────────────────
- *
- * Primeiro **o número que a Meta devolve**. É o único dado que prova que a
- * chave certa está apontando para o telefone certo — em 26/08/2026 duas telas
- * da Meta mostraram identificadores diferentes para o mesmo número, e nenhuma
- * checagem de "a variável está preenchida?" teria pego isso.
- *
- * Depois as três chaves, com o que cada uma faz. Presença nunca é prova de que
- * a credencial serve (guardrail 1) — por isso a presença vem DEPOIS da prova.
- *
- * ── ⭐ E DEPOIS, O QUE O LEAD REALMENTE RECEBE (10/09/2026) ──────────────────
- *
- * A tela provava que as chaves funcionavam e não dizia uma palavra sobre a
- * mensagem. Quem opera não abre o painel da Meta: dava para rodar semanas sem
- * ninguém nunca ter lido a frase que sai em nome da empresa para um estranho.
- * O bloco dos modelos fecha isso — a conta, o teto que a Meta concede, a
- * qualidade do número e o corpo aprovado de cada modelo, inteiro.
- *
- * A ordem é de dentro para fora: primeiro se as chaves servem, depois de qual
- * conta e com que teto, e por último o que é dito. Ler o texto de uma mensagem
- * que não tem como sair é o tipo de conferência que dá conforto sem dar prova.
+ * A operação de WhatsApp da Foocci mora na Sala Comercial. Além da conferência
+ * do número e dos modelos já sincronizados, esta tela concentra a submissão dos
+ * três modelos oficiais usados para descobrir o decisor na prospecção fria.
  */
 
 import { ConferenciaClient } from "./ConferenciaClient";
 import { ModelosClient } from "./ModelosClient";
+import { TemplatesFriosClient } from "./TemplatesFriosClient";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +31,7 @@ export default function Page() {
         </header>
 
         <ConferenciaClient />
-
+        <TemplatesFriosClient />
         <ModelosClient />
       </div>
     </div>
