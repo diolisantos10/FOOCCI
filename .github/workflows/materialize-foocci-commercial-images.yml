@@ -19,13 +19,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract project images
+      - name: Rebuild and extract image archive
         shell: bash
         run: |
           set -euo pipefail
           ROOT='reestruturação da área comercial do FOOCCI'
-          test -f "$ROOT/.image_import/images.tar.gz"
-          tar -xzf "$ROOT/.image_import/images.tar.gz" -C "$ROOT"
+          cat "$ROOT"/.image_import/part_* > /tmp/foocci_images.tar.gz.b64
+          base64 --decode /tmp/foocci_images.tar.gz.b64 > /tmp/foocci_images.tar.gz
+          tar -xzf /tmp/foocci_images.tar.gz -C "$ROOT"
           rm -rf "$ROOT/.image_import"
 
       - name: Commit materialized images
