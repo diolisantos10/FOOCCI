@@ -29,16 +29,16 @@ import {
 } from "@/lib/internal-auth";
 // Fora do arquivo de rota de propósito: `route.ts` só pode exportar métodos
 // HTTP e configuração — qualquer outro export derruba o `next build`.
-import { destinoDe } from "@/lib/destino-por-papel";
+import { destinoDe, destinoDoAdmin } from "@/lib/destino-por-papel";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let corpo: { email?: string; senha?: string };
+  let corpo: { email?: string; senha?: string; origem?: string };
   try {
-    corpo = (await req.json()) as { email?: string; senha?: string };
+    corpo = (await req.json()) as { email?: string; senha?: string; origem?: string };
   } catch {
     return NextResponse.json({ ok: false, error: "Corpo inválido." }, { status: 400 });
   }
@@ -104,7 +104,24 @@ export async function POST(req: NextRequest) {
 
   const res = NextResponse.json({
     ok: true,
-    data: { nome: sessao.nome, papel: sessao.role, destino: destinoDe(sessao.role) },
+    data: {
+      nome: sessao.nome,
+      papel: sessao.role,
+      // ── POR ONDE ELA ENTROU DECIDE PARA ONDE ELA VAI ──────────────────────
+      //
+      // As duas portas da casa batem NESTA rota: `/admin/login` e
+      // `/comercial/entrar`. Enquanto o destino olhava só o papel, quem entrava
+      // pelo Admin era mandado para `/comercial/painel` — o defeito que o CEO
+      // reportou ("acesso o FOOCCI Admin e ele entra no Foocci comercial").
+      //
+      // ⚠️ `origem` escolhe TELA DE ABERTURA, nunca permissão. O que a pessoa
+      // pode continua decidido rota a rota, no servidor, pela sessão assinada —
+      // mandar "origem":"admin" não abre porta nenhuma a quem não a tem: quem
+      // não alcança o Admin recebe o destino do Comercial ou a tela de entrar.
+      // Ausente ou desconhecida, vale o Comercial, como sempre valeu.
+      destino:
+        corpo.origem === "admin" ? destinoDoAdmin(sessao.role) : destinoDe(sessao.role),
+    },
   });
 
   res.headers.set("Set-Cookie", criarCookieInterno(sessao));

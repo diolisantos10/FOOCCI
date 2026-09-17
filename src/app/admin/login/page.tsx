@@ -30,7 +30,7 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ROTAS } from "@/lib/sala/rotas";
+import { ENTRADA_DO_ADMIN } from "@/lib/destino-por-papel";
 
 type Porta = "pessoa" | "chaveDaCasa";
 
@@ -59,7 +59,11 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/session/interna", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), senha }),
+        // ⚠️ A ORIGEM VAI JUNTO, E ELA NÃO É DETALHE. Esta rota é a mesma que
+        // atende `/comercial/entrar`; sem esta palavra o servidor não tem como
+        // saber qual das duas portas foi aberta, e manda todo mundo para o
+        // Comercial — que foi exatamente o defeito relatado pelo CEO.
+        body: JSON.stringify({ email: email.trim(), senha, origem: "admin" }),
       });
 
       const data = (await res.json().catch(() => ({}))) as {
@@ -71,7 +75,7 @@ export default function AdminLoginPage() {
       if (res.ok && data.ok) {
         // O destino é o que o servidor mandou. Um destino escolhido aqui seria
         // um destino que o navegador pode trocar.
-        router.replace(data.data?.destino ?? "/admin/departamentos");
+        router.replace(data.data?.destino ?? ENTRADA_DO_ADMIN);
         return;
       }
 
@@ -102,9 +106,12 @@ export default function AdminLoginPage() {
       });
 
       if (res.ok) {
-        // A entrada por segredo é a do dono. Mesmo destino que o papel MASTER_CEO
-        // recebe em `destinoDe`: a Sala de Vendas, não o organograma vazio.
-        router.replace(ROTAS.painel);
+        // ⛔ A senha da casa abre o ADMIN, e só ele. Entre 10/09 e 17/09/2026
+        // esta linha mandava para `/comercial/painel` — e a área comercial
+        // RECUSA a senha da casa por desenho: o dono entrava pelo Admin, era
+        // jogado no Comercial e lá recebia a tela de entrar. A porta certa é a
+        // do Admin, que é a porta que esta senha de fato abre.
+        router.replace(ENTRADA_DO_ADMIN);
         return;
       }
 
