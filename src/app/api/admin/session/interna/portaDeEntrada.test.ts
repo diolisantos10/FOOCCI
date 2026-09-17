@@ -58,8 +58,7 @@ async function entrar(role: InternalRole, origem: "admin" | "comercial") {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email: "a@foocci.com", senha: "x", origem }),
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const res = await POST(req as any);
+  const res = await POST(req as unknown as Parameters<typeof POST>[0]);
   const json = (await res.json()) as { data?: { destino?: string } };
   return json.data?.destino;
 }
@@ -113,8 +112,7 @@ describe("por onde se entra decide onde se abre", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: "a@foocci.com", senha: "x" }),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await POST(req as any);
+    const res = await POST(req as unknown as Parameters<typeof POST>[0]);
     const json = (await res.json()) as { data?: { destino?: string } };
     expect(json.data?.destino).toBe("/comercial/painel");
   });
