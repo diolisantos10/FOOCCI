@@ -24,45 +24,11 @@
 
 import { lerSessaoInterna } from "@/lib/internal-auth";
 import { prisma } from "@/lib/prisma";
-import { lerFichaDoLead } from "@/services/salaDeVendas/crm360";
+import { lerFichaDoLead, leadAoAlcance } from "@/services/salaDeVendas/crm360";
 import { Crm360View, FichaNaoEncontrada, FichaComErro } from "./Crm360View";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Ficha do lead · Comercial" };
-
-/** Quem enxerga a operação inteira. Espelha `_guarda.vePelaOperacaoToda`. */
-const VE_TUDO = new Set<string>([
-  "MASTER_CEO",
-  "DIRETOR_FOOCCI",
-  "GERENTE_DEPARTAMENTO",
-  "AUDITOR_QA",
-]);
-
-/**
- * O lead está ao alcance desta pessoa?
- *
- * Igual à guarda das rotas: o dele, o de ninguém e o que espera gente. Conversa
- * que outra pessoa está conduzindo não se alcança — nem para ler.
- */
-export async function alcanca(
-  db: typeof prisma,
-  sessao: { userId: string; role: string },
-  leadId: string,
-): Promise<boolean> {
-  if (VE_TUDO.has(sessao.role)) return true;
-
-  const lead = await db.siteLead.findUnique({
-    where: { id: leadId },
-    select: { atendenteUserId: true, atendidoPor: true },
-  });
-
-  return (
-    lead !== null &&
-    (lead.atendenteUserId === sessao.userId ||
-      lead.atendidoPor === "NINGUEM" ||
-      lead.atendidoPor === "AGUARDANDO_HUMANO")
-  );
-}
 
 export default async function FichaDoLeadPage({ params }: { params: { id: string } }) {
   const sessao = lerSessaoInterna();
@@ -71,7 +37,7 @@ export default async function FichaDoLeadPage({ params }: { params: { id: string
   }
 
   try {
-    if (!(await alcanca(prisma, sessao, params.id))) return <FichaNaoEncontrada />;
+    if (!(await leadAoAlcance(prisma, sessao, params.id))) return <FichaNaoEncontrada />;
 
     const r = await lerFichaDoLead(prisma, { leadId: params.id });
     if (!r.achou) return <FichaNaoEncontrada />;

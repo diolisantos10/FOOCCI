@@ -326,3 +326,47 @@ function comoOportunidade(o: Record<string, never>): OportunidadeDaFicha {
     fechadaEm: iso(v.fechadaEm as Date | null),
   };
 }
+
+// ─── ⚠️ A FECHADURA DA FICHA MORA AQUI, E NÃO NA PÁGINA ─────────────────────
+//
+// Esta regra nasceu dentro de `app/comercial/(area)/lead/[id]/page.tsx` e o
+// build do Next RECUSOU o arquivo: uma página só pode exportar os nomes que o
+// framework conhece, e `alcanca` não é um deles. O erro foi bom — a regra de
+// quem alcança qual lead é doutrina de domínio, não detalhe de tela, e no
+// serviço ela pode ser testada sem renderizar nada.
+//
+// Mantida deliberadamente separada de `_guarda.podeVerOLead`: aquela devolve
+// `NextResponse`, que é linguagem de rota. A REGRA é a mesma, de propósito.
+/** Quem enxerga a operação inteira. Espelha `_guarda.vePelaOperacaoToda`. */
+const VE_TUDO = new Set<string>([
+  "MASTER_CEO",
+  "DIRETOR_FOOCCI",
+  "GERENTE_DEPARTAMENTO",
+  "AUDITOR_QA",
+]);
+
+/**
+ * O lead está ao alcance desta pessoa?
+ *
+ * Igual à guarda das rotas: o dele, o de ninguém e o que espera gente. Conversa
+ * que outra pessoa está conduzindo não se alcança — nem para ler.
+ */
+export async function leadAoAlcance(
+  db: Pick<PrismaClient, "siteLead">,
+  sessao: { userId: string; role: string },
+  leadId: string,
+): Promise<boolean> {
+  if (VE_TUDO.has(sessao.role)) return true;
+
+  const lead = await db.siteLead.findUnique({
+    where: { id: leadId },
+    select: { atendenteUserId: true, atendidoPor: true },
+  });
+
+  return (
+    lead !== null &&
+    (lead.atendenteUserId === sessao.userId ||
+      lead.atendidoPor === "NINGUEM" ||
+      lead.atendidoPor === "AGUARDANDO_HUMANO")
+  );
+}
