@@ -261,6 +261,54 @@ export function lerPedidoDeParar(mensagem: string): boolean {
   return PEDE_PARAR_PERGUNTA.test(mensagem);
 }
 
+/**
+ * ⭐ "ME EXPLICA MELHOR" — o instante em que a lista fria vira LEAD.
+ *
+ * ── A ORDEM ─────────────────────────────────────────────────────────────────
+ * CEO, 17/09/2026: *"A lista fria não é lead. Ela só é lead quando se interessa
+ * sobre o produto e quer escutar."*
+ *
+ * Esta é a leitura que decide isso, e ela está AQUI, em código determinístico,
+ * junto das outras duas (`lerPedidoDeParar`, `lerIrritacao`), pelo mesmo motivo
+ * delas: é classificação, não composição. Extrair está certo ou errado, e o erro
+ * vai direto para a fila do vendedor. Deixar o modelo decidir quem é lead faria
+ * a mesma conversa produzir listas diferentes em dias diferentes.
+ *
+ * ── ⚠️ O QUE **NÃO** É INTERESSE, E É A METADE QUE IMPORTA ──────────────────
+ *
+ * Responder não é interesse. "Quem é?", "de onde vocês são?", "não conheço" são
+ * perguntas de quem está se defendendo de um desconhecido — e promovê-las a lead
+ * encheria a fila de quem nunca pediu nada, que é exatamente o defeito que a
+ * distinção existe para impedir.
+ *
+ * Também não é interesse o SINAL DE PORTEIRO ("vou passar para o responsável"):
+ * ali quem fala não é quem decide, e o objetivo daquela conversa continua sendo
+ * achar o decisor — não vender. Quem cuida disso é `objetivoDaProspeccao`.
+ *
+ * Interesse é **querer escutar sobre o produto**: pedir explicação, preço,
+ * demonstração, material, ou dizer com todas as letras que se interessou.
+ *
+ * ⚠️ Sem `\b` no fim das alternativas com acento: em JavaScript `\b` é ASCII, e
+ * a casa já pagou essa lição duas vezes neste mesmo arquivo.
+ */
+const DEMONSTRA_INTERESSE =
+  /(me (explica|conta|fala|manda|mostra|envia)|quero (saber|entender|ver|conhecer|testar)|tenho interesse|me interess|fiquei interessad|como funciona|quanto (custa|fica|sai)|qual (o |é o )?(pre[çc]o|valor|plano)|manda (o |a |mais )?(material|proposta|detalhe|informa)|pode (explicar|mandar|enviar|mostrar)|gostaria de (saber|ver|conhecer)|quero (uma )?(demonstra|demo)|topo (ver|escutar|ouvir)|pode (me )?ligar|vamos conversar|marca (uma |a )?(reuni|conversa|demo))/i;
+
+/**
+ * O que a pessoa disse demonstra interesse no produto?
+ *
+ * Devolve o TRECHO que casou, e não `true`, de propósito: quem promove precisa
+ * gravar a PROVA (`promoverFrioParaLead` exige o motivo). Um booleano
+ * produziria um carimbo sem nada que o sustente, e três semanas depois ninguém
+ * saberia dizer por que aquele restaurante entrou na fila de quem vale tempo
+ * de gente.
+ */
+export function lerInteresseNoProduto(mensagem: string): string | null {
+  const casou = DEMONSTRA_INTERESSE.exec(mensagem ?? "");
+  if (!casou) return null;
+  return (mensagem ?? "").trim().slice(0, 200);
+}
+
 export function lerIrritacao(mensagem: string): number {
   if (IRRITADO_FORTE.test(mensagem)) return 3;
   if (IRRITADO_MEDIO.test(mensagem)) return 2;

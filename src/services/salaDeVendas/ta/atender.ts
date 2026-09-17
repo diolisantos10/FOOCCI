@@ -80,12 +80,15 @@ import {
   blocoDoObjetivoDaProspeccao,
   objetivoDaProspeccao,
 } from "@/services/foocci-sdr/gatekeeper/objetivo";
+import { AUTORIA_SISTEMA, promoverFrioParaLead } from "@/services/salaDeVendas/jornadaComercial";
+import { veioDeListaFria } from "@/services/salaDeVendas/frioOuLead";
 import {
   blocoDeConduta,
   blocoDeMemoria,
   gravarMemoria,
   lerIrritacao,
   lerMemoria,
+  lerInteresseNoProduto,
   lerPedidoDeParar,
   type MemoriaDoLead,
 } from "./memoria";
@@ -277,6 +280,13 @@ async function executarTurno(
       // Lead sem empresa devolve `null`, e `null` não muda nada.
       empresa: { select: { estagio: true } },
       contato: { select: { ehDecisor: true } },
+      // ⭐ LISTA FRIA × LEAD. Os dois campos que dizem se esta pessoa nos
+      // procurou (`fonte`) e se ela já foi promovida por interesse
+      // (`virouLeadEm`). Sem eles na consulta, a promoção não teria como saber
+      // se há algo a promover — e promover de novo reescreveria o instante
+      // verdadeiro do interesse pelo instante da repetição.
+      fonte: true,
+      virouLeadEm: true,
     },
   });
 
@@ -398,6 +408,37 @@ async function executarTurno(
       { pediuPararSondagem: pediuParar, irritacao: irritacaoAgora },
       agora,
     );
+  }
+
+  // ── ⭐ 5c. O INSTANTE EM QUE A LISTA FRIA VIRA LEAD ─────────────────────
+  //
+  // Ordem do CEO, 17/09/2026: *"A lista fria não é lead. Ela só é lead quando
+  // se interessa sobre o produto e quer escutar."*
+  //
+  // A promoção acontece AQUI e em nenhum outro lugar do turno, porque aqui é
+  // onde a casa lê pela primeira vez o que a pessoa acabou de escrever — o
+  // mesmo ponto em que ela já lê o pedido de parar. Pôr isto depois da
+  // composição promoveria a pessoa um turno tarde: a mensagem em que ela disse
+  // "me explica melhor" seria respondida por um agente que ainda a tratava como
+  // lista fria.
+  //
+  // ⚠️ Virar lead **não libera envio nenhum**. `promoverFrioParaLead` só
+  // escreve registro; os portões deste arquivo continuam sendo os mesmos, na
+  // mesma ordem, e nenhum deles lê `virouLeadEm`.
+  const interesse = lerInteresseNoProduto(pedido.mensagem);
+  if (interesse && !lead.virouLeadEm && veioDeListaFria({ fonte: lead.fonte })) {
+    try {
+      await promoverFrioParaLead(db, {
+        leadId: lead.id,
+        motivo: interesse,
+        autoria: AUTORIA_SISTEMA,
+        agora,
+      });
+    } catch {
+      // Falhar a promoção não pode transformar um atendimento que deu certo em
+      // turno quebrado. O contato continua frio e a próxima mensagem
+      // interessada promove — o que não pode é o cliente ficar sem resposta.
+    }
   }
 
   const memoria: MemoriaDoLead = {

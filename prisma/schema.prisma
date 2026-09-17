@@ -5155,6 +5155,29 @@ model SiteLead {
   contatoId String?
   contato   Contato? @relation(fields: [contatoId], references: [id], onDelete: SetNull)
 
+  // ── ⭐ A CONSCIÊNCIA DO CONTATO FRIO, 17/09/2026 ──────────────────────────
+  //
+  // Ordem do CEO: *"A lista fria não é lead. Ela só é lead quando se interessa
+  // sobre o produto e quer escutar."*
+  //
+  // Sem estes dois campos a distinção não existia em lugar nenhum: um
+  // restaurante que NÓS fomos caçar e um restaurante que preencheu o formulário
+  // ficavam indistinguíveis depois da primeira resposta, porque a única pista
+  // era `fonte` — e `fonte` nunca muda, nem quando a pessoa se interessa.
+  //
+  // ⚠️ `null` NÃO significa "não é lead": significa "não foi promovido aqui".
+  // Quem nasceu do formulário do site já é lead sem nunca ter passado por esta
+  // coluna. Quem lê a distinção é `ehLead()` em `frioOuLead.ts`, e ela junta as
+  // duas informações — a porta de entrada e a promoção.
+  //
+  /// Quando este contato frio demonstrou interesse e virou lead de verdade.
+  /// Preenchido UMA vez, no momento do interesse, e nunca antes.
+  virouLeadEm     DateTime?
+  /// O que ele disse que caracterizou o interesse. Sem o motivo, a promoção é
+  /// um carimbo sem prova — e ninguém consegue auditar por que este contato
+  /// entrou na fila de quem vale tempo de gente.
+  virouLeadMotivo String?
+
   oportunidades Oportunidade[] @relation("OportunidadeDoLead")
 
   interactions           SiteLeadInteraction[]
@@ -5181,6 +5204,8 @@ model SiteLead {
   @@index([whatsappDigits])
   @@index([lastContactedAt])
   @@index([optOutAt])
+  /// A fila de quem virou lead de verdade — ver a migração da consciência do frio.
+  @@index([virouLeadEm])
   // ── Índices da Sala de Vendas ──────────────────────────────────────────────
   /// A ordenação padrão da lista de conversas: quem falou por último, no topo.
   @@index([ultimaMensagemEm])

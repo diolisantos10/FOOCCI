@@ -30,6 +30,7 @@ import {
   type LeadSafetyDecision,
 } from "@/services/foocci-sdr/LeadContactSafety";
 import { acharLeadPeloTelefone } from "./casamento";
+import { garantirEmpresaDoLead } from "./empresaDoLead";
 import { conferirRitmo, tetosEmVigor } from "../freioDeRitmo";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
@@ -666,7 +667,20 @@ export async function materializarLead(
         tags: item.tags,
         fonte: "LISTA_PROSPECCAO",
         origem: "prospeccao",
-        stage: "NOVO",
+        // ── ⭐ `DISPONIVEL_PARA_PROSPECCAO`, E NÃO `NOVO`, 17/09/2026 ──────
+        //
+        // Ordem do CEO: *"A lista fria não é lead. Ela só é lead quando se
+        // interessa sobre o produto e quer escutar."*
+        //
+        // `NOVO` se escreve na tela como **"Novo lead"**. Este registro nasce
+        // de um restaurante que NÓS fomos caçar na internet — ele não pediu
+        // contato nenhum. Nascer em `NOVO` fazia a Sala de Vendas pôr o selo de
+        // lead em cima de quem o CEO diz que não é lead, e não era só palavra:
+        // era FILA. Quem confia no selo trabalha a lista errada primeiro.
+        //
+        // `DISPONIVEL_PARA_PROSPECCAO` já existia no funil e já se escreve "Na
+        // base fria" — a etapa certa estava pronta e este ponto não a usava.
+        stage: "DISPONIVEL_PARA_PROSPECCAO",
         atendidoPor: "NINGUEM",
         // consentAt fica NULO de propósito — ver o comentário acima.
       },
@@ -690,6 +704,27 @@ export async function materializarLead(
           canaisAtuais: item.canaisAtuais,
           observacoes: item.observacoes,
         },
+      });
+    }
+
+    // ── ⭐ A EMPRESA NASCE JUNTO — O ELO QUE IMPEDE A DÍVIDA DE VOLTAR ────
+    //
+    // Sem isto, todo lead novo de prospecção repetiria exatamente o buraco que o
+    // retrofit de 17/09/2026 foi consertar: `objetivoDaProspeccao` devolvendo
+    // `null` porque não há `Empresa` ligada, e o agente sem saber que o objetivo
+    // de um número frio é achar o responsável comercial. Consertar só o passado
+    // seria consertar por um dia.
+    //
+    // ⚠️ Vai num `try` próprio, e de propósito: materializar o lead é o ato que
+    // não pode falhar (o item já saiu de PENDENTE). Se a jornada recusar a
+    // escrita, o lead continua existindo e o retrofit o pega na próxima
+    // varredura — perder o lead seria pior do que ficar um dia sem o elo.
+    try {
+      await garantirEmpresaDoLead(db, { leadId: criado.id });
+    } catch (erroDaJornada) {
+      console.error("[prospeccao] lead criado, mas sem ligar à empresa da jornada", {
+        leadId: criado.id,
+        erro: erroDaJornada instanceof Error ? erroDaJornada.message : String(erroDaJornada),
       });
     }
 
