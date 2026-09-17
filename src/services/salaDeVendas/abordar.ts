@@ -58,6 +58,7 @@ import {
   type ModeloDeAbordagem,
 } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { avaliarAdequacaoDoTemplate, type HistoricoDeAbordagens } from "./supervisora/adequacaoDoTemplate";
+import { reservarEnvio } from "./travaDeRepeticao";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -80,7 +81,13 @@ export type ResultadoDaAbordagem =
          *  `supervisora/adequacaoDoTemplate.ts` — o texto do template NUNCA é
          *  alterado por ela; só liberado ou barrado. Em SHADOW/OFF este
          *  motivo nunca acontece. */
-        | "supervisoraRecusou";
+        | "supervisoraRecusou"
+        /**
+         * ⛔ A trava de repetição recusou: este conteúdo já saiu para este
+         * número, ou outra abordagem saiu há menos que o intervalo mínimo.
+         * Não é defeito do canal — é o portão do CONTEÚDO fazendo o trabalho.
+         */
+        | "travaDeRepeticao";
       detalhe: string;
     };
 
@@ -580,6 +587,34 @@ export async function abordarLead(
       motivo: "supervisoraRecusou",
       detalhe: revisaoDoTemplate.motivoDeRetencao ?? "retido pela Supervisora",
     };
+  }
+
+  // ── ⛔ TRAVA 3.5: A TRAVA DE REPETIÇÃO — 17/09/2026 ─────────────────────
+  //
+  // A ÚLTIMA pergunta antes de a mensagem bater na Meta: **este mesmo conteúdo
+  // já foi para este mesmo número?** As travas acima respondem "esta pessoa
+  // pode ser abordada?" lendo o estado do lead — e é justamente essa leitura
+  // que duas rodadas simultâneas fazem ao mesmo tempo, as duas vendo zero.
+  //
+  // Aqui não há leitura: há uma reserva com `@@unique` no banco. Ver
+  // `travaDeRepeticao.ts`. Fail-closed: na dúvida, não sai.
+  const reserva = await reservarEnvio(db, {
+    telefone: lead.whatsapp,
+    // O texto RENDERIZADO, que é o que a pessoa lê — e não o nome do modelo.
+    // Dois modelos diferentes que produzem a mesma frase são a mesma mensagem
+    // para quem recebe.
+    conteudo: textoIntegral.texto,
+    natureza: "abordagem",
+    leadId: lead.id,
+    origem: "abordar.ts",
+    agora,
+  });
+
+  if (!reserva.liberado) {
+    // ⛔ NUNCA `registrarFalhaDeEnvio`: FALHOU é vocabulário da Meta, e uma
+    // retentativa automática mandaria a repetição de novo. A linha fica
+    // PENDENTE, visível, e o motivo mora em `TravaDeAbordagemRecusa`.
+    return { abordou: false, motivo: "travaDeRepeticao", detalhe: reserva.detalhe };
   }
 
   // ── Trava 4: a entrega, com o resultado escrito na própria linha ───────

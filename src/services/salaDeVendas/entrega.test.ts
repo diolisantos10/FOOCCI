@@ -206,3 +206,117 @@ describe("⭐ o que nunca sai, mesmo com tudo ligado", () => {
     expect(r).toMatchObject({ entregue: false, motivo: "mensagemNaoExiste" });
   });
 });
+
+/**
+ * ⛔ A TRAVA DE REPETIÇÃO NO CAMINHO DE SAÍDA — 17/09/2026.
+ *
+ * ── A PERGUNTA OBRIGATÓRIA: o teste alcança o código que responde ao cliente? ──
+ *
+ * Alcança. Estes casos chamam `entregarMensagem` — a MESMA função do webhook e
+ * da tela de atendimento — e medem se `enviarTextoDeVendas` (a linha que bate
+ * na Meta) foi ou não chamada. Nada aqui é a trava testada contra si mesma: a
+ * trava tem arquivo próprio, e o que se mede aqui é se ela está no caminho.
+ *
+ * ⚠️ E a outra metade é tão importante quanto: conversa viva **não** pode ser
+ * bloqueada. O caso do TA repetindo a mesma frase prova que não é.
+ */
+function bancoComTrava(over: { mensagem?: Record<string, unknown> } = {}) {
+  const base = banco(over);
+  const ritmo = new Set<string>();
+  const enviadasPelaTrava = new Set<string>();
+  const recusas: Array<Record<string, unknown>> = [];
+
+  return {
+    recusas,
+    db: {
+      ...base,
+      travaDeAbordagemRitmo: {
+        updateMany: async () => ({ count: 0 }),
+        create: async (args: { data: { telefoneDigits: string } }) => {
+          if (ritmo.has(args.data.telefoneDigits)) throw new Error("Unique constraint failed");
+          ritmo.add(args.data.telefoneDigits);
+          return args.data;
+        },
+      },
+      travaDeAbordagemEnviada: {
+        create: async (args: { data: { telefoneDigits: string; impressao: string } }) => {
+          const chave = `${args.data.telefoneDigits}::${args.data.impressao}`;
+          if (enviadasPelaTrava.has(chave)) throw new Error("Unique constraint failed");
+          enviadasPelaTrava.add(chave);
+          return args.data;
+        },
+      },
+      travaDeAbordagemRecusa: {
+        create: async (args: { data: Record<string, unknown> }) => {
+          recusas.push(args.data);
+          return args.data;
+        },
+      },
+    } as never,
+  };
+}
+
+describe("⛔ a trava de repetição, no caminho de saída", () => {
+  it("SISTEMA: a MESMA mensagem para o mesmo lead sai UMA vez — a segunda é recusada", async () => {
+    ligarTudo();
+    const b = bancoComTrava({ mensagem: { autor: "SISTEMA" } });
+
+    const primeira = await entregarMensagem(b.db, "m1", "pessoa");
+    expect(primeira.entregue).toBe(true);
+    expect(enviar).toHaveBeenCalledTimes(1);
+
+    const segunda = await entregarMensagem(b.db, "m1", "pessoa");
+
+    expect(segunda).toMatchObject({ entregue: false, motivo: "travaDeRepeticao" });
+    // ⭐ A prova que importa: a Meta NÃO foi chamada de novo.
+    expect(enviar).toHaveBeenCalledTimes(1);
+    // E a recusa ficou escrita, não virou silêncio.
+    expect(b.recusas).toHaveLength(1);
+  });
+
+  it("⭐ CORRIDA: duas entregas SIMULTÂNEAS do mesmo conteúdo → a Meta é chamada UMA vez", async () => {
+    ligarTudo();
+    const b = bancoComTrava({ mensagem: { autor: "SISTEMA" } });
+
+    const [a, c] = await Promise.all([
+      entregarMensagem(b.db, "m1", "pessoa"),
+      entregarMensagem(b.db, "m1", "pessoa"),
+    ]);
+
+    expect([a.entregue, c.entregue].filter(Boolean)).toHaveLength(1);
+    expect(enviar).toHaveBeenCalledTimes(1);
+  });
+
+  it("TEMPLATE é abordagem mesmo assinado por gente — e não repete", async () => {
+    ligarTudo();
+    const b = bancoComTrava({ mensagem: { autor: "HUMANO", tipo: "TEMPLATE" } });
+
+    expect((await entregarMensagem(b.db, "m1", "pessoa")).entregue).toBe(true);
+    expect(await entregarMensagem(b.db, "m1", "pessoa")).toMatchObject({
+      motivo: "travaDeRepeticao",
+    });
+    expect(enviar).toHaveBeenCalledTimes(1);
+  });
+
+  it("⚠️ CONVERSA VIVA NÃO É BLOQUEADA: o TA pode repetir a mesma frase", async () => {
+    ligarTudo();
+    const b = bancoComTrava({ mensagem: { autor: "IA" } });
+
+    for (let i = 0; i < 4; i++) {
+      expect((await entregarMensagem(b.db, "m1", "pessoa")).entregue).toBe(true);
+    }
+
+    expect(enviar).toHaveBeenCalledTimes(4);
+    expect(b.recusas).toHaveLength(0);
+  });
+
+  it("⚠️ HUMANO que assumiu não é bloqueado", async () => {
+    ligarTudo();
+    const b = bancoComTrava({ mensagem: { autor: "HUMANO" } });
+
+    for (let i = 0; i < 3; i++) {
+      expect((await entregarMensagem(b.db, "m1", "pessoa")).entregue).toBe(true);
+    }
+    expect(enviar).toHaveBeenCalledTimes(3);
+  });
+});

@@ -8759,3 +8759,65 @@ model EventoDaJornada {
   @@index([autor, criadoEm])
   @@map("jornada_eventos")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A TRAVA DE REPETIÇÃO — 17/09/2026
+//
+// Medido no banco de produção: 21 de 200 conversas receberam a MESMA mensagem
+// nossa repetida; dois restaurantes receberam o mesmo texto 16 vezes.
+//
+// A causa é de desenho: todo o caminho de saída LÊ o estado do lead e só
+// DEPOIS escreve. Duas rodadas simultâneas leem o mesmo zero e mandam as duas.
+// Estas três tabelas existem para que a pergunta "já mandamos isto para este
+// número?" seja respondida pelo BANCO, atomicamente, e não por um `if`.
+//
+// Ver `src/services/salaDeVendas/travaDeRepeticao.ts`.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Uma linha por NÚMERO: quando saiu a última abordagem nossa.
+///
+/// A chave é o telefone, e não o lead, de propósito: a base tem leads
+/// duplicados para a mesma pessoa, e uma trava por lead não veria a segunda
+/// mensagem saindo pela segunda ficha.
+model TravaDeAbordagemRitmo {
+  telefoneDigits String   @id
+  ultimoEnvioEm  DateTime
+
+  @@map("trava_abordagem_ritmo")
+}
+
+/// Uma linha por (número, conteúdo). O `@@unique` é a trava: a segunda
+/// gravação do mesmo conteúdo para o mesmo número é recusada pelo Postgres.
+model TravaDeAbordagemEnviada {
+  id             String   @id @default(cuid())
+  telefoneDigits String
+  /// sha256 do conteúdo normalizado (espaço colapsado, minúsculas).
+  impressao      String
+  leadId         String?
+  /// De onde veio a tentativa ("abordar.ts", "entrega.ts"…).
+  origem         String
+  criadoEm       DateTime @default(now())
+
+  @@unique([telefoneDigits, impressao])
+  @@index([telefoneDigits, criadoEm])
+  @@map("trava_abordagem_enviada")
+}
+
+/// Toda recusa da trava, escrita. Sem isto ela seria silêncio — o mesmo
+/// defeito que ela veio consertar, com o sinal trocado.
+model TravaDeAbordagemRecusa {
+  id             String   @id @default(cuid())
+  telefoneDigits String
+  impressao      String
+  leadId         String?
+  origem         String
+  /// `conteudoJaEnviado`, `intervaloMinimo`, `semTelefone`, `bancoIndisponivel`.
+  motivo         String
+  detalhe        String
+  criadoEm       DateTime @default(now())
+
+  @@index([criadoEm])
+  @@index([telefoneDigits, criadoEm])
+  @@index([motivo, criadoEm])
+  @@map("trava_abordagem_recusa")
+}

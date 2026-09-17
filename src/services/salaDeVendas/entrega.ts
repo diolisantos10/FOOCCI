@@ -56,6 +56,7 @@ import {
 } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { pediuSilencio } from "@/services/foocci-sdr/LeadContactSafety";
 import { revisarAntesDeEntregar } from "./supervisora/revisao";
+import { reservarEnvio, type NaturezaDaFala } from "./travaDeRepeticao";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -81,7 +82,14 @@ export type ResultadoDaEntrega =
         /** A Supervisora reteve — ver `supervisora/revisao.ts`. Só acontece em
          *  modo GUARD/INTERVENTION; em SHADOW/OFF esta mensagem nunca sai por
          *  este motivo. */
-        | "retidaPelaSupervisora";
+        | "retidaPelaSupervisora"
+        /**
+         * ⛔ A trava de repetição recusou (17/09/2026): este mesmo conteúdo já
+         * saiu para este número, ou outra abordagem saiu há menos que o
+         * intervalo mínimo. Só acontece com fala de ABORDAGEM — resposta
+         * dentro de conversa viva nunca passa por ela.
+         */
+        | "travaDeRepeticao";
       detalhe: string;
     };
 
@@ -96,6 +104,33 @@ export type ResultadoDaEntrega =
  * mesma mensagem, a segunda vez recusa com `naoEraParaEnviar` em vez de mandar
  * a mesma coisa de novo para o cliente.
  */
+/**
+ * ⭐ ABORDAGEM ou CONVERSA — e a distinção não é adivinhada pelo texto.
+ *
+ * A trava de repetição é contra **repetição de abordagem**, nunca contra
+ * conversa. Bloquear resposta dentro de uma conversa viva seria trocar um
+ * defeito por outro: duas perguntas iguais do cliente merecem a mesma
+ * resposta, e o intervalo mínimo mataria o atendimento.
+ *
+ * A distinção vem de dois campos que a linha JÁ carrega, e por isso não
+ * depende de quem chama lembrar de nada:
+ *
+ *   · `tipo === "TEMPLATE"` — só existe fora da janela de 24h, ou seja, a casa
+ *     falando primeiro. É abordagem, sempre.
+ *   · `autor === "SISTEMA"` — a máquina disparando cadência ou texto
+ *     operacional que ninguém redigiu (a distinção é do próprio `ta/atender.ts`:
+ *     *"`SISTEMA` é cadência e template operacional"*). É abordagem.
+ *   · `autor === "IA"` ou `"HUMANO"` — o TA respondendo quem escreveu, ou a
+ *     pessoa que assumiu digitando. É conversa, e passa livre.
+ */
+export function naturezaDaFala(
+  autor: string | null | undefined,
+  tipo: string | null | undefined,
+): NaturezaDaFala {
+  if (tipo === "TEMPLATE") return "abordagem";
+  return autor === "SISTEMA" ? "abordagem" : "conversa";
+}
+
 export async function entregarMensagem(
   db: Cliente,
   mensagemId: string,
@@ -143,6 +178,7 @@ export async function entregarMensagem(
         leadId: true,
         autor: true,
         autorUserId: true,
+        tipo: true,
         papelDoAgente: true,
         lead: { select: { whatsapp: true, optOutAt: true } },
       },
@@ -214,6 +250,31 @@ export async function entregarMensagem(
     }
 
     const textoParaEnviar = revisao.textoParaEnviar;
+
+    // ── ⛔ A TRAVA DE REPETIÇÃO — 17/09/2026 ────────────────────────────
+    //
+    // Depois da Supervisora e ANTES da linha que bate na Meta. É a última
+    // pergunta do caminho de saída, e a única que ninguém fazia: **este
+    // conteúdo já foi para este número?**
+    //
+    // ⚠️ `entregarMensagem` já era idempotente — por `mensagemId`, e SÓ por
+    // ele. Duas linhas PENDENTES com o mesmo texto são duas entregas legítimas
+    // aos olhos dele, e foi por essa fresta que a repetição passou.
+    const reserva = await reservarEnvio(db, {
+      telefone,
+      conteudo: textoParaEnviar,
+      natureza: naturezaDaFala(m.autor, m.tipo),
+      leadId: m.leadId,
+      origem: "entrega.ts",
+    });
+
+    if (!reserva.liberado) {
+      // ⛔ NUNCA `registrarFalhaDeEnvio`, pela mesma razão já escrita acima
+      // para a retenção da Supervisora: FALHOU é vocabulário da Meta, e um
+      // retry automático mandaria a repetição de novo. A linha fica PENDENTE
+      // e o motivo mora em `TravaDeAbordagemRecusa`.
+      return { entregue: false, motivo: "travaDeRepeticao", detalhe: reserva.detalhe };
+    }
 
     const r = await enviarTextoDeVendas(
       // A decisão do portão: opt-out e telefone já foram conferidos acima, com o

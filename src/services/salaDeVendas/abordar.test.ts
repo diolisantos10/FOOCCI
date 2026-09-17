@@ -65,12 +65,17 @@ function banco(over: {
   const carimbos: Array<Record<string, unknown>> = [];
   /** Toda consulta feita ao banco, com os argumentos — ver o duplo abaixo. */
   const consultas: Array<Record<string, unknown>> = [];
+  /** O estado da trava de repetição — ver os duplos dela mais abaixo. */
+  const ritmo = new Set<string>();
+  const enviadasPelaTrava = new Set<string>();
+  const recusasDaTrava: Array<Record<string, unknown>> = [];
 
   return {
     gravadas,
     atualizadas,
     carimbos,
     consultas,
+    recusasDaTrava,
     db: {
       siteLead: {
         /** `contarAbordagensDeHoje`, reusada do `selecao.ts`. */
@@ -151,6 +156,41 @@ function banco(over: {
           return over.config === undefined
             ? { outboundLigado: true, pausadoEm: null, horasEntreAbordagens: null, limiteDiario: 250 }
             : over.config;
+        },
+      },
+
+      /**
+       * ⭐ A TRAVA DE REPETIÇÃO — 17/09/2026, `travaDeRepeticao.ts`.
+       *
+       * ⚠️ Estes três duplos **implementam a trava de verdade** (chave primária
+       * e `@@unique` compostos), e não um "sempre passa". Um duplo permissivo
+       * aqui seria régua verde sobre o componente errado: os 41 casos deste
+       * arquivo continuariam verdes com a trava desligada.
+       *
+       * Cada chamada de `banco()` nasce com as tabelas VAZIAS — que é o estado
+       * de um número nunca abordado. O caso da repetição tem arquivo próprio
+       * (`travaDeRepeticao.test.ts`).
+       */
+      travaDeAbordagemRitmo: {
+        updateMany: async () => ({ count: ritmo.size === 0 ? 0 : 1 }),
+        create: async (args: { data: { telefoneDigits: string } }) => {
+          if (ritmo.has(args.data.telefoneDigits)) throw new Error("Unique constraint failed");
+          ritmo.add(args.data.telefoneDigits);
+          return args.data;
+        },
+      },
+      travaDeAbordagemEnviada: {
+        create: async (args: { data: { telefoneDigits: string; impressao: string } }) => {
+          const chave = `${args.data.telefoneDigits}::${args.data.impressao}`;
+          if (enviadasPelaTrava.has(chave)) throw new Error("Unique constraint failed");
+          enviadasPelaTrava.add(chave);
+          return args.data;
+        },
+      },
+      travaDeAbordagemRecusa: {
+        create: async (args: { data: Record<string, unknown> }) => {
+          recusasDaTrava.push(args.data);
+          return args.data;
         },
       },
     } as never,
