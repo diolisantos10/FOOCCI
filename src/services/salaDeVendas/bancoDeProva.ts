@@ -34,6 +34,21 @@ export interface Tabelas {
   leadProposta: Linha[];
   /** A conversa. Acrescentada pelo raio-x das conversas de prospecção. */
   leadMensagem: Linha[];
+
+  // ── Acrescentadas pela frente UI-A (Central de Atendimento e CRM 360) ─────
+  //
+  // Nada foi removido nem alterado acima: as telas novas precisavam de tabelas
+  // que este banco ainda não guardava, e um banco de prova que não guarda a
+  // tabela obriga o teste a dublar a consulta — que é justamente a régua verde
+  // sobre o componente errado.
+  /** O time. As linhas já carregam `disponibilidade` embutida, como o Prisma devolve. */
+  internalUser: Linha[];
+  /** A passagem para gente. É dela que sai a espera de quem está na fila. */
+  leadHandoff: Linha[];
+  /** A trilha da ficha — o que a linha do tempo do CRM 360 lê. */
+  siteLeadInteraction: Linha[];
+  /** Reuniões e visitas marcadas. */
+  leadCompromisso: Linha[];
 }
 
 function combinaCampo(valor: unknown, condicao: unknown): boolean {
@@ -55,6 +70,14 @@ function combinaCampo(valor: unknown, condicao: unknown): boolean {
           break;
         case "notIn":
           if ((alvo as unknown[]).includes(valor as never)) return false;
+          break;
+        case "isNot":
+          // Só o caso que o Prisma usa nestes serviços: "a relação existe".
+          if (alvo === null) {
+            if (valor === null || valor === undefined) return false;
+          } else {
+            throw new Error("bancoDeProva: 'isNot' só entende null");
+          }
           break;
         case "not":
           if (alvo === null) {
@@ -127,6 +150,17 @@ function comoTabela(linhas: Linha[], enriquecer?: (l: Linha) => Linha) {
       const inicio = args?.skip ?? 0;
       return args?.take === undefined ? achadas.slice(inicio) : achadas.slice(inicio, inicio + args.take);
     },
+    async findUnique(args: { where: Linha }) {
+      return linhas.filter((l) => combina(l, args.where)).map(ver)[0] ?? null;
+    },
+    async findFirst(args?: { where?: Linha; orderBy?: Record<string, "asc" | "desc"> }) {
+      return (
+        ordenar(
+          linhas.filter((l) => combina(l, args?.where)),
+          args?.orderBy,
+        ).map(ver)[0] ?? null
+      );
+    },
     async groupBy(args: { by: string[]; where?: Linha; _count?: unknown }) {
       const campo = args.by[0]!;
       const grupos = new Map<unknown, number>();
@@ -152,6 +186,10 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     siteLead: dados.siteLead ?? [],
     leadProposta: dados.leadProposta ?? [],
     leadMensagem: dados.leadMensagem ?? [],
+    internalUser: dados.internalUser ?? [],
+    leadHandoff: dados.leadHandoff ?? [],
+    siteLeadInteraction: dados.siteLeadInteraction ?? [],
+    leadCompromisso: dados.leadCompromisso ?? [],
   };
 
   const porId = new Map(t.empresa.map((e) => [e.id as string, e]));
@@ -162,9 +200,21 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     contato: comoTabela(t.contato),
     oportunidade: comoTabela(t.oportunidade),
     cliente: comoTabela(t.cliente),
-    siteLead: comoTabela(t.siteLead),
+    // O lead carrega junto as relações que a ficha do CRM 360 lê num `select`
+    // aninhado. Acrescentar campos nunca faz uma consulta errada passar — o que
+    // o `where` mede continua sendo medido.
+    siteLead: comoTabela(t.siteLead, (l) => ({
+      ...l,
+      propostas: t.leadProposta.filter((p) => p.leadId === l.id),
+      compromissos: t.leadCompromisso.filter((c) => c.leadId === l.id),
+      oportunidades: t.oportunidade.filter((o) => o.leadId === l.id),
+    })),
     leadProposta: comoTabela(t.leadProposta),
     leadMensagem: comoTabela(t.leadMensagem),
+    internalUser: comoTabela(t.internalUser),
+    leadHandoff: comoTabela(t.leadHandoff),
+    siteLeadInteraction: comoTabela(t.siteLeadInteraction),
+    leadCompromisso: comoTabela(t.leadCompromisso),
     // A trilha carrega a empresa junto, porque `amostraDoHunter` precisa da
     // data de descoberta para medir quanto o Hunter demorou.
     eventoDaJornada: comoTabela(t.eventoDaJornada, (l) => ({
