@@ -15,6 +15,45 @@ import { PlanSubscriptionService, isTerminalStatus } from "@/services/billing/Pl
 import { MercadoPagoPlatformBilling, isPlatformBillingConfigured } from "@/services/billing/MercadoPagoPlatformBilling";
 import { PlanNfseService } from "@/services/billing/PlanNfseService";
 import { PlanProvisioningService } from "@/services/billing/PlanProvisioningService";
+import { ganharPeloPagamento } from "@/services/salaDeVendas/checkoutDaProposta";
+import { AUTORIA_SISTEMA } from "@/services/salaDeVendas/jornadaComercial";
+
+/**
+ * ⭐ O CICLO COMERCIAL FECHANDO — pagou, logo a oportunidade é GANHA.
+ *
+ * O documento do CEO não deixa a conversa terminar em arquivamento: *"produto →
+ * oferta → checkout → pagamento → pedido. Depois: CRM = GANHO ou CRM = PERDIDO +
+ * motivo."* Até aqui o pagamento ativava a assinatura e o funil comercial não
+ * ficava sabendo — a venda seguia aberta em `PROPOSTA` para sempre.
+ *
+ * Só age quando a assinatura nasceu de uma proposta comercial (a chave
+ * `proposta:<id>`); assinatura do checkout público passa reto.
+ *
+ * **Nunca derruba o webhook.** O dinheiro já entrou e o evento não pode ser
+ * perdido por causa do CRM — a falha vai para o log com o id da assinatura.
+ */
+async function fecharCicloComercial(subscriptionId: string, receitaCents: number | null, restaurantId: string | null, chave: string | null): Promise<void> {
+  try {
+    const r = await ganharPeloPagamento(prisma, {
+      assinaturaId: subscriptionId,
+      chaveDeIdempotencia: chave,
+      receitaCents,
+      restaurantId,
+      autoria: AUTORIA_SISTEMA,
+    });
+    if (!r.ok) {
+      console.error(
+        `[billing/mp-webhook] pagamento confirmado na assinatura ${subscriptionId}, mas a oportunidade ` +
+          `NÃO foi ganha (${r.causa}). A venda segue aberta no funil — verificar na Sala de Vendas.`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[billing/mp-webhook] pagamento confirmado na assinatura ${subscriptionId} e o fecho do CRM explodiu:`,
+      err,
+    );
+  }
+}
 
 /**
  * A COSTURA, chamada sempre que a assinatura passa a valer.
@@ -70,8 +109,10 @@ export async function POST(req: Request) {
         const act = await PlanSubscriptionService.activate(sub.id);
         // Só cria conta para quem está de fato ativo. Sem aceite (G4) ou em
         // estado terminal, `activate` já registrou o motivo com a evidência.
-        if (act.ok) await provisionAccount(sub.id);
-        else return NextResponse.json({ ok: true, activated: false, reason: act.reason });
+        if (act.ok) {
+          await provisionAccount(sub.id);
+          await fecharCicloComercial(sub.id, sub.firstChargeCents ?? sub.priceCents, sub.restaurantId, sub.signupIdempotencyKey);
+        } else return NextResponse.json({ ok: true, activated: false, reason: act.reason });
       } else if (pre.status === "cancelled") await PlanSubscriptionService.cancel(sub.id);
       else if (pre.status === "paused") await PlanSubscriptionService.markDelinquent(sub.id);
       return NextResponse.json({ ok: true });
@@ -120,6 +161,15 @@ export async function POST(req: Request) {
 
       // A conta do cliente nasce aqui. Idempotente: reenvio do MP não duplica.
       await provisionAccount(sub.id);
+
+      // E o funil comercial fecha aqui. Também idempotente: o mesmo webhook duas
+      // vezes devolve o MESMO cliente (`Cliente.oportunidadeId` é UNIQUE).
+      await fecharCicloComercial(
+        sub.id,
+        payment.amountCents || sub.priceCents,
+        sub.restaurantId,
+        sub.signupIdempotencyKey,
+      );
 
       // Primeira cobrança confirmada → o preapproval sobe do valor com os 50%
       // para o valor cheio do ciclo. Só na primeira (`created`), e o próprio
