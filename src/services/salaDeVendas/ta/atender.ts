@@ -77,6 +77,10 @@ import { foraDaAlcadaNaMensagem } from "../precos";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
 import {
+  blocoDoObjetivoDaProspeccao,
+  objetivoDaProspeccao,
+} from "@/services/foocci-sdr/gatekeeper/objetivo";
+import {
   blocoDeConduta,
   blocoDeMemoria,
   gravarMemoria,
@@ -266,6 +270,13 @@ async function executarTurno(
       // nunca vestido — o mesmo defeito de peça sem chamador que já apareceu
       // três vezes nesta base.
       temperatura: true,
+      // ⭐ ANTES OU DEPOIS DO DECISOR. O documento do CEO é explícito: quando o
+      // decisor aparece, o objetivo muda de "descobrir quem decide" para "gerar
+      // oportunidade". Sem estes dois campos na consulta, a mudança de postura
+      // estaria escrita e nunca vestida — o mesmo defeito de peça sem chamador.
+      // Lead sem empresa devolve `null`, e `null` não muda nada.
+      empresa: { select: { estagio: true } },
+      contato: { select: { ehDecisor: true } },
     },
   });
 
@@ -404,6 +415,13 @@ async function executarTurno(
   // e "closer" só poderia ser deduzido do estágio do lead — que muda DEPOIS da
   // mensagem, e portanto atribui a fala ao papel errado.
   const postura = posturaDoLead(lead.temperatura);
+
+  // A mudança de objetivo entra POR CIMA da postura, e não no lugar dela: um
+  // lead morno falando com a recepcionista precisa das duas respostas.
+  const objetivo = objetivoDaProspeccao({
+    estagioDaEmpresa: lead.empresa?.estagio ?? null,
+    contatoEhDecisor: lead.contato?.ehDecisor ?? null,
+  });
   const papelDoAgente = postura === "fechar" ? "closer" : "qualificacao";
 
   const r = await falar(
@@ -413,7 +431,9 @@ async function executarTurno(
       jaPerguntou,
       historico,
       memoria: blocoDeMemoria(memoria),
-      conduta: blocoDeConduta(memoria),
+      conduta: [blocoDeConduta(memoria), blocoDoObjetivoDaProspeccao(objetivo)]
+        .filter((bloco) => bloco.trim().length > 0)
+        .join("\n"),
       // A trava do determinístico. O bloco de conduta acima avisa o modelo; esta
       // linha impede o chão de fazer a pergunta quando o modelo cair.
       pediuPararSondagem: memoria.pediuPararSondagem,

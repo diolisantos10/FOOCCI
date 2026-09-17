@@ -5,6 +5,21 @@
  *
  *   filas · lista de conversas · a conversa · ficha 360º
  *
+ * ── ⭐ E O COPILOTO, QUE ENTROU SEM VIRAR UMA QUINTA COLUNA ────────────────
+ *
+ * A coluna da direita passou a ter DUAS abas: **Copiloto** e **Ficha**. O
+ * copiloto traz o contexto que o documento exige quando o humano assume (resumo,
+ * origem, campanha, decisor, o que o Hunter achou, o que o SDR descobriu…) e,
+ * sob pedido, a leitura da IA com sugestões de resposta.
+ *
+ * Aba, e não coluna nova, pelo orçamento de largura contado logo abaixo: uma
+ * quinta coluna deixaria a conversa com 160px e traria de volta o defeito que já
+ * custou duas tentativas aqui.
+ *
+ * ⛔ **"Usar sugestão" não envia.** Ela escreve no campo de digitação — por isso
+ * o rascunho subiu para este componente (ver `texto`, mais abaixo). O envio
+ * continua inteiro no rodapé da conversa, no botão que uma pessoa aperta.
+ *
  * ── COMO ELA CABE NO CELULAR ────────────────────────────────────────────────
  *
  * Quatro colunas não cabem em 390px, e espremê-las produz quatro colunas
@@ -58,12 +73,14 @@ import type { EventoDaFicha } from "@/services/salaDeVendas/linhaDoTempo";
 import { rotuloCurto, ETAPAS_NA_SALA } from "@/services/salaDeVendas/rotulosDaSala";
 import type { NomeDaFila, LeadNaFila } from "@/services/salaDeVendas/filas";
 import type { MensagemNaTela } from "@/services/salaDeVendas/conversa";
+import { useCopiloto } from "./_copiloto";
+import { PainelDoCopiloto } from "./PainelDoCopiloto";
 
 function cx(...p: Array<string | false | null | undefined>): string {
   return p.filter(Boolean).join(" ");
 }
 
-type PainelVisivel = "filas" | "lista" | "conversa" | "ficha";
+type PainelVisivel = "filas" | "lista" | "conversa" | "copiloto" | "ficha";
 
 /**
  * ⚠️ Os rótulos saíram daqui para `@/services/salaDeVendas/rotulosDaSala`, e as
@@ -116,6 +133,29 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
 
   const { estado: estadoDaLista, recarregar: recarregarLista } = useSalaDeVendas(fila);
   const { estado: estadoDaConversa, recarregar: recarregarConversa } = useConversa(leadId);
+  const {
+    estado: estadoDoCopiloto,
+    recarregar: recarregarCopiloto,
+    pedirLeitura,
+  } = useCopiloto(leadId);
+
+  /* ── ⭐ O TEXTO DA MENSAGEM SUBIU PARA CÁ, E ESSA É A MUDANÇA ESTRUTURAL ──
+   *
+   * Ele morava dentro de `PainelDaConversa`. Subiu porque "Usar sugestão" vive
+   * na coluna do copiloto, do outro lado da tela, e precisa escrever NESTE
+   * campo.
+   *
+   * ⛔ Repare no que subiu e no que NÃO subiu: subiu o TEXTO; o envio continua
+   * inteiro lá embaixo, no botão que uma pessoa aperta. O copiloto alcança o
+   * rascunho e não alcança o envio — e é essa fronteira que faz "usar sugestão"
+   * ser sugestão, e não mensagem enviada pela IA. */
+  const [texto, setTexto] = useState("");
+
+  // Trocar de conversa limpa o rascunho. Sem isto, a sugestão preparada para um
+  // lead ficaria no campo do lead seguinte — e alguém mandaria.
+  useEffect(() => {
+    setTexto("");
+  }, [leadId]);
 
   // Abrir por endereço carimba leitura igual a abrir por clique. Sem isto, o
   // lead aberto por link continuaria "não lido" para o resto do time.
@@ -151,20 +191,26 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
 
       {/* No celular, uma barra de navegação entre os quatro painéis. */}
       <nav className="flex shrink-0 gap-1 border-b border-line bg-paper px-2 py-1.5 xl:hidden">
-        {(["filas", "lista", "conversa", "ficha"] as const).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPainel(p)}
-            disabled={(p === "conversa" || p === "ficha") && !leadId}
-            className={cx(
-              "flex-1 rounded-lg px-2 py-1.5 text-[12.5px] font-semibold capitalize transition-colors",
-              painel === p ? "bg-brand-500 text-white" : "text-ink2 hover:bg-canvas",
-              (p === "conversa" || p === "ficha") && !leadId && "opacity-40",
-            )}
-          >
-            {p}
-          </button>
-        ))}
+        {/* Cinco painéis em 390px: `px-1` e 11.5px porque a sexta letra de
+            "copiloto" não cabia com o espaçamento anterior — e aba recortada
+            ensina que a aba não existe. */}
+        {(["filas", "lista", "conversa", "copiloto", "ficha"] as const).map((p) => {
+          const precisaDeLead = p === "conversa" || p === "ficha" || p === "copiloto";
+          return (
+            <button
+              key={p}
+              onClick={() => setPainel(p)}
+              disabled={precisaDeLead && !leadId}
+              className={cx(
+                "min-w-0 flex-1 truncate rounded-lg px-1 py-1.5 text-[11.5px] font-semibold capitalize transition-colors",
+                painel === p ? "bg-brand-500 text-white" : "text-ink2 hover:bg-canvas",
+                precisaDeLead && !leadId && "opacity-40",
+              )}
+            >
+              {p}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="flex min-h-0 flex-1">
@@ -208,6 +254,8 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
         >
           <PainelDaConversa
             estado={estadoDaConversa}
+            texto={texto}
+            aoEscreverTexto={setTexto}
             aoAvisar={setAviso}
             aoMudar={() => {
               recarregarConversa();
@@ -222,21 +270,68 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
           />
         </main>
 
-        {/* ── 4. FICHA 360º ────────────────────────────────────────────── */}
+        {/* ── 4. A COLUNA DIREITA: COPILOTO e FICHA 360º ──────────────────
+            ⭐ Duas abas na MESMA coluna, e não uma quinta coluna.
+
+            O orçamento de largura desta tela está contado no cabeçalho do
+            arquivo e não sobra: 160+240+256 de laterais deixam 416px para a
+            conversa num monitor de 1280. Uma quinta coluna levaria a conversa
+            para 160px e as bolhas voltariam a quebrar em uma palavra por linha
+            — o defeito que já custou duas tentativas aqui.
+
+            No desktop a aba escolhe o conteúdo; no celular a barra de cima já
+            trata cada um como painel próprio. */}
         <aside
           className={cx(
-            "w-full shrink-0 overflow-y-auto border-l border-line bg-paper xl:block xl:w-64",
-            painel === "ficha" ? "block" : "hidden",
+            "w-full shrink-0 flex-col overflow-hidden border-l border-line bg-paper xl:flex xl:w-64",
+            painel === "ficha" || painel === "copiloto" ? "flex" : "hidden",
           )}
         >
-          <PainelDaFicha
-            estado={estadoDaConversa}
-            aoAvisar={setAviso}
-            aoSalvar={() => {
-              recarregarConversa();
-              recarregarLista();
-            }}
-          />
+          <div className="hidden shrink-0 gap-1 border-b border-line px-2 py-1.5 xl:flex">
+            {(["copiloto", "ficha"] as const).map((aba) => (
+              <button
+                key={aba}
+                onClick={() => setPainel(aba)}
+                className={cx(
+                  "flex-1 rounded-lg px-2 py-1.5 text-[12.5px] font-semibold capitalize transition-colors",
+                  painel === aba ? "bg-brand-500 text-white" : "text-ink2 hover:bg-canvas",
+                )}
+              >
+                {aba}
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {painel === "ficha" ? (
+              <PainelDaFicha
+                estado={estadoDaConversa}
+                aoAvisar={setAviso}
+                aoSalvar={() => {
+                  recarregarConversa();
+                  recarregarLista();
+                }}
+              />
+            ) : (
+              <PainelDoCopiloto
+                estado={estadoDoCopiloto}
+                pedirLeitura={pedirLeitura}
+                recarregar={recarregarCopiloto}
+                /* ⛔ AQUI, e só aqui, uma sugestão sai do copiloto: ela vira o
+                   rascunho. Não há chamada de envio neste caminho. */
+                aoUsarSugestao={(t) => {
+                  setTexto(t);
+                  setPainel("conversa");
+                }}
+                aoAvisar={setAviso}
+                aoMudar={() => {
+                  recarregarConversa();
+                  recarregarLista();
+                  recarregarCopiloto();
+                }}
+              />
+            )}
+          </div>
         </aside>
       </div>
     </div>
@@ -405,11 +500,16 @@ function Etiqueta({ texto, tom }: { texto: string; tom?: string }) {
 
 function PainelDaConversa({
   estado,
+  texto,
+  aoEscreverTexto,
   aoAvisar,
   aoMudar,
   aoAgir,
 }: {
   estado: ReturnType<typeof useConversa>["estado"];
+  /** O rascunho vive no pai — ver o comentário em `AtendimentoClient`. */
+  texto: string;
+  aoEscreverTexto: (t: string) => void;
   aoAvisar: (s: string | null) => void;
   aoMudar: () => void;
   aoAgir: (
@@ -418,7 +518,6 @@ function PainelDaConversa({
     extra?: { objetivo?: string; motivo?: string },
   ) => void | Promise<void>;
 }) {
-  const [texto, setTexto] = useState("");
   const [interna, setInterna] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
@@ -459,7 +558,7 @@ function PainelDaConversa({
     setEnviando(false);
 
     if (r.ok) {
-      setTexto("");
+      aoEscreverTexto("");
       // O aviso do envio desligado vem da ROTA, e não é escrito aqui: quem sabe
       // se a mensagem saiu é o servidor.
       aoAvisar(r.aviso ?? null);
@@ -565,7 +664,7 @@ function PainelDaConversa({
         <div className="flex items-end gap-2">
           <textarea
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => aoEscreverTexto(e.target.value)}
             rows={2}
             disabled={!podeEscrever}
             placeholder={interna ? "Nota interna — o lead nunca vê" : "Escreva uma mensagem"}

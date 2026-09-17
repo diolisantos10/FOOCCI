@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { guardarSalaDeVendas, vePelaOperacaoToda } from "../../../_guarda";
+import { guardarSalaDeVendas, vePelaOperacaoToda } from "../../_guarda";
 import { dryRunLegacyColdRecovery } from "@/services/sales/legacyColdRecovery";
 
 export const dynamic = "force-dynamic";

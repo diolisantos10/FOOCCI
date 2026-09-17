@@ -194,6 +194,16 @@ export const TABELAS_PRESERVADAS: Readonly<Record<string, string>> = {
     "guarda `mpPreapprovalId`, que é uma recorrência viva no Mercado Pago: sem " +
     "cancelar lá, o cartão do lojista continua sendo debitado depois do restaurante " +
     "deixar de existir. Dinheiro não se apaga por cascata — quem decide é humano.",
+  clientes_comerciais:
+    "A conta do cliente vista pelo COMERCIAL DA FOOCCI (bloco B1 da jornada " +
+    "EMPRESA→…→CLIENTE), não do restaurante. `restaurantId` aqui é um ponteiro " +
+    "OPCIONAL e SEM chave estrangeira: aponta para o tenant quando ele já existe, e " +
+    "só. Apagar o restaurante não pode apagar a história da venda — ganho, ativação, " +
+    "NPS, recompra e motivo de churn são registro da Foocci sobre o próprio negócio " +
+    "dela, e é justamente no restaurante que sai da base que essa história vale mais. " +
+    "O ponteiro fica apontando para um id que não existe mais, e isso é intencional: " +
+    "a exportação da purga leva a fotografia da linha, e quem recriar o restaurante " +
+    "recola o vínculo à mão.",
 };
 
 /**
