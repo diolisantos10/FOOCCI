@@ -5135,6 +5135,28 @@ model SiteLead {
   /// que paga a próxima decisão de produto.
   motivoPerdaId String?
 
+  // ── ⭐ A JORNADA COMERCIAL (bloco B1) — DOIS PONTEIROS, AMBOS OPCIONAIS ────
+  //
+  // O documento pede *"um único registro evoluindo"*: EMPRESA → CONTATO →
+  // DECISOR → LEAD → OPORTUNIDADE → CLIENTE. Estes dois campos são a costura
+  // entre o que já existia (o lead) e o que passou a existir (a empresa e a
+  // pessoa), e são o ÚNICO acréscimo a este model.
+  //
+  // ⚠️ OPCIONAIS DE PROPÓSITO, E ISSO NÃO É FROUXIDÃO. A maioria dos leads NÃO
+  // tem empresa descoberta: quem chega pelo Meta Ads, pelo formulário do site ou
+  // escrevendo no WhatsApp é uma pessoa, e o restaurante dela nunca passou pelo
+  // Hunter. Esses leads continuam funcionando exatamente como antes, com os dois
+  // campos nulos. Torná-los obrigatórios pararia a captação viva no mesmo dia.
+  /// O restaurante prospectado, quando o Hunter o descobriu.
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  /// A pessoa por trás deste lead, quando ela foi descoberta como contato da
+  /// empresa antes de virar relacionamento.
+  contatoId String?
+  contato   Contato? @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+
+  oportunidades Oportunidade[] @relation("OportunidadeDoLead")
+
   interactions           SiteLeadInteraction[]
   mensagens              LeadMensagem[]
   tarefas                LeadTarefa[]
@@ -5173,6 +5195,9 @@ model SiteLead {
   @@index([temperatura])
   @@index([prioritario])
   @@index([motivoPerdaId])
+  /// "Todos os leads desta empresa" — a ficha da empresa abre por aqui.
+  @@index([empresaId])
+  @@index([contatoId])
 }
 
 /// As etapas do funil comercial da Foocci. ORDEM IMPORTA: a taxa de conversão
@@ -6684,7 +6709,11 @@ model MotivoDePerda {
 
   createdAt DateTime @default(now())
 
-  leads SiteLead[]
+  leads         SiteLead[]
+  /// ⭐ A oportunidade perdida usa O MESMO catálogo do lead, e não um segundo.
+  /// Dois catálogos de motivo de perda divergem em três meses, e a pergunta "o
+  /// que mais nos faz perder" passa a ter duas respostas diferentes.
+  oportunidades Oportunidade[] @relation("MotivoDaOportunidade")
 
   @@index([ativo, ordem])
   @@map("motivos_de_perda")
@@ -8104,4 +8133,629 @@ model ModeloDeVendas {
   @@unique([phoneNumberId, nome, idioma])
   @@index([situacao])
   @@map("modelos_de_vendas")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A JORNADA COMERCIAL — EMPRESA → CONTATO → DECISOR → LEAD → OPORTUNIDADE → CLIENTE
+//
+// Bloco B1 da reestruturação comercial (`reestruturação da área comercial do
+// FOOCCI/HISTORICO_INTEGRAL.md`). A decisão arquitetural do documento é literal:
+//
+//   "Hunter → SDR → Vendedor → CRM não são quatro bancos de dados.
+//    É um único registro evoluindo. Todo o histórico acompanha o registro."
+//
+// ── O QUE FALTAVA, E POR QUE NÃO DAVA PARA REMENDAR NO `SiteLead` ──────────
+//
+// `SiteLead` é hoje lead, prospect, empresa e contato ao mesmo tempo. Isso
+// funciona para quem CHEGA até nós (formulário, WhatsApp, Meta Ads): uma pessoa,
+// um telefone, uma linha. E quebra para quem NÓS vamos buscar: um restaurante
+// tem várias pessoas (o bot dos pedidos, a recepcionista, a dona), e é a
+// EMPRESA que tem ICP, canais, unidades e marketplace — não a pessoa.
+// Espremer isso em `SiteLead` obrigaria a duplicar a empresa a cada contato
+// descoberto, e o score do restaurante passaria a existir em três cópias
+// divergentes.
+//
+// ── ⚠️ ESTES MODELOS SÃO ADITIVOS. NADA FOI APAGADO, RENOMEADO OU ESVAZIADO ─
+//
+// `SiteLead` continua funcionando exatamente como antes: ganhou DOIS campos
+// opcionais (`empresaId`, `contatoId`) e nada mais. Lead que nasce sem empresa
+// — que é a maioria, e é o caminho do Meta Ads e do site — segue com os dois
+// nulos e nenhuma consulta existente muda de resultado.
+//
+// ── MULTI-TENANT: A RESPOSTA É "NÃO TEM", E É PROPOSITAL ───────────────────
+//
+// Esta família inteira segue a regra escrita em `SiteLead`: é a base da FOOCCI
+// vendendo para donos de restaurante, não a base de um restaurante. Não tem
+// `restaurantId` porque o restaurante ainda não existe — e é exatamente essa
+// ausência que impede o cruzamento. Pôr `restaurantId` aqui seria inventar um
+// tenant falso dentro do sistema cuja regra número um é não misturar as bases.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// O pipeline do Hunter, na ordem do documento:
+/// descoberta → enriquecendo → pronto SDR → gatekeeper → decisor encontrado →
+/// qualificado.
+///
+/// ⚠️ `DESCARTADA` fica FORA da sequência, pelo mesmo motivo de `PERDIDO` no
+/// funil do lead: uma empresa descartada SAIU do pipeline, não avançou nele.
+/// Contá-la como etapa faria a conversão do Hunter mentir.
+enum EstagioDaEmpresa {
+  /// Achada por alguma fonte. Só existe nome e o mínimo que a fonte deu.
+  DESCOBERTA
+  /// Alguém (pessoa ou máquina) está completando canais, unidades e sistema.
+  ENRIQUECENDO
+  /// Tem ficha suficiente e ICP medido. É a fila de trabalho do SDR.
+  ///
+  /// ⚠️ ESTE É O TETO DA DESCOBERTA AUTOMÁTICA. Nenhuma fonte entrega empresa
+  /// em fila de envio: descoberta ligada a disparo é como uma base de 8.000
+  /// virar 8.000 mensagens numa tarde.
+  PRONTA_PARA_SDR
+  /// O SDR bateu num porteiro (bot, recepção, SAC) e está procurando a rota.
+  GATEKEEPER
+  /// Existe um `Contato` com `ehDecisor = true` ligado a esta empresa.
+  DECISOR_ENCONTRADO
+  /// O decisor conversou e tem perfil, dor e interesse. Vale virar oportunidade.
+  QUALIFICADA
+  /// Terminal, e fora da sequência. `motivoDoDescarte` é obrigatório.
+  DESCARTADA
+}
+
+/// A leitura do ICP, separada do número pelo mesmo motivo de `LeadTemperatura`:
+/// o número é o cálculo, a prioridade é a leitura.
+/// **Não existe prioridade por omissão** — `null` quer dizer "ninguém priorizou".
+enum PrioridadeDaEmpresa {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+/// Quem atende o telefone e NÃO decide nada. O documento lista todos estes:
+/// *"bot; recepcionista; atendente; caixa; SAC; central telefônica; formulário;
+/// WhatsApp de pedidos"*.
+///
+/// Saber QUAL é muda a estratégia do SDR: bot de pedidos se fura com menu,
+/// recepcionista se convence com transparência, formulário não se fura de jeito
+/// nenhum e exige outro canal.
+enum TipoDeGatekeeper {
+  BOT_DE_PEDIDOS
+  RECEPCIONISTA
+  ATENDENTE
+  SAC
+  CAIXA
+  FORMULARIO
+  WHATSAPP_GERAL
+  CENTRAL_TELEFONICA
+  OUTRO
+}
+
+/// Quanto se confia no dado. Existe porque "informado pelo atendimento" e
+/// "achado num diretório de 2019" não valem a mesma coisa — e quem for abordar
+/// o decisor precisa saber em qual dos dois está apostando.
+enum ConfiancaDaInformacao {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+/// Os estágios da oportunidade. ORDEM IMPORTA (a conversão é calculada nela).
+/// `GANHA` e `PERDIDA` são terminais e ficam fora da sequência.
+enum EstagioDaOportunidade {
+  DESCOBERTA
+  QUALIFICACAO
+  PROPOSTA
+  NEGOCIACAO
+  GANHA
+  PERDIDA
+}
+
+/// A vida do cliente depois da venda. O documento é explícito:
+/// *"Lead NÃO volta para o início. Ele se torna CLIENTE."*
+enum SituacaoDoCliente {
+  /// Comprou, ainda não está usando. É onde o churn nasce quando ninguém olha.
+  EM_ATIVACAO
+  ATIVO
+  /// Sinal de churn detectado. Não é cancelamento — é o aviso antes dele.
+  EM_RISCO
+  /// Parou de usar, sem ter cancelado formalmente.
+  INATIVO
+  CANCELADO
+}
+
+/// A que entidade da jornada um evento pertence.
+enum EntidadeDaJornada {
+  EMPRESA
+  CONTATO
+  OPORTUNIDADE
+  CLIENTE
+}
+
+/// O que aconteceu. Vocabulário deliberadamente curto: evento que não muda
+/// nada nem explica nada vira ruído, e trilha ruidosa ninguém lê.
+enum TipoDeEventoDaJornada {
+  CRIACAO
+  MUDANCA_DE_ESTAGIO
+  /// Um dado novo entrou na ficha (canal, unidades, sistema, CNPJ…).
+  ENRIQUECIMENTO
+  /// Duas entidades foram amarradas (lead ↔ empresa, contato ↔ empresa…).
+  VINCULO
+  GATEKEEPER_IDENTIFICADO
+  DECISOR_ENCONTRADO
+  /// O ICP foi calculado (ou recalculado) — a conta fica em `EmpresaFatorIcp`.
+  SCORE_CALCULADO
+  NOTA
+}
+
+/// ⭐ O RESTAURANTE PROSPECTADO — o alvo do Hunter, ANTES de existir lead.
+///
+/// É a ficha que o documento desenha em `RESTAURANTE / Sushi House`: categoria,
+/// cidade, bairro, canais encontrados, delivery, iFood, unidades, sistema,
+/// ICP, prioridade, fonte e estado no pipeline.
+///
+/// ── DEDUPE ──────────────────────────────────────────────────────────────────
+/// `chaveDeDedupe` é a única restrição de unicidade, e é assim de propósito:
+/// CNPJ não vem em quase nenhuma fonte de descoberta, e telefone é da PESSOA,
+/// não da casa (o mesmo número aparece em duas unidades). A chave é derivada de
+/// nome+cidade+estado normalizados pelo serviço, e é o que torna "descobrir a
+/// mesma empresa duas vezes" um `no-op` em vez de uma linha duplicada.
+model Empresa {
+  id   String @id @default(cuid())
+  nome String
+
+  /// nome+cidade+estado normalizados. Ver `jornadaComercial.chaveDeDedupeDaEmpresa`.
+  chaveDeDedupe String @unique
+
+  /// Japonesa, pizzaria, padaria, boteco… O universo já está escrito em
+  /// `src/services/salaDeVendas/score.ts` e não é reinventado aqui.
+  categoria String?
+  cidade    String?
+  estado    String?
+  bairro    String?
+  endereco  String?
+  cep       String?
+  cnpj      String?
+
+  // ── CANAIS ENCONTRADOS ────────────────────────────────────────────────────
+  // Todos opcionais e todos com PROVENIÊNCIA própria (ver `EmpresaProveniencia`):
+  // saber que existe um WhatsApp publicado não diz de onde ele veio, e sem isso
+  // não há como responder "por que temos o contato desta empresa?".
+  site              String?
+  instagram         String?
+  facebook          String?
+  /// O número que a empresa PUBLICA. ⚠️ Número publicado NÃO é opt-in — a trava
+  /// que decide se dá para falar continua sendo `LeadContactSafety`.
+  whatsappPublicado String?
+  email             String?
+  telefone          String?
+  googleMapsUrl     String?
+
+  // ── COMO ELA VENDE HOJE ───────────────────────────────────────────────────
+  /// `null` = ninguém apurou, e é diferente de `false` ("apurado, não tem").
+  /// Escrever `false` por omissão apagaria a fila de quem falta enriquecer.
+  deliveryProprio      Boolean?
+  /// iFood, Rappi, 99Food… Vazio significa "não apurado"; a diferença entre
+  /// "vazio" e "apurado e nenhum" mora em `apuradoMarketplaceEm`.
+  marketplaces         String[]  @default([])
+  apuradoMarketplaceEm DateTime?
+  cardapioProprio      Boolean?
+  numeroDeUnidades     Int?
+  /// O sistema de gestão/PDV identificado — é a dor e o concorrente ao mesmo tempo.
+  sistemaIdentificado  String?
+  /// Ticket médio estimado, em CENTAVOS, como todo dinheiro nesta casa.
+  ticketEstimadoCents  Int?
+
+  // ── ICP ───────────────────────────────────────────────────────────────────
+  /// **`null` significa "ninguém mediu"**, e é diferente de zero, que significa
+  /// "medido e não qualifica". Mesma regra de `SiteLead.score`, pelo mesmo motivo:
+  /// escrever zero esconderia a fila inteira de quem nunca foi avaliado.
+  scoreIcp    Int?
+  scoreIcpEm  DateTime?
+  /// A versão da régua que gerou o número. Sem isso, mudar os pesos reescreveria
+  /// retroativamente a explicação de scores antigos.
+  reguaVersao Int?
+  /// `null` = não priorizada. Nunca BAIXA por omissão.
+  prioridade  PrioridadeDaEmpresa?
+
+  // ── PIPELINE HUNTER ───────────────────────────────────────────────────────
+  estagio          EstagioDaEmpresa @default(DESCOBERTA)
+  estagioMudouEm   DateTime         @default(now())
+  /// Quem mudou por último. Espelha o último `EventoDaJornada` — a trilha é a
+  /// fonte da verdade, este campo é cache da lista.
+  estagioMudouPor  String?
+  /// Obrigatório em DESCARTADA. Descarte sem motivo não vira relatório, e a
+  /// pergunta "o que mais nos faz descartar" fica sem resposta.
+  motivoDoDescarte String?
+
+  // ── DE ONDE ELA VEIO ──────────────────────────────────────────────────────
+  /// A fonte que a trouxe pela primeira vez ("planilha-outscraper", "site",
+  /// "indicacao"). O detalhe campo a campo está em `proveniencias`.
+  fonteDaDescoberta   String
+  descobertaEm        DateTime        @default(now())
+  /// IA, HUMANO ou SISTEMA — o documento exige distinguir, e a trilha inteira
+  /// desta família usa o mesmo vocabulário de `LeadMensagem.autor`.
+  descobertaPorAutor  AutorDaMensagem @default(SISTEMA)
+  /// O id interno de quem descobriu, quando foi gente. Sem chave estrangeira
+  /// de propósito: uma FK obrigaria a alterar `InternalUser`, que é model vivo.
+  descobertaPorUserId String?
+
+  /// O lote/importação que trouxe esta empresa, quando veio de planilha.
+  /// Sem FK pelo mesmo motivo: `LoteDeProspeccao` é model vivo e não ganha
+  /// relação de volta neste bloco.
+  loteDeProspeccaoId String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  contatos      Contato[]
+  oportunidades Oportunidade[]
+  clientes      Cliente[]
+  leads         SiteLead[]
+  fatoresIcp    EmpresaFatorIcp[]
+  proveniencias EmpresaProveniencia[]
+  eventos       EventoDaJornada[]
+
+  @@index([estagio, estagioMudouEm])
+  @@index([prioridade, scoreIcp])
+  @@index([cidade, estado])
+  @@index([categoria])
+  @@index([cnpj])
+  @@index([loteDeProspeccaoId])
+  @@map("empresas")
+}
+
+/// A CONTA do ICP, fator a fator — irmão gêmeo de `LeadScoreFator`, e pelo
+/// mesmo motivo do item 10 do comando: *"não utilizar uma pontuação opaca sem
+/// explicação"*. Número que ninguém consegue contestar é número que o time
+/// aprende a ignorar.
+model EmpresaFatorIcp {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  /// Chave estável da regra (`unidades`, `marketplace`, `sistema`…).
+  fator       String
+  /// O que foi observado, em texto legível ("2 unidades", "só iFood").
+  observado   String
+  pontos      Int
+  reguaVersao Int
+
+  criadoEm DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@index([fator])
+  @@map("empresa_fatores_icp")
+}
+
+/// ⭐ PROVENIÊNCIA CAMPO A CAMPO — *"registrar origem/proveniência dos dados"*.
+///
+/// Uma linha por dado apurado. Existe porque "a empresa veio do Outscraper" não
+/// responde "de onde veio ESTE telefone": a ficha se forma por camadas, e cada
+/// camada tem fonte, data, autor e confiança diferentes. No dia da dúvida — e
+/// numa base fria B2B ele chega — a resposta tem de ser por campo.
+///
+/// Append-only: apurar de novo cria linha nova. A última por `coletadoEm` é a
+/// que vale, e as anteriores continuam provando o que se sabia antes.
+model EmpresaProveniencia {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  /// O nome do campo da ficha ("whatsappPublicado", "numeroDeUnidades"…).
+  campo     String
+  /// O valor como foi apurado, em texto. Não é o campo — é a prova dele.
+  valor     String?
+  /// De onde saiu ("google-maps", "site-oficial", "instagram", "planilha").
+  fonte     String
+  /// O endereço exato, quando existe. É o que permite conferir sem refazer.
+  url       String?
+  confianca ConfiancaDaInformacao @default(MEDIA)
+
+  coletadoEm        DateTime        @default(now())
+  coletadoPorAutor  AutorDaMensagem @default(SISTEMA)
+  coletadoPorUserId String?
+
+  @@index([empresaId, campo, coletadoEm])
+  @@index([fonte])
+  @@map("empresa_proveniencias")
+}
+
+/// ⭐ UMA PESSOA LIGADA À EMPRESA — e a resposta para a palavra que não existia
+/// no banco: DECISOR.
+///
+/// ── POR QUE NÃO É UM `SiteLead` ───────────────────────────────────────────
+/// `SiteLead` é um RELACIONAMENTO COMERCIAL (tem funil, SLA, consentimento,
+/// conversa). Um contato descoberto é só uma pessoa conhecida — a recepcionista
+/// que informou o nome da gerente não tem funil, não tem SLA e não pode receber
+/// abordagem. Criar lead para cada pessoa encontrada encheria a fila de trabalho
+/// com porteiros.
+///
+/// Quando o decisor aceita conversar, aí sim nasce (ou se liga) um `SiteLead`,
+/// e o campo `SiteLead.contatoId` amarra os dois.
+model Contato {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  nome  String
+  cargo String?
+
+  /// Por onde se fala com esta pessoa ("whatsapp", "telefone", "email",
+  /// "instagram"). Texto e não enum: o canal muda mais rápido que o schema.
+  canal          String?
+  telefone       String?
+  /// Só dígitos, no MESMO formato de `SiteLead.whatsappDigits` — é por ele que
+  /// o serviço reconhece que este contato já virou lead.
+  telefoneDigits String?
+  email          String?
+
+  // ── DECISOR OU PORTEIRO ───────────────────────────────────────────────────
+  /// `true` = decide ou influencia a compra. **`false` não quer dizer porteiro**:
+  /// quer dizer "não é decisor", que inclui quem ninguém classificou ainda.
+  ehDecisor        Boolean           @default(false)
+  ehGatekeeper     Boolean           @default(false)
+  /// Só preenchido quando `ehGatekeeper = true`.
+  tipoDeGatekeeper TipoDeGatekeeper?
+
+  confianca         ConfiancaDaInformacao @default(MEDIA)
+  /// COMO se soube ("informado pelo atendimento", "assinatura do site",
+  /// "perfil do Instagram"). É a frase que o vendedor lê antes de abrir a boca.
+  comoFoiDescoberto String?
+  fonte             String?
+
+  // ── CONSENTIMENTO ─────────────────────────────────────────────────────────
+  // Mesmo contrato de `SiteLead`: `null` é BLOQUEIO, nunca presunção. Nada aqui
+  // autoriza envio — quem autoriza continua sendo `LeadContactSafety`, sobre o
+  // lead. Estes campos só carregam a prova para quando ela existir.
+  consentimentoEm       DateTime?
+  consentimentoCanal    String?
+  consentimentoPolitica String?
+  optOutEm              DateTime?
+
+  criadoEm        DateTime        @default(now())
+  criadoPorAutor  AutorDaMensagem @default(SISTEMA)
+  criadoPorUserId String?
+  atualizadoEm    DateTime        @updatedAt
+
+  leads         SiteLead[]
+  oportunidades Oportunidade[]
+  eventos       EventoDaJornada[]
+
+  /// A mesma pessoa não entra duas vezes na mesma empresa pelo mesmo telefone.
+  /// ⚠️ Parcial por natureza: contato sem telefone não é deduplicado por aqui —
+  /// e é melhor duplicar um contato sem telefone do que recusar um decisor cujo
+  /// número ainda não se conhece.
+  @@unique([empresaId, telefoneDigits])
+  @@index([empresaId, ehDecisor])
+  @@index([telefoneDigits])
+  @@index([ehGatekeeper, tipoDeGatekeeper])
+  @@map("contatos_de_empresa")
+}
+
+/// ⭐ A OPORTUNIDADE — o negócio em si, que hoje não existe em lugar nenhum.
+///
+/// ── POR QUE NÃO É O `SiteLeadStage` ───────────────────────────────────────
+/// O funil do lead responde "em que pé está a CONVERSA com esta pessoa". A
+/// oportunidade responde "quanto vale este NEGÓCIO e o que falta para fechar".
+/// São contas diferentes: a mesma empresa pode ter duas oportunidades (as duas
+/// unidades, ou uma perdida em março e outra aberta em setembro), e um funil por
+/// pessoa nunca soube contar isso.
+///
+/// ⚠️ O funil do lead NÃO foi tocado. `SiteLeadStage` continua com as 13 etapas
+/// e todas as telas que o consomem seguem iguais.
+model Oportunidade {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  /// O decisor. Opcional porque existe oportunidade que nasce de um lead de
+  /// entrada (Meta Ads), onde a empresa foi descoberta DEPOIS da pessoa.
+  contatoDecisorId String?
+  contatoDecisor   Contato? @relation(fields: [contatoDecisorId], references: [id], onDelete: SetNull)
+
+  /// O lead que conduz a conversa desta oportunidade, quando há um.
+  leadId String?
+  lead   SiteLead? @relation("OportunidadeDoLead", fields: [leadId], references: [id], onDelete: SetNull)
+
+  /// ⭐ A chave da idempotência. O serviço a deriva da origem do pedido
+  /// (empresa + contato + motivo), e é ela que faz "criar a oportunidade duas
+  /// vezes" devolver a mesma linha em vez de abrir duas negociações.
+  chaveDeOrigem String? @unique
+
+  /// Em CENTAVOS. `null` = ninguém estimou — nunca zero por omissão.
+  valorPotencialCents Int?
+  /// O que ele quer comprar ("CRM", "cardápio próprio", "plano completo").
+  produtoDeInteresse  String?
+
+  estagio         EstagioDaOportunidade @default(DESCOBERTA)
+  estagioMudouEm  DateTime              @default(now())
+  estagioMudouPor String?
+
+  /// 0 a 100. `null` = não estimada.
+  probabilidade Int?
+
+  /// A dor que sustenta a venda ("80% do faturamento no iFood").
+  dorIdentificada String?
+  /// As objeções ouvidas, uma por linha da lista. Vazio = nenhuma registrada.
+  objecoes        String[] @default([])
+
+  /// Só em PERDIDA, e OBRIGATÓRIO: reusa o catálogo `MotivoDePerda` que já
+  /// existe para o lead, em vez de criar um segundo catálogo divergente.
+  motivoPerdaId      String?
+  motivoPerda        MotivoDePerda? @relation("MotivoDaOportunidade", fields: [motivoPerdaId], references: [id])
+  /// O detalhe, quando o motivo exige. Nunca substitui o motivo estruturado.
+  motivoPerdaDetalhe String?
+
+  previsaoDeFechamento DateTime?
+  fechadaEm            DateTime?
+
+  criadoEm        DateTime        @default(now())
+  criadoPorAutor  AutorDaMensagem @default(SISTEMA)
+  criadoPorUserId String?
+  atualizadoEm    DateTime        @updatedAt
+
+  cliente Cliente?
+  eventos EventoDaJornada[]
+
+  @@index([estagio, estagioMudouEm])
+  @@index([empresaId, estagio])
+  @@index([leadId])
+  @@index([previsaoDeFechamento])
+  @@index([motivoPerdaId])
+  @@map("oportunidades")
+}
+
+/// ⭐ O CLIENTE — nasce quando a oportunidade é GANHA, e não antes.
+///
+/// O documento é explícito: *"Lead NÃO volta para o início. Ele se torna
+/// CLIENTE."* Hoje GANHO é o fim da linha do comercial e ninguém mede o que
+/// acontece depois — ativação, saúde, recompra e churn não existiam nesta base.
+///
+/// ── IDEMPOTÊNCIA POR CONSTRUÇÃO ───────────────────────────────────────────
+/// `oportunidadeId` é ÚNICO. Ganhar a mesma oportunidade duas vezes não pode
+/// criar dois clientes, e a garantia é do banco — não da ordem das chamadas.
+///
+/// ⚠️ NÃO confundir com `Restaurant` (o tenant do produto) nem com
+/// `PlanSubscription` (o contrato e o dinheiro). Este model é a SAÚDE da conta
+/// do ponto de vista comercial. `restaurantId` fica aqui como ponteiro opcional
+/// e SEM chave estrangeira: a conta do produto pode ser provisionada dias depois
+/// da venda, e o comercial não espera por ela.
+model Cliente {
+  id String @id @default(cuid())
+
+  oportunidadeId String       @unique
+  oportunidade   Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  /// O tenant do produto, quando já existir. Ponteiro solto de propósito.
+  restaurantId String?
+
+  situacao         SituacaoDoCliente @default(EM_ATIVACAO)
+  situacaoMudouEm  DateTime          @default(now())
+  situacaoMudouPor String?
+
+  ganhoEm DateTime @default(now())
+
+  // ── ATIVAÇÃO ──────────────────────────────────────────────────────────────
+  /// Quando começou de fato a usar. `null` = comprou e ainda não ligou — que é
+  /// o estado onde o churn nasce.
+  ativadoEm        DateTime?
+  /// Os passos de ativação concluídos ("cardápio publicado", "WhatsApp ligado").
+  passosDeAtivacao String[]  @default([])
+
+  // ── SAÚDE ─────────────────────────────────────────────────────────────────
+  /// 0 a 100. `null` = não medida. Nunca zero por omissão — zero aqui
+  /// significaria "conta morta" e mandaria o time atrás de quem ninguém olhou.
+  saude         Int?
+  saudeEm       DateTime?
+  /// 0 a 10, a nota crua do NPS. `null` = não respondeu.
+  nps           Int?
+  npsEm         DateTime?
+  /// `null` = não medido. Preenchido = a conta está em risco e o motivo explica.
+  riscoDeChurn  Int?
+  motivoDoRisco String?
+
+  // ── RECEITA DEPOIS DA PRIMEIRA VENDA ──────────────────────────────────────
+  ultimaCompraEm    DateTime?
+  recompras         Int       @default(0)
+  upsells           Int       @default(0)
+  /// Soma do que já entrou por esta conta, em CENTAVOS.
+  receitaTotalCents Int       @default(0)
+
+  canceladoEm          DateTime?
+  motivoDoCancelamento String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  eventos EventoDaJornada[]
+
+  @@index([situacao, situacaoMudouEm])
+  @@index([empresaId])
+  @@index([riscoDeChurn])
+  @@index([restaurantId])
+  @@map("clientes_comerciais")
+}
+
+/// ⭐ A TRILHA DA JORNADA — append-only, e ela acompanha o registro.
+///
+/// ── POR QUE NÃO É `SiteLeadInteraction` ───────────────────────────────────
+///
+/// Foi a primeira coisa que tentei, e não cabe: `SiteLeadInteraction.leadId` é
+/// OBRIGATÓRIO e tem cascade para `SiteLead`. Uma empresa descoberta pelo Hunter
+/// não tem lead — e a maior parte da vida dela acontece antes de existir um. Para
+/// reusar aquela tabela seria preciso afrouxar uma coluna viva que os testes, dois
+/// índices e toda a tela da ficha assumem preenchida. **Não afrouxo coluna viva
+/// para caber.**
+///
+/// O que se reusa é o CONTRATO, não a tabela: mesmo formato de `actor`/`nota`/
+/// `interna`, mesma regra de append-only, mesmo vocabulário de autoria
+/// (`AutorDaMensagem`). Quem lê as duas lê a mesma gramática.
+///
+/// ⚠️ `SiteLeadInteraction` continua sendo a linha do tempo DO LEAD, intocada.
+/// Esta é a linha do tempo da JORNADA. A ficha do vendedor junta as duas pela
+/// ordem do relógio — nada foi movido de uma para a outra.
+model EventoDaJornada {
+  id String @id @default(cuid())
+
+  /// Qual entidade este evento descreve. Redundante com as chaves abaixo de
+  /// propósito: é por ele que a consulta filtra sem varrer quatro colunas.
+  entidade   EntidadeDaJornada
+  /// O id da entidade acima, repetido para consulta direta.
+  entidadeId String
+
+  empresaId      String?
+  empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contatoId      String?
+  contato        Contato?      @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  oportunidadeId String?
+  oportunidade   Oportunidade? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  clienteId      String?
+  cliente        Cliente?      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  /// O lead envolvido, quando há um. Sem cascade e sem relação de volta: apagar
+  /// um lead não pode apagar a história da EMPRESA.
+  leadId         String?
+
+  tipo TipoDeEventoDaJornada
+
+  /// Preenchidos só em MUDANCA_DE_ESTAGIO. Texto e não enum porque a mesma
+  /// tabela guarda estágio de empresa, de oportunidade e de cliente — três enums
+  /// diferentes. O rótulo vem do serviço.
+  deEstagio   String?
+  paraEstagio String?
+
+  /// IA, HUMANO ou SISTEMA. O documento exige distinguir: *"ações da IA vs
+  /// humano"*. É o campo que responde "quem decidiu isto?".
+  autor       AutorDaMensagem
+  /// O id interno, quando foi gente. Sem FK: não altera `InternalUser`.
+  autorUserId String?
+  /// Rótulo legível de quem agiu, congelado no evento — mesma doutrina de
+  /// `InternalAuditEvent.actorLabel`: se a pessoa sair, o histórico continua
+  /// dizendo quem foi.
+  autorLabel  String?
+
+  /// O porquê. Em MUDANCA_DE_ESTAGIO é o que explica o movimento; em
+  /// ENRIQUECIMENTO é de onde o dado veio.
+  motivo String?
+  nota   String?
+  /// De onde o dado veio, quando o evento trouxe dado ("google-maps", "site").
+  fonte  String?
+
+  /// `true` = nunca sai para o cliente. Mesma regra de `SiteLeadInteraction`.
+  interna Boolean @default(true)
+
+  /// ⭐ A chave da idempotência da trilha. Quando preenchida, a mesma ação não
+  /// grava dois eventos — é o que permite reprocessar uma rodada inteira sem
+  /// inflar a história. `null` = evento livre (nota manual), que pode repetir.
+  chaveDeIdempotencia String? @unique
+
+  criadoEm DateTime @default(now())
+
+  @@index([entidade, entidadeId, criadoEm])
+  @@index([empresaId, criadoEm])
+  @@index([oportunidadeId, criadoEm])
+  @@index([clienteId, criadoEm])
+  @@index([leadId, criadoEm])
+  @@index([tipo, criadoEm])
+  @@index([autor, criadoEm])
+  @@map("jornada_eventos")
 }
