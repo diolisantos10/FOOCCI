@@ -168,6 +168,10 @@ export function reagirA(motivo: MotivoDaFila): Reacao {
     // formato de `portaoRecusou`: fala do destinatário, não do canal. Um lead
     // insistido demais não diz nada sobre o próximo da lista.
     case "supervisoraRecusou":
+    // ⛔ A trava de repetição (17/09/2026) barrou ESTE conteúdo para ESTE
+    // número. Mesmo formato de `portaoRecusou`: fala do destinatário e do que
+    // ele já recebeu, nunca do canal. O próximo da fila nunca recebeu isto.
+    case "travaDeRepeticao":
       return "pula";
 
     // O freio do dia/hora. Não é defeito, e não adianta tentar o próximo: ele
