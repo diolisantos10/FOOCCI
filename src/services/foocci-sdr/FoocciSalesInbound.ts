@@ -12,7 +12,7 @@ import { registrarEntrada } from "@/services/salaDeVendas/conversa";
 import { comIdentidade, comoSistema } from "@/services/salaDeVendas/identidadeNoBanco";
 import { atenderComOTA, type ResultadoDoTurno } from "@/services/salaDeVendas/ta/atender";
 import { comATravaDaConversa } from "@/services/salaDeVendas/travaDaConversa";
-import { interceptarAutomacaoAntesDoTA } from "./WhatsappBotGate";
+import { aplicarPoliticaAntesDoTA } from "./ColdLeadInboundPolicy";
 import { carimbarTurno, chegouEntradaDepois, esperar, janelaDeAgrupamento, juntarEntradasDoTurno } from "@/services/salaDeVendas/ta/agrupamento";
 import type { TipoDaMensagem } from "@prisma/client";
 
@@ -43,7 +43,15 @@ const VOLTAS_DO_TURNO=3;
 // SOMENTE a esta transação; recepção, BotGate e demais usos de comIdentidade
 // continuam com o timeout padrão para não esconder travas no restante da Sala.
 const TRANSACAO_TA = { maxWait: 5_000, timeout: 60_000 } as const;
-async function chamarOTA(leadId:string,msg:MensagemDeVendas,leitura:LeituraDaMensagem,agora:Date):Promise<ResultadoDoTurno|undefined>{ if(!leitura.temTexto||!msg.text)return undefined;try{const gate=await comIdentidade(prisma,comoSistema("webhook da Meta: gate de automação comercial"),(tx)=>interceptarAutomacaoAntesDoTA(tx,{leadId,fromPhone:msg.fromPhone,text:msg.text!,agora}));if(gate.intercepted){console.info(`[foocci-sdr] BotGate ${leadId}: ${gate.status} — ${gate.detalhe}`);return undefined}const r=await comATravaDaConversa(prisma,{leadId,agora},async(dono)=>turnoConsolidado(leadId,dono,agora,msg.text!));return r===null?undefined:r}catch(e){console.error(`[foocci-sdr] o TA não conseguiu atender o lead ${leadId}:`,e);return undefined}}
+async function chamarOTA(leadId:string,msg:MensagemDeVendas,leitura:LeituraDaMensagem,agora:Date):Promise<ResultadoDoTurno|undefined>{ if(!leitura.temTexto||!msg.text)return undefined;try{
+  // ⭐ A POLÍTICA INTEIRA, E NÃO SÓ O GATE. Até 17/09/2026 esta linha chamava
+  // `interceptarAutomacaoAntesDoTA` direto, e `aplicarPoliticaAntesDoTA` — que
+  // grava o porteiro e a indicação do decisor — não era chamada por caminho de
+  // produção nenhum. O ativo mais caro da prospecção ("é com a Juliana") era
+  // gravado na conversa e perdido em todo o resto. Era um chamador que faltava.
+  const gate=await comIdentidade(prisma,comoSistema("webhook da Meta: política comercial antes do TA"),(tx)=>aplicarPoliticaAntesDoTA(tx,{leadId,fromPhone:msg.fromPhone,text:msg.text!,agora}));
+  if(gate.gatekeeper?.aplicado)console.info(`[foocci-sdr] gatekeeper ${leadId}: ${gate.gatekeeper.detalhe} — objetivo ${gate.gatekeeper.objetivo??"inalterado"}`);
+  if(gate.intercepted){console.info(`[foocci-sdr] política ${leadId}: interceptado por ${gate.kind}`);return undefined}const r=await comATravaDaConversa(prisma,{leadId,agora},async(dono)=>turnoConsolidado(leadId,dono,agora,msg.text!));return r===null?undefined:r}catch(e){console.error(`[foocci-sdr] o TA não conseguiu atender o lead ${leadId}:`,e);return undefined}}
 async function turnoConsolidado(leadId:string,dono:string,agora:Date,chao:string):Promise<ResultadoDoTurno|undefined>{let ultimo:ResultadoDoTurno|undefined;for(let volta=0;volta<VOLTAS_DO_TURNO;volta++){if(volta===0)await esperar(janelaDeAgrupamento());const entradas=await juntarEntradasDoTurno(prisma,leadId).catch(()=>null);if(!entradas){if(volta>0)return ultimo;return comIdentidade(prisma,comoSistema("webhook da Meta: o TA respondendo, sem usuário logado"),(tx)=>atenderComOTA(tx,{leadId,mensagem:chao,agora,turnoId:`${dono}:chao`}),TRANSACAO_TA)}const turnoId=`${dono}:${volta}`;await carimbarTurno(prisma,entradas.ids,turnoId);ultimo=await comIdentidade(prisma,comoSistema("webhook da Meta: o TA respondendo, sem usuário logado"),(tx)=>atenderComOTA(tx,{leadId,mensagem:entradas.texto,agora,turnoId}),TRANSACAO_TA);const novo=await chegouEntradaDepois(prisma,leadId,entradas.ateQuando).catch(()=>false);if(!novo)return ultimo}return ultimo}
 async function encontrarLead(codigo:string|null,digitos:string|null,fromPhone:string):Promise<LeadResumo|null>{const select={id:true,codigo:true,optOutAt:true} as const;if(codigo){const x=await prisma.siteLead.findUnique({where:{codigo},select});if(x)return x}const cauda=(digitos??fromPhone).replace(/\D/g,"").slice(-8);if(cauda.length<8)return null;return prisma.siteLead.findFirst({where:{whatsappDigits:{contains:cauda}},orderBy:{createdAt:"desc"},select})}
 async function criarContatoDeWhatsApp(msg:MensagemDeVendas,digitos:string|null,agora:Date,opts:{jaOptOut:boolean}):Promise<LeadResumo|null>{try{const c=await prisma.siteLead.create({data:{nome:(msg.profileName??"").trim()||msg.fromPhone,whatsapp:msg.fromPhone,whatsappDigits:digitos,fonte:"WHATSAPP_DIRETO",stage:"NOVO",consentAt:opts.jaOptOut?null:agora,lastInteractionAt:agora},select:{id:true,codigo:true,optOutAt:true}});await registrarInteracao(c.id,"CAPTURA","Escreveu direto no WhatsApp de vendas, sem passar pelo formulário.",agora);return c}catch(e){console.error("[foocci-sdr] não consegui criar o contato de WhatsApp:",e);return null}}
