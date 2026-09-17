@@ -8821,3 +8821,33 @@ model TravaDeAbordagemRecusa {
   @@index([motivo, criadoEm])
   @@map("trava_abordagem_recusa")
 }
+
+/// O FUNIL DE UM CICLO DE CAMPANHA DO CRM DO RESTAURANTE.
+///
+/// Existe por um motivo só: fazer a conta do dia FECHAR. Quem é cortado antes de
+/// virar linha em `campaign_executions` (o excedente do teto por rodada) não
+/// deixava rastro nenhum, e sem esse número a invariante
+/// `enviados + barrados + cortados = elegíveis` nunca podia ser provada.
+///
+/// Somente medição. Nada aqui gateia envio — não é trava, é régua.
+model CrmCicloFunil {
+  id           String   @id @default(cuid())
+  restaurantId String
+  campaignId   String
+  ocorridoEm   DateTime @default(now())
+
+  /// Quantos sobreviveram a TODAS as exclusões e foram oferecidos a este ciclo.
+  elegiveis Int
+  /// Quantos entraram no lote de fato enviado.
+  noLote Int
+  /// elegiveis − noLote: o grupo que sumia sem rastro.
+  cortados Int
+  /// Qual teto cortou: TETO_DA_RODADA / LIMITE_DIARIO_DA_CAMPANHA / ORCAMENTO_DO_CICLO.
+  motivoDoCorte String?
+  /// O teto por rodada aplicado, para a conta poder ser refeita depois.
+  tetoDaRodada Int @default(0)
+
+  @@index([restaurantId, ocorridoEm])
+  @@index([campaignId, ocorridoEm])
+  @@map("crm_ciclo_funil")
+}

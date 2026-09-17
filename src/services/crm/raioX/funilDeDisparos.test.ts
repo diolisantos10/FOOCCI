@@ -23,9 +23,12 @@ function bancoFalso(linhas: Linha[], extras?: {
   clientes?: number; optOut?: number; semTelefone?: number;
   campanhas?: Array<{ id: string; name: string; status: string; templateId: string | null; lastRunAt: Date | null }>;
   safety?: unknown;
+  /** Rodadas de campanha medidas — o degrau cortado antes de virar linha. */
+  rodadas?: Array<{ campaignId: string; elegiveis: number; noLote: number; cortados: number }>;
 }): LeitorDoBanco {
   return {
     campaignExecution: { findMany: async () => linhas },
+    crmCicloFunil: { findMany: async () => extras?.rodadas ?? [] },
     restaurantCRMProfile: { findUnique: async () => ({ whatsAppSafetyConfig: extras?.safety ?? null }) },
     customer: {
       count: async ({ where }: { where: Record<string, unknown> }) => {
@@ -170,5 +173,69 @@ describe("a cadência", () => {
     const r = await raioXDeDisparos(bancoFalso(linhas), janela);
     expect(r.restaurantes[0]!.cadencia.minutosComAtividade).toBe(2);
     expect(r.restaurantes[0]!.cadencia.ultimaAtividadeEm).toBe(T(21).toISOString());
+  });
+});
+
+/** Fábrica curta de linha de execução para os casos da conta do dia. */
+function linha(x: { campaignId: string; status: string; createdAt: Date; errorMessage?: string | null }): Linha {
+  return {
+    restaurantId: "r1", campaignId: x.campaignId, status: x.status,
+    errorMessage: x.errorMessage ?? null,
+    sentAt: (STATUS_DE_ENVIO as readonly string[]).includes(x.status) ? x.createdAt : null,
+    createdAt: x.createdAt,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A CONTA DO DIA, pela porta de leitura de verdade (D-0E3).
+// ─────────────────────────────────────────────────────────────────────────────
+describe("a conta do dia: de quantos eu podia, quantos mandei, quem barrou o resto", () => {
+  const CAMP = "cmp1";
+  const t = (m: number) => new Date(Date.UTC(2026, 8, 17, 12, m));
+
+  it("fecha a invariante com cada degrau nomeado pela regra que barrou", async () => {
+    const linhas = [
+      ...Array.from({ length: 6 }, (_, i) => linha({ campaignId: CAMP, status: "SENT", createdAt: t(i) })),
+      ...Array.from({ length: 3 }, (_, i) => linha({ campaignId: CAMP, status: "BLOCKED", errorMessage: "CUSTOMER_OPTED_OUT", createdAt: t(i) })),
+      ...Array.from({ length: 1 }, (_, i) => linha({ campaignId: CAMP, status: "SKIPPED", errorMessage: "MISSING_PHONE", createdAt: t(i) })),
+    ];
+    const db = bancoFalso(linhas, {
+      rodadas: [{ campaignId: CAMP, elegiveis: 40, noLote: 10, cortados: 30 }],
+    });
+    const r = await raioXDeDisparos(db, { desde: t(0), ate: t(59) });
+    const conta = r.restaurantes[0]!.contaDoDia;
+
+    expect(conta.podiaHoje).toBe(900);       // teto efetivo da Meta
+    expect(conta.enviouHoje).toBe(6);
+    expect(conta.sobraDoDia).toBe(894);
+    expect(conta.fechamento.fecha).toBe(true);   // 6 + 4 + 30 = 40
+    expect(conta.fechamento.diferenca).toBe(0);
+    expect(conta.barrados).toContainEqual({ degrau: "BLOCKED:CUSTOMER_OPTED_OUT", quantidade: 3 });
+    expect(conta.barrados).toContainEqual({ degrau: "SKIPPED:MISSING_PHONE", quantidade: 1 });
+    expect(conta.totalCortadoAntesDoBanco).toBe(30);
+    expect(conta.alarme?.nivel).toBe("GRAVE");   // podia 900, mandou 6
+  });
+
+  it("sem rodada registrada a conta NÃO se declara fechada (ausência não é informação)", async () => {
+    const db = bancoFalso([linha({ campaignId: CAMP, status: "SENT", createdAt: t(0) })]);
+    const r = await raioXDeDisparos(db, { desde: t(0), ate: t(59) });
+    const conta = r.restaurantes[0]!.contaDoDia;
+    expect(conta.fechamento.fecha).toBe(false);
+    expect(conta.fechamento.elegivel).toBeNull();
+  });
+
+  it("envio de outro módulo (carrinho) conta no teto do dia, mas NÃO entra na invariante", async () => {
+    // O carrinho abandonado consome o teto — então aparece em `enviouHoje`.
+    // Mas ele não nasce de um elegível de campanha: entrar na invariante faria a
+    // soma estourar o elegível e gritar alarme falso para sempre.
+    const linhas = [
+      linha({ campaignId: CAMP, status: "SENT", createdAt: t(0) }),
+      linha({ campaignId: "carrinho", status: "SENT", createdAt: t(1) }),
+    ];
+    const db = bancoFalso(linhas, { rodadas: [{ campaignId: CAMP, elegiveis: 1, noLote: 1, cortados: 0 }] });
+    const conta = (await raioXDeDisparos(db, { desde: t(0), ate: t(59) })).restaurantes[0]!.contaDoDia;
+    expect(conta.enviouHoje).toBe(2);
+    expect(conta.enviouNoCiclo).toBe(1);
+    expect(conta.fechamento.fecha).toBe(true);
   });
 });
