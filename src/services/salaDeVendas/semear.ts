@@ -27,6 +27,7 @@
  * desligar é ato humano, das duas direções.
  */
 
+import type { TipoDeTarefa } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const MOTIVOS: ReadonlyArray<{
@@ -158,10 +159,107 @@ async function semearCadencia(): Promise<"criada" | "mantida"> {
   return "criada";
 }
 
+/**
+ * ⭐ AS CADÊNCIAS POR COMPORTAMENTO, todas **inativas**.
+ *
+ * O item 9 do documento não pede uma cadência: pede tratamentos diferentes para
+ * situações diferentes — carrinho abandonado, pagamento abandonado, proposta
+ * sem retorno, reunião por confirmar. Uma cadência só, com um roteiro só,
+ * responde a todas com a mesma frase, que é exatamente o defeito.
+ *
+ * O `slug` de cada uma é o que indexa o catálogo de condições em
+ * `crm/cadenciaPorComportamento.ts` — mudar um slug aqui desliga a condição do
+ * passo correspondente lá, e o passo volta a rodar incondicionalmente.
+ *
+ * Nascem inativas pela mesma razão da cadência de retomada: cadência ativa
+ * dispara toque de verdade, e ligar automação no dia da migração é decidir por
+ * quem vai atender.
+ */
+const CADENCIAS_POR_COMPORTAMENTO: ReadonlyArray<{
+  slug: string;
+  nome: string;
+  quando: string;
+  passos: { ordem: number; esperaHoras: number; titulo: string; roteiro: string; tipo: TipoDeTarefa }[];
+}> = [
+  {
+    slug: "carrinho-abandonado",
+    nome: "Carrinho abandonado",
+    quando: "proposta montada com valor, parada e nunca enviada",
+    passos: [
+      { ordem: 0, esperaHoras: 2, titulo: "Lembrar do pedido montado", roteiro: "Retomar exatamente o que já estava escolhido — sem recomeçar a conversa.", tipo: "MENSAGEM" },
+      { ordem: 1, esperaHoras: 24, titulo: "Segundo lembrete do pedido", roteiro: "Perguntar o que falta para fechar. Se houver objeção, registrá-la.", tipo: "MENSAGEM" },
+    ],
+  },
+  {
+    slug: "pagamento-abandonado",
+    nome: "Pagamento abandonado",
+    quando: "aceitou a proposta e o pagamento não entrou",
+    passos: [
+      { ordem: 0, esperaHoras: 24, titulo: "Reenviar o link de pagamento", roteiro: "Ele já disse sim. Mandar o link, não o argumento.", tipo: "MENSAGEM" },
+    ],
+  },
+  {
+    slug: "proposta-sem-retorno",
+    nome: "Proposta sem retorno",
+    quando: "proposta enviada e sem resposta além do prazo da régua",
+    passos: [
+      { ordem: 0, esperaHoras: 72, titulo: "Cobrar retorno da proposta", roteiro: "Perguntar se a proposta chegou e o que ficou em aberto.", tipo: "FOLLOW_UP" },
+      { ordem: 1, esperaHoras: 120, titulo: "Segunda cobrança da proposta", roteiro: "Trazer o valor da conta feita e perguntar o que travou.", tipo: "FOLLOW_UP" },
+    ],
+  },
+  {
+    slug: "confirmacao-de-reuniao",
+    nome: "Confirmação de reunião",
+    quando: "reunião marcada dentro da janela e ainda sem confirmação",
+    passos: [
+      { ordem: 0, esperaHoras: 1, titulo: "Confirmar a reunião", roteiro: "Confirmar dia e hora. Reunião não confirmada é reunião que não acontece.", tipo: "CONFIRMACAO_DE_REUNIAO" },
+    ],
+  },
+];
+
+async function semearCadenciasPorComportamento(): Promise<{ criadas: number; mantidas: number }> {
+  let criadas = 0;
+  let mantidas = 0;
+
+  for (const c of CADENCIAS_POR_COMPORTAMENTO) {
+    const existente = await prisma.cadencia.findUnique({ where: { slug: c.slug }, select: { id: true } });
+    if (existente) {
+      mantidas += 1;
+      continue;
+    }
+
+    await prisma.cadencia.create({
+      data: {
+        slug: c.slug,
+        nome: c.nome,
+        ativa: false,
+        quando: c.quando,
+        passos: {
+          create: c.passos.map((p) => ({
+            ordem: p.ordem,
+            esperaHoras: p.esperaHoras,
+            titulo: p.titulo,
+            roteiro: p.roteiro,
+            tipo: p.tipo,
+            // IA executa a mensagem, mas o envio continua passando por
+            // `abordarLead()` — portão, freio de ritmo e chave de envio.
+            executor: "IA",
+          })),
+        },
+      },
+    });
+    criadas += 1;
+  }
+
+  return { criadas, mantidas };
+}
+
 export interface ResultadoDaSemeadura {
   motivos: number;
   configDoTA: "criada" | "mantida";
   cadencia: "criada" | "mantida";
+  /** As cadências por comportamento do item 9 — todas nascem desligadas. */
+  cadenciasPorComportamento: { criadas: number; mantidas: number };
   /** O estado que interessa conferir depois: nada ligado. */
   agentesLigados: number;
   cadenciasAtivas: number;
@@ -171,11 +269,13 @@ export async function semearSalaDeVendas(): Promise<ResultadoDaSemeadura> {
   const motivos = await semearMotivos();
   const configDoTA = await semearConfigDoTA();
   const cadencia = await semearCadencia();
+  const cadenciasPorComportamento = await semearCadenciasPorComportamento();
 
   return {
     motivos,
     configDoTA,
     cadencia,
+    cadenciasPorComportamento,
     agentesLigados: await prisma.sdrIaConfig.count({ where: { ligado: true } }),
     cadenciasAtivas: await prisma.cadencia.count({ where: { ativa: true } }),
   };
