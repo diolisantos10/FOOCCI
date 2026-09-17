@@ -107,6 +107,52 @@ export interface PlanoDoDia {
 
   /** Quantos contatos a régua não conseguiu classificar. Nunca escondido. */
   naoMedidos: number;
+
+  /**
+   * Quantos contatos caíram em CADA um dos estados — os catorze, inclusive os
+   * zerados.
+   *
+   * ── POR QUE ISTO NÃO SAI DAS FILAS ─────────────────────────────────────────
+   *
+   * As filas acima só carregam os estados que pedem ação hoje. Quem lê o painel
+   * da CRM precisa da outra metade: quantos pediram silêncio, quantos viraram
+   * cliente, quantos não têm perfil. Deduzir esses números por subtração das
+   * filas daria um número errado, porque um mesmo lead entra em mais de uma
+   * fila. Aqui cada contato classificado conta uma vez, no estado dele.
+   *
+   * `NAO_MEDIDO` é o mesmo número de `naoMedidos`, repetido aqui para a tela
+   * poder exibir os catorze baldes com uma varredura só.
+   */
+  porEstado: Record<EstadoDeFollowUp, number>;
+
+  /**
+   * A leitura bateu no teto de linhas.
+   *
+   * Quando é `true`, TODA contagem deste plano é um piso, não um total — e a
+   * tela precisa dizer isso. Um piso estampado como total é a mentira mais cara
+   * que um painel consegue contar, porque ela parece um número.
+   */
+  limiteAtingido: boolean;
+}
+
+/** Os catorze baldes zerados. Balde que some quando zera é balde que ninguém investiga. */
+export function contagemZeradaPorEstado(): Record<EstadoDeFollowUp, number> {
+  return {
+    PEDIU_SILENCIO: 0,
+    VIROU_CLIENTE: 0,
+    VENDA_PERDIDA: 0,
+    OPORTUNIDADE_FUTURA: 0,
+    LEAD_SEM_PERFIL: 0,
+    PAGAMENTO_ABANDONADO: 0,
+    CARRINHO_ABANDONADO: 0,
+    PROPOSTA_PARADA: 0,
+    REUNIAO_PENDENTE: 0,
+    CLIENTE_SUMIU: 0,
+    PENSANDO: 0,
+    NUNCA_RESPONDEU: 0,
+    NAO_ABORDADO: 0,
+    NAO_MEDIDO: 0,
+  };
 }
 
 /** Os estados que somam em "oportunidades abandonadas" no painel. */
@@ -211,6 +257,7 @@ export async function montarPlanoDoDia(
   } = {},
 ): Promise<PlanoDoDia> {
   const agora = params.agora ?? new Date();
+  const limite = params.limite ?? 5000;
 
   const linhas = (await db.siteLead.findMany({
     where: {
@@ -222,7 +269,7 @@ export async function montarPlanoDoDia(
       ],
     },
     orderBy: { ultimaMensagemEm: "asc" },
-    take: params.limite ?? 5000,
+    take: limite,
     select: SELECT_PARA_CLASSIFICAR as unknown as Prisma.SiteLeadSelect,
   })) as unknown as Parameters<typeof fichaDaLinha>[0][];
 
@@ -238,6 +285,7 @@ export async function montarPlanoDoDia(
   };
 
   let naoMedidos = 0;
+  const porEstado = contagemZeradaPorEstado();
 
   for (const linha of linhas) {
     const ficha = fichaDaLinha(linha);
@@ -245,8 +293,11 @@ export async function montarPlanoDoDia(
 
     if (!c.medido) {
       naoMedidos += 1;
+      porEstado.NAO_MEDIDO += 1;
       continue;
     }
+
+    porEstado[c.estado] += 1;
 
     if (pedeAcao(c)) filas.precisamDeFollowUp.push(item(ficha, c));
     if (estaEsfriando(c)) filas.esfriando.push(item(ficha, c));
@@ -299,6 +350,8 @@ export async function montarPlanoDoDia(
     filas,
     receitaPotencial: somar([...unicos.values()]),
     naoMedidos,
+    porEstado,
+    limiteAtingido: linhas.length >= limite,
   };
 }
 
