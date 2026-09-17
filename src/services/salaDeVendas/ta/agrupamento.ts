@@ -99,6 +99,11 @@ export async function juntarEntradasDoTurno(
     where: {
       leadId,
       direcao: "ENTRADA",
+      // BOT/HUMANO: não reconsolidar entrada consumida pelo gate.
+      OR: [
+        { turnoId: null },
+        { turnoId: { not: { startsWith: "bot-gate:" } } },
+      ],
       ...(ultimaSaida ? { ocorreuEm: { gt: ultimaSaida.ocorreuEm } } : {}),
     },
     // Ascendente: a ordem da conversa é a do relógio do provedor, não a da
@@ -143,7 +148,15 @@ export async function chegouEntradaDepois(
   marco: Date,
 ): Promise<boolean> {
   const n = await db.leadMensagem.count({
-    where: { leadId, direcao: "ENTRADA", ocorreuEm: { gt: marco } },
+    where: {
+      leadId,
+      direcao: "ENTRADA",
+      ocorreuEm: { gt: marco },
+      OR: [
+        { turnoId: null },
+        { turnoId: { not: { startsWith: "bot-gate:" } } },
+      ],
+    },
   });
   return n > 0;
 }

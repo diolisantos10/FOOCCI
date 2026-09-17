@@ -11,20 +11,34 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const inboundPath = path.join(process.cwd(), "src/services/foocci-sdr/FoocciSalesInbound.ts");
+const politicaPath = path.join(process.cwd(), "src/services/foocci-sdr/ColdLeadInboundPolicy.ts");
 const agrupamentoPath = path.join(process.cwd(), "src/services/salaDeVendas/ta/agrupamento.ts");
 
 let inbound = fs.readFileSync(inboundPath, "utf8");
+const politica = fs.readFileSync(politicaPath, "utf8");
 let agrupamento = fs.readFileSync(agrupamentoPath, "utf8");
 
+// ⚠️ A CORRENTE TEM DOIS ELOS DESDE QUE O GATEKEEPER FOI LIGADO (17/09/2026).
+//
+// Antes, o inbound chamava `interceptarAutomacaoAntesDoTA` direto. Hoje ele
+// chama `aplicarPoliticaAntesDoTA`, e é ela quem chama o gate por dentro —
+// junto do registro do interlocutor e da indicação explícita. A proteção
+// continua inteira, mas conferir só o inbound passaria a aprovar um arquivo
+// onde o gate não está mais: por isso a validação agora percorre os DOIS elos.
+// Quebrar qualquer um deles para o build, como antes.
+const politicaCall = "aplicarPoliticaAntesDoTA(tx";
 const gateSymbol = "interceptarAutomacaoAntesDoTA";
-const gateCall = "interceptarAutomacaoAntesDoTA(tx";
+const gateCallNaPolitica = "interceptarAutomacaoAntesDoTA(db";
 const taDispatch = "comATravaDaConversa";
 
-if (!inbound.includes(gateSymbol) || !inbound.includes(gateCall)) {
-  throw new Error("Bot/Humano Gate: chamada do gate não encontrada; recusando build sem proteção");
+if (!inbound.includes(politicaCall)) {
+  throw new Error("Bot/Humano Gate: política antes do TA não é chamada no inbound; recusando build sem proteção");
+}
+if (!politica.includes(gateSymbol) || !politica.includes(gateCallNaPolitica)) {
+  throw new Error("Bot/Humano Gate: a política não chama o gate; recusando build sem proteção");
 }
 
-const gateIndex = inbound.indexOf(gateCall);
+const gateIndex = inbound.indexOf(politicaCall);
 const taIndex = inbound.indexOf(taDispatch, gateIndex);
 if (taIndex < 0 || gateIndex > taIndex) {
   throw new Error("Bot/Humano Gate: gate não está antes do TA; recusando build sem proteção");
@@ -32,14 +46,19 @@ if (taIndex < 0 || gateIndex > taIndex) {
 
 // O source atual já chama o gate. Falta apenas carimbar a entrada interceptada
 // para que o agrupador não a entregue de novo ao TA numa mensagem posterior.
-const carimboGate = 'turnoId:`bot-gate:${gate.status}`';
+//
+// ⚠️ O carimbo passou a usar `gate.kind` (BOT | REFERRAL), e não `gate.status`:
+// quem devolve agora é a política, e `status` era campo do gate antigo — lê-lo
+// aqui gravaria `bot-gate:undefined`. O prefixo `bot-gate:` é o que o
+// agrupamento filtra, e ele continua igual.
+const carimboGate = 'turnoId:`bot-gate:${gate.kind}`';
 if (!inbound.includes(carimboGate)) {
   const anchor = "if(gate.intercepted){console.info(";
   if (!inbound.includes(anchor)) {
     throw new Error("Bot/Humano Gate: ramo de interceptação não encontrado");
   }
 
-  const protegido = 'if(gate.intercepted){if(msg.waMessageId){await prisma.leadMensagem.updateMany({where:{leadId,waMessageId:msg.waMessageId,direcao:"ENTRADA"},data:{turnoId:`bot-gate:${gate.status}`}}).catch((e)=>console.error(`[foocci-sdr] falha ao carimbar entrada do BotGate ${leadId}:`,e))}console.info(';
+  const protegido = 'if(gate.intercepted){if(msg.waMessageId){await prisma.leadMensagem.updateMany({where:{leadId,waMessageId:msg.waMessageId,direcao:"ENTRADA"},data:{turnoId:`bot-gate:${gate.kind}`}}).catch((e)=>console.error(`[foocci-sdr] falha ao carimbar entrada do BotGate ${leadId}:`,e))}console.info(';
   inbound = inbound.replace(anchor, protegido);
 }
 
