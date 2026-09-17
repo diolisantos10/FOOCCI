@@ -97,6 +97,54 @@ export const ROTAS = {
    * lista `PARA_TODOS`.
    */
   supervisora: `${COMERCIAL}/supervisora`,
+
+  // ─── As telas do desenho do CEO (17/09/2026) ───────────────────────────────
+  //
+  // O CEO desenhou 14 telas para a nova área comercial e nós construímos o
+  // motor inteiro sem construir nenhuma delas. Estas são as que faltavam. Elas
+  // não substituem nada: /conversas, /funil, /precos, /carteira e /painel
+  // continuam onde estavam, e continuam sendo a porta do dia a dia.
+
+  /**
+   * A Control Tower — a saúde da operação inteira numa tela só.
+   *
+   * ⚠️ Não é o Painel. O Painel responde "quais são os meus números"; a Torre
+   * responde "o que está travado AGORA, e por quê". Régua de gestão, mesma
+   * lista de papéis do Painel.
+   */
+  torre: `${COMERCIAL}/torre`,
+  /**
+   * A Central de Atendimento — a visão de cima das conversas.
+   *
+   * ⚠️ Não é /conversas. Lá se atende UMA pessoa; aqui se enxerga a fila
+   * inteira, quem espera há mais tempo, quem é IA e quem é gente, e a carga de
+   * cada atendente. Tela de quem distribui, não de quem responde.
+   */
+  atendimento: `${COMERCIAL}/atendimento`,
+  /** A Central SDR / Gatekeeper — os 9 tipos de porteiro e a caça ao decisor. */
+  sdr: `${COMERCIAL}/sdr`,
+  /** A CRM IA — o plano do dia, os 14 estados de follow-up e o pós-venda. */
+  crm: `${COMERCIAL}/crm`,
+  /** Qualificação e Lead Score — FRIO → MORNO → QUENTE → PRIORIDADE MÁXIMA. */
+  qualificacao: `${COMERCIAL}/qualificacao`,
+  /**
+   * O Motor de Decisão — as regras de distribuição, e as que ainda NÃO existem.
+   *
+   * Mostra a carga e o estado de cada colega, então segue a régua do Painel:
+   * gestão e auditoria, nunca o SDR. A rota recusa sozinha; a aba só evita
+   * oferecer uma porta que vai bater na cara de quem clicar.
+   */
+  roteamento: `${COMERCIAL}/roteamento`,
+  /** Catálogo, oferta e checkout — o que se vende, por quanto, e as propostas. */
+  oferta: `${COMERCIAL}/oferta`,
+  /**
+   * Follow-up e pós-venda na mesma tela, em abas.
+   *
+   * São a MESMA pergunta dos dois lados do GANHO: "o que está parado, e quando
+   * alguém toca de novo?". Antes da venda o relógio é o silêncio; depois é a
+   * ativação. Separá-las obrigaria o gerente a somar de cabeça a base inteira.
+   */
+  relacionamento: `${COMERCIAL}/relacionamento`,
 } as const;
 
 /**
@@ -226,6 +274,23 @@ export function abasDoComercial(papel: InternalRole | null): Aba[] {
     // não distribui autorização.
     { href: ROTAS.baseFria, rotulo: "Base fria" },
     { href: ROTAS.importacoes, rotulo: "Importações" },
+    // ─── As telas do desenho do CEO ────────────────────────────────────────
+    //
+    // Entram DEPOIS das que já existiam, e não no lugar delas: quem abria a
+    // Sala num endereço continua abrindo no mesmo. A ordem segue o percurso do
+    // trabalho — vê a operação (Torre), distribui (Atendimento), caça o decisor
+    // (SDR), mede (Qualificação), oferece (Oferta), mantém (CRM,
+    // Relacionamento).
+    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.torre, rotulo: "Torre" }] : []),
+    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.atendimento, rotulo: "Atendimento" }] : []),
+    { href: ROTAS.sdr, rotulo: "SDR" },
+    { href: ROTAS.qualificacao, rotulo: "Qualificação" },
+    // Mostra a carga e o estado de cada colega — mesma régua da Supervisora e
+    // do Painel. O SDR não ganha esta aba, e a rota o recusa de qualquer jeito.
+    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.roteamento, rotulo: "Roteamento" }] : []),
+    { href: ROTAS.oferta, rotulo: "Oferta" },
+    { href: ROTAS.crm, rotulo: "CRM" },
+    { href: ROTAS.relacionamento, rotulo: "Relacionamento" },
     ...(tudo || PAPEIS_DOS_ACESSOS.has(papel) ? [{ href: ROTAS.acessos, rotulo: "Criar acesso" }] : []),
   ];
 }
