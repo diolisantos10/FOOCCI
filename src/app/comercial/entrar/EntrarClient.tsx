@@ -59,7 +59,11 @@ export function EntrarClient() {
       const r = await fetch("/api/admin/session/interna", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), senha }),
+        // A origem é dita por extenso — a mesma rota atende `/admin/login`, e
+        // ela precisa saber qual porta foi aberta para escolher a tela de
+        // abertura. Ausente valeria o Comercial do mesmo jeito; dizer evita que
+        // a próxima mudança do lado do Admin decida por esta tela calada.
+        body: JSON.stringify({ email: email.trim(), senha, origem: "comercial" }),
       });
 
       const j = (await r.json().catch(() => ({}))) as {

@@ -12,7 +12,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function TrocarSenhaClient({ nome }: { nome: string }) {
+export function TrocarSenhaClient({
+  nome,
+  destino,
+}: {
+  nome: string;
+  /** Para onde voltar depois de trocar. Vem do SERVIDOR, pelo papel da pessoa. */
+  destino: string;
+}) {
   const router = useRouter();
   const [atual, setAtual] = useState("");
   const [nova, setNova] = useState("");
@@ -44,7 +51,7 @@ export function TrocarSenhaClient({ nome }: { nome: string }) {
       setErro(dados.error ?? "Não foi possível trocar a senha.");
       return;
     }
-    router.replace("/comercial");
+    router.replace(destino);
     router.refresh();
   }
 
