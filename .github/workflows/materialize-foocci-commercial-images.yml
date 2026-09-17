@@ -1,0 +1,44 @@
+name: Materialize FOOCCI commercial project images
+
+on:
+  push:
+    branches:
+      - claude/remove-legacy-runner-q8iXa
+    paths:
+      - 'reestruturação da área comercial do FOOCCI/.image_import/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild image archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='reestruturação da área comercial do FOOCCI'
+          cat "$ROOT"/.image_import/part_* > /tmp/foocci_images.tar.gz.b64
+          base64 --decode /tmp/foocci_images.tar.gz.b64 > /tmp/foocci_images.tar.gz
+          tar -xzf /tmp/foocci_images.tar.gz -C "$ROOT"
+          rm -rf "$ROOT/.image_import"
+
+      - name: Commit materialized images
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'reestruturação da área comercial do FOOCCI'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git commit -m 'docs: materializa todas as imagens da reestruturação comercial'
+          git push
