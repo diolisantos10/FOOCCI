@@ -32,6 +32,8 @@ export interface Tabelas {
   eventoDaJornada: Linha[];
   siteLead: Linha[];
   leadProposta: Linha[];
+  /** A conversa. Acrescentada pelo raio-x das conversas de prospecção. */
+  leadMensagem: Linha[];
 }
 
 function combinaCampo(valor: unknown, condicao: unknown): boolean {
@@ -110,11 +112,20 @@ function comoTabela(linhas: Linha[], enriquecer?: (l: Linha) => Linha) {
     async count(args?: { where?: Linha }) {
       return linhas.filter((l) => combina(l, args?.where)).length;
     },
-    async findMany(args?: { where?: Linha; orderBy?: Record<string, "asc" | "desc"> }) {
-      return ordenar(
+    async findMany(args?: {
+      where?: Linha;
+      orderBy?: Record<string, "asc" | "desc">;
+      skip?: number;
+      take?: number;
+    }) {
+      const achadas = ordenar(
         linhas.filter((l) => combina(l, args?.where)),
         args?.orderBy,
       ).map(ver);
+      // `select` é ignorado de propósito: devolver a linha inteira nunca faz um
+      // teste passar com a consulta errada — o que ele mediria é o `where`.
+      const inicio = args?.skip ?? 0;
+      return args?.take === undefined ? achadas.slice(inicio) : achadas.slice(inicio, inicio + args.take);
     },
     async groupBy(args: { by: string[]; where?: Linha; _count?: unknown }) {
       const campo = args.by[0]!;
@@ -140,6 +151,7 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     eventoDaJornada: dados.eventoDaJornada ?? [],
     siteLead: dados.siteLead ?? [],
     leadProposta: dados.leadProposta ?? [],
+    leadMensagem: dados.leadMensagem ?? [],
   };
 
   const porId = new Map(t.empresa.map((e) => [e.id as string, e]));
@@ -152,6 +164,7 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     cliente: comoTabela(t.cliente),
     siteLead: comoTabela(t.siteLead),
     leadProposta: comoTabela(t.leadProposta),
+    leadMensagem: comoTabela(t.leadMensagem),
     // A trilha carrega a empresa junto, porque `amostraDoHunter` precisa da
     // data de descoberta para medir quanto o Hunter demorou.
     eventoDaJornada: comoTabela(t.eventoDaJornada, (l) => ({
