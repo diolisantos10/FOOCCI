@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { SiteLeadStage } from "@prisma/client";
 
 export type LegacyRecoveryBucket =
   | "OPT_OUT"
@@ -27,11 +28,36 @@ export interface LegacyRecoveryDryRun {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const QUALIFIED = new Set(["QUALIFICADO", "OPORTUNIDADE", "PROPOSTA", "NEGOCIACAO", "FECHADO"]);
+/**
+ * Quem NÃO pode receber abordagem fria de recuperação.
+ *
+ * ⚠️ Esta tabela é `Record<SiteLeadStage, boolean>` de propósito: se alguém criar
+ * um estágio novo no schema, o TypeScript PARA o build até que se decida aqui se
+ * ele pode ou não ser reabordado. Um `Set` de strings soltas não trava nada — e
+ * a primeira versão deste arquivo listava "OPORTUNIDADE", "PROPOSTA",
+ * "NEGOCIACAO" e "FECHADO", que NÃO EXISTEM no enum. Resultado: um lead em
+ * PROPOSTA_ENVIADA, EM_NEGOCIACAO ou já GANHO caía no balde de recuperação e
+ * ficava elegível para levar uma mensagem fria de "olá, tudo bem?".
+ */
+const FORA_DA_RECUPERACAO: Record<SiteLeadStage, boolean> = {
+  NOVO: false,
+  DISPONIVEL_PARA_PROSPECCAO: false,
+  PRIMEIRO_CONTATO: false,
+  RESPONDEU: false,
+  EM_QUALIFICACAO: false,
+  NUTRICAO: false,
+  PERDIDO: false,
+  QUALIFICADO: true,
+  DEMO_AGENDADA: true,
+  DEMO_REALIZADA: true,
+  PROPOSTA_ENVIADA: true,
+  EM_NEGOCIACAO: true,
+  GANHO: true,
+};
 
-function classify(input: { optOutAt: Date | null; stage: string; lastInboundAt: Date | null }, now: Date): Pick<LegacyRecoveryItem, "bucket" | "nextAction"> {
+export function classify(input: { optOutAt: Date | null; stage: string; lastInboundAt: Date | null }, now: Date): Pick<LegacyRecoveryItem, "bucket" | "nextAction"> {
   if (input.optOutAt) return { bucket: "OPT_OUT", nextAction: "STOP" };
-  if (QUALIFIED.has(input.stage)) return { bucket: "ALREADY_QUALIFIED", nextAction: "PRESERVE_CURRENT_FLOW" };
+  if (FORA_DA_RECUPERACAO[input.stage as SiteLeadStage]) return { bucket: "ALREADY_QUALIFIED", nextAction: "PRESERVE_CURRENT_FLOW" };
   if (!input.lastInboundAt) return { bucket: "NO_INBOUND_HISTORY", nextAction: "WAIT_APPROVED_TEMPLATE" };
   if (now.getTime() - input.lastInboundAt.getTime() < DAY_MS) return { bucket: "OPEN_24H", nextAction: "ELIGIBLE_FOR_RECOVERY_REVIEW" };
   return { bucket: "CLOSED_24H", nextAction: "WAIT_APPROVED_TEMPLATE" };
