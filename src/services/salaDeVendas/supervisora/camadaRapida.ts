@@ -32,6 +32,8 @@ import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter
 import type { MotivoDaSupervisora, VeredictoDaSupervisora } from "@prisma/client";
 import type { ContextoDaRevisao } from "./contexto";
 import { conhecimentoComercialParaPrompt } from "./conhecimentoComercial";
+import { avaliarPelaRubrica, achadosParaPrompt, vereditoMaisSevero, type ParecerDaRubrica } from "./rubrica";
+import { podeChamarModelo } from "./tetoDiario";
 
 /** O nome pelo qual esta camada aparece no roteamento governado do Brain. */
 export const AGENTE_CAMADA_RAPIDA = "supervisora-camada-rapida";
@@ -148,10 +150,57 @@ function instrucao(ctx: ContextoDaRevisao): string {
     .join("\n");
 }
 
+/**
+ * O parecer determinístico vira um `ResultadoDaCamada` completo — sem modelo,
+ * sem rede, sem custo. Usado nos dois casos em que a régua decide sozinha:
+ * defeito GRAVE/CRÍTICO encontrado, e teto diário de custo atingido.
+ */
+function daRubrica(parecer: ParecerDaRubrica, origem: string): ResultadoDaCamada {
+  return {
+    veredito: parecer.veredito,
+    motivos: parecer.motivos.length ? parecer.motivos : ["OUTRO"],
+    detalhe: `${origem} — ${parecer.detalhe}`,
+    // A régua não reescreve: ela sabe apontar o defeito, não inventar a fala
+    // certa. Por isso ela nunca devolve AMARELO sozinha (ver abaixo).
+    textoReescrito: null,
+    falhaTecnica: false,
+    engineProvider: null,
+    engineModel: null,
+  };
+}
+
 export async function avaliarCamadaRapida(
   ctx: ContextoDaRevisao,
   respostaProposta: string,
 ): Promise<ResultadoDaCamada> {
+  // ── PASSO 1: A RÉGUA DETERMINÍSTICA, ANTES DE QUALQUER CUSTO ─────────────
+  //
+  // `rubrica.ts` lê forma e frase proibida sem modelo nenhum. Quando ela já
+  // acha um defeito GRAVE ou CRÍTICO, não há o que um segundo parecer possa
+  // acrescentar que mude a decisão — o texto não sai desse jeito de qualquer
+  // forma. Então se devolve na hora, com o motivo NOMEADO e o trecho citado,
+  // e a chamada de modelo simplesmente não acontece. Isso é, ao mesmo tempo,
+  // a parte auditável do veredito e a maior economia do desenho.
+  const parecerDaRubrica = avaliarPelaRubrica(respostaProposta);
+  if (parecerDaRubrica.veredito === "VERMELHO" || parecerDaRubrica.veredito === "CRITICO") {
+    return daRubrica(parecerDaRubrica, "régua determinística da rubrica");
+  }
+
+  // ── PASSO 2: O TETO DE CUSTO ─────────────────────────────────────────────
+  //
+  // Estourado o teto do dia, a Supervisora não deixa de existir: ela passa a
+  // valer só pela régua acima, que aqui já disse VERDE ou AMARELO. AMARELO sem
+  // reescrita não pode virar veredito (o contrato desta camada exige o texto
+  // corrigido), então o que sobra é VERDE — a mensagem passou por toda a régua
+  // que não custa nada. Ver o cabeçalho de `tetoDiario.ts`: esta é a degradação
+  // escolhida, e ela está escrita, não suposta.
+  if (!podeChamarModelo()) {
+    return daRubrica(
+      { ...parecerDaRubrica, veredito: "VERDE" },
+      "teto diário de custo atingido — avaliada só pela régua determinística",
+    );
+  }
+
   let engine: Awaited<ReturnType<typeof selectEngineRouted>> | null = null;
   try {
     engine = await selectEngineRouted(AGENTE_CAMADA_RAPIDA, { taskProfile: "JUDGE" });
@@ -164,6 +213,7 @@ export async function avaliarCamadaRapida(
   }
 
   const userContent = [
+    achadosParaPrompt(parecerDaRubrica),
     `MENSAGEM DO CLIENTE (a mais recente): "${ctx.ultimaMensagemDoCliente ?? "(nenhuma — abertura de conversa)"}"`,
     `RESPOSTA PROPOSTA PELO AGENTE, A REVISAR: "${respostaProposta}"`,
   ].join("\n\n");
@@ -192,7 +242,42 @@ export async function avaliarCamadaRapida(
     return falhaTecnica("o motor devolveu um JSON inválido", engine);
   }
 
-  return interpretarResposta(parsed, engine);
+  return juntarComARubrica(interpretarResposta(parsed, engine), parecerDaRubrica);
+}
+
+/**
+ * Onde a régua e o modelo se encontram.
+ *
+ * A régua aqui só pode estar em VERDE ou AMARELO (GRAVE/CRÍTICO já teriam
+ * devolvido lá em cima, sem chamar modelo). Então há exatamente um caso a
+ * resolver: **a régua viu defeitos leves e o modelo não viu nada.**
+ *
+ * Nesse caso o veredito sobe para AMARELO — a régua não afrouxa diante de um
+ * segundo parecer (ver `vereditoMaisSevero`) — mas isso só vale se houver uma
+ * reescrita para entregar, porque AMARELO sem texto corrigido é um contrato
+ * quebrado desta camada. Sem reescrita, o veredito do modelo prevalece e os
+ * achados da régua ficam registrados no detalhe: reter uma mensagem por três
+ * emojis, sem sequer saber dizer como ela deveria ser, seria a régua verde no
+ * lugar errado — só que ao contrário.
+ *
+ * Falha técnica nunca é mesclada: ela não é um veredito sobre o texto, é a
+ * ausência de um.
+ */
+function juntarComARubrica(
+  doModelo: ResultadoDaCamada,
+  daRegua: ParecerDaRubrica,
+): ResultadoDaCamada {
+  if (doModelo.falhaTecnica || !daRegua.achados.length) return doModelo;
+
+  const vereditoJunto = vereditoMaisSevero(doModelo.veredito, daRegua.veredito);
+  const detalhe = `${doModelo.detalhe} | régua: ${daRegua.detalhe}`;
+  const motivos = [...new Set([...doModelo.motivos, ...daRegua.motivos])];
+
+  if (vereditoJunto === "AMARELO" && !doModelo.textoReescrito) {
+    return { ...doModelo, motivos, detalhe };
+  }
+
+  return { ...doModelo, veredito: vereditoJunto, motivos, detalhe };
 }
 
 function interpretarResposta(

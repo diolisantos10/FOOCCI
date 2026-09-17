@@ -24,6 +24,8 @@ import type { MotivoDoHandoff } from "@prisma/client";
 import type { ContextoDaRevisao } from "./contexto";
 import { conhecimentoComercialParaPrompt } from "./conhecimentoComercial";
 import type { ResultadoDaCamada } from "./camadaRapida";
+import { avaliarPelaRubrica } from "./rubrica";
+import { podeChamarModelo } from "./tetoDiario";
 
 export const AGENTE_CAMADA_PROFUNDA = "supervisora-camada-profunda";
 
@@ -127,6 +129,35 @@ export async function avaliarCamadaProfunda(
   turnos: Array<{ deQuem: "cliente" | "ta"; texto: string }>,
   motivoDoAcionamento: string,
 ): Promise<ResultadoDaCamadaProfunda> {
+  // ── A RÉGUA DETERMINÍSTICA TAMBÉM VEM ANTES AQUI ────────────────────────
+  //
+  // Quase sempre a camada rápida já terá barrado o que a régua pega — mas esta
+  // função é chamada de mais de um ponto, e uma régua que só vale num dos
+  // caminhos não é régua. Defeito GRAVE/CRÍTICO decide sozinho, de graça, e o
+  // modelo caro não roda. `precisaDeGente` segue o próprio veredito: CRÍTICO
+  // vai para uma pessoa, VERMELHO não vai por si só.
+  const daRegua = avaliarPelaRubrica(respostaProposta);
+  if (daRegua.veredito === "VERMELHO" || daRegua.veredito === "CRITICO") {
+    return {
+      veredito: daRegua.veredito,
+      motivos: daRegua.motivos.length ? daRegua.motivos : ["OUTRO"],
+      detalhe: `régua determinística da rubrica — ${daRegua.detalhe}`,
+      textoReescrito: null,
+      falhaTecnica: false,
+      engineProvider: null,
+      engineModel: null,
+      precisaDeGente: daRegua.veredito === "CRITICO",
+      sugestaoPermanente: null,
+    };
+  }
+
+  // O mesmo teto de custo da camada rápida — ver `tetoDiario.ts`. Estourado, a
+  // camada cara não roda; isso é `falhaTecnica`, e `revisao.ts` já sabe que uma
+  // falha da profunda não derruba um veredito bom da rápida.
+  if (!podeChamarModelo()) {
+    return falha("teto diário de chamadas de modelo da Supervisora atingido — a camada profunda não rodou");
+  }
+
   let engine: Awaited<ReturnType<typeof selectEngineRouted>> | null = null;
   try {
     engine = await selectEngineRouted(AGENTE_CAMADA_PROFUNDA, { taskProfile: "REASON" });
