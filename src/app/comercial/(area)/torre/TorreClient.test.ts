@@ -18,7 +18,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { textoDaVariacao } from "../_pecas/Pecas";
-import { alertasDoAgora, SecaoAlertas, SecaoOntem, SecaoRaioX, SecaoTravado, type DadosDaTorre } from "./TorreClient";
+import { alertasDoAgora, RESSALVA_DO_PRAZO, SecaoAlertas, SecaoOntem, SecaoRaioX, SecaoTravado, type DadosDaTorre } from "./TorreClient";
 
 const SEM_TRAVA: DadosDaTorre["painel"]["agora"] = {
   semResponsavel: 0,
@@ -184,5 +184,40 @@ describe("o raio-X: o que a base não responde sai com motivo, não com zero", (
 
   it("'onde a conversa morreu' não medido também aparece com o motivo", () => {
     expect(h).toContain("MOTIVO_DO_ONDE_MORREU");
+  });
+});
+
+/**
+ * A COLUNA DE PRAZO DO DESENHO, COM A RESSALVA QUE ELA EXIGE.
+ *
+ * `slaVenceEm` só passou a ser gravado em 18/09/2026, e `filasDoAgora` conta
+ * como "estourado" apenas quem TEM prazo e o perdeu. Um "0 atrasados" ali
+ * afirmaria "ninguém está atrasado", quando o que existe é "a maioria dos leads
+ * nem tem prazo para perder". Se alguém tirar a ressalva do cartão, este teste
+ * cai — e ele lê o HTML da seção que o supervisor vê, não uma constante solta.
+ */
+describe("prazo: ausência de prazo não é ausência de atraso", () => {
+  it("o cartão de prazo estourado carrega a ressalva, mesmo quando marca zero", () => {
+    const h = renderToStaticMarkup(
+      React.createElement(SecaoTravado, { dados: dados({ agora: { slaEstourado: 0 } }) }),
+    );
+    const c = cartao(h, "Prazo estourado");
+    expect(c).toContain("18/09/2026");
+    expect(c).toContain("ausência de prazo não é ausência de atraso");
+  });
+
+  it("com prazo estourado acima de zero, a ressalva continua ao lado do número", () => {
+    const h = renderToStaticMarkup(
+      React.createElement(SecaoTravado, { dados: dados({ agora: { slaEstourado: 7 } }) }),
+    );
+    const c = cartao(h, "Prazo estourado");
+    expect(c).toContain(">7<");
+    expect(c).toContain("ausência de prazo não é ausência de atraso");
+  });
+
+  it("a ressalva é a mesma frase que o módulo exporta — não há duas versões do aviso", () => {
+    expect(RESSALVA_DO_PRAZO).toContain("ausência de prazo não é ausência de atraso");
+    const h = renderToStaticMarkup(React.createElement(SecaoTravado, { dados: dados() }));
+    expect(h).toContain(RESSALVA_DO_PRAZO);
   });
 });

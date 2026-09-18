@@ -31,20 +31,42 @@
 import { useEffect, useState } from "react";
 import {
   Aviso,
-  Cabecalho,
+  Barra,
   Caixa,
   Carregando,
+  CartaoDeIA,
+  Celula,
+  Corpo,
   Erro,
+  FilaDeIndicadores,
   Grade,
+  Indicador,
+  Linha,
   Numero,
   NaoMedido,
+  Pilula,
   SemAcesso,
   Secao,
+  Tabela,
+  TituloDaPagina,
   cx,
+  emDia,
   textoDaVariacao,
   type Fase,
   type Medida,
 } from "../_pecas/Pecas";
+
+/**
+ * ⚠️ A RESSALVA DO PRAZO, ESCRITA UMA VEZ E REPETIDA ONDE O NÚMERO APARECE.
+ *
+ * `slaVenceEm` só passou a ser gravado em 18/09/2026. Lead anterior a isso não
+ * tem prazo, e por isso NUNCA entra na conta de "prazo estourado" — a contagem
+ * é de quem tem prazo e o perdeu, não de quem está atrasado. **Ausência de
+ * prazo não é ausência de atraso**, e a torre não deixa o número passar sozinho.
+ */
+export const RESSALVA_DO_PRAZO =
+  "conta só leads com prazo gravado (o campo passou a ser escrito em 18/09/2026): " +
+  "lead mais antigo não tem prazo e não aparece aqui — ausência de prazo não é ausência de atraso";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // O QUE A ROTA DEVOLVE — o mesmo formato dos serviços, sem tradução pelo meio
@@ -174,15 +196,31 @@ export function SecaoTravado({ dados }: { dados: DadosDaTorre }) {
       titulo="Travado agora"
       descricao="Retrato deste instante, não do período. É o que um supervisor destrava hoje."
     >
-      <Grade>
-        <Numero rotulo="Sem dono" valor={a.semResponsavel} destaque={a.semResponsavel > 0 ? "alerta" : undefined} />
-        <Numero rotulo="Prazo estourado" valor={a.slaEstourado} destaque={a.slaEstourado > 0 ? "alerta" : undefined} />
-        <Numero rotulo="Follow-up vencido" valor={a.followUpVencido} destaque={a.followUpVencido > 0 ? "alerta" : undefined} />
-        <Numero rotulo="Sem próxima ação" valor={a.semProximaAcao} />
-        <Numero rotulo="Esperando gente" valor={a.aguardandoHumano} />
-        <Numero rotulo="Com a IA" valor={a.comIA} />
-        <Numero rotulo="Entraram em 24 h" valor={a.entrandoAgora} />
-      </Grade>
+      <FilaDeIndicadores>
+        <Indicador
+          rotulo="Sem dono"
+          valor={a.semResponsavel}
+          icone="pessoas"
+          tom={a.semResponsavel > 0 ? "vermelho" : "verde"}
+        />
+        <Indicador
+          rotulo="Prazo estourado"
+          valor={a.slaEstourado}
+          icone="relogio"
+          tom={a.slaEstourado > 0 ? "vermelho" : "verde"}
+          rodape={RESSALVA_DO_PRAZO}
+        />
+        <Indicador
+          rotulo="Follow-up vencido"
+          valor={a.followUpVencido}
+          icone="alerta"
+          tom={a.followUpVencido > 0 ? "ambar" : "verde"}
+        />
+        <Indicador rotulo="Sem próxima ação" valor={a.semProximaAcao} icone="alvo" tom="ambar" />
+        <Indicador rotulo="Esperando gente" valor={a.aguardandoHumano} icone="pessoas" tom="azul" />
+        <Indicador rotulo="Com a IA" valor={a.comIA} icone="faisca" tom="roxo" />
+        <Indicador rotulo="Entraram em 24 h" valor={a.entrandoAgora} icone="grafico" tom="azul" />
+      </FilaDeIndicadores>
     </Secao>
   );
 }
@@ -216,6 +254,7 @@ export function SecaoAlertas({ dados }: { dados: DadosDaTorre }) {
 export function SecaoOntem({ dados }: { dados: DadosDaTorre }) {
   const { hoje, ontem, janelaHoras } = dados.comparacao;
   const porEtapaDeOntem = new Map(ontem.funil.degraus.map((d) => [d.etapa, d.total]));
+  const teto = Math.max(1, ...hoje.funil.degraus.map((d) => d.total));
 
   return (
     <Secao
@@ -226,30 +265,42 @@ export function SecaoOntem({ dados }: { dados: DadosDaTorre }) {
         {hoje.funil.degraus.map((d) => {
           const de = porEtapaDeOntem.get(d.etapa) ?? 0;
           return (
-            <li key={d.etapa} className="rounded-2xl border border-line bg-paper p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-[13.5px] font-semibold text-ink">{d.rotulo}</span>
-                <span className="text-lg font-semibold tabular-nums text-ink">{d.total}</span>
-              </div>
-              <p className="mt-0.5 text-[11.5px] text-muted">{textoDaVariacao(de, d.total)}</p>
-            </li>
+            <Barra
+              key={d.etapa}
+              rotulo={d.rotulo}
+              valor={d.total}
+              /* A barra compara com o MAIOR degrau de hoje — é proporção dentro
+                 da janela, não porcentagem contra ontem. A comparação com ontem
+                 é a linha de texto, que se recusa a dividir por zero. */
+              fracao={null}
+              nota={textoDaVariacao(de, d.total)}
+              tom="azul"
+            />
           );
         })}
       </ul>
+      <p className="text-[11.5px] leading-snug text-muted">
+        Maior degrau da janela: {teto}. Nenhuma variação foi calculada sobre base
+        zero — crescer de 0 para 3 não tem porcentagem.
+      </p>
     </Secao>
   );
 }
 
 export function SecaoFunil({ dados }: { dados: DadosDaTorre }) {
   const c = dados.painel.conversao;
+  const topo = Math.max(1, ...c.degraus.map((d) => d.total));
   return (
-    <Secao titulo="Volume por etapa do funil" descricao="Leads criados no período, contados na etapa em que estão hoje.">
+    <Secao titulo="Funil de receita" descricao="Leads criados no período, contados na etapa em que estão hoje. A barra é a fatia do topo do funil.">
       <ul className="flex flex-col gap-1.5">
-        {c.degraus.map((d) => (
-          <li key={d.etapa} className="flex items-baseline justify-between gap-3 rounded-2xl border border-line bg-paper px-3 py-2">
-            <span className="text-[13px] text-ink2">{d.rotulo}</span>
-            <span className="text-[15px] font-semibold tabular-nums text-ink">{d.total}</span>
-          </li>
+        {c.degraus.map((d, i) => (
+          <Barra
+            key={d.etapa}
+            rotulo={d.rotulo}
+            valor={d.total}
+            fracao={d.total / topo}
+            tom={i === 0 ? "azul" : i >= c.degraus.length - 1 ? "verde" : "azul"}
+          />
         ))}
       </ul>
       <p className="text-[12px] text-muted">
@@ -279,36 +330,44 @@ export function SecaoRaioX({ dados }: { dados: DadosDaTorre }) {
       titulo="Raio-X das conversas"
       descricao="Onde a conversa de prospecção parou, em seis degraus. Cada conversa conta só no degrau mais alto que alcançou."
     >
-      <Grade>
-        <Numero
+      <FilaDeIndicadores>
+        <Indicador
           rotulo="Abordados"
           valor={r.abordagem.medido ? r.abordagem.valor.abordados : null}
           motivo={r.abordagem.medido ? undefined : r.abordagem.motivo}
+          icone="alvo"
+          tom="azul"
         />
-        <Numero
+        <Indicador
           rotulo="Responderam"
           valor={r.abordagem.medido ? r.abordagem.valor.responderam : null}
           motivo={r.abordagem.medido ? undefined : r.abordagem.motivo}
+          icone="pessoas"
+          tom="verde"
           rodape={
             r.abordagem.medido && r.abordagem.valor.taxaDeResposta.medido
               ? `${Math.round(r.abordagem.valor.taxaDeResposta.valor * 100)}% dos abordados`
               : undefined
           }
         />
-        <Numero
+        <Indicador
           rotulo="Porteiros classificados"
           valor={r.gatekeepers.medido ? r.gatekeepers.valor.classificados : null}
           motivo={r.gatekeepers.medido ? undefined : r.gatekeepers.motivo}
+          icone="porta"
+          tom="ambar"
         />
-        <Numero
+        <Indicador
           rotulo="Decisores com telefone"
           valor={r.decisores.medido ? r.decisores.valor.comTelefone : null}
           motivo={r.decisores.medido ? undefined : r.decisores.motivo}
+          icone="chave"
+          tom="roxo"
           rodape={
             r.decisores.medido ? `${r.decisores.valor.semTelefone} identificados sem telefone` : undefined
           }
         />
-      </Grade>
+      </FilaDeIndicadores>
 
       {(!r.gatekeepers.medido || !r.decisores.medido) && (
         <Aviso>
@@ -326,14 +385,12 @@ export function SecaoRaioX({ dados }: { dados: DadosDaTorre }) {
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.04em] text-muted">Onde a conversa morreu</p>
         {r.ondeMorreu.medido ? (
           <ul className="flex flex-col gap-1.5">
-            {r.ondeMorreu.valor.map((e) => (
-              <li key={e.etapa} className="rounded-2xl border border-line bg-paper p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <span className="text-[13px] text-ink2">{e.rotulo}</span>
-                  <span className="text-[15px] font-semibold tabular-nums text-ink">{e.quantos}</span>
-                </div>
-              </li>
-            ))}
+            {r.ondeMorreu.valor.map((e) => {
+              const topo = Math.max(1, ...(r.ondeMorreu.medido ? r.ondeMorreu.valor : []).map((x) => x.quantos));
+              return (
+                <Barra key={e.etapa} rotulo={e.rotulo} valor={e.quantos} fracao={e.quantos / topo} tom="ambar" />
+              );
+            })}
           </ul>
         ) : (
           <Caixa>
@@ -375,14 +432,21 @@ export function SecaoSupervisora({ dados }: { dados: DadosDaTorre }) {
         />
       </Grade>
       {s.principaisRiscos.length > 0 && (
-        <ul className="flex flex-col gap-1">
+        <Tabela colunas={["Risco pego pela Supervisora", "Gravidade", "Quantas"]}>
           {s.principaisRiscos.map((r) => (
-            <li key={r.motivo} className="flex items-baseline justify-between gap-3 rounded-2xl border border-line bg-paper px-3 py-2">
-              <span className="text-[13px] text-ink2">{r.rotulo}</span>
-              <span className="text-[14px] font-semibold tabular-nums text-ink">{r.total}</span>
-            </li>
+            <Linha key={r.motivo}>
+              <Celula forte>{r.rotulo}</Celula>
+              <Celula>
+                <Pilula tom={r.total > 0 ? "ambar" : "cinza"}>
+                  {r.total > 0 ? "atenção" : "sem ocorrência"}
+                </Pilula>
+              </Celula>
+              <Celula numero forte>
+                {r.total}
+              </Celula>
+            </Linha>
           ))}
-        </ul>
+        </Tabela>
       )}
     </Secao>
   );
@@ -457,9 +521,16 @@ export function TorreClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <Cabecalho
+      <TituloDaPagina
+        contexto="Sala de Vendas › Control Tower"
         titulo="Control Tower"
-        subtitulo="A saúde da operação comercial inteira em uma tela. Só leitura: daqui não sai mensagem, nem atribuição, nem mudança de estágio."
+        subtitulo="Diagnostique gargalos e oportunidades em toda a operação: Hunter, SDR, Vendas e CRM. Só leitura: daqui não sai mensagem, nem atribuição, nem mudança de estágio."
+        periodo={
+          estado.fase === "pronto"
+            ? `${emDia(estado.dados.periodo.de)} – ${emDia(estado.dados.periodo.ate)}`
+            : undefined
+        }
+        atualidade={estado.fase === "pronto" ? "Tempo real" : undefined}
       />
 
       {estado.fase === "carregando" && <Carregando texto="Medindo a operação inteira — filas, funil, raio-X e Supervisora…" />}
@@ -469,12 +540,33 @@ export function TorreClient() {
       {estado.fase === "pronto" && (
         <>
           <SecaoTravado dados={estado.dados} />
-          <SecaoAlertas dados={estado.dados} />
-          <SecaoOntem dados={estado.dados} />
-          <SecaoFunil dados={estado.dados} />
-          <SecaoRaioX dados={estado.dados} />
-          <SecaoSupervisora dados={estado.dados} />
-          <SecaoTime dados={estado.dados} />
+
+          <Corpo
+            lateral={
+              <>
+                <SecaoAlertas dados={estado.dados} />
+                <CartaoDeIA titulo="O que este painel NÃO viu">
+                  <p>
+                    A coluna de prazo do desenho existe aqui, mas com ressalva:{" "}
+                    {RESSALVA_DO_PRAZO}.
+                  </p>
+                  <p className="mt-2">
+                    Porteiro e decisor saem como <strong>não medido</strong> enquanto a
+                    maior parte dos leads antigos não tiver <code>Empresa</code> ligada —
+                    o motivo está escrito no raio-X, ao lado do lugar onde estaria o
+                    número. Esta caixa não recomenda por palpite: ela lista o que a
+                    operação ainda não consegue perguntar.
+                  </p>
+                </CartaoDeIA>
+                <SecaoTime dados={estado.dados} />
+              </>
+            }
+          >
+            <SecaoFunil dados={estado.dados} />
+            <SecaoOntem dados={estado.dados} />
+            <SecaoRaioX dados={estado.dados} />
+            <SecaoSupervisora dados={estado.dados} />
+          </Corpo>
         </>
       )}
     </div>

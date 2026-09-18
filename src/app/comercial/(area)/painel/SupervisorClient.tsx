@@ -25,6 +25,43 @@
  */
 
 import { useEffect, useState } from "react";
+import {
+  Barra,
+  CartaoDeIA,
+  Celula,
+  Corpo,
+  FilaDeIndicadores,
+  Indicador,
+  Linha,
+  Pilula,
+  Tabela,
+  type NomeDeIcone,
+  type Tom,
+} from "../_pecas/Pecas";
+
+/**
+ * ⚠️ A COLUNA SLA DO DESENHO, E POR QUE ELA NÃO TRAZ TEMPO INVENTADO.
+ *
+ * `slaVenceEm` só passou a ser gravado em 18/09/2026. Etapa cuja duração o
+ * serviço devolve como `semDados` aparece com o motivo escrito, nunca com um
+ * tempo estimado nem com "0 atrasados": ausência de prazo não é ausência de
+ * atraso, e as duas pedem trabalho oposto — uma é cobrar o time, a outra é
+ * gravar o prazo.
+ */
+export const MOTIVO_DO_PRAZO_AUSENTE =
+  "prazo não gravado nesta etapa (o campo passou a ser escrito em 18/09/2026) — ausência de prazo não é ausência de atraso";
+
+/** O ícone e a cor de cada degrau do funil, na ordem do desenho. */
+const TINTA_DO_DEGRAU: Array<{ icone: NomeDeIcone; tom: Tom }> = [
+  { icone: "funil", tom: "azul" },
+  { icone: "alvo", tom: "azul" },
+  { icone: "porta", tom: "ambar" },
+  { icone: "chave", tom: "roxo" },
+  { icone: "agenda", tom: "azul" },
+  { icone: "dinheiro", tom: "verde" },
+  { icone: "coracao", tom: "verde" },
+  { icone: "grafico", tom: "azul" },
+];
 
 type Taxa =
   | { medido: true; valor: number; base: number }
@@ -95,7 +132,7 @@ type Diagnostico =
     }
   | { medido: false; motivo: string; detalhe: string };
 
-interface Visao {
+export interface Visao {
   funil: { degraus: Degrau[]; pontaAPonta: Taxa | null };
   eficiencia: { etapas: EtapaMedida[]; gargalos: EtapaMedida[]; cegas: string[] };
   saude:
@@ -177,7 +214,16 @@ export function SupervisorClient() {
     );
   }
 
-  const { v } = estado;
+  return <PainelDoSupervisor v={estado.v} />;
+}
+
+/**
+ * O CORPO DO SUPERVISOR, SEPARADO DA BUSCA DE PROPÓSITO.
+ *
+ * Assim o teste renderiza EXATAMENTE o que o gerente vê, com a visão que o
+ * serviço devolveria — e não um pedaço parecido escrito só para o teste passar.
+ */
+export function PainelDoSupervisor({ v }: { v: Visao }) {
   const tudoCego = v.funil.degraus.every((d) => !d.volume.medido);
 
   if (tudoCego) {
@@ -193,150 +239,192 @@ export function SupervisorClient() {
     );
   }
 
+  const topo = Math.max(
+    1,
+    ...v.funil.degraus.map((d) => (d.volume.medido ? d.volume.total : 0)),
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      {/* ── DIAGNÓSTICO ───────────────────────────────────────────────── */}
-      <Secao titulo="Diagnóstico">
-        <CartaoDeDiagnostico d={v.diagnostico} />
-      </Secao>
-
-      {/* ── SAÚDE ─────────────────────────────────────────────────────── */}
-      <Secao titulo="Saúde da operação">
-        <CartaoDeSaude s={v.saude} />
-      </Secao>
-
-      {/* ── FUNIL ─────────────────────────────────────────────────────── */}
-      <Secao titulo="Funil de receita">
-        <ul className="flex flex-col gap-2">
-          {v.funil.degraus.map((d) => (
-            <li
+      {/* ── A FILA DE INDICADORES ─────────────────────────────────────────
+          Os oito cartões do desenho saem DOS DEGRAUS DO FUNIL, e não de uma
+          lista digitada: o que o serviço mede é o que aparece. Degrau sem
+          fonte ligada vira "não medido" com o motivo — nunca um zero, que
+          diria "medimos e não houve nenhum". */}
+      <FilaDeIndicadores>
+        {v.funil.degraus.slice(0, 8).map((d, i) => {
+          const t = TINTA_DO_DEGRAU[i] ?? { icone: "grafico" as NomeDeIcone, tom: "azul" as Tom };
+          return (
+            <Indicador
               key={d.etapa}
-              className="rounded-2xl border border-line bg-paper p-3"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-[13.5px] font-semibold text-ink">{d.rotulo}</span>
-                <span className="text-xl font-semibold tabular-nums text-ink">
-                  {d.volume.medido ? d.volume.total : <NaoMedido texto="não medido" />}
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11.5px] text-muted">
-                <span>{d.conversao ? `conversão ${textoDaTaxa(d.conversao)}` : "topo do funil"}</span>
-                <span>{d.ehRetrato ? "retrato de agora" : textoDaTendencia(d.tendencia)}</span>
-              </div>
-              <p className="mt-1 text-[11.5px] leading-snug text-muted">{d.comoSeMede}</p>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[12px] text-muted">
-          Ponta a ponta:{" "}
-          <strong className="text-ink2">
-            {v.funil.pontaAPonta ? textoDaTaxa(v.funil.pontaAPonta) : "não medido"}
-          </strong>
-        </p>
-      </Secao>
+              rotulo={d.rotulo}
+              valor={d.volume.medido ? d.volume.total : null}
+              motivo={d.volume.medido ? undefined : "nenhuma fonte grava esta etapa hoje"}
+              icone={t.icone}
+              tom={t.tom}
+              variacao={d.ehRetrato ? "retrato de agora" : textoDaTendencia(d.tendencia)}
+            />
+          );
+        })}
+      </FilaDeIndicadores>
 
-      {/* ── EFICIÊNCIA POR ETAPA ──────────────────────────────────────── */}
-      <Secao titulo="Eficiência por etapa">
-        <ul className="flex flex-col gap-2">
-          {v.eficiencia.etapas.map((e) => {
-            const ehGargalo = v.eficiencia.gargalos[0]?.etapa === e.etapa;
-            return (
-              <li
-                key={e.etapa}
-                className={cx(
-                  "rounded-2xl border p-3",
-                  ehGargalo ? "border-red-200 bg-red-50" : "border-line bg-paper",
-                )}
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <span className="text-[13.5px] font-semibold text-ink">
-                    {e.rotulo}
-                    {ehGargalo && (
-                      <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[.04em] text-red-700">
-                        gargalo
+      <Corpo
+        lateral={
+          <>
+            {/* ── A COLUNA DA IA ───────────────────────────────────────── */}
+            <CartaoDeIA titulo="Diagnóstico da IA">
+              <CartaoDeDiagnostico d={v.diagnostico} />
+            </CartaoDeIA>
+
+            <CartaoDeIA titulo="Principais gargalos">
+              {v.eficiencia.gargalos.length === 0 ? (
+                <p>
+                  Nenhum gargalo com gravidade medida.
+                  {v.cegas.length > 0 && (
+                    <>
+                      {" "}
+                      <strong>Ressalva:</strong> {v.cegas.join(", ")} não foram medidas
+                      — a ausência de gargalo aí é ausência de medição, não de problema.
+                    </>
+                  )}
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {v.eficiencia.gargalos.map((g) => {
+                    const grau = g.gravidade.medido ? g.gravidade.valor : null;
+                    return (
+                      <li key={g.etapa}>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12.5px] text-ink2">{g.rotulo}</span>
+                          <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-ink">
+                            {grau === null ? "—" : Math.round(grau * 100)}
+                          </span>
+                        </div>
+                        {grau !== null && (
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-canvas">
+                            <div
+                              className="h-full rounded-full bg-red-500"
+                              style={{ width: `${Math.round(grau * 100)}%` }}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CartaoDeIA>
+
+            <CartaoDeIA titulo="Ações recomendadas">
+              {v.acoes.length === 0 ? (
+                <p>
+                  Nenhuma ação recomendada com número que a sustente. O supervisor não
+                  recomenda por palpite.
+                </p>
+              ) : (
+                <ol className="flex flex-col gap-2">
+                  {v.acoes.map((a, i) => (
+                    <li key={a.texto} className="flex gap-2">
+                      <span className="shrink-0 tabular-nums text-muted">{i + 1}.</span>
+                      <span>
+                        {a.texto}
+                        <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
+                          porque {a.porque}
+                        </span>
                       </span>
-                    )}
-                  </span>
-                  <span className="text-[13px] tabular-nums text-ink2">
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CartaoDeIA>
+          </>
+        }
+      >
+        {/* ── SAÚDE ───────────────────────────────────────────────────── */}
+        <Secao titulo="Saúde da operação">
+          <CartaoDeSaude s={v.saude} />
+        </Secao>
+
+        {/* ── FUNIL DE RECEITA, EM BARRAS DECRESCENTES ────────────────── */}
+        <Secao titulo="Funil de receita">
+          <ul className="flex flex-col gap-2">
+            {v.funil.degraus.map((d, i) => (
+              <Barra
+                key={d.etapa}
+                rotulo={d.rotulo}
+                valor={d.volume.medido ? d.volume.total : null}
+                motivo={d.volume.medido ? undefined : "nenhuma fonte grava esta etapa hoje"}
+                fracao={d.volume.medido ? d.volume.total / topo : null}
+                tom={(TINTA_DO_DEGRAU[i] ?? { tom: "azul" as Tom }).tom}
+                nota={
+                  <>
+                    {d.conversao ? `conversão ${textoDaTaxa(d.conversao)}` : "topo do funil"}
+                    {" · "}
+                    {d.ehRetrato ? "retrato de agora" : textoDaTendencia(d.tendencia)}
+                    <span className="mt-0.5 block">{d.comoSeMede}</span>
+                  </>
+                }
+              />
+            ))}
+          </ul>
+          <p className="mt-2 text-[12px] text-muted">
+            Ponta a ponta:{" "}
+            <strong className="text-ink2">
+              {v.funil.pontaAPonta ? textoDaTaxa(v.funil.pontaAPonta) : "não medido"}
+            </strong>
+          </p>
+        </Secao>
+
+        {/* ── EFICIÊNCIA POR ETAPA, NA TABELA DO DESENHO ──────────────── */}
+        <Secao titulo="Eficiência por etapa">
+          <Tabela colunas={["Etapa", "Prazo (SLA)", "Dentro do prazo", "Conversão", "Volume", "Gargalo", "Tendência"]}>
+            {v.eficiencia.etapas.map((e) => {
+              const ehGargalo = v.eficiencia.gargalos[0]?.etapa === e.etapa;
+              return (
+                <Linha key={e.etapa} alerta={ehGargalo}>
+                  <Celula forte>
+                    {e.rotulo}
+                    <span className="mt-0.5 block max-w-[34ch] text-[11px] font-normal leading-snug text-muted">
+                      {e.oQuePrazoMede}
+                    </span>
+                  </Celula>
+                  <Celula numero>
                     {e.duracao.medido ? (
                       `${emTempo(e.duracao.minutos)} / prazo ${emTempo(e.slaMinutos)}`
                     ) : (
-                      <NaoMedido texto="tempo não medido" />
+                      <span className="block max-w-[34ch]">
+                        <span className="italic text-muted">não medido</span>
+                        <span className="mt-0.5 block text-[11px] font-normal leading-snug text-muted">
+                          {MOTIVO_DO_PRAZO_AUSENTE}
+                        </span>
+                      </span>
                     )}
-                  </span>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-muted">
-                  <span>dentro do prazo: {textoDaTaxa(e.dentroDoSla)}</span>
-                  <span>conversão: {e.conversao ? textoDaTaxa(e.conversao) : "não medida"}</span>
-                  <span>{textoDaTendencia(e.tendencia)}</span>
-                </div>
-                <p className="mt-1 text-[11.5px] leading-snug text-muted">{e.oQuePrazoMede}</p>
-                {e.gravidade.medido ? (
-                  <ul className="mt-2 flex flex-col gap-0.5 border-t border-line pt-2 text-[11.5px] text-muted">
-                    {e.gravidade.parcelas.map((p) => (
-                      <li key={p.fator}>
-                        <span className="text-ink2">{p.fator}</span> — {p.evidencia}{" "}
-                        <span className="tabular-nums">(peso {p.peso})</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 border-t border-line pt-2 text-[11.5px] italic text-muted">
-                    etapa cega: nada foi medido aqui. Não é saúde — é ausência de régua.
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </Secao>
-
-      {/* ── GARGALOS ──────────────────────────────────────────────────── */}
-      <Secao titulo="Principais gargalos">
-        {v.eficiencia.gargalos.length === 0 ? (
-          <p className="rounded-2xl border border-line bg-paper p-4 text-[13px] leading-relaxed text-ink2">
-            Nenhum gargalo com gravidade medida.
-            {v.cegas.length > 0 && (
-              <>
-                {" "}
-                <strong>Ressalva:</strong> {v.cegas.join(", ")} não foram medidas —
-                a ausência de gargalo aí é ausência de medição, não de problema.
-              </>
-            )}
+                  </Celula>
+                  <Celula numero>{textoDaTaxa(e.dentroDoSla)}</Celula>
+                  <Celula numero>{e.conversao ? textoDaTaxa(e.conversao) : "não medida"}</Celula>
+                  <Celula numero>
+                    {e.volume.medido ? e.volume.total : <span className="italic text-muted">não medido</span>}
+                  </Celula>
+                  <Celula>
+                    {ehGargalo ? (
+                      <Pilula tom="vermelho">gargalo</Pilula>
+                    ) : e.gravidade.medido ? (
+                      <Pilula tom="verde">ok</Pilula>
+                    ) : (
+                      <Pilula tom="cinza">etapa cega</Pilula>
+                    )}
+                  </Celula>
+                  <Celula>{textoDaTendencia(e.tendencia)}</Celula>
+                </Linha>
+              );
+            })}
+          </Tabela>
+          <p className="mt-2 max-w-[80ch] text-[11.5px] leading-snug text-muted">
+            Etapa cega não é etapa saudável: é etapa sem régua. Ela continua na tabela,
+            carimbada, porque etapa que some do radar é etapa que ninguém conserta.
           </p>
-        ) : (
-          <ol className="flex flex-col gap-1 rounded-2xl border border-line bg-paper p-3">
-            {v.eficiencia.gargalos.map((g, i) => (
-              <li key={g.etapa} className="flex items-baseline gap-2 text-[13px]">
-                <span className="shrink-0 tabular-nums text-muted">{i + 1}.</span>
-                <span className="text-ink2">{g.rotulo}</span>
-                <span className="ml-auto shrink-0 font-semibold tabular-nums text-ink">
-                  {g.gravidade.medido ? `${Math.round(g.gravidade.valor * 100)}` : "—"}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Secao>
-
-      {/* ── AÇÕES ─────────────────────────────────────────────────────── */}
-      <Secao titulo="Ações recomendadas">
-        {v.acoes.length === 0 ? (
-          <p className="rounded-2xl border border-line bg-paper p-4 text-[13px] text-ink2">
-            Nenhuma ação recomendada com número que a sustente. O supervisor não
-            recomenda por palpite.
-          </p>
-        ) : (
-          <ol className="flex flex-col gap-2">
-            {v.acoes.map((a) => (
-              <li key={a.texto} className="rounded-2xl border border-line bg-paper p-3">
-                <p className="text-[13.5px] leading-relaxed text-ink">{a.texto}</p>
-                <p className="mt-1 text-[11.5px] leading-snug text-muted">porque {a.porque}</p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Secao>
+        </Secao>
+      </Corpo>
     </div>
   );
 }
