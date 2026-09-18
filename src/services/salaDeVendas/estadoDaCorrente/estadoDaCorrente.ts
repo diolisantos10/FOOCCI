@@ -37,6 +37,9 @@ import {
   recepcaoLigada,
 } from "../recepcao/portasDeEntrada";
 import { MINUTOS_PARA_A_PRIMEIRA_RESPOSTA } from "../recepcao/prazoDaPrimeiraResposta";
+import { COLD_GREETING_TEMPLATES } from "@/services/sales/coldContactDiscovery";
+import { ESTAGIO_2_TEMPLATES } from "@/services/sales/estagio2Templates";
+import { MODELOS_DO_PRIMEIRO_CONTATO } from "@/services/foocci-sdr/modelosDoPrimeiroContato";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -444,6 +447,118 @@ export interface OParadoMaisRecente {
   detalhe: string;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OS MODELOS DA CASA — o que existe, em que estágio, e quem entra no sorteio
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⭐ A LISTA DOS MODELOS, NA PORTA DE LEITURA.
+ *
+ * Até aqui, para saber quais textos a casa tem e quais deles podem sair, era
+ * preciso abrir a tela da Meta e a tela do app e casar as duas na cabeça. Duas
+ * telas que ninguém casa é como o panfleto de nove linhas ficou meses no
+ * sorteio do primeiro contato sem ninguém conseguir apontar o responsável.
+ *
+ * ── ⚠️ ELA SÓ LÊ, E NÃO SUBMETE NADA ───────────────────────────────────────
+ *
+ * Criar modelo na Meta é escrita, e escrita não mora nesta pasta. O único
+ * caminho de criação continua sendo `POST /api/admin/sala-de-vendas/whatsapp/
+ * templates-frios`. Aqui se lê o CATÁLOGO da casa (que é código) cruzado com o
+ * espelho local da Meta (`ModeloDeVendas`), e nada mais.
+ *
+ * ── ⚠️ "NÃO SEI" NUNCA VIRA "NÃO APROVADO" ─────────────────────────────────
+ *
+ * `situacao: null` significa que o espelho não tem linha para este nome — pode
+ * ser modelo nunca submetido, ou sincronização que não rodou. As duas coisas
+ * são "não medido", e `motivoDoNaoMedido` diz qual. Escrever "REJECTED" aí
+ * faria alguém reescrever um texto que a Meta nunca viu.
+ */
+export interface ModeloDaCasa {
+  nome: string;
+  /** 1 = número frio (atravessar o porteiro). 2 = conversa com quem decide. */
+  estagio: 1 | 2;
+  corpo: string;
+  categoria: string;
+  /** Quantas `{{n}}` o corpo tem, contadas do texto da casa. */
+  variaveis: number;
+  /** A coluna de origem de cada variável, na ordem. Vazio no estágio 1. */
+  fontesDasVariaveis: string[];
+  /** APPROVED, PENDING, REJECTED… do espelho local. `null` = não medido. */
+  situacao: string | null;
+  motivoDaRecusa: string | null;
+  /**
+   * ⭐ Entra no sorteio do PRIMEIRO CONTATO? Só os três do estágio 1 entram —
+   * e é este fechamento que tirou o panfleto do ar. O estágio 2 é sempre
+   * `false`: ele não se sorteia, ele é escolhido pelo momento da conversa.
+   */
+  noSorteioDoPrimeiroContato: boolean;
+  motivoDoNaoMedido: string | null;
+}
+
+function contarVariaveis(corpo: string): number {
+  return new Set([...corpo.matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1])).size;
+}
+
+async function lerModelos(db: Cliente): Promise<ModeloDaCasa[]> {
+  /**
+   * ⚠️ SEM `select` DE PROPÓSITO, e o motivo é o contrato desta pasta.
+   *
+   * `contrato.test.ts` proíbe `nome: true` em qualquer select deste arquivo —
+   * a trava que impede o nome de uma PESSOA de sair por uma porta de leitura.
+   * A coluna `nome` de `ModeloDeVendas` é o nome de um MODELO, não de gente,
+   * mas afrouxar a regra para acomodar a exceção é como a trava deixa de valer
+   * para o caso que ela existe para pegar. A régua fica; a consulta é que muda.
+   *
+   * `ModeloDeVendas` não guarda pessoa nenhuma — é catálogo de texto da casa —
+   * e só três campos saem daqui, escolhidos abaixo, um a um.
+   */
+  const espelho = await db.modeloDeVendas.findMany();
+  const porNome = new Map(
+    espelho.map((m) => [m.nome, { situacao: m.situacao, motivoDaRecusa: m.motivoDaRecusa }]),
+  );
+  const noSorteio = new Set<string>(MODELOS_DO_PRIMEIRO_CONTATO as readonly string[]);
+
+  const montar = (
+    nome: string,
+    estagio: 1 | 2,
+    corpo: string,
+    categoria: string,
+    fontes: string[],
+  ): ModeloDaCasa => {
+    const doEspelho = porNome.get(nome) ?? null;
+    return {
+      nome,
+      estagio,
+      corpo,
+      categoria,
+      variaveis: contarVariaveis(corpo),
+      fontesDasVariaveis: fontes,
+      situacao: doEspelho?.situacao ?? null,
+      motivoDaRecusa: doEspelho?.motivoDaRecusa ?? null,
+      noSorteioDoPrimeiroContato: noSorteio.has(nome),
+      motivoDoNaoMedido: doEspelho
+        ? null
+        : "não há linha deste nome no espelho local da Meta — pode ser modelo nunca submetido ou sincronização que não rodou. NÃO é reprovação.",
+    };
+  };
+
+  return [
+    ...COLD_GREETING_TEMPLATES.map((t) =>
+      montar(t.name, 1, t.body, t.category, t.restaurantNameParam ? ["SiteLead.restaurante"] : []),
+    ),
+    ...ESTAGIO_2_TEMPLATES.map((m) =>
+      montar(
+        m.name,
+        2,
+        m.body,
+        m.category,
+        [...m.variaveis].sort((a, b) => a.posicao - b.posicao).map((v) => v.fonte),
+      ),
+    ),
+  ];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface EstadoDaCorrente {
@@ -455,6 +570,8 @@ export interface EstadoDaCorrente {
   largados: OsLargados;
   corrente: ACorrente;
   paradoMaisRecente: OParadoMaisRecente | null;
+  /** O catálogo de textos da casa, por estágio, cruzado com o espelho da Meta. */
+  modelos: ModeloDaCasa[];
   /** Tudo que esta leitura NÃO conseguiu medir, com o motivo. Nunca zero. */
   naoMedido: string[];
 }
@@ -469,6 +586,7 @@ export async function estadoDaCorrente(
   const ha7d = new Date(agora.getTime() - 7 * 24 * 3_600_000);
 
   const interruptores = await lerInterruptores(db, env);
+  const modelos = await lerModelos(db);
 
   const [j24, j7] = await Promise.all([lerJanela(db, "24h", ha24h), lerJanela(db, "7d", ha7d)]);
   const [t24, t7] = await Promise.all([lerTempoAteFalarmos(db, ha24h), lerTempoAteFalarmos(db, ha7d)]);
@@ -559,6 +677,20 @@ export async function estadoDaCorrente(
     : null;
 
   const naoMedido: string[] = [];
+  const semEspelho = modelos.filter((m) => m.situacao === null).map((m) => m.nome);
+  if (semEspelho.length > 0) {
+    naoMedido.push(
+      `${semEspelho.length} modelo(s) do catálogo sem linha no espelho da Meta (${semEspelho.join(", ")}) — ` +
+        "situação NÃO MEDIDA, e isso não é reprovação: pode ser modelo nunca submetido.",
+    );
+  }
+  const estagio2Aprovados = modelos.filter((m) => m.estagio === 2 && m.situacao === "APPROVED").length;
+  if (estagio2Aprovados === 0) {
+    naoMedido.push(
+      "nenhum modelo do ESTÁGIO 2 consta como APPROVED — fora da janela de 24h a casa não tem como abrir " +
+        "conversa com quem decide, e isso é achado, não ruído.",
+    );
+  }
   if (t24.motivoDoNaoMedido) naoMedido.push(`tempo até falarmos (24h): ${t24.motivoDoNaoMedido}`);
   if (t7.motivoDoNaoMedido) naoMedido.push(`tempo até falarmos (7d): ${t7.motivoDoNaoMedido}`);
   if (semPrazo > 0) {
@@ -608,6 +740,7 @@ export async function estadoDaCorrente(
       ganhos: contagem.get("GANHO") ?? 0,
     },
     paradoMaisRecente,
+    modelos,
     naoMedido,
   };
 }
