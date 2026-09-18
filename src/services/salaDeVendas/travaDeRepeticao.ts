@@ -156,6 +156,21 @@ export interface PedidoDeReserva {
   agora?: Date;
   /** Só para teste. Em produção vem do ambiente. */
   intervaloHoras?: number;
+  /**
+   * ⭐ RETENTATIVA DA MESMA ABORDAGEM — 18/09/2026, com a fila de modelos.
+   *
+   * Quando a Meta recusa um modelo por erro DO MODELO, o caminho de abordagem
+   * tenta o próximo da fila. Essa segunda tentativa **não é uma segunda
+   * abordagem**: a primeira não chegou a ninguém — nada saiu do nosso lado.
+   * Contar o intervalo mínimo contra ela mataria a fila na segunda volta, e o
+   * lead ficaria sem nada, que é exatamente o defeito que a fila veio corrigir.
+   *
+   * ⚠️ Pula SÓ a trava do ritmo. A trava do CONTEÚDO (`@@unique`) continua
+   * inteira: nenhum texto sai duas vezes para o mesmo número, retentativa ou
+   * não. Quem passa `true` aqui precisa já ter reservado o ritmo nesta mesma
+   * rodada — só `abordar.ts` faz isso, e só da segunda volta em diante.
+   */
+  retentativaDaMesmaAbordagem?: boolean;
 }
 
 /**
@@ -204,10 +219,12 @@ export async function reservarEnvio(
     // duas rodadas simultâneas disputam a MESMA linha e exatamente uma recebe
     // `count: 1`. É a diferença entre isto e um `findFirst` seguido de
     // `update`, que é o defeito que esta trava existe para corrigir.
-    const avancou = await db.travaDeAbordagemRitmo.updateMany({
-      where: { telefoneDigits: digitos, ultimoEnvioEm: { lt: limite } },
-      data: { ultimoEnvioEm: agora },
-    });
+    const avancou = pedido.retentativaDaMesmaAbordagem
+      ? { count: 1 }
+      : await db.travaDeAbordagemRitmo.updateMany({
+          where: { telefoneDigits: digitos, ultimoEnvioEm: { lt: limite } },
+          data: { ultimoEnvioEm: agora },
+        });
 
     if (avancou.count === 0) {
       // Ou nunca houve abordagem para este número (linha ainda não existe), ou

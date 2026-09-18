@@ -101,11 +101,46 @@ export type EscolhaDoPrimeiroContato =
  * não do nome: se um dia o `_03` passar a pedir variável, ele sai sozinho do
  * grupo, sem ninguém precisar lembrar de mudar este arquivo.
  */
-export async function escolherModeloDoPrimeiroContato(
+/**
+ * ⭐ A ORDEM DA FILA DE TENTATIVAS — ordem do CEO, 18/09/2026:
+ * *"porque se uma não dá certo, a gente tenta as outras."*
+ *
+ * O primeiro da fila é o MESMO que o sorteio sempre escolheu (`escolherAleatorio`,
+ * uma chamada de `random`, comportamento idêntico ao de antes). O que muda é que
+ * agora existe um SEGUNDO e um TERCEIRO atrás dele, na ordem do pool.
+ *
+ * ⚠️ `reserva` entra DEPOIS de `preferidos`, nunca misturada: os grupos não se
+ * misturam, e a reserva só é alcançada quando os preferidos acabaram.
+ */
+function filaDeTentativas<T>(
+  preferidos: readonly T[],
+  reserva: readonly T[],
+  random: () => number,
+): T[] {
+  const base = preferidos.length ? preferidos : reserva;
+  const extras = preferidos.length ? reserva : [];
+  const primeiro = escolherAleatorio(base, random);
+  if (!primeiro) return [...extras];
+  return [primeiro, ...base.filter((m) => m !== primeiro), ...extras];
+}
+
+export type CandidatosDoPrimeiroContato =
+  | { ok: true; modelos: ModeloLiberadoParaEnvio[]; motivo: MotivoDaEscolha }
+  | { ok: false; motivo: MotivoDaEscolha; detalhe: string };
+
+/**
+ * A FILA do estágio 1 — todos os modelos elegíveis, em ordem de tentativa.
+ *
+ * ⛔ A trava de grupo continua inteira: sem dado para `{{1}}`, os modelos com
+ * variável **não entram na fila** — nem como último recurso. Já perdemos ~10%
+ * dos disparos com variável vazia; uma fila que "tenta o `_01` mesmo assim" é
+ * essa perda de volta, com outro nome.
+ */
+export async function candidatosDoPrimeiroContato(
   db: Cliente,
   p: { podePreencherAVariavel: boolean },
   random: () => number = Math.random,
-): Promise<EscolhaDoPrimeiroContato> {
+): Promise<CandidatosDoPrimeiroContato> {
   const liberados = await modelosLiberadosParaEnvio(db);
   const doPrimeiroContato = liberados.filter((m) =>
     (MODELOS_DO_PRIMEIRO_CONTATO as readonly string[]).includes(m.nome),
@@ -124,11 +159,10 @@ export async function escolherModeloDoPrimeiroContato(
   const semVariavel = doPrimeiroContato.filter((m) => m.variaveis === 0);
   const comVariavel = doPrimeiroContato.filter((m) => m.variaveis > 0);
 
-  // Sem nome do restaurante, só os sem variável servem. Fail-closed: se não
-  // houver nenhum, recusa — nunca manda um `{{1}}` vazio nem inventa o nome.
   if (!p.podePreencherAVariavel) {
-    const escolhido = escolherAleatorio(semVariavel, random);
-    if (!escolhido) {
+    // ⛔ Só os sem variável. `comVariavel` nem entra como reserva.
+    const fila = filaDeTentativas(semVariavel, [], random);
+    if (fila.length === 0) {
       return {
         ok: false,
         motivo: "semDadoParaAVariavel",
@@ -137,21 +171,28 @@ export async function escolherModeloDoPrimeiroContato(
           "está liberado. Não se inventa o nome da casa para preencher {{1}}.",
       };
     }
-    return { ok: true, modelo: escolhido, motivo: "semDadoParaAVariavel" };
+    return { ok: true, modelos: fila, motivo: "semDadoParaAVariavel" };
   }
 
-  // Com nome, preferimos os que o USAM — a mensagem com o nome da casa é a que
-  // se parece com gente. O sem-variável fica de reserva quando nenhum outro
-  // estiver liberado.
-  const escolhido = escolherAleatorio(comVariavel.length ? comVariavel : semVariavel, random);
-  if (!escolhido) {
+  const fila = filaDeTentativas(comVariavel, semVariavel, random);
+  if (fila.length === 0) {
     return {
       ok: false,
       motivo: "nenhumModeloDoPrimeiroContatoLiberado",
       detalhe: "os três modelos de primeiro contato existem, mas nenhum ficou elegível para este contato.",
     };
   }
-  return { ok: true, modelo: escolhido, motivo: "podePreencherAVariavel" };
+  return { ok: true, modelos: fila, motivo: "podePreencherAVariavel" };
+}
+
+export async function escolherModeloDoPrimeiroContato(
+  db: Cliente,
+  p: { podePreencherAVariavel: boolean },
+  random: () => number = Math.random,
+): Promise<EscolhaDoPrimeiroContato> {
+  const fila = await candidatosDoPrimeiroContato(db, p, random);
+  if (!fila.ok) return fila;
+  return { ok: true, modelo: fila.modelos[0]!, motivo: fila.motivo };
 }
 
 /**
@@ -252,39 +293,34 @@ export type EscolhaDoLeadDeFormulario =
  */
 export const MODELO_NEUTRO_DE_RESERVA = "foocci_contato_inicial_03";
 
-export async function escolherModeloDoLeadDeFormulario(
+export type CandidatosDoLeadDeFormulario =
+  | { ok: true; modelos: ModeloLiberadoParaEnvio[]; motivo: MotivoDaEscolhaDeFormulario }
+  | { ok: false; motivo: MotivoDaEscolhaDeFormulario; detalhe: string };
+
+/**
+ * A FILA do estágio 1-B — os `foocci_lead_formulario_*`, em ordem de tentativa,
+ * com a reserva neutra no fim.
+ *
+ * ⛔ A trava que não afrouxa: `foocci_contato_inicial_01/02` **nunca** entram
+ * nesta fila, em nenhuma posição. Quem levantou a mão não recebe "este contato
+ * é do {{1}}, certo?" — nem na primeira tentativa, nem na última. A única ponte
+ * entre os grupos é o `_03`, que é neutro, e é ela e só ela.
+ */
+export async function candidatosDoLeadDeFormulario(
   db: Cliente,
   p: { jaSabeORestaurante: boolean },
   random: () => number = Math.random,
-): Promise<EscolhaDoLeadDeFormulario> {
+): Promise<CandidatosDoLeadDeFormulario> {
   const liberados = await modelosLiberadosParaEnvio(db);
   const doFormulario = liberados.filter((m) =>
     (MODELOS_DO_LEAD_DE_FORMULARIO as readonly string[]).includes(m.nome),
   );
+  const neutro = liberados.filter((m) => m.nome === MODELO_NEUTRO_DE_RESERVA);
 
   if (doFormulario.length === 0) {
-    // ── ⚠️ A RESERVA NEUTRA — ordem do CEO, 18/09/2026 ────────────────────────
-    //
-    // A regra original recusava a abordagem quando nenhum modelo morno estivesse
-    // aprovado, para quem pediu contato nunca receber texto de estranho. A
-    // intenção continua certa; o custo real dela é que era proibitivo.
-    //
-    // Medido hoje: três leads pagos entraram, a recepção os assumiu, e NINGUÉM
-    // falou com eles — os textos mornos foram submetidos e a Meta só analisa
-    // amanhã. O CEO: *"a Meta só vai aprovar amanhã, esses clientes têm que ser
-    // abordados AGORA."* Lead quente esperando um dia pela fila de análise da
-    // Meta é venda perdida, e venda perdida é pior que texto imperfeito.
-    //
-    // A reserva NÃO é qualquer modelo frio: é só o `foocci_contato_inicial_03`
-    // — "Olá! Tudo bem?" —, que é neutro e não diz nada que só faça sentido
-    // para estranho. Os outros dois perguntam "este contato é do {{1}}, certo?",
-    // que é exatamente o insulto que esta trava existia para impedir, e
-    // continuam proibidos aqui.
-    const neutro = liberados.find((m) => m.nome === MODELO_NEUTRO_DE_RESERVA);
-    if (neutro) {
-      return { ok: true, modelo: neutro, motivo: "reservaNeutra" };
+    if (neutro.length) {
+      return { ok: true, modelos: [...neutro], motivo: "reservaNeutra" };
     }
-
     return {
       ok: false,
       motivo: "nenhumModeloDeFormularioLiberado",
@@ -304,8 +340,10 @@ export async function escolherModeloDoLeadDeFormulario(
 
   const preferidos = p.jaSabeORestaurante ? jaQualificam : perguntaORestaurante;
   const reserva = p.jaSabeORestaurante ? perguntaORestaurante : jaQualificam;
-  const escolhido = escolherAleatorio(preferidos.length ? preferidos : reserva, random);
-  if (!escolhido) {
+  // A reserva neutra fecha a fila: é o último texto que ainda pode sair sem
+  // ofender quem pediu contato.
+  const fila = [...filaDeTentativas(preferidos, reserva, random), ...neutro];
+  if (fila.length === 0) {
     return {
       ok: false,
       motivo: "nenhumModeloDeFormularioLiberado",
@@ -314,7 +352,17 @@ export async function escolherModeloDoLeadDeFormulario(
   }
   return {
     ok: true,
-    modelo: escolhido,
+    modelos: fila,
     motivo: p.jaSabeORestaurante ? "jaSabeORestaurante" : "vaiPerguntarORestaurante",
   };
+}
+
+export async function escolherModeloDoLeadDeFormulario(
+  db: Cliente,
+  p: { jaSabeORestaurante: boolean },
+  random: () => number = Math.random,
+): Promise<EscolhaDoLeadDeFormulario> {
+  const fila = await candidatosDoLeadDeFormulario(db, p, random);
+  if (!fila.ok) return fila;
+  return { ok: true, modelo: fila.modelos[0]!, motivo: fila.motivo };
 }
