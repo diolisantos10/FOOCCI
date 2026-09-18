@@ -147,6 +147,19 @@ export interface MensagemDaAmostra {
   texto: string | null;
   status: string;
   templateNome: string | null;
+  /**
+   * ⚠️ O MOTIVO DA FALHA, DITO PELO PROVEDOR — aberto em 18/09/2026.
+   *
+   * Naquele dia 659 abordagens saíram e **as 200 conferidas falharam, todas**.
+   * O texto estava certo, o envio respondeu 200 com `wamid`, e a recusa vinha
+   * depois, pelo aviso de status da Meta. O motivo estava gravado em
+   * `LeadMensagem.erro` desde sempre e **nenhuma porta o mostrava** — então a
+   * tela dizia "FALHOU" e ninguém conseguia dizer por quê.
+   *
+   * Contar falha sem poder ler a causa é o mesmo defeito que este raio-X
+   * existe para matar: número sem explicação não é medição, é susto.
+   */
+  erro: string | null;
 }
 
 export interface ConversaDaAmostra {
@@ -719,6 +732,7 @@ export async function raioXDasConversas(
         legenda: true,
         status: true,
         templateNome: true,
+        erro: true,
       },
       orderBy: { ocorreuEm: "asc" },
     })) as Array<{
@@ -730,6 +744,7 @@ export async function raioXDasConversas(
       legenda: string | null;
       status: string;
       templateNome: string | null;
+      erro: string | null;
     }>;
 
     for (const f of amostraDeFichas.filter((x) => lote.includes(x.lead.id))) {
@@ -755,6 +770,7 @@ export async function raioXDasConversas(
             texto: m.texto ?? m.legenda ?? null,
             status: m.status,
             templateNome: m.templateNome,
+            erro: m.erro,
           })),
       });
     }
