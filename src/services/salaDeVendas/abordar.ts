@@ -64,7 +64,7 @@ import {
   type ModeloDeAbordagem,
 } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { avaliarAdequacaoDoTemplate, type HistoricoDeAbordagens } from "./supervisora/adequacaoDoTemplate";
-import { reservarEnvio } from "./travaDeRepeticao";
+import { reservarEnvio, devolverReserva } from "./travaDeRepeticao";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -669,6 +669,15 @@ export async function abordarLead(
   const envio = await enviarModeloDeVendas(decisao, lead.whatsapp ?? "", modelo);
 
   if (!envio.ok) {
+    // A entrega não aconteceu: a reserva volta. Sem isto, uma recusa da Meta
+    // bloqueia o número por 20h por uma mensagem que ninguém leu — e a próxima
+    // tentativa, com outro modelo, é recusada por "já falei com essa pessoa".
+    await devolverReserva(db, {
+      telefone: lead.whatsapp,
+      conteudo: textoIntegral.texto,
+      natureza: "abordagem",
+    });
+
     await registrarFalhaDeEnvio(db, {
       mensagemId: gravada.mensagemId,
       erro: envio.error ?? "erro sem motivo",

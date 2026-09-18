@@ -169,6 +169,53 @@ export interface PedidoDeReserva {
  * os dois pela trava de conteúdo e chegariam juntos ao ritmo — e aí só a
  * atomicidade do ritmo os separaria, um passo depois de já terem reservado.
  */
+/**
+ * DEVOLVE a reserva quando a entrega NÃO aconteceu.
+ *
+ * ── ⚠️ MEDIDO EM PRODUÇÃO, 18/09/2026 ───────────────────────────────────────
+ *
+ * A reserva é feita ANTES do envio, de propósito: é ela que impede duas rodadas
+ * simultâneas de mandarem a mesma coisa. Mas quando a Meta recusa, a reserva
+ * ficava de pé assim mesmo — e o número passava 20 horas bloqueado por uma
+ * mensagem que **ninguém leu**.
+ *
+ * Aconteceu com os três leads pagos: os três receberam `META_131042`, nenhum
+ * viu nada, e o sistema recusou a segunda tentativa dizendo "já falei com essa
+ * pessoa". É o mesmo defeito que o freio entre lotes tinha de manhã, no mesmo
+ * dia: **contar tentativa como se fosse entrega.**
+ *
+ * O que a trava protege é a paciência de quem recebe. Mensagem que não chegou
+ * não gastou paciência nenhuma.
+ *
+ * ⚠️ Devolver a reserva é seguro **porque o envio já terminou** — a corrida que
+ * a reserva impede acontece entre a decisão e a entrega, e nesse ponto ela já
+ * passou. Chamar isto em qualquer outro momento reabriria a corrida.
+ */
+export async function devolverReserva(
+  db: Cliente,
+  pedido: { telefone: string | null | undefined; conteudo: string; natureza: NaturezaDaFala },
+): Promise<void> {
+  if (pedido.natureza === "conversa") return;
+
+  const digitos = digitosDoTelefone(pedido.telefone);
+  const conteudo = (pedido.conteudo ?? "").trim();
+  if (digitos.length < 10 || !conteudo) return;
+
+  const impressao = impressaoDoConteudo(conteudo);
+
+  try {
+    // O conteúdo volta a ser inédito para este número.
+    await db.travaDeAbordagemEnviada.deleteMany({ where: { telefoneDigits: digitos, impressao } });
+    // E o relógio do ritmo volta ao que era: como nada saiu, não há do que
+    // descansar. A linha some inteira — ela nasce de novo no próximo envio.
+    await db.travaDeAbordagemRitmo.deleteMany({ where: { telefoneDigits: digitos } });
+  } catch (e) {
+    // Falhar aqui é ruim, mas não é motivo para derrubar o fluxo: o pior caso
+    // é o número ficar bloqueado 20h, que é o comportamento de antes.
+    console.error("[travaDeRepeticao] não consegui devolver a reserva:", e);
+  }
+}
+
 export async function reservarEnvio(
   db: Cliente,
   pedido: PedidoDeReserva,
