@@ -133,10 +133,21 @@ describe("janela de abordagem — 9h às 20h, dias úteis, horário de São Paul
     expect(foraDaJanela(new Date("2026-06-03T23:00:00Z"))).toBe(true);
   });
 
-  it("REPROVA de madrugada e no fim de semana", () => {
+  it("REPROVA de madrugada, no domingo e no sábado depois das 14h", () => {
     expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-03T05:00:00Z") })).reason).toBe("FORA_DA_JANELA");
-    // Sábado, 6 de junho de 2026, meio-dia em SP.
-    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-06T15:00:00Z") })).reason).toBe("FORA_DA_JANELA");
+
+    // ── ⚠️ O SÁBADO MUDOU EM 18/09/2026 ───────────────────────────────────
+    //
+    // Este caso guardava "sábado meio-dia = FORA". Ordem do CEO de 18/09/2026:
+    // *"ao sábado das nove às quatorze horas"*. Sábado passou a ser dia de
+    // abordagem até as 14h — e o teste tinha de mudar junto, senão ele
+    // continuaria provando com régua verde uma regra que o dono revogou.
+    // Sábado, 6 de junho de 2026: 15h UTC = 12h SP → DENTRO.
+    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-06T15:00:00Z") })).sendable).toBe(true);
+    // 17h UTC = 14h SP → às quatorze em ponto o sábado FECHA.
+    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-06T17:00:00Z") })).reason).toBe("FORA_DA_JANELA");
+    // Domingo, 7 de junho de 2026, meio-dia em SP: não se aborda, em hora nenhuma.
+    expect(avaliarContatoDeLead(base({ agora: new Date("2026-06-07T15:00:00Z") })).reason).toBe("FORA_DA_JANELA");
   });
 
   it("⭐ a última hora atendida é a das 19h — às 20h a Sala fecha", () => {

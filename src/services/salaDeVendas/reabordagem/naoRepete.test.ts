@@ -21,7 +21,10 @@ import type { PortaDeEnvio, ResultadoDoEnvio } from "./portaDeEnvio";
 
 type Linha = Record<string, unknown>;
 
-const AGORA = new Date("2026-09-18T09:00:00.000Z");
+// ⚠️ 12:00 UTC = 09:00 em São Paulo, sexta: dentro da janela comercial de
+// abordagem (`janelaComercial.ts`). Era 09:00 UTC — 06:00 em SP — e desde
+// 18/09/2026 nenhum lote sai a essa hora.
+const AGORA = new Date("2026-09-18T12:00:00.000Z");
 const ANTES = new Date("2026-09-01T09:00:00.000Z");
 
 const QUANTOS = 30;

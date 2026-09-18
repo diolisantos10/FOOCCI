@@ -27,13 +27,21 @@ import { describe, it, expect } from "vitest";
 import { bancoDeProva } from "../bancoDeProva";
 import { reservarEnvio } from "../travaDeRepeticao";
 import { dispararUmLote, TAMANHO_DO_LOTE_MAXIMO } from "./executar";
+import { podeAbordarAgora } from "../janelaComercial";
 import { pararTudo } from "./interruptor";
 import { painelDaReabordagem } from "./painel";
 import type { PortaDeEnvio, ResultadoDoEnvio } from "./portaDeEnvio";
 
 type Linha = Record<string, unknown>;
 
-const INICIO = new Date("2026-09-18T09:00:00.000Z");
+/**
+ * ⚠️ 12:00 UTC = **09:00 em São Paulo, numa sexta**: a primeira hora da janela
+ * comercial de abordagem (`janelaComercial.ts`). Este valor era 09:00 UTC, que
+ * é 06:00 em São Paulo — e desde 18/09/2026 a campanha inteira é recusada nesse
+ * horário, com `foraDaJanelaComercial`. O teste tinha de passar a rodar dentro
+ * do horário em que a casa realmente fala com gente.
+ */
+const INICIO = new Date("2026-09-18T12:00:00.000Z");
 const DENTRO_DA_JANELA = new Date("2026-09-17T20:00:00.000Z");
 const FORA_DA_JANELA = new Date("2026-09-01T10:00:00.000Z");
 
@@ -200,6 +208,16 @@ function portaDeProva(db: ReturnType<typeof bancoDeProva>, relogio: () => Date) 
   return { porta, enviados };
 }
 
+/** Avança de 15 em 15 minutos até a janela comercial abrir. Usa a função REAL. */
+function proximoInstanteAbordavel(instante: Date): Date {
+  let t = new Date(instante);
+  // Teto de uma semana: laço infinito num teste é pior que um teste vermelho.
+  for (let i = 0; i < 7 * 24 * 4 && !podeAbordarAgora(t).pode; i++) {
+    t = new Date(t.getTime() + 15 * 60_000);
+  }
+  return t;
+}
+
 async function rodarACampanhaInteira(
   db: ReturnType<typeof bancoDeProva>,
   porta: PortaDeEnvio,
@@ -233,7 +251,13 @@ async function rodarACampanhaInteira(
 
     // O freio entre lotes é lido do banco: sem avançar o relógio, o disparo
     // seguinte é RECUSADO — e é isso que o `intervaloEntreLotes` prova.
-    relogio = new Date(relogio.getTime() + 31 * 60_000);
+    //
+    // ⚠️ E depois do freio vem a JANELA: 21 lotes a 31 minutos são quase onze
+    // horas, ou seja, a campanha atravessa o fim do expediente e o fim de
+    // semana. O relógio pula para o próximo instante em que a casa PODE
+    // abordar — que é exatamente o que acontece na vida real, e o motivo de a
+    // base inteira levar dias.
+    relogio = proximoInstanteAbordavel(new Date(relogio.getTime() + 31 * 60_000));
   }
 
   return lotes;
@@ -402,5 +426,89 @@ describe("a campanha de reabordagem, de ponta a ponta", () => {
     expect(r.rodou).toBe(false);
     if (!r.rodou) expect(r.motivo).toBe("portaSemTrava");
     expect(db.tabelas.reabordagemExecucao.length).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐⭐ A JANELA COMERCIAL — e a linha que ela NÃO pode cruzar.
+//
+// Ordem do CEO, 18/09/2026: seg–sex 09–20, sáb 09–14, domingo não se aborda.
+// Esta máquina não tinha janela nenhuma: ela só conhecia a janela de 24h da
+// Meta, que responde outra pergunta ("cabe texto livre, ou tem de ser
+// template?"). Um lote pedido às 3h de domingo saía.
+//
+// ⛔ E a régua do outro lado, que é metade da regra: a janela barra **NÓS
+// INICIARMOS**, nunca **NÓS RESPONDERMOS**. Quem escreve para a casa às 22h de
+// um domingo está com o celular na mão. Calar com essa pessoa em nome do
+// horário comercial seria usar contra ela a proteção feita para proteger quem
+// não nos chamou.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("⭐ a janela comercial barra o lote — e só o lote", () => {
+  const DOMINGO_3H = new Date("2026-09-20T06:00:00.000Z"); // 03:00 em São Paulo
+  const DOMINGO_22H = new Date("2026-09-21T01:00:00.000Z"); // domingo 22:00 em SP
+  const SEGUNDA_9H = new Date("2026-09-21T12:00:00.000Z"); // 09:00 em São Paulo
+
+  it("⛔ um disparo pedido às 3h de domingo NÃO sai, e a recusa tem nome", async () => {
+    const db = montarBase();
+    const { porta, enviados } = portaDeProva(db, () => DOMINGO_3H);
+
+    const r = await dispararUmLote(db as never, {
+      porta,
+      tamanho: TAMANHO_DO_LOTE_MAXIMO,
+      agora: DOMINGO_3H,
+      quemDisparou: "teste da janela",
+    });
+
+    expect(r.rodou).toBe(false);
+    if (r.rodou) throw new Error("impossível");
+    expect(r.motivo).toBe("foraDaJanelaComercial");
+    expect(r.detalhe).toContain("domingo");
+    // ⚠️ E ninguém foi tocado: nem mensagem, nem linha de execução. Recusar
+    // DEPOIS de gastar o contato marcaria como examinado quem nunca foi
+    // abordado, e ele nunca mais apareceria no lote seguinte.
+    expect(enviados).toHaveLength(0);
+    expect(await db.reabordagemExecucao.count({})).toBe(0);
+  });
+
+  it("⭐ o MESMO lote, na segunda às 9h, sai normalmente", async () => {
+    const db = montarBase();
+    const { porta, enviados } = portaDeProva(db, () => SEGUNDA_9H);
+
+    const r = await dispararUmLote(db as never, {
+      porta,
+      tamanho: TAMANHO_DO_LOTE_MAXIMO,
+      agora: SEGUNDA_9H,
+      quemDisparou: "teste da janela",
+    });
+
+    expect(r.rodou, "segunda 09:00 é a primeira hora da janela").toBe(true);
+    if (!r.rodou) throw new Error("impossível");
+    expect(r.conta.examinados).toBeGreaterThan(0);
+    expect(enviados.length).toBeGreaterThan(0);
+  });
+
+  it("⛔ RESPONDER a quem escreveu continua funcionando fora da janela", async () => {
+    // O canal por onde a casa FALA numa conversa viva é `porta.naJanela` — o
+    // mesmo `registrarSaida` + `entregarMensagem` que atende quem nos procurou.
+    // Ele é chamado aqui às 22h de um DOMINGO, o pior horário possível para
+    // abordar, e entrega. É isso que prova que a janela mora na decisão de
+    // INICIAR e não no canal de falar: se alguém a pendurar no canal, este
+    // caso fica vermelho.
+    const db = montarBase();
+    const { porta, enviados } = portaDeProva(db, () => DOMINGO_22H);
+
+    const abordar = await dispararUmLote(db as never, {
+      porta,
+      agora: DOMINGO_22H,
+      quemDisparou: "teste da janela",
+    });
+    expect(abordar.rodou, "abordar às 22h de domingo tem de ser recusado").toBe(false);
+
+    const resposta = await porta.naJanela("lead-0001", "Oi! Claro, posso te explicar agora mesmo.");
+    expect(resposta.enviado, "responder a quem escreveu NUNCA pode ser barrado pelo horário").toBe(true);
+    expect(enviados).toEqual([
+      { leadId: "lead-0001", conteudo: "Oi! Claro, posso te explicar agora mesmo." },
+    ]);
   });
 });
