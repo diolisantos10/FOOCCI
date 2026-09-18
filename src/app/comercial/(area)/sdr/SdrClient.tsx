@@ -30,19 +30,46 @@
 import { useEffect, useState } from "react";
 import {
   Aviso,
-  Cabecalho,
   Caixa,
   Carregando,
+  CartaoDeIA,
+  Celula,
+  Corpo,
   Erro,
-  Grade,
+  FilaDeIndicadores,
+  Icone,
+  Indicador,
+  Linha,
   NaoMedido,
-  Numero,
+  Pilula,
   SemAcesso,
   Secao,
+  Tabela,
+  TituloDaPagina,
   cx,
+  emDia,
   type Fase,
   type Medida,
+  type NomeDeIcone,
+  type Tom,
 } from "../_pecas/Pecas";
+
+/**
+ * O ícone e a cor de cada balde da fila, na ordem do desenho 12. A fila vem do
+ * serviço; esta lista só empresta cor a quem ela trouxer, e quem não estiver
+ * aqui sai em cinza — nunca fora da tela.
+ */
+const TINTA_DA_FILA: Record<string, { icone: NomeDeIcone; tom: Tom }> = {
+  NOVO: { icone: "alvo", tom: "azul" },
+  PROSPECT: { icone: "alvo", tom: "azul" },
+  GATEKEEPER: { icone: "porta", tom: "ambar" },
+  PORTEIRO: { icone: "porta", tom: "ambar" },
+  ATENDENTE: { icone: "pessoas", tom: "ambar" },
+  DECISOR: { icone: "chave", tom: "roxo" },
+  ABORDAGEM: { icone: "faisca", tom: "azul" },
+  REUNIAO: { icone: "agenda", tom: "verde" },
+  SEM_CONTATO: { icone: "alerta", tom: "cinza" },
+};
 
 type Taxa =
   | { medido: true; valor: number; base: number }
@@ -98,15 +125,34 @@ export function SecaoFilaDoSdr({ dados }: { dados: DadosDoSdr }) {
         </Caixa>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {dados.fila.map((f) => (
-            <li
-              key={f.estado}
-              className="flex items-baseline justify-between gap-3 rounded-2xl border border-line bg-paper px-3 py-2"
-            >
-              <span className="text-[13px] text-ink2">{f.rotulo}</span>
-              <span className="text-[16px] font-semibold tabular-nums text-ink">{f.total}</span>
-            </li>
-          ))}
+          {dados.fila.map((f) => {
+            const t = TINTA_DA_FILA[f.estado] ?? { icone: "alvo" as NomeDeIcone, tom: "cinza" as Tom };
+            return (
+              <li
+                key={f.estado}
+                className="flex items-center gap-3 rounded-2xl border border-line bg-paper px-3 py-2"
+              >
+                <span
+                  className={cx(
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
+                    t.tom === "azul" && "bg-blue-50 text-blue-600",
+                    t.tom === "ambar" && "bg-amber-50 text-amber-600",
+                    t.tom === "roxo" && "bg-violet-50 text-violet-600",
+                    t.tom === "verde" && "bg-emerald-50 text-emerald-600",
+                    t.tom === "cinza" && "bg-slate-100 text-slate-500",
+                  )}
+                >
+                  <Icone nome={t.icone} className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1 text-[13px] text-ink2">{f.rotulo}</span>
+                <span className="text-[16px] font-semibold tabular-nums text-ink">{f.total}</span>
+                {/* A seta do desenho abre a fila. Enquanto a tela de trabalho
+                    daquele balde não existir, ela é só o sinal de direção — e
+                    não um botão que não vai a lugar nenhum. */}
+                <Icone nome="alvo" className="h-3.5 w-3.5 shrink-0 text-muted" />
+              </li>
+            );
+          })}
         </ul>
       )}
     </Secao>
@@ -119,16 +165,20 @@ export function SecaoNumerosDoSdr({ dados }: { dados: DadosDoSdr }) {
   const g = dados.gatekeepers;
   return (
     <Secao titulo="O período em números" descricao="Tudo vem do raio-X das conversas, sobre a janela selecionada.">
-      <Grade>
-        <Numero
+      <FilaDeIndicadores>
+        <Indicador
           rotulo="Abordados"
           valor={a.medido ? a.valor.abordados : null}
           motivo={a.medido ? undefined : a.motivo}
+          icone="alvo"
+          tom="azul"
         />
-        <Numero
+        <Indicador
           rotulo="Responderam"
           valor={a.medido ? a.valor.responderam : null}
           motivo={a.medido ? undefined : a.motivo}
+          icone="pessoas"
+          tom="verde"
           rodape={
             a.medido && a.valor.taxaDeResposta.medido
               ? `${Math.round(a.valor.taxaDeResposta.valor * 100)}% dos abordados`
@@ -137,26 +187,32 @@ export function SecaoNumerosDoSdr({ dados }: { dados: DadosDoSdr }) {
                 : undefined
           }
         />
-        <Numero
+        <Indicador
           rotulo="Caíram em porteiro"
           valor={g.medido ? g.valor.classificados : null}
           motivo={g.medido ? undefined : g.motivo}
+          icone="porta"
+          tom="ambar"
         />
-        <Numero
+        <Indicador
           rotulo="Decisores capturados"
           valor={d.medido ? d.valor.comTelefone + d.valor.semTelefone : null}
           motivo={d.medido ? undefined : d.motivo}
+          icone="chave"
+          tom="roxo"
           rodape={
             d.medido ? `${d.valor.comTelefone} com telefone · ${d.valor.semTelefone} sem` : undefined
           }
         />
-        <Numero
+        <Indicador
           rotulo="Fila de reabordagem"
           valor={dados.reabordagem.medido ? dados.reabordagem.valor.total : null}
           motivo={dados.reabordagem.medido ? undefined : dados.reabordagem.motivo}
+          icone="relogio"
+          tom="azul"
           rodape={dados.reabordagem.medido ? dados.reabordagem.valor.criterio : undefined}
         />
-      </Grade>
+      </FilaDeIndicadores>
     </Secao>
   );
 }
@@ -187,34 +243,28 @@ export function SecaoTiposDeGatekeeper({ dados }: { dados: DadosDoSdr }) {
         </Aviso>
       )}
 
-      <ul className="flex flex-col gap-1.5">
+      <Tabela colunas={["Tipo de porteiro", "Dá para insistir?", "Quantos"]}>
         {dados.tiposDeGatekeeper.map((t) => {
           const quantos = porTipo?.get(t.tipo);
           return (
-            <li
-              key={t.tipo}
-              className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-2xl border border-line bg-paper px-3 py-2"
-            >
-              <span className="text-[13px] text-ink2">{t.rotulo}</span>
-              <span
-                className={cx(
-                  "rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[.04em]",
-                  t.humano ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
-                )}
-              >
-                {t.humano ? "dá para insistir" : "máquina"}
-              </span>
-              <span className="text-[15px] font-semibold tabular-nums text-ink">
+            <Linha key={t.tipo}>
+              <Celula forte>{t.rotulo}</Celula>
+              <Celula>
+                <Pilula tom={t.humano ? "verde" : "cinza"}>
+                  {t.humano ? "dá para insistir" : "máquina"}
+                </Pilula>
+              </Celula>
+              <Celula numero forte>
                 {quantos === undefined ? (
                   <span className="text-[12px] font-normal italic text-muted">não medido</span>
                 ) : (
                   quantos
                 )}
-              </span>
-            </li>
+              </Celula>
+            </Linha>
           );
         })}
-      </ul>
+      </Tabela>
 
       {g.medido && (
         <Caixa>
@@ -306,9 +356,16 @@ export function SdrClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <Cabecalho
+      <TituloDaPagina
+        contexto="Sala de Vendas › Central SDR"
         titulo="Central SDR / Gatekeeper"
-        subtitulo="Atravessar o porteiro e chegar em quem decide. Só leitura: esta tela não envia mensagem nem agenda abordagem."
+        subtitulo="Conquiste o contato certo, atravesse gatekeepers e leve a conversa até o decisor. Só leitura: esta tela não envia mensagem nem agenda abordagem."
+        periodo={
+          estado.fase === "pronto"
+            ? `${emDia(estado.dados.periodo.de)} – ${emDia(estado.dados.periodo.ate)}`
+            : undefined
+        }
+        atualidade={estado.fase === "pronto" ? "Tempo real" : undefined}
       />
 
       {estado.fase === "carregando" && <Carregando texto="Lendo a fila do SDR e o raio-X das conversas…" />}
@@ -318,11 +375,87 @@ export function SdrClient() {
       {estado.fase === "pronto" && (
         <>
           <SecaoNumerosDoSdr dados={estado.dados} />
-          <SecaoFilaDoSdr dados={estado.dados} />
-          <SecaoTiposDeGatekeeper dados={estado.dados} />
-          <SecaoPistasSemTelefone dados={estado.dados} />
+
+          <Corpo lateral={<CopilotoDoSdr dados={estado.dados} />}>
+            <SecaoFilaDoSdr dados={estado.dados} />
+            <SecaoTiposDeGatekeeper dados={estado.dados} />
+            <SecaoPistasSemTelefone dados={estado.dados} />
+          </Corpo>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * O COPILOTO SDR DO DESENHO — o que dá para dizer hoje, e só isso.
+ *
+ * O desenho tem, nesta coluna: resumo da situação, tipo de gatekeeper detectado,
+ * decisor encontrado, próxima melhor ação, respostas sugeridas e um checklist.
+ * **As respostas sugeridas e os quatro botões de ação NÃO entram**: esta frente
+ * é só leitura, e um botão "Pedir contato do responsável" que não pede nada
+ * ensina o SDR a contar com um envio que não existe.
+ *
+ * O que entra é o que se mede: o resumo do período, o motivo de porteiro e
+ * decisor não terem resposta hoje, e a fila de trabalho que sobra dela.
+ */
+export function CopilotoDoSdr({ dados }: { dados: DadosDoSdr }) {
+  const g = dados.gatekeepers;
+  const d = dados.decisores;
+  const a = dados.abordagem;
+  const semTelefone = d.medido ? d.valor.pistasSemTelefone.length : 0;
+
+  return (
+    <>
+      <CartaoDeIA titulo="Resumo da situação">
+        {a.medido ? (
+          <p>
+            <strong className="text-ink">{a.valor.abordados}</strong> empresas abordadas na
+            janela; <strong className="text-ink">{a.valor.responderam}</strong> responderam e{" "}
+            <strong className="text-ink">{a.valor.nuncaResponderam}</strong> nunca disseram
+            nada. Silêncio não é recusa — é a fila que a reabordagem existe para atacar.
+          </p>
+        ) : (
+          <p>
+            <NaoMedido motivo={a.motivo} />
+          </p>
+        )}
+      </CartaoDeIA>
+
+      <CartaoDeIA titulo="Tipo de porteiro detectado" tom={g.medido ? "ambar" : "cinza"}>
+        {g.medido ? (
+          <p>
+            <strong className="text-ink">{g.valor.classificados}</strong> conversas caíram em
+            porteiro e foram classificadas. A tabela ao lado reparte por tipo: com gente dá
+            para insistir, com menu de bot não dá — e essa diferença decide a próxima
+            tentativa.
+          </p>
+        ) : (
+          <p>
+            Não medido hoje. {g.motivo} Os nove tipos continuam desenhados ao lado, vazios e
+            explicados: o produto classifica porteiro; o que falta é o vínculo entre a empresa
+            e o contato na maior parte dos leads antigos.
+          </p>
+        )}
+      </CartaoDeIA>
+
+      <CartaoDeIA titulo="Decisor encontrado" tom={d.medido ? "roxo" : "cinza"}>
+        {d.medido ? (
+          <p>
+            <strong className="text-ink">{d.valor.comTelefone}</strong> decisores com telefone
+            e <strong className="text-ink">{d.valor.semTelefone}</strong> sem. A próxima melhor
+            ação é a mais barata que existe:{" "}
+            {semTelefone > 0
+              ? `pegar o número dos ${semTelefone} de quem já sabemos o nome — o difícil, descobrir quem decide, já foi feito.`
+              : "nenhum decisor identificado está sem número nesta janela."}
+          </p>
+        ) : (
+          <p>
+            Não medido hoje. {d.motivo} Um zero aqui diria &quot;procuramos e não há decisor&quot;,
+            e o que existe é outra coisa: ninguém conseguiu perguntar.
+          </p>
+        )}
+      </CartaoDeIA>
+    </>
   );
 }

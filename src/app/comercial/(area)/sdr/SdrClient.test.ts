@@ -26,6 +26,7 @@ import { contarFilaDoSdr, ESTADOS_DA_FILA } from "@/services/salaDeVendas/prospe
 import { ROTULO_DO_TIPO, TIPOS_DE_GATEKEEPER, ehPorteiroHumano } from "@/services/foocci-sdr/gatekeeper/rotulos";
 
 import {
+  CopilotoDoSdr,
   SecaoFilaDoSdr,
   SecaoNumerosDoSdr,
   SecaoTiposDeGatekeeper,
@@ -197,5 +198,30 @@ describe("a fila do SDR vem de contarFilaDoSdr, não de constante", () => {
   it("sem nenhuma empresa cadastrada, a tela diz que falta cadastro — não 'operação parada'", () => {
     const h = renderToStaticMarkup(React.createElement(SecaoFilaDoSdr, { dados: dados({ fila: [] }) }));
     expect(h).toContain("cadastro faltando, não operação parada");
+  });
+});
+
+/**
+ * O COPILOTO SDR: DIZ O QUE MEDIU, E NÃO OFERECE ATO QUE NÃO EXISTE.
+ *
+ * O desenho tem quatro botões de ação nesta coluna ("Pedir contato do
+ * responsável", "Agendar reunião"...). A frente é só leitura. Botão que não faz
+ * nada ensina a operação a contar com um envio que não existe — e este teste
+ * renderiza a coluna de verdade para provar que nenhum entrou junto com a cor.
+ */
+describe("copiloto SDR: leitura, não ato", () => {
+  it("não desenha botão nenhum — nem de enviar, nem de agendar", () => {
+    const h = renderToStaticMarkup(React.createElement(CopilotoDoSdr, { dados: dados() }));
+    expect(h).not.toContain("<button");
+    expect(h).not.toContain("Agendar reunião");
+    expect(h).not.toContain("Pedir contato");
+  });
+
+  it("com porteiro e decisor não medidos, a coluna repete o MOTIVO do serviço", () => {
+    const h = renderToStaticMarkup(React.createElement(CopilotoDoSdr, { dados: dados() }));
+    expect(h).toContain("MOTIVO_DE_TESTE_DO_PORTEIRO");
+    expect(h).toContain("MOTIVO_DE_TESTE_DO_DECISOR");
+    expect(h).toContain("ninguém conseguiu perguntar");
+    expect(h).not.toMatch(/>0</);
   });
 });
