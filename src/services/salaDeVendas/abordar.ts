@@ -54,6 +54,8 @@ import { parametrosDoEnvioAgora } from "@/services/foocci-sdr/modelosDaMeta";
 import { escolherModeloLiberado } from "@/services/foocci-sdr/modelosLiberados";
 import {
   ehPrimeiroContatoFrio,
+  ehLeadDeFormulario,
+  escolherModeloDoLeadDeFormulario,
   escolherModeloDoPrimeiroContato,
 } from "@/services/foocci-sdr/modelosDoPrimeiroContato";
 import {
@@ -531,6 +533,18 @@ export async function abordarLead(
       // vai em `{{1}}` já é `saudacaoDoLead`. Sem ela, o modelo com variável
       // seria recusado pela Meta contato a contato.
       podePreencherAVariavel: Boolean(saudacaoDoLead(lead)),
+    });
+    if (!escolha.ok) {
+      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };
+    }
+    modeloPersistido = escolha.modelo;
+  } else if (ehLeadDeFormulario(lead.fonte)) {
+    // ⭐ ESTÁGIO 1-B — quem preencheu formulário/campanha PEDIU o contato.
+    // Mandar "Este contato é do {{1}}, certo?" a quem levantou a mão é tratar
+    // como estranho quem se apresentou. Pool fechado nos `foocci_lead_formulario_*`,
+    // e fail-closed: sem eles liberados, NÃO cai para os frios.
+    const escolha = await escolherModeloDoLeadDeFormulario(db, {
+      podeCitarORestaurante: Boolean((lead.restaurante ?? "").trim()),
     });
     if (!escolha.ok) {
       return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };

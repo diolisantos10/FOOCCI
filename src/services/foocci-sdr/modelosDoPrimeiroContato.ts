@@ -41,6 +41,7 @@
 
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { modelosLiberadosParaEnvio, escolherAleatorio, type ModeloLiberadoParaEnvio } from "./modelosLiberados";
+import { MODELOS_DO_LEAD_DE_FORMULARIO } from "@/services/sales/leadFormularioTemplates";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -183,4 +184,106 @@ export const FONTES_DO_NUMERO_FRIO = ["LISTA_PROSPECCAO", "IMPORTACAO"] as const
 export function ehPrimeiroContatoFrio(fonte: string | null | undefined): boolean {
   const f = (fonte ?? "").trim().toUpperCase();
   return (FONTES_DO_NUMERO_FRIO as readonly string[]).includes(f);
+}
+
+/**
+ * ⭐ ESTÁGIO 1-B — QUEM PREENCHEU FORMULÁRIO, 18/09/2026.
+ *
+ * *"Essa abordagem aqui é para quem é frio. Você não precisa se preocupar com os
+ * três primeiros leads, porque eles entraram através do sistema da Meta, o que
+ * nos dá total autorização de a gente poder falar com eles."* — CEO
+ *
+ * A lista é de INCLUSÃO e explícita: são as portas por onde a PESSOA deixou o
+ * próprio contato pedindo para ser chamada. Para elas existe texto próprio
+ * (`foocci_lead_formulario_*`), morno, que reconhece o pedido.
+ *
+ * ⚠️ Autorização a casa tem; janela de 24h NÃO — a janela abre quando a pessoa
+ * escreve. Por isso ainda é modelo aprovado, só que o morno.
+ *
+ * ⚠️ Origem desconhecida fica de fora das DUAS listas, de propósito: ela não
+ * vira fria "por ser o texto mais contido" nem morna "por via das dúvidas".
+ */
+export const FONTES_DO_LEAD_DE_FORMULARIO = [
+  "CAMPANHA_PAGA",
+  "FACEBOOK",
+  "INSTAGRAM",
+  "FORMULARIO_DEMONSTRACAO",
+  "AGENDAMENTO",
+] as const;
+
+export function ehLeadDeFormulario(fonte: string | null | undefined): boolean {
+  const f = (fonte ?? "").trim().toUpperCase();
+  return (FONTES_DO_LEAD_DE_FORMULARIO as readonly string[]).includes(f);
+}
+
+/**
+ * ⛔ O CRITÉRIO, em uma frase: **o modelo que cita o restaurante só entra
+ * quando existe o nome do restaurante.**
+ *
+ * Mesma doutrina de `escolherModeloDoPrimeiroContato`, e mesmo fail-closed:
+ * sem modelo elegível liberado, `ok: false` — nunca queda para "qualquer
+ * modelo", que é exatamente como o lead de formulário receberia texto frio.
+ *
+ * ⚠️ O grupo "sem o nome da casa" é lido do espelho da Meta pela CONTAGEM de
+ * variáveis, não pelo nome: o `_01` pede 3, o `_02` pede 2.
+ */
+export const MODELO_DE_FORMULARIO_SEM_RESTAURANTE = "foocci_lead_formulario_02";
+
+export type MotivoDaEscolhaDeFormulario =
+  | "podeCitarORestaurante"
+  | "semNomeDoRestaurante"
+  | "nenhumModeloDeFormularioLiberado";
+
+export type EscolhaDoLeadDeFormulario =
+  | { ok: true; modelo: ModeloLiberadoParaEnvio; motivo: MotivoDaEscolhaDeFormulario }
+  | { ok: false; motivo: MotivoDaEscolhaDeFormulario; detalhe: string };
+
+export async function escolherModeloDoLeadDeFormulario(
+  db: Cliente,
+  p: { podeCitarORestaurante: boolean },
+  random: () => number = Math.random,
+): Promise<EscolhaDoLeadDeFormulario> {
+  const liberados = await modelosLiberadosParaEnvio(db);
+  const doFormulario = liberados.filter((m) =>
+    (MODELOS_DO_LEAD_DE_FORMULARIO as readonly string[]).includes(m.nome),
+  );
+
+  if (doFormulario.length === 0) {
+    return {
+      ok: false,
+      motivo: "nenhumModeloDeFormularioLiberado",
+      detalhe:
+        "nenhum modelo de lead de formulário está APPROVED e com 'Pode enviar' ligado. " +
+        "A abordagem NÃO cai para os textos frios: quem pediu contato não recebe abordagem de estranho.",
+    };
+  }
+
+  // O `_01` cita o restaurante e pede 3 variáveis; o `_02` pede 2. Sem o nome
+  // da casa, só o menor serve.
+  const semRestaurante = doFormulario.filter((m) => m.variaveis <= 2);
+  const comRestaurante = doFormulario.filter((m) => m.variaveis > 2);
+
+  if (!p.podeCitarORestaurante) {
+    const escolhido = escolherAleatorio(semRestaurante, random);
+    if (!escolhido) {
+      return {
+        ok: false,
+        motivo: "semNomeDoRestaurante",
+        detalhe:
+          `este lead não tem o nome do restaurante, e ${MODELO_DE_FORMULARIO_SEM_RESTAURANTE} não está liberado. ` +
+          "Não se inventa o nome da casa para preencher a variável.",
+      };
+    }
+    return { ok: true, modelo: escolhido, motivo: "semNomeDoRestaurante" };
+  }
+
+  const escolhido = escolherAleatorio(comRestaurante.length ? comRestaurante : semRestaurante, random);
+  if (!escolhido) {
+    return {
+      ok: false,
+      motivo: "nenhumModeloDeFormularioLiberado",
+      detalhe: "os modelos de formulário existem, mas nenhum ficou elegível para este lead.",
+    };
+  }
+  return { ok: true, modelo: escolhido, motivo: "podeCitarORestaurante" };
 }
