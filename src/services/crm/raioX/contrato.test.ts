@@ -100,6 +100,9 @@ describe("⛔ nenhuma escrita no banco", () => {
     expect([...new Set(models)].sort()).toEqual([
       "campaign",
       "campaignExecution",
+      // A conta do dia lê o funil do ciclo — o degrau que antes sumia. Leitura
+      // pura, como todo o resto desta porta.
+      "crmCicloFunil",
       "customer",
       "restaurantCRMProfile",
     ]);

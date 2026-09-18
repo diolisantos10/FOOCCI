@@ -96,6 +96,7 @@ import {
   type BudgetBlockReason,
 } from "./CRMWhatsAppBudgetPlanner";
 import { SendTimingIntelligenceService } from "./SendTimingIntelligenceService";
+import { avaliarOciosidade } from "./raioX/contaDoDia";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -130,6 +131,17 @@ export interface CampaignBatchResult {
 /** Recently-blocked customers are not re-attempted for this many hours (avoids
  *  re-creating a block row every cron tick and inflating the failure count). */
 const BLOCK_RETRY_WINDOW_HOURS = 24;
+
+/**
+ * SKIPs que são problema de CADASTRO, não de momento: nenhuma nova tentativa
+ * resolve — quem resolve é o lojista corrigindo o número. Saem da fila até lá.
+ * Os outros SKIPs (cupom expirado, já cruzou o nível) dependem do estado do
+ * cliente e podem mudar sozinhos, então só ganham o respiro de 24 h.
+ */
+const SKIP_DE_CADASTRO_PERMANENTE: ReadonlySet<string> = new Set([
+  "MISSING_PHONE",
+  "INVALID_PHONE_FORMAT",
+]);
 
 /** In-process guard against parallel live reprocess runs for the same campaign
  *  (closes the duplicate-send race a double-submit could otherwise open). */
@@ -521,8 +533,28 @@ export class ScheduledCampaignRunnerService {
     // O que ficou de fora não some: continua na tela de falhas do lojista, com
     // o motivo escrito, e o "Reprocessar" manual segue disponível depois que
     // alguém corrigir o cadastro.
+    // 3. PULADO (SKIPPED) — E ESTE ERA O CANO ENTUPIDO.
+    //
+    //    Até 17/09/2026 esta consulta pedia só BLOCKED e FAILED. O SKIPPED, que
+    //    é o veredito de quem tem problema de CADASTRO (sem telefone, telefone
+    //    inválido), ficava de fora — ou seja, era a ÚNICA decisão terminal que
+    //    não tirava ninguém da fila.
+    //
+    //    O efeito é uma rolha, e ela é determinística: `resolveAudience` devolve
+    //    a fila ordenada (mais antigos primeiro) e o ciclo leva os `batchCap`
+    //    primeiros. Se a cabeça da fila é gente sem telefone válido, o ciclo
+    //    grava SKIPPED para ela, ela VOLTA na próxima consulta na mesma posição,
+    //    e o ciclo seguinte pega exatamente as mesmas pessoas. Para sempre.
+    //    Elegíveis altos, enviados ZERO, contagem de elegíveis que não se mexe
+    //    de um ciclo para o outro — o retrato exato dos 2.396 medidos em
+    //    produção nos ciclos de 22:20 / 22:30 / 22:40 UTC.
+    //
+    //    ⚠️ Consertar isto NÃO alarga trava nenhuma. Ninguém passa a receber por
+    //    ter sido destravado: quem sai da fila é quem o próprio sistema já tinha
+    //    decidido que não recebe. O que muda é que a fila ANDA, e alcança quem
+    //    estava atrás da rolha — gente que nenhuma regra jamais barrou.
     const tentativasAnteriores = await prisma.campaignExecution.findMany({
-      where:  { campaignId, status: { in: ["BLOCKED", "FAILED"] as never[] } },
+      where:  { campaignId, status: { in: ["BLOCKED", "FAILED", "SKIPPED"] as never[] } },
       select: { customerId: true, status: true, failedReason: true, errorMessage: true, createdAt: true },
     });
 
@@ -533,6 +565,12 @@ export class ScheduledCampaignRunnerService {
     for (const t of tentativasAnteriores) {
       if (t.createdAt >= limiteDaJanela) recentlyAttemptedIds.add(t.customerId);
       if (saiDaFilaParaSempre(t)) permanentlyFailedIds.add(t.customerId);
+      // Cadastro quebrado não se resolve tentando de novo: é o lojista que
+      // corrige o telefone. Fica fora da fila até lá (e continua visível na tela
+      // de falhas, com o motivo escrito, e reprocessável à mão).
+      if (t.status === "SKIPPED" && SKIP_DE_CADASTRO_PERMANENTE.has(t.errorMessage ?? "")) {
+        permanentlyFailedIds.add(t.customerId);
+      }
     }
 
     if (permanentlyFailedIds.size > 0) {
@@ -616,6 +654,43 @@ export class ScheduledCampaignRunnerService {
     // consome vaga e é barrada) de quem já está na conta (que passa). Não
     // reintroduza um portão de lote aqui: ele volta a ser destrutivo demais.
     const batch = newEligible.slice(0, batchCap);
+
+    // ── O DEGRAU QUE NÃO DEIXAVA RASTRO ──────────────────────────────────────
+    // Quem fica FORA do lote por causa do teto da rodada não vira linha em
+    // `campaign_executions` — some. Sem este registro a conta do dia
+    // (`enviados + barrados + cortados = elegíveis`) nunca fecha, e degrau que
+    // não fecha é onde os elegíveis morrem sem ninguém ver.
+    //
+    // MEDIÇÃO, não trava: nada aqui decide envio. Falha de gravação é engolida
+    // (best-effort) porque uma régua quebrada não pode derrubar o disparo.
+    if (!dryRun) {
+      // `try` de verdade, e não só `.catch`: régua quebrada NÃO derruba disparo.
+      // Um `.catch` sozinho não segura erro SÍNCRONO (model ausente num cliente
+      // Prisma desatualizado, por exemplo) — e aí a medição mataria o envio, que
+      // é exatamente o contrário do que ela existe para fazer.
+      try {
+      const cortados = newEligible.length - batch.length;
+      await prisma.crmCicloFunil.create({
+        data: {
+          restaurantId:  campaign.restaurantId,
+          campaignId:    campaign.id,
+          elegiveis:     newEligible.length,
+          noLote:        batch.length,
+          cortados,
+          motivoDoCorte: cortados <= 0
+            ? null
+            : batchCap === META_CLOUD_MAX_PER_RUN ? "TETO_DA_RODADA"
+            : (limit !== undefined && batchCap === limit) ? "ORCAMENTO_DO_CICLO"
+            : "LIMITE_DIARIO_DA_CAMPANHA",
+          tetoDaRodada:  batchCap,
+        },
+      });
+      } catch (e) {
+        console.warn("[CampaignRunner] funil do ciclo não registrado", {
+          campaignId: campaign.id, error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
 
     if (dryRun) {
       return {
@@ -746,8 +821,25 @@ export class ScheduledCampaignRunnerService {
         // more recently than the configured spacing, this run waits for the next
         // tick. Dry runs still preview normally.
         if (!dryRun && budget.minMinutesBetweenCycles > 0) {
+          // ⚠️ "ÚLTIMA RODADA DE CAMPANHA", NÃO "ÚLTIMA LINHA QUALQUER".
+          //
+          // Este portão olhava QUALQUER linha de `campaign_executions` do
+          // restaurante. Só que essa tabela não é só do CRM de campanhas: o
+          // carrinho abandonado (`OrderDraftRecoverySendService`) grava linha
+          // ali a cada MINUTO, com o id da campanha própria dele, e as
+          // automações também. Uma linha dessas, criada 1 minuto antes do tick,
+          // fazia o CRM inteiro do restaurante achar que tinha acabado de rodar
+          // e pular o ciclo — matando 1 de cada 4 ciclos observados, ~25% da
+          // cadência, para sempre e em silêncio.
+          //
+          // O espaçamento existe para proteger o NÚMERO de WhatsApp de rajada de
+          // CAMPANHA. Então quem conta é a última rodada de campanha desta
+          // rodada de campanhas — as do grupo devido agora.
+          //
+          // Continua FAIL-CLOSED: rodada de campanha recente ainda segura o
+          // ciclo. O que sai é ruído de outro módulo, não a trava.
           const lastActivity = await prisma.campaignExecution.findFirst({
-            where:   { restaurantId: rid },
+            where:   { restaurantId: rid, campaignId: { in: group.map((c) => c.id) } },
             orderBy: { createdAt: "desc" },
             select:  { createdAt: true },
           });
@@ -780,6 +872,39 @@ export class ScheduledCampaignRunnerService {
           )
         );
         results.push(...legacy);
+      }
+
+      // ── O ALARME DA CAPACIDADE OCIOSA ──────────────────────────────────────
+      // Onde: log ESTRUTURADO aqui, e campo `contaDoDia.alarme` no raio-x.
+      // Por que os dois: o log é onde o zero de produção realmente apareceu (e
+      // passou semanas sem ninguém ler, porque não havia linha dizendo "podia
+      // 900, mandei 60"); o raio-x é a porta que responde quando alguém
+      // PERGUNTA. Uma sem a outra deixa metade do defeito de pé — capacidade
+      // ociosa invisível é exatamente o que estamos consertando.
+      //
+      // Só mede. Nunca muda o que foi enviado.
+      if (!dryRun) {
+        try {
+          const enviadasHoje = await getTodayGlobalSendCount(rid);
+          const alarme = avaliarOciosidade(
+            safety.dailyGlobalCap > 0 ? safety.dailyGlobalCap : null,
+            enviadasHoje,
+          );
+          if (alarme) {
+            console.warn("[crm-capacidade-ociosa]", {
+              restaurantId: rid,
+              nivel:        alarme.nivel,
+              podiaHoje:    alarme.podia,
+              enviouHoje:   alarme.enviou,
+              sobraDoDia:   alarme.sobra,
+              mensagem:     alarme.mensagem,
+            });
+          }
+        } catch (e) {
+          console.warn("[crm-capacidade-ociosa] não foi possível medir a sobra do dia", {
+            restaurantId: rid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
     }
 

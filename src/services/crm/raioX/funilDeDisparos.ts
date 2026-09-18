@@ -28,10 +28,11 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { applyEffectiveSafety, parseSafetyConfig } from "@/lib/crm-safety";
+import { montarContaDoDia, type ContaDoDia, type DegrauContado } from "./contaDoDia";
 
 /** Cliente Prisma, ou qualquer coisa com a mesma forma (o teste injeta um duplo). */
 export type LeitorDoBanco = Pick<PrismaClient,
-  "campaignExecution" | "campaign" | "customer" | "restaurantCRMProfile">;
+  "campaignExecution" | "campaign" | "customer" | "restaurantCRMProfile" | "crmCicloFunil">;
 
 /** Os status que significam "a mensagem saiu". Mesma lista das travas. */
 export const STATUS_DE_ENVIO = ["SENT", "DELIVERED", "READ"] as const;
@@ -93,6 +94,11 @@ export interface FunilDoRestaurante {
     enviadasNaJanela: number;
     decisoesNaJanela: number;
   }>;
+  /**
+   * A CONTA DO DIA: de quantos eu podia, quantos mandei, e para cada um que não
+   * mandei, qual regra barrou — com a invariante conferida, não afirmada.
+   */
+  contaDoDia: ContaDoDia;
   /** O que esta fonte NÃO consegue responder, com o motivo. */
   naoMedido: LacunaNaoMedida[];
 }
@@ -110,11 +116,13 @@ const SEM_CODIGO = "SEM_CODIGO";
 /** As lacunas que valem para qualquer restaurante — declaradas, não omitidas. */
 const LACUNAS_ESTRUTURAIS: LacunaNaoMedida[] = [
   {
-    degrau: "candidato cortado antes de virar linha",
+    degrau: "candidato cortado pelo teto de audiência (500 por consulta)",
     motivo:
-      "`resolveAudience` corta a audiência em 500 por consulta e o ciclo ainda " +
-      "aplica `batchCap`. Quem fica de fora não gera linha em campaign_executions, " +
-      "então não existe contagem — só o tamanho do segmento, que é outra pergunta.",
+      "`resolveAudience` aplica `take: 500` DENTRO da consulta. Quem fica fora " +
+      "desse corte não é devolvido a ninguém e não vira elegível nem degrau. " +
+      "⚠️ O OUTRO corte deste degrau — o `batchCap` do ciclo — DEIXOU de ser " +
+      "lacuna em 17/09/2026: agora é gravado em `crm_ciclo_funil` e aparece em " +
+      "`contaDoDia.cortadosAntesDoBanco`.",
   },
   {
     degrau: "ciclo que nem chegou a rodar",
@@ -140,6 +148,27 @@ function contarPorMotivo(
   return [...mapa.entries()]
     .map(([codigo, quantidade]) => ({ codigo, quantidade }))
     .sort((a, b) => b.quantidade - a.quantidade);
+}
+
+/**
+ * "Para cada um que não mandei, QUAL regra o barrou."
+ *
+ * Todo veredito que não é envio vira um degrau nomeado `STATUS:CODIGO` — o
+ * status diz a família (bloqueio de segurança, falha de canal, pulo de cadastro)
+ * e o código diz a regra exata (CUSTOMER_OPTED_OUT, MISSING_PHONE, ...).
+ * PENDING entra também: linha sem veredito ainda é alguém que não recebeu, e
+ * varrê-la para debaixo do tapete é justamente como um degrau vira invisível.
+ */
+function contarBarradosPorRegra(
+  linhas: Array<{ status: string; errorMessage: string | null }>,
+): DegrauContado[] {
+  const mapa = new Map<string, number>();
+  for (const l of linhas) {
+    if ((STATUS_DE_ENVIO as readonly string[]).includes(l.status)) continue;
+    const chave = `${l.status}:${l.errorMessage?.trim() || SEM_CODIGO}`;
+    mapa.set(chave, (mapa.get(chave) ?? 0) + 1);
+  }
+  return [...mapa.entries()].map(([degrau, quantidade]) => ({ degrau, quantidade }));
 }
 
 function horarioQuieto(cfg: { quietHoursEnabled: boolean; quietHoursStart: string; quietHoursEnd: string; timezone: string }): string | null {
@@ -220,6 +249,24 @@ export async function raioXDeDisparos(
         ])
       : [0, 0, 0];
 
+    // O degrau que antes sumia: o corte do `batchCap`, agora gravado pelo runner.
+    // Sem rodada registrada na janela, `temRodada` é false — e aí a conta NÃO se
+    // declara fechada, em vez de inventar um zero.
+    const rodadas = real
+      ? await db.crmCicloFunil.findMany({
+          where:  { restaurantId: rid, ocorridoEm: janela },
+          select: { campaignId: true, elegiveis: true, noLote: true, cortados: true },
+        })
+      : [];
+    const campanhasMedidas = new Set(rodadas.map((r) => r.campaignId));
+    const cortesDoCiclo = {
+      temRodada: rodadas.length > 0,
+      elegiveis: rodadas.reduce((s, r) => s + r.elegiveis, 0),
+      cortados:  rodadas.reduce((s, r) => s + r.cortados, 0),
+    };
+    // Só as linhas das campanhas MEDIDAS entram na invariante (ver contaDoDia).
+    const linhasMedidas = linhas.filter((l) => campanhasMedidas.has(l.campaignId));
+
     const ativas = real
       ? await db.campaign.findMany({
           where: { restaurantId: rid, status: { in: ["ACTIVE", "SCHEDULED"] as never[] } },
@@ -260,6 +307,20 @@ export async function raioXDeDisparos(
       },
       base: { clientes, optOut, semTelefoneUtil: semTelefone },
       campanhas,
+      contaDoDia: montarContaDoDia({
+        restaurantId: rid,
+        tetoDiario:   cfg.dailyGlobalCap,
+        enviadasHoje: enviadas,
+        enviadasNoCiclo: linhasMedidas.filter(
+          (l) => (STATUS_DE_ENVIO as readonly string[]).includes(l.status)).length,
+        // Cada degrau GRAVADO vira uma entrada por motivo de máquina — é assim
+        // que "para cada um que não mandei, QUAL regra o barrou" vira número.
+        barrados:     contarBarradosPorRegra(linhasMedidas),
+        cortadosAntesDoBanco: cortesDoCiclo.cortados > 0
+          ? [{ degrau: "CORTADO_ANTES_DO_BANCO", quantidade: cortesDoCiclo.cortados }]
+          : [],
+        elegiveisMedidos: cortesDoCiclo.temRodada ? cortesDoCiclo.elegiveis : null,
+      }),
       naoMedido: LACUNAS_ESTRUTURAIS,
     });
   }
