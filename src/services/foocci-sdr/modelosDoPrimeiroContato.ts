@@ -235,11 +235,22 @@ export function ehLeadDeFormulario(fonte: string | null | undefined): boolean {
 export type MotivoDaEscolhaDeFormulario =
   | "jaSabeORestaurante"
   | "vaiPerguntarORestaurante"
+  /** Nenhum modelo morno aprovado ainda: saiu o neutro "Olá! Tudo bem?". */
+  | "reservaNeutra"
   | "nenhumModeloDeFormularioLiberado";
 
 export type EscolhaDoLeadDeFormulario =
   | { ok: true; modelo: ModeloLiberadoParaEnvio; motivo: MotivoDaEscolhaDeFormulario }
   | { ok: false; motivo: MotivoDaEscolhaDeFormulario; detalhe: string };
+
+/**
+ * O único texto frio que serve de reserva para um lead morno.
+ *
+ * "Olá! Tudo bem?" — nada nele pressupõe estranho, e por isso ele pode receber
+ * quem pediu contato sem ofender. Os outros dois modelos frios perguntam se o
+ * contato é do restaurante X, e esses continuam vedados aqui.
+ */
+export const MODELO_NEUTRO_DE_RESERVA = "foocci_contato_inicial_03";
 
 export async function escolherModeloDoLeadDeFormulario(
   db: Cliente,
@@ -252,12 +263,35 @@ export async function escolherModeloDoLeadDeFormulario(
   );
 
   if (doFormulario.length === 0) {
+    // ── ⚠️ A RESERVA NEUTRA — ordem do CEO, 18/09/2026 ────────────────────────
+    //
+    // A regra original recusava a abordagem quando nenhum modelo morno estivesse
+    // aprovado, para quem pediu contato nunca receber texto de estranho. A
+    // intenção continua certa; o custo real dela é que era proibitivo.
+    //
+    // Medido hoje: três leads pagos entraram, a recepção os assumiu, e NINGUÉM
+    // falou com eles — os textos mornos foram submetidos e a Meta só analisa
+    // amanhã. O CEO: *"a Meta só vai aprovar amanhã, esses clientes têm que ser
+    // abordados AGORA."* Lead quente esperando um dia pela fila de análise da
+    // Meta é venda perdida, e venda perdida é pior que texto imperfeito.
+    //
+    // A reserva NÃO é qualquer modelo frio: é só o `foocci_contato_inicial_03`
+    // — "Olá! Tudo bem?" —, que é neutro e não diz nada que só faça sentido
+    // para estranho. Os outros dois perguntam "este contato é do {{1}}, certo?",
+    // que é exatamente o insulto que esta trava existia para impedir, e
+    // continuam proibidos aqui.
+    const neutro = liberados.find((m) => m.nome === MODELO_NEUTRO_DE_RESERVA);
+    if (neutro) {
+      return { ok: true, modelo: neutro, motivo: "reservaNeutra" };
+    }
+
     return {
       ok: false,
       motivo: "nenhumModeloDeFormularioLiberado",
       detalhe:
-        "nenhum modelo de lead de formulário está APPROVED e com 'Pode enviar' ligado. " +
-        "A abordagem NÃO cai para os textos frios: quem pediu contato não recebe abordagem de estranho.",
+        "nenhum modelo de lead de formulário está APPROVED, e nem a reserva neutra " +
+        `(${MODELO_NEUTRO_DE_RESERVA}) está liberada. A abordagem NÃO cai para os ` +
+        "outros textos frios: quem pediu contato não recebe 'este contato é do X, certo?'.",
     };
   }
 

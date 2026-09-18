@@ -14,6 +14,7 @@ import {
   ehPrimeiroContatoFrio,
   MODELOS_DO_PRIMEIRO_CONTATO,
   MODELO_SEM_VARIAVEL,
+  escolherModeloDoLeadDeFormulario,
 } from "./modelosDoPrimeiroContato";
 
 const PANFLETO = {
@@ -46,6 +47,21 @@ beforeAll(() => {
 const db = {
   $queryRaw: async () => LIBERADOS,
 } as never;
+
+/** Banco falso com o pool que o teste escolher — o mesmo formato de `db`. */
+function bancoComModelos(nomes: string[]) {
+  const porNome = new Map(LIBERADOS.map((m) => [m.nome, m]));
+  const extras: Record<string, { nome: string; idioma: string; variaveis: number; corpo: string; nomesParametros: string[] }> = {
+    foocci_lead_formulario_03: {
+      nome: "foocci_lead_formulario_03",
+      idioma: "pt_BR",
+      variaveis: 1,
+      corpo: "Olá, {{1}}! Que bom ter você por aqui 😊 … qual é o nome do seu restaurante?",
+      nomesParametros: [],
+    },
+  };
+  return { $queryRaw: async () => nomes.map((n) => porNome.get(n) ?? extras[n]).filter(Boolean) } as never;
+}
 
 const SORTEIOS = 1000;
 const passos = Array.from({ length: SORTEIOS }, (_, i) => i / SORTEIOS);
@@ -149,5 +165,52 @@ describe("os dois estágios são caminhos distintos — e a origem é quem separ
     for (const fonte of [null, undefined, "", "   ", "FONTE_QUE_NAO_EXISTE"]) {
       expect(ehPrimeiroContatoFrio(fonte), String(fonte)).toBe(false);
     }
+  });
+});
+
+/**
+ * ⚠️ A RESERVA NEUTRA — ordem do CEO em 18/09/2026.
+ *
+ * Três leads pagos entraram, a recepção os assumiu, e ninguém falou com eles:
+ * os textos mornos tinham acabado de ser submetidos e a Meta só analisa no dia
+ * seguinte. Ele foi direto: *"a Meta só vai aprovar amanhã, esses clientes têm
+ * que ser abordados AGORA."*
+ *
+ * A regra antiga recusava a abordagem inteira nesse caso. A intenção estava
+ * certa — quem pediu contato não pode receber texto de estranho — mas o preço
+ * era um lead quente esperando um dia pela fila de análise da Meta.
+ */
+describe("reserva neutra quando nenhum modelo morno está aprovado", () => {
+  const MORNO = { jaSabeORestaurante: false };
+
+  it("sai o 'Olá! Tudo bem?' em vez de recusar a abordagem", async () => {
+    const db = bancoComModelos(["foocci_contato_inicial_01", "foocci_contato_inicial_03"]);
+
+    const r = await escolherModeloDoLeadDeFormulario(db, MORNO);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.modelo.nome).toBe("foocci_contato_inicial_03");
+    expect(r.motivo).toBe("reservaNeutra");
+  });
+
+  // A trava que a reserva NÃO pode afrouxar: "este contato é do {{1}}, certo?"
+  // continua vedado a quem pediu contato. Era esse o insulto que a regra
+  // original existia para impedir, e ele continua impedido.
+  it("mas NUNCA cai para os frios que tratam a pessoa como estranha", async () => {
+    const db = bancoComModelos(["foocci_contato_inicial_01", "foocci_contato_inicial_02"]);
+
+    const r = await escolherModeloDoLeadDeFormulario(db, MORNO);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.motivo).toBe("nenhumModeloDeFormularioLiberado");
+  });
+
+  it("e quando o morno existe, ele ganha do neutro", async () => {
+    const db = bancoComModelos(["foocci_contato_inicial_03", "foocci_lead_formulario_03"]);
+
+    const r = await escolherModeloDoLeadDeFormulario(db, MORNO);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.modelo.nome).toBe("foocci_lead_formulario_03");
   });
 });
