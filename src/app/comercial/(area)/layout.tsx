@@ -29,12 +29,12 @@
  * A moldura é a casa; a fechadura está em cada porta.
  */
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { lerSessaoInterna } from "@/lib/internal-auth";
 import { precisaTrocarSenha, ROTA_DA_TROCA } from "@/lib/troca-de-senha";
-import { ENTRADA, abasDoComercial } from "@/lib/sala/rotas";
+import { ENTRADA, menuDoComercial } from "@/lib/sala/rotas";
 import { SairDoComercial } from "./SairDoComercial";
+import { MenuDaSala } from "./_pecas/MenuDaSala";
 
 export const metadata = {
   title: { default: "Comercial Foocci", template: "%s · Comercial Foocci" },
@@ -75,7 +75,14 @@ export default async function ComercialLayout({ children }: { children: React.Re
     redirect(ROTA_DA_TROCA);
   }
 
-  const abas = abasDoComercial(sessao.role);
+  // As listas de papéis NÃO atravessam para o navegador: o menu vai para o
+  // componente de cliente já filtrado, e sem a régua que o filtrou.
+  const menu = menuDoComercial(sessao.role).map((g) => ({
+    rotulo: g.rotulo,
+    href: g.href,
+    abas: g.abas.map((a) => ({ href: a.href, rotulo: a.rotulo })),
+    prefixos: g.prefixos,
+  }));
 
   return (
     <div className="flex h-screen flex-col bg-canvas">
@@ -99,20 +106,7 @@ export default async function ComercialLayout({ children }: { children: React.Re
           </div>
         </div>
 
-        <nav aria-label="Seções da área comercial" className="overflow-x-auto">
-          <ul className="flex min-w-max gap-1 px-3 pb-1.5">
-            {abas.map((a) => (
-              <li key={a.href}>
-                <Link
-                  href={a.href}
-                  className="block rounded-lg px-3 py-1.5 text-[13px] font-semibold text-ink2 transition-colors hover:bg-canvas hover:text-ink"
-                >
-                  {a.rotulo}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <MenuDaSala menu={menu} />
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>

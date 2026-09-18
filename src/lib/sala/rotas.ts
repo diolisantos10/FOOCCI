@@ -175,37 +175,53 @@ export function destinoDoEnderecoAntigo(caminho: string): string {
   return [COMERCIAL, traduzido, ...cauda].join("/");
 }
 
-// ─── As abas, e quem alcança cada uma ───────────────────────────────────────
+// ─── O menu: 10 grupos, e quem alcança cada aba ─────────────────────────────
+//
+// ── POR QUE O MENU DEIXOU DE TER UMA LINHA POR TELA (18/09/2026) ────────────
+//
+// O menu chegou a 24 itens — uma linha para cada pasta construída. O CEO abriu
+// o desenho da área nova e disse o que faltava: *"não é MAIS coisas que a gente
+// precisa, é um UPGRADE"*. Vinte e quatro portas lado a lado não são poder de
+// escolha; são a mesma pergunta feita vinte e quatro vezes por dia.
+//
+// O desenho tem **10 itens na lateral**. Então o menu passa a ter 10, e as
+// telas que falavam da mesma coisa viraram ABAS de um item só.
+//
+// ⚠️ **Nenhuma tela foi apagada, movida ou redesenhada.** Cada endereço
+// continua exatamente onde estava, respondendo exatamente o que respondia — ele
+// só deixou de ocupar uma linha no topo. Quem tem um favorito, um link em
+// conversa ou uma anotação continua chegando. É por isso que `abasDoComercial`
+// continua existindo abaixo, devolvendo a lista PLANA: ela é a prova, no teste,
+// de que agrupar não escondeu endereço nenhum de quem podia alcançá-lo.
+//
+// ⚠️ E a moldura continua não sendo a fechadura. A aba que a pessoa não alcança
+// não aparece — mas quem digitar o endereço direto continua batendo na rota,
+// que recusa no servidor.
 
 export interface Aba {
   href: string;
   rotulo: string;
+  /** Sem lista = a Sala inteira alcança. Com lista = só estes papéis. */
+  papeis?: ReadonlySet<string>;
 }
 
-const PARA_TODOS: readonly Aba[] = [
-  { href: ROTAS.filas, rotulo: "Filas" },
-  { href: ROTAS.conversas, rotulo: "Conversas" },
-  // Logo depois de Conversas, e antes do Funil: quem abre a Sala de manhã
-  // procura primeiro quem ficou sem resposta, não o desenho do funil.
-  { href: ROTAS.carteira, rotulo: "Carteira" },
-  { href: ROTAS.funil, rotulo: "Funil" },
-  // Os números da própria pessoa. Fica em `PARA_TODOS` porque não há de quem
-  // esconder: são os dela. O CEO abre e vê os dele, que é o que faz sentido —
-  // os números do time inteiro ele tem no Painel, ao lado.
-  { href: ROTAS.meus, rotulo: "Meus números" },
-  // As fichas ficam visíveis para TODO MUNDO da Sala, o SDR incluído: elas dizem
-  // o que cada função pode e não pode, e o SDR precisa ler a dele para saber onde
-  // ele para e onde o Closer começa. Esconder a alçada a transforma em folclore —
-  // e folclore se resolve perguntando ao colega mais antigo.
-  { href: ROTAS.agentes, rotulo: "Agentes" },
-  // Preço é dado PÚBLICO: está estampado no site para qualquer estranho ler.
-  // Esconder do próprio vendedor não protegeria nada — só o obrigaria a caçar o
-  // número na página de marketing no meio da conversa, ou a chutar.
-  { href: ROTAS.precos, rotulo: "Preços" },
-  // O ensaio do TA fica visível para a Sala inteira: quem vai trabalhar ao lado
-  // dele precisa saber como ele fala e onde ele para. E a tela não envia nada.
-  { href: ROTAS.ensaio, rotulo: "Ensaio do TA" },
-];
+export interface Grupo {
+  /** O rótulo do item no menu de cima — o do desenho do CEO. */
+  rotulo: string;
+  /** Onde o item do menu leva: a primeira aba que ESTA pessoa alcança. */
+  href: string;
+  /** As abas da barra de dentro, já filtradas pelo papel. */
+  abas: Aba[];
+  /**
+   * Endereços que pertencem ao grupo sem serem item da barra.
+   *
+   * A ficha do lead (`/comercial/lead/<id>`) abre a partir de Leads e precisa
+   * manter a barra do grupo desenhada — mas ela não é uma aba: é o detalhe de
+   * uma linha, e um item de menu que só faz sentido depois de um clique é um
+   * item morto no resto do tempo.
+   */
+  prefixos?: readonly string[];
+}
 
 const PAPEIS_DO_PAINEL = new Set<string>([
   "MASTER_CEO",
@@ -225,13 +241,145 @@ const PAPEIS_DO_WHATSAPP = PAPEIS_DO_PAINEL;
 const PAPEIS_DOS_ACESSOS = new Set<string>(["MASTER_CEO", "DIRETOR_FOOCCI"]);
 
 /**
- * As abas que este papel enxerga.
+ * O desenho do menu — a ordem é a do desenho do CEO, que é a do percurso do
+ * trabalho: vê a operação, prospecta, fura o porteiro, atende, cuida do lead,
+ * vende, mantém, automatiza, mede, configura.
  *
+ * A régua de papel de cada aba é a MESMA que o item tinha quando era linha de
+ * menu — agrupar não foi ocasião de abrir nem de fechar porta nenhuma.
+ */
+export const GRUPOS: readonly Grupo[] = [
+  {
+    // Painel responde "quais são os meus números"; a Torre responde "o que está
+    // travado AGORA". Mesma pergunta de gestão, duas lentes — e a mesma régua.
+    rotulo: "Painel",
+    href: ROTAS.painel,
+    abas: [
+      { href: ROTAS.painel, rotulo: "Painel", papeis: PAPEIS_DO_PAINEL },
+      { href: ROTAS.torre, rotulo: "Torre de controle", papeis: PAPEIS_DO_PAINEL },
+    ],
+  },
+  {
+    // Quem a casa fala hoje, o estoque inteiro, e de que arquivo cada contato
+    // veio. Três perguntas sobre a MESMA lista fria.
+    rotulo: "Prospecção",
+    href: ROTAS.prospeccao,
+    abas: [
+      { href: ROTAS.prospeccao, rotulo: "Prospecção" },
+      { href: ROTAS.baseFria, rotulo: "Base fria" },
+      { href: ROTAS.importacoes, rotulo: "Importações" },
+    ],
+  },
+  {
+    // A caça ao decisor e a fila de quem já responde: é o trabalho de abordar,
+    // dos dois lados do "alô".
+    rotulo: "SDR",
+    href: ROTAS.sdr,
+    abas: [
+      { href: ROTAS.sdr, rotulo: "Central SDR" },
+      { href: ROTAS.filas, rotulo: "Filas" },
+    ],
+  },
+  {
+    // Lá se atende UMA pessoa; aqui se enxerga a fila inteira. O menu leva a
+    // Conversas porque é a tela do dia de quem responde — a visão de cima é a
+    // aba ao lado, e ela segue a régua de gestão.
+    rotulo: "Atendimento",
+    href: ROTAS.conversas,
+    abas: [
+      { href: ROTAS.conversas, rotulo: "Conversas" },
+      { href: ROTAS.atendimento, rotulo: "Central de atendimento", papeis: PAPEIS_DO_PAINEL },
+    ],
+  },
+  {
+    // Todos os leads, o desenho do funil e a temperatura de cada um. A ficha
+    // individual abre daqui e mantém a barra — ver `prefixos`.
+    rotulo: "Leads",
+    href: ROTAS.carteira,
+    abas: [
+      { href: ROTAS.carteira, rotulo: "Carteira" },
+      { href: ROTAS.funil, rotulo: "Funil" },
+      { href: ROTAS.qualificacao, rotulo: "Qualificação" },
+    ],
+    prefixos: [`${COMERCIAL}/lead`],
+  },
+  {
+    // O que se vende e por quanto. Preço é dado público; a oferta é o que se
+    // monta em cima dele.
+    rotulo: "Vendas",
+    href: ROTAS.precos,
+    abas: [
+      { href: ROTAS.precos, rotulo: "Preços" },
+      { href: ROTAS.oferta, rotulo: "Oferta e checkout" },
+    ],
+  },
+  {
+    // O plano do dia e o relógio do silêncio — antes e depois do GANHO.
+    rotulo: "CRM",
+    href: ROTAS.crm,
+    abas: [
+      { href: ROTAS.crm, rotulo: "CRM IA" },
+      { href: ROTAS.relacionamento, rotulo: "Follow-up e pós-venda" },
+    ],
+  },
+  {
+    // O que a máquina faz sozinha: a regra que distribui, o agente que fala, e
+    // o ensaio em que se confere como ele fala. As duas primeiras mostram carga
+    // e estado do time — régua de gestão. O ensaio não envia nada e fica aberto
+    // à Sala: quem vai trabalhar ao lado do TA precisa saber onde ele para.
+    rotulo: "Automações",
+    href: ROTAS.roteamento,
+    abas: [
+      { href: ROTAS.roteamento, rotulo: "Roteamento", papeis: PAPEIS_DO_PAINEL },
+      { href: ROTAS.agente, rotulo: "O agente", papeis: PAPEIS_DO_PAINEL },
+      { href: ROTAS.ensaio, rotulo: "Ensaio do TA" },
+    ],
+  },
+  {
+    // "Meus números" são os da própria pessoa e não se escondem de ninguém. A
+    // Supervisora compara agentes ENTRE SI — por isso ela segue a régua do
+    // Painel, e o SDR humano nunca a ganha.
+    rotulo: "Relatórios",
+    href: ROTAS.meus,
+    abas: [
+      { href: ROTAS.meus, rotulo: "Meus números" },
+      { href: ROTAS.supervisora, rotulo: "Supervisora", papeis: PAPEIS_DO_PAINEL },
+    ],
+  },
+  {
+    // O canal, as fichas de função e a criação de acesso. As fichas ficam
+    // visíveis para TODO MUNDO: elas dizem o que cada função pode, e esconder a
+    // alçada a transforma em folclore.
+    rotulo: "Configurações",
+    href: ROTAS.agentes,
+    abas: [
+      { href: ROTAS.whatsapp, rotulo: "WhatsApp", papeis: PAPEIS_DO_WHATSAPP },
+      { href: ROTAS.agentes, rotulo: "Agentes" },
+      { href: ROTAS.acessos, rotulo: "Criar acesso", papeis: PAPEIS_DOS_ACESSOS },
+    ],
+  },
+];
+
+/**
  * `null` = entrou pela senha compartilhada, que não carrega papel. Nesse caso
  * mostra tudo — esconder itens de quem entrou pela porta de administração
  * esconderia o produto de quem o está montando.
  */
-export function abasDoComercial(papel: InternalRole | null): Aba[] {
+function alcanca(papel: InternalRole | null, aba: Aba): boolean {
+  if (!aba.papeis) return true;
+  return papel === null || aba.papeis.has(papel);
+}
+
+/**
+ * O menu de cima: os grupos que este papel alcança, cada um já com as suas abas
+ * filtradas.
+ *
+ * O `href` do item NÃO é fixo: é o da **primeira aba que esta pessoa alcança**.
+ * Um item que apontasse sempre para a mesma tela mandaria o vendedor para um
+ * 403 no primeiro clique em "Atendimento" — e a régua é que porta oferecida
+ * abre. Grupo sem nenhuma aba alcançável não aparece.
+ */
+export function menuDoComercial(papel: InternalRole | null): Grupo[] {
   // ── O PAPEL QUE NÃO ENTRA NÃO RECEBE MENU ───────────────────────────────
   //
   // `AGENTE_IA` é o time de agentes, e ele não faz login: `autenticarInterno`
@@ -243,54 +391,46 @@ export function abasDoComercial(papel: InternalRole | null): Aba[] {
   // fechada no mesmo corredor.
   if (papel === "AGENTE_IA") return [];
 
-  const tudo = papel === null;
+  const menu: Grupo[] = [];
+  for (const g of GRUPOS) {
+    const abas = g.abas.filter((a) => alcanca(papel, a));
+    if (abas.length === 0) continue;
+    menu.push({ ...g, abas, href: abas[0]!.href });
+  }
+  return menu;
+}
 
-  return [
-    ...PARA_TODOS,
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.painel, rotulo: "Painel" }] : []),
-    // O agente segue a lista do painel para LER. Ligar continua sendo do dono,
-    // e quem recusa é a rota — a aba mostra o estado a quem trabalha ao lado
-    // dele, porque descobrir que o TA está desligado pela ausência de resposta
-    // é o pior jeito possível.
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.agente, rotulo: "O agente" }] : []),
-    ...(tudo || PAPEIS_DO_WHATSAPP.has(papel) ? [{ href: ROTAS.whatsapp, rotulo: "WhatsApp" }] : []),
-    // A Supervisora segue a MESMA régua do Painel: gestão e auditoria, nunca
-    // o SDR — o painel dela compara agentes entre si, e é exatamente o tipo
-    // de tela que `rotulos("AGENTE_HUMANO")` prova, em `rotas.test.ts`, que
-    // ele NUNCA ganha.
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.supervisora, rotulo: "Supervisora" }] : []),
-    // A prospecção aparece para a Sala inteira LER, **o SDR humano incluído** —
-    // é ele quem vai abordar, e ele precisa ver a fila do dia e por que alguém
-    // foi barrado. Esconder dele a fila que ele mesmo executa seria folclore.
-    //
-    // Liberar lote e mexer no interruptor a rota recusa a quem não responde
-    // pela marca (`autorizacao.test.ts` prova as duas metades). A aba mostra o
-    // estado; ela não distribui autorização.
-    { href: ROTAS.prospeccao, rotulo: "Prospecção" },
-    // As duas telas da base entram ao lado da Prospecção, e pela mesma razão que
-    // ela: quem trabalha a lista precisa poder olhar o estoque inteiro e saber
-    // de que arquivo cada contato veio. Cancelar importação e retomar lote a
-    // rota recusa a quem não responde pela marca — a aba mostra o estado, ela
-    // não distribui autorização.
-    { href: ROTAS.baseFria, rotulo: "Base fria" },
-    { href: ROTAS.importacoes, rotulo: "Importações" },
-    // ─── As telas do desenho do CEO ────────────────────────────────────────
-    //
-    // Entram DEPOIS das que já existiam, e não no lugar delas: quem abria a
-    // Sala num endereço continua abrindo no mesmo. A ordem segue o percurso do
-    // trabalho — vê a operação (Torre), distribui (Atendimento), caça o decisor
-    // (SDR), mede (Qualificação), oferece (Oferta), mantém (CRM,
-    // Relacionamento).
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.torre, rotulo: "Torre" }] : []),
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.atendimento, rotulo: "Atendimento" }] : []),
-    { href: ROTAS.sdr, rotulo: "SDR" },
-    { href: ROTAS.qualificacao, rotulo: "Qualificação" },
-    // Mostra a carga e o estado de cada colega — mesma régua da Supervisora e
-    // do Painel. O SDR não ganha esta aba, e a rota o recusa de qualquer jeito.
-    ...(tudo || PAPEIS_DO_PAINEL.has(papel) ? [{ href: ROTAS.roteamento, rotulo: "Roteamento" }] : []),
-    { href: ROTAS.oferta, rotulo: "Oferta" },
-    { href: ROTAS.crm, rotulo: "CRM" },
-    { href: ROTAS.relacionamento, rotulo: "Relacionamento" },
-    ...(tudo || PAPEIS_DOS_ACESSOS.has(papel) ? [{ href: ROTAS.acessos, rotulo: "Criar acesso" }] : []),
-  ];
+/**
+ * A lista PLANA de tudo que este papel alcança.
+ *
+ * Existe para a prova: agrupar o menu não podia fazer sumir endereço nenhum, e
+ * não podia abrir nem fechar porta para papel nenhum. O teste compara esta
+ * lista com a de antes do agrupamento.
+ */
+export function abasDoComercial(papel: InternalRole | null): Aba[] {
+  return menuDoComercial(papel).flatMap((g) => g.abas);
+}
+
+/**
+ * Qual grupo desenha a barra de abas para o endereço aberto.
+ *
+ * Casa pelo prefixo MAIS LONGO, e nunca por `startsWith` solto: `/comercial` é
+ * prefixo de toda a área, e uma comparação ingênua faria a barra das Filas
+ * aparecer em cima de todas as telas da casa.
+ */
+export function grupoDoCaminho(menu: readonly Grupo[], caminho: string): Grupo | null {
+  const limpo = caminho.replace(/\/+$/, "") || COMERCIAL;
+  let melhor: Grupo | null = null;
+  let tamanho = -1;
+
+  for (const g of menu) {
+    for (const alvo of [...g.abas.map((a) => a.href), ...(g.prefixos ?? [])]) {
+      const casa = limpo === alvo || limpo.startsWith(`${alvo}/`);
+      if (casa && alvo.length > tamanho) {
+        melhor = g;
+        tamanho = alvo.length;
+      }
+    }
+  }
+  return melhor;
 }

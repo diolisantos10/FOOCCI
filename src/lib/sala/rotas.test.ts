@@ -29,6 +29,9 @@ import {
   BASE_ANTIGA,
   destinoDoEnderecoAntigo,
   abasDoComercial,
+  menuDoComercial,
+  grupoDoCaminho,
+  GRUPOS,
 } from "./rotas";
 
 describe("o endereço antigo continua chegando", () => {
@@ -118,7 +121,8 @@ describe("as abas continuam fechando por papel", () => {
 
   it("⭐ o vendedor NÃO ganhou aba nova na mudança de casa", () => {
     // Mudar de endereço não podia ser a ocasião em que alguém passou a enxergar
-    // o painel da operação, o canal da Meta ou a criação de acesso.
+    // o painel da operação, o canal da Meta ou a criação de acesso. Agrupar o
+    // menu, em 18/09/2026, também não.
     const dele = rotulos("AGENTE_HUMANO");
     expect(dele).not.toContain("Painel");
     expect(dele).not.toContain("WhatsApp");
@@ -160,5 +164,113 @@ describe("as abas continuam fechando por papel", () => {
       expect(a.href.startsWith(COMERCIAL), a.href).toBe(true);
     }
     expect(ENTRADA.startsWith(COMERCIAL)).toBe(true);
+  });
+});
+
+/**
+ * ── 24 ITENS DE MENU VIRARAM 10 (18/09/2026) ────────────────────────────────
+ *
+ * O CEO: *"não é MAIS coisas que a gente precisa, é um UPGRADE"*. O risco de um
+ * agrupamento não é ele ficar feio — é ele **perder tela** no caminho, ou abrir
+ * para o vendedor uma porta de gestão porque agora ela mora dentro de um grupo
+ * que ele alcança. Estes casos existem para pegar as duas coisas.
+ */
+describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
+  /** Tudo que existia no menu antes do agrupamento, endereço a endereço. */
+  const ANTES: readonly string[] = [
+    ROTAS.filas, ROTAS.conversas, ROTAS.carteira, ROTAS.funil, ROTAS.meus,
+    ROTAS.agentes, ROTAS.precos, ROTAS.ensaio, ROTAS.painel, ROTAS.agente,
+    ROTAS.whatsapp, ROTAS.supervisora, ROTAS.prospeccao, ROTAS.baseFria,
+    ROTAS.importacoes, ROTAS.torre, ROTAS.atendimento, ROTAS.sdr,
+    ROTAS.qualificacao, ROTAS.roteamento, ROTAS.oferta, ROTAS.crm,
+    ROTAS.relacionamento, ROTAS.acessos,
+  ];
+
+  it("⛔ nenhum dos 24 endereços antigos sumiu do menu", () => {
+    const hoje = new Set(GRUPOS.flatMap((g) => g.abas.map((a) => a.href)));
+    const sumidos = ANTES.filter((h) => !hoje.has(h));
+    expect(sumidos, `endereço que deixou de ser alcançável: ${sumidos.join(", ")}`).toEqual([]);
+    // E o contrário: ninguém aproveitou a faxina para enfiar tela nova.
+    expect(hoje.size).toBe(ANTES.length);
+  });
+
+  it("o menu tem os 10 itens do desenho do CEO, na ordem dele", () => {
+    expect(GRUPOS.map((g) => g.rotulo)).toEqual([
+      "Painel", "Prospecção", "SDR", "Atendimento", "Leads",
+      "Vendas", "CRM", "Automações", "Relatórios", "Configurações",
+    ]);
+  });
+
+  it("⭐ papel a papel, o que se alcança é EXATAMENTE o que se alcançava", () => {
+    // A régua de cada aba é a mesma que o item tinha quando era linha de menu.
+    // Este caso escreve essa expectativa à mão, papel a papel, em vez de
+    // derivá-la do próprio código — derivar provaria só que o código é igual a
+    // si mesmo.
+    const gestao = [
+      ROTAS.painel, ROTAS.torre, ROTAS.atendimento, ROTAS.roteamento,
+      ROTAS.agente, ROTAS.supervisora, ROTAS.whatsapp,
+    ];
+    const deTodos = ANTES.filter((h) => !gestao.includes(h) && h !== ROTAS.acessos);
+
+    const ve = (papel: Parameters<typeof abasDoComercial>[0]) =>
+      new Set(abasDoComercial(papel).map((a) => a.href));
+
+    const vendedor = ve("AGENTE_HUMANO");
+    for (const h of deTodos) expect(vendedor.has(h), `vendedor perdeu ${h}`).toBe(true);
+    for (const h of [...gestao, ROTAS.acessos]) {
+      expect(vendedor.has(h), `vendedor GANHOU ${h}`).toBe(false);
+    }
+
+    const gerente = ve("GERENTE_DEPARTAMENTO");
+    for (const h of [...deTodos, ...gestao]) expect(gerente.has(h), h).toBe(true);
+    expect(gerente.has(ROTAS.acessos)).toBe(false);
+
+    const dono = ve("MASTER_CEO");
+    for (const h of ANTES) expect(dono.has(h), `o dono perdeu ${h}`).toBe(true);
+
+    // O papel que não faz login continua sem menu nenhum.
+    expect(abasDoComercial("AGENTE_IA")).toEqual([]);
+    expect(menuDoComercial("AGENTE_IA")).toEqual([]);
+  });
+
+  it("⛔ o item do menu leva a uma tela que ESTA pessoa abre", () => {
+    // O defeito que este caso existe para impedir: "Atendimento" apontando para
+    // a central de gestão faria o vendedor bater num 403 no primeiro clique.
+    for (const papel of ["AGENTE_HUMANO", "GERENTE_DEPARTAMENTO", "MASTER_CEO", null] as const) {
+      for (const g of menuDoComercial(papel)) {
+        expect(g.abas.length, `${g.rotulo} vazio para ${papel}`).toBeGreaterThan(0);
+        expect(g.abas.some((a) => a.href === g.href), `${g.rotulo} para ${papel}`).toBe(true);
+      }
+    }
+    const vendedor = menuDoComercial("AGENTE_HUMANO");
+    expect(vendedor.find((g) => g.rotulo === "Atendimento")!.href).toBe(ROTAS.conversas);
+    // Grupo inteiro de gestão simplesmente não aparece para ele.
+    expect(vendedor.map((g) => g.rotulo)).not.toContain("Painel");
+  });
+
+  it("a barra de dentro casa pelo prefixo mais longo, não por `/comercial`", () => {
+    const menu = menuDoComercial(null);
+    const grupo = (c: string) => grupoDoCaminho(menu, c)?.rotulo;
+
+    // `/comercial` é prefixo de tudo: casamento ingênuo poria a barra do SDR
+    // em cima da casa inteira.
+    expect(grupo(ROTAS.carteira)).toBe("Leads");
+    expect(grupo(ROTAS.supervisora)).toBe("Relatórios");
+    expect(grupo(ROTAS.filas)).toBe("SDR");
+    expect(grupo(`${ROTAS.filas}/`)).toBe("SDR");
+    // A ficha do lead abre de Leads e mantém a barra — sem ser item de menu.
+    expect(grupo(`${COMERCIAL}/lead/abc-123`)).toBe("Leads");
+    expect(
+      GRUPOS.flatMap((g) => g.abas).some((a) => a.href === `${COMERCIAL}/lead`),
+      "a ficha do lead virou item de menu",
+    ).toBe(false);
+    // Endereço de fora da área não inventa grupo.
+    expect(grupo("/admin")).toBeUndefined();
+  });
+
+  it("a ficha do lead só é alcançada por quem alcança a Carteira", () => {
+    // Coerência: o `prefixos` do grupo não pode virar uma porta lateral.
+    const leads = menuDoComercial("AGENTE_HUMANO").find((g) => g.rotulo === "Leads")!;
+    expect(leads.abas.map((a) => a.href)).toContain(ROTAS.carteira);
   });
 });
