@@ -117,3 +117,77 @@ A planilha estava sem linhas de leads no momento da implementação. O teste fin
 4. contato visível no Foocci Comercial como lead inbound;
 5. origem/campanha/anúncio preservados no histórico;
 6. nenhum item criado em Base Fria.
+
+---
+
+## ⛔ 18/09/2026 — POR QUE NÃO CHEGAVA. Medido, não suposto.
+
+Três leads pagos (`Formulário 15-09-2026`) estavam na planilha e não no Foocci —
+o mais antigo havia 36 horas. A causa foi medida lendo a planilha:
+
+**Ela tinha as 16 colunas da Meta e NENHUMA das colunas `foocci_*`.**
+
+Essas colunas são criadas por `garantirColunasDeSync_` na **primeira execução**
+do script. A ausência total delas prova uma coisa só: **este Apps Script nunca
+rodou uma única vez nesta planilha.** Ninguém executou `instalarTriggerFoocci`.
+
+O que foi **descartado por medição**, e não por palpite:
+
+| Suspeita | Veredito |
+|---|---|
+| Assinatura do webhook na Meta | **Irrelevante.** Este caminho não usa webhook da Meta. |
+| Formulário não inscrito na Meta | **Não.** Os três leads chegaram à planilha normalmente. |
+| A chave `FOOCCI_META_LEADS_KEY` | **Presente** no serviço FOOCCI, ambiente production. |
+| Permissão do app da Meta | **Irrelevante** para este hop. |
+
+Ou seja: o hop **Meta → Planilha funciona**. O hop **Planilha → Foocci nunca foi
+ligado**. Nada disso depende de configuração no Facebook.
+
+### O passo exato para ligar (tudo dentro da planilha, nada no Facebook)
+
+1. Abrir `Leads Campanha Facebook Ads`
+   (`https://docs.google.com/spreadsheets/d/1LYijufDggX7eVVVOt5ZqBqvhBDfrnSTnVhTHpHyGwoI`),
+   logado como **`foocci1@gmail.com`**, que é o dono.
+2. **Extensões → Apps Script**.
+3. Colar o conteúdo de `scripts/integrations/meta-leads-google-sheets.gs` e salvar.
+4. **Configurações do projeto → Propriedades do script → Adicionar propriedade**:
+   nome `FOOCCI_META_LEADS_KEY`, valor = o **mesmo** valor da variável
+   `FOOCCI_META_LEADS_KEY` do serviço FOOCCI em production no Railway.
+5. Selecionar a função **`instalarTriggerFoocci`** e clicar em **Executar**.
+   Autorizar as permissões que o Google pedir.
+6. Conferir com a função **`verificarInstalacaoFoocci`** (Executar → Ver registro
+   de execução). O log tem de dizer `segredoConfigurado: true`,
+   `gatilhosInstalados: 1`, `jaRodouAlgumaVez: true`.
+
+Depois disso as colunas `foocci_sync_status`, `foocci_synced_at`,
+`foocci_attempts`, `foocci_last_error` e `foocci_lead_id` aparecem na planilha, e
+cada linha passa a dizer sozinha se entrou ou por que não entrou.
+
+### Por que NÃO construímos uma sincronização do lado do servidor
+
+A tentação era óbvia: um cron no Foocci lendo a planilha pela API do Google.
+Foi recusada por dois motivos, nesta ordem:
+
+1. **Credencial que não existe.** O Foocci só tem OAuth de Analytics e Business
+   Profile (`GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`). Ler esta planilha exigiria uma
+   **conta de serviço do Google com escopo `spreadsheets.readonly`**, o JSON dela
+   numa variável nova (`GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON`) e a planilha
+   compartilhada com o e-mail dessa conta de serviço. Nada disso existe hoje, e
+   segredo não se inventa nem se escreve em código.
+2. **Seria o segundo caminho de nascimento do mesmo lead.** O push do Apps
+   Script já existe, roda de minuto em minuto, carrega o próprio controle de
+   estado na planilha e **não precisa de credencial nenhuma** — a autorização é
+   a do dono da planilha, dada uma vez. Dois caminhos produziriam duas verdades
+   sobre a origem do lead, e a que diverge é sempre a que ninguém atualiza.
+
+**Intervalo:** 1 minuto, que é o que o gatilho já usa, e está certo. Errar para
+mais é o erro caro — lead quente esfria em minutos, e o teto de 25 linhas por
+execução (`FOOCCI_MAX_ROWS_PER_RUN`) já protege contra rajada. O piso do Apps
+Script é 1 minuto; não há ganho em pedir menos.
+
+## O comando de resgate — `/api/admin/meta-leads/backfill`
+
+Para o que ficou de fora enquanto a ponte estava desligada. Segredo próprio
+(`FOOCCI_META_LEADS_BACKFILL_KEY`), fail-closed, idempotente pelo `id` da Meta.
+Não escreve em `SiteLead` por conta própria: chama `importarMetaLead`, a mesma
+porta do webhook e da ponte. Ver `src/services/meta-leads/importarMetaLead.ts`.

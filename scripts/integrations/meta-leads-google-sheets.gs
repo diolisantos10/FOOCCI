@@ -9,6 +9,27 @@
  */
 
 const FOOCCI_SHEET_NAME = 'Página1';
+
+/*
+ * ⚠️ MEDIDO EM 18/09/2026, E É A CAUSA INTEIRA DO ATRASO DE 36 HORAS.
+ *
+ * A planilha "Leads Campanha Facebook Ads" tinha TRÊS leads pagos e NENHUMA das
+ * colunas `foocci_*`. Essas colunas são criadas por `garantirColunasDeSync_` na
+ * primeira execução — a ausência delas prova que este script **nunca rodou uma
+ * única vez** naquela planilha. Não era a chave (conferida, presente no Railway),
+ * não era assinatura de webhook, não era permissão do app da Meta: o hop
+ * Meta→Planilha funcionava e o hop Planilha→Foocci nunca foi ligado.
+ *
+ * Duas travas saíram daquela medição:
+ *
+ *  1. O nome da aba deixou de ser fatal. `'Página1'` é o padrão do Google em
+ *     português, mas a planilha pode ter sido criada em outra língua ou a aba
+ *     renomeada — e o script inteiro morria no `getSheetByName`, calado, para
+ *     sempre. Agora ele tenta o nome e cai na primeira aba; quem manda na
+ *     validação são os CABEÇALHOS, que continuam fail-closed.
+ *  2. `verificarInstalacaoFoocci` existe para responder "isto está ligado?" sem
+ *     precisar esperar um lead aparecer para descobrir que não estava.
+ */
 const FOOCCI_META_LEADS_URL = 'https://foocci.com.br/api/v1/meta-leads';
 const FOOCCI_MAX_ROWS_PER_RUN = 25;
 
@@ -30,9 +51,7 @@ function sincronizarLeadsFoocci() {
       throw new Error('Configure FOOCCI_META_LEADS_KEY em Propriedades do script.');
     }
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOOCCI_SHEET_NAME);
-    if (!sheet) throw new Error('Aba "' + FOOCCI_SHEET_NAME + '" não encontrada.');
-
+    const sheet = abaDosLeads_();
     garantirColunasDeSync_(sheet);
 
     const lastRow = sheet.getLastRow();
@@ -127,9 +146,7 @@ function instalarTriggerFoocci() {
 }
 
 function reprocessarErrosPermanentesFoocci() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(FOOCCI_SHEET_NAME);
-  if (!sheet) throw new Error('Aba "' + FOOCCI_SHEET_NAME + '" não encontrada.');
-
+  const sheet = abaDosLeads_();
   garantirColunasDeSync_(sheet);
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return;
@@ -141,6 +158,54 @@ function reprocessarErrosPermanentesFoocci() {
       sheet.getRange(i + 1, index.foocci_last_error + 1).setValue('');
     }
   }
+}
+
+/**
+ * A aba dos leads: pelo nome, e — se ele não existir — a primeira da planilha.
+ *
+ * Cair na primeira aba NÃO afrouxa nada: `validarCabecalhosMeta_` roda em
+ * seguida e recusa qualquer aba que não tenha as 16 colunas da Meta. O que essa
+ * queda evita é o modo de falha que custou 36 horas: o script morrer no nome da
+ * aba e nunca chegar a conferir cabeçalho nenhum.
+ */
+function abaDosLeads_() {
+  const planilha = SpreadsheetApp.getActiveSpreadsheet();
+  const porNome = planilha.getSheetByName(FOOCCI_SHEET_NAME);
+  if (porNome) return porNome;
+
+  const abas = planilha.getSheets();
+  if (!abas.length) throw new Error('A planilha não tem nenhuma aba.');
+  return abas[0];
+}
+
+/**
+ * "ISTO ESTÁ LIGADO?" — a resposta, sem precisar de um lead para descobrir.
+ *
+ * Rode esta função no editor do Apps Script e leia o log. Ela responde as três
+ * perguntas que ninguém conseguia responder em 18/09/2026: o segredo está
+ * configurado, o gatilho existe, e as colunas de controle já foram criadas
+ * (ou seja: o script já rodou pelo menos uma vez).
+ */
+function verificarInstalacaoFoocci() {
+  const secret = PropertiesService.getScriptProperties().getProperty('FOOCCI_META_LEADS_KEY');
+  const gatilhos = ScriptApp.getProjectTriggers().filter(function (t) {
+    return t.getHandlerFunction() === 'sincronizarLeadsFoocci';
+  });
+
+  const sheet = abaDosLeads_();
+  const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0]
+    .map(function (h) { return String(h).trim(); });
+
+  const diagnostico = {
+    aba: sheet.getName(),
+    segredoConfigurado: Boolean(secret),
+    gatilhosInstalados: gatilhos.length,
+    jaRodouAlgumaVez: headers.indexOf('foocci_sync_status') !== -1,
+    linhas: Math.max(sheet.getLastRow() - 1, 0),
+  };
+
+  Logger.log(JSON.stringify(diagnostico, null, 2));
+  return diagnostico;
 }
 
 function payloadDaLinha_(row, index, metaLeadId) {
