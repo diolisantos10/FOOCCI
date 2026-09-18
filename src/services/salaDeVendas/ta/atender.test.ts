@@ -95,10 +95,34 @@ function banco(a: Ajustes = {}) {
     // existe: vazio é o estado de uma instalação nova, e o TA precisa
     // continuar atendendo — sem nome, mas atendendo.
     internalUser: {
-      findMany: vi.fn().mockResolvedValue(a.timeNoBanco ?? []),
+      findMany: vi.fn(async (args: { where?: { role?: unknown } }) => {
+        // `escolherAgente` pede o time de IA; `lerCandidatos` pede gente com
+        // disponibilidade. O duplo responde ao ARGUMENTO, como o Prisma faria.
+        const role = (args?.where?.role ?? null) as { in?: string[] } | null;
+        if (role && Array.isArray(role.in)) return a.semHumanoDePlantao ? [] : [HUMANO_DISPONIVEL];
+        return a.timeNoBanco ?? [];
+      }),
     },
   };
 }
+
+  /**
+   * ⭐ D-0E4, 18/09/2026 — `passarParaGente` passou a conferir se EXISTE
+   * humano disponível antes de tirar o lead da IA. Sem ninguém na fila, o
+   * handoff recusa e a IA continua conduzindo (ver
+   * `pedidoDeGenteSemFila.test.ts`). Os casos deste arquivo medem o handoff
+   * ACONTECENDO, então o time precisa existir — e existir aqui é ter
+   * `disponibilidade`, que é o que `lerCandidatos` lê.
+   *
+   * ⚠️ Esta pessoa NÃO interfere em `escolherAgente`: ele casa por e-mail com
+   * `TIME_DE_AGENTES`, e este e-mail não está lá.
+   */
+  const HUMANO_DISPONIVEL = {
+    id: "u-humano-de-plantao",
+    nome: "Pessoa de plantão",
+    email: "plantao@exemplo.invalido",
+    disponibilidade: { estado: "DISPONIVEL", capacidade: 10, especialidades: [], regioes: [], pausadoAte: null },
+  };
 
 /** Uma pergunta comum, que a base de verdade responde e não chama gente. */
 const PERGUNTA = "quanto custa o plano crescimento?";

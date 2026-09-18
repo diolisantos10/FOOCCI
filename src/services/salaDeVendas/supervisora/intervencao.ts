@@ -75,6 +75,9 @@ export async function varrerConversasEmAndamento(
         : "irritação grave, fora do fluxo de uma mensagem de saída";
 
       const r = await passarParaGente(db, {
+        // ⛔ TRAVA, não roteamento: o ponto é PARAR a IA. Deixá-la falando por
+        // falta de humano transformaria a Supervisora em sugestão.
+        seNaoHouverGente: "passarMesmoAssim",
         leadId: lead.id,
         motivoEscrito: `Supervisora (INTERVENTION, varredura fora do fluxo de envio): ${motivo}`,
         dossie: { resumo: motivo },

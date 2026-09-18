@@ -40,6 +40,8 @@ import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { POLITICA_PRIVACIDADE_VERSAO } from "@/lib/site/politicaPrivacidade";
 import { semearEntrevistaDoLead } from "@/services/foocci-sdr/LeadParaSondagem";
+import { prazoDaPrimeiraResposta } from "@/services/salaDeVendas/recepcao/prazoDaPrimeiraResposta";
+import { iaAssumeSeEstaLivre } from "@/services/salaDeVendas/responsavel";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
 const FROM = process.env.LEADS_FROM_EMAIL || "Foocci <onboarding@resend.dev>";
@@ -186,6 +188,27 @@ export const SiteLeadService = {
       console.error("[site-lead] entrevista do SDR NÃO foi semeada para o contato", { leadId });
     }
 
+    /* ── ⭐ D-0E4, 18/09/2026: A IA ASSUME NA CHEGADA ──────────────────────
+     * Ordem do CEO: *"Todos os clientes serão atendidos pela IA. Atendimento
+     * humano só entra, por enquanto, por solicitação do cliente."*
+     *
+     * Até aqui todo lead nascia `atendidoPor: NINGUEM` e só era assumido quando
+     * a pessoa escrevesse no WhatsApp — o que a maioria nunca faz. Era a causa
+     * literal dos 6.273 contatos sem responsável.
+     *
+     * A escrita é CONDICIONAL a `NINGUEM` (ver `iaAssumeSeEstaLivre`): um
+     * reenvio de quem já tem dono humano não tira o lead de ninguém.
+     *
+     * ⚠️ Assumir NÃO manda mensagem nenhuma. Quem fala é a rodada da recepção,
+     * com as chaves do dono. Aqui só se define de quem é o lead. */
+    try {
+      await iaAssumeSeEstaLivre(prisma, { leadId });
+    } catch (e) {
+      // O contato já está salvo. Falhar em atribuir não pode derrubar a captura
+      // — o lead volta a ser assumido na próxima rodada da recepção.
+      console.error("[site-lead] a IA não conseguiu assumir o contato na chegada:", e);
+    }
+
     const error = await notify({ ...input, codigo });
 
     await prisma.siteLead.update({
@@ -287,6 +310,16 @@ async function createWithCode(
      * exatamente a linha que o portão do SDR reprova. */
     consentAt:            new Date(),
     consentPolicyVersion: POLITICA_PRIVACIDADE_VERSAO,
+    /* ── ⭐ O RELÓGIO DA PRIMEIRA RESPOSTA, LIGADO NA CHEGADA ──────────────
+     * `slaVenceEm` existia no schema desde sempre, era lida em dois lugares e
+     * **nenhuma linha da casa a escrevia**. A fila de "SLA estourado" devolvia
+     * zero, e zero ali não queria dizer "ninguém está atrasado": queria dizer
+     * "o relógio nunca foi ligado".
+     *
+     * Ele nasce AQUI, no mesmo `create` do contato, e não num passo depois:
+     * um segundo passo pode falhar, e aí existiria lead sem prazo — que é
+     * precisamente o estado de todos os 6.273 contatos largados. */
+    slaVenceEm: prazoDaPrimeiraResposta(new Date()),
   };
 
   for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {

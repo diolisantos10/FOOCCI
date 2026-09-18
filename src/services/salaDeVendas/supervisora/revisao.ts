@@ -458,6 +458,9 @@ async function tentarEscalar(
 ): Promise<boolean> {
   try {
     const r = await passarParaGente(db, {
+      // ⛔ Idem `intervencao.ts`: aqui a IA é retirada por segurança (RISCO), e
+      // segurança não espera fila.
+      seNaoHouverGente: "passarMesmoAssim",
       leadId: params.leadId,
       motivoEscrito:
         "A Supervisora reteve uma mensagem e pediu apoio de gente: " + resultado.detalhe,

@@ -117,6 +117,31 @@ export const AVISO_DE_QUE_VEM_GENTE =
   "Entendi o que você precisa. Isso aí é decisão que eu não posso tomar sozinho, " +
   "então já passei pro time com tudo o que você me contou — alguém vem falar com você.";
 
+/**
+ * ⭐ D-0E4 — O CLIENTE PEDIU GENTE E NÃO HÁ GENTE AGORA.
+ *
+ * ── POR QUE ESTE TEXTO EXISTE, E POR QUE ELE DIZ ISSO ───────────────────────
+ *
+ * Antes de 18/09/2026 este caso terminava em silêncio: o handoff trocava o dono
+ * para `AGUARDANDO_HUMANO`, o gate 2 deste arquivo passava a calar a IA, e a
+ * pessoa que acabou de escrever *"quero falar com alguém"* não recebia nada.
+ * Silêncio depois de um pedido é a pior resposta possível a um pedido.
+ *
+ * Três coisas que este texto **não** faz, e cada uma é uma tentação:
+ *
+ *  · não promete prazo ("em 5 minutos") — prazo que ninguém confere é mentira
+ *    com cara de atendimento;
+ *  · não finge que já passou ("já encaminhei") — não passou, e o cliente
+ *    descobriria isso pelo silêncio;
+ *  · não ignora o pedido e volta a vender — ignorar um pedido explícito é o
+ *    defeito que o gatilho `PEDIU_HUMANO` existe para evitar.
+ *
+ * Ele diz a verdade e mantém a conversa viva, que é exatamente a ordem do CEO.
+ */
+export const AVISO_DE_QUE_VOU_CHAMAR_ALGUEM =
+  "Anotei que você quer falar com alguém do time — vou chamar. Enquanto isso eu " +
+  "sigo aqui com você: pode me contar o que precisa que eu já adianto tudo.";
+
 export type MotivoDeCalar =
   | "taDesligado"
   | "leadNaoEDaIA"
@@ -143,7 +168,33 @@ export type ResultadoDoTurno =
    * "ele falou" sejam separáveis em código — quem lê `resposta` precisa saber
    * que está no ramo em que ela existe.
    */
-  | { falou: true; porPolitica: false; mensagemId: string; resposta: FalaFinal; entregue: boolean }
+  | {
+      falou: true;
+      porPolitica: false;
+      /** Ausente/`false` neste ramo: aqui houve fala de venda composta. */
+      pediuGenteSemFila?: false;
+      mensagemId: string;
+      resposta: FalaFinal;
+      entregue: boolean;
+    }
+  /**
+   * ⭐ D-0E4: o cliente PEDIU gente, não havia ninguém disponível, e a IA
+   * **continuou conduzindo** depois de dizer isso a ele.
+   *
+   * Variante à parte, e não um campo a mais na de cima, pela mesma razão que a
+   * fala por política é: o que saiu **não é** `resposta.texto` — é um aviso
+   * determinístico. Contá-lo como fala composta inflaria a métrica do modelo
+   * com uma frase que o modelo não escreveu. E separá-lo de `chamouGente` é o
+   * ponto inteiro do martelo: ninguém foi chamado, porque não havia ninguém.
+   */
+  | {
+      falou: true;
+      porPolitica: false;
+      pediuGenteSemFila: true;
+      mensagemId: string;
+      texto: string;
+      entregue: boolean;
+    }
   /**
    * ⭐ PASSO 3: ele respondeu SOZINHO, por uma política que a empresa já tinha
    * decidido — e **não chamou ninguém**.
@@ -609,6 +660,11 @@ async function executarTurno(
     const consulta = resumoDaConsulta(conector, traduzidos.semTraducao);
 
     const h = await passarParaGente(db, {
+      // ⭐ D-0E4: se não houver humano, o lead NÃO sai da IA. A conversa segue
+      // viva e o cliente ouve a verdade — ver o ramo `semGenteDisponivel`
+      // logo abaixo. Passar para uma fila vazia é o que produziu o lead
+      // parado 24 h em "esperando gente".
+      seNaoHouverGente: "manterComIA",
       leadId: lead.id,
       motivoEscrito: r.porque,
       motivoExplicito,
@@ -720,11 +776,74 @@ async function executarTurno(
       return { falou: false, chamouGente: true, handoffId: h.handoffId, motivo: h.motivo };
     }
 
-    // O handoff recusou. As duas saídas erradas: responder com a fala de venda
-    // (ignora o gatilho que disparou) ou calar mentindo o motivo. Fica o motivo
-    // verdadeiro, nomeado, e o lead segue com a IA para a próxima tentativa —
-    // `passarParaGente` só troca o dono depois de validar, então nada ficou
-    // pela metade.
+    // ── ⭐ D-0E4: NÃO HÁ HUMANO — E A IA NÃO ABANDONA A CONVERSA ──────────
+    //
+    // `passarParaGente` recusou porque não existe ninguém disponível, e recusou
+    // ANTES de trocar o dono: o lead continua com a IA, intacto. Calar aqui
+    // seria reproduzir o defeito pelo outro lado — o cliente pediu gente e
+    // receberia silêncio do mesmo jeito.
+    //
+    // Então: o pedido fica REGISTRADO na ficha (`motivoDoPedido`, que é o campo
+    // que quem entrar depois lê primeiro), o cliente ouve a verdade, e a IA
+    // segue conduzindo. Nada de trava é afrouxado: o texto sai por
+    // `registrarSaida` + `entregarMensagem`, pelo mesmo funil, com as mesmas
+    // chaves do dono.
+    if (h.causa === "semGenteDisponivel") {
+      await db.siteLead
+        .updateMany({
+          where: { id: lead.id, atendidoPor: "IA" },
+          data: { motivoDoPedido: `o cliente pediu falar com gente e não havia ninguém: ${h.detalhe}` },
+        })
+        .catch(() => {
+          // Anotar o pedido é útil; responder ao cliente é obrigatório. Uma
+          // falha aqui nunca pode roubar a resposta dele.
+        });
+
+      console.warn("[ta] o cliente pediu gente e NÃO há humano disponível — a IA segue conduzindo", {
+        leadId: lead.id,
+        detalhe: h.detalhe,
+      });
+
+      const pedidoGravado = await registrarSaida(db, {
+        leadId: lead.id,
+        texto: AVISO_DE_QUE_VOU_CHAMAR_ALGUEM,
+        autor: "IA",
+        autorUserId: assina,
+        agora,
+        turnoId: pedido.turnoId ?? null,
+        papelDoAgente: "recepcao",
+        origemDaFala: r.origem,
+      });
+
+      if (!pedidoGravado.ok) {
+        return calar("naoConseguiuGravar", `o aviso de que vou chamar alguém não foi gravado: ${pedidoGravado.causa}`);
+      }
+
+      const entrega = await entregarMensagem(db, pedidoGravado.mensagemId, "maquina");
+      if (!entrega.entregue) {
+        console.error("[ta] o aviso de que vou chamar alguém NÃO chegou ao lead", {
+          leadId: lead.id,
+          mensagemId: pedidoGravado.mensagemId,
+          motivo: entrega.motivo,
+          detalhe: entrega.detalhe,
+        });
+      }
+
+      return {
+        falou: true,
+        porPolitica: false,
+        pediuGenteSemFila: true,
+        mensagemId: pedidoGravado.mensagemId,
+        texto: AVISO_DE_QUE_VOU_CHAMAR_ALGUEM,
+        entregue: entrega.entregue,
+      };
+    }
+
+    // O handoff recusou por outro motivo. As duas saídas erradas: responder com
+    // a fala de venda (ignora o gatilho que disparou) ou calar mentindo o
+    // motivo. Fica o motivo verdadeiro, nomeado, e o lead segue com a IA para a
+    // próxima tentativa — `passarParaGente` só troca o dono depois de validar,
+    // então nada ficou pela metade.
     return calar("handoffRecusado", `o handoff recusou: ${h.causa}`);
   }
 

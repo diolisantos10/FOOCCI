@@ -27,6 +27,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { MotivoDoHandoff, SiteLeadStage, LeadAtendidoPor } from "@prisma/client";
 import { assumirComoHumano, devolverParaIA, pedirHumano } from "./responsavel";
+import { genteDisponivelAgora } from "./genteDisponivel";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -65,11 +66,53 @@ export interface RegraDeHandoff {
   ligados: readonly MotivoDoHandoff[];
 }
 
+/**
+ * ⭐ D-0E4 — MARTELO DO CEO, 18/09/2026, textual:
+ *
+ *   *"Todos os clientes serão atendidos pela IA."*
+ *   *"Atendimento humano só entra, por enquanto, por solicitação do cliente."*
+ *
+ * ── O QUE MUDOU, E O QUE ISSO CUSTA ─────────────────────────────────────────
+ *
+ * `ligados` tinha os ONZE gatilhos do comando antigo. Passou a ter UM:
+ * `PEDIU_HUMANO`. Saíram, por ordem direta e não por acidente:
+ *
+ *   INTENCAO_DE_COMPRA · PEDIU_PROPOSTA · PEDIU_DESCONTO ·
+ *   OBJECAO_NAO_RESOLVIDA · IA_INSEGURA · SENTIMENTO_NEGATIVO · RISCO ·
+ *   INFORMACAO_NAO_CONFIRMADA · SCORE_ATINGIU_LIMITE · IA_FALHOU
+ *
+ * Nenhum deles é um pedido do cliente: são leituras NOSSAS sobre a conversa.
+ * Enquanto valiam, um lead quente virava fila de espera humana por decisão da
+ * máquina — e onde não há humano, fila de espera é silêncio.
+ *
+ * ⚠️ **Isto não afrouxa trava nenhuma.** Supervisora, trava anti-repetição,
+ * opt-out, janela de 24 h e o gate Bot/Humano continuam exatamente de pé. Estes
+ * gatilhos decidem QUEM CONDUZ a conversa, nunca O QUE PODE SAIR dela. O caso
+ * de RISCO continua sendo tratado pela Supervisora, que tem caminho próprio e
+ * não passa por aqui.
+ *
+ * ⚠️ E a lista volta a crescer mudando ESTE array — nenhum chamador foi
+ * apagado, nenhum motivo saiu do enum. Retrofit, não demolição.
+ */
 export const REGRA_PADRAO: RegraDeHandoff = {
   scoreParaHumano: 70,
   confiancaMinima: 0.6,
-  // Os onze do comando. `DEVOLUCAO_PARA_IA` e `DISTRIBUICAO` ficam de fora:
-  // não são a IA desistindo, são movimentos operacionais de gente.
+  ligados: ["PEDIU_HUMANO"],
+};
+
+/**
+ * A régua ANTERIOR ao martelo D-0E4, preservada e NÃO usada por caminho de
+ * produção nenhum.
+ *
+ * Fica escrita por dois motivos: os testes que provam que cada gatilho ainda
+ * funciona continuam podendo passá-la explicitamente (a máquina não foi
+ * demolida, só desligada), e o dia em que o CEO quiser religar um deles a
+ * conversa é sobre qual item desta lista volta — não sobre reconstruir onze
+ * gatilhos de memória.
+ */
+export const REGRA_DE_ONZE_GATILHOS: RegraDeHandoff = {
+  scoreParaHumano: 70,
+  confiancaMinima: 0.6,
   ligados: [
     "PEDIU_HUMANO",
     "INTENCAO_DE_COMPRA",
@@ -340,6 +383,13 @@ export type ResultadoDePassar =
   | { ok: false; causa: "semMotivo" }
   | { ok: false; causa: "naoExiste" }
   | { ok: false; causa: "naoEraDaIA"; atendidoPor: LeadAtendidoPor }
+  /**
+   * ⭐ D-0E4: não existe humano disponível para receber, e quem chamou pediu
+   * para NÃO passar nesse caso. O lead **continua com a IA** — nada foi
+   * trocado, nada foi registrado, e a conversa segue viva. `detalhe` diz por
+   * que ninguém pode receber, para o chamador contar a verdade ao cliente.
+   */
+  | { ok: false; causa: "semGenteDisponivel"; detalhe: string }
   /** O dono trocou, mas o registro não foi gravado. Estado recuperável. */
   | { ok: false; causa: "trocouSemRegistrar"; leadId: string };
 
@@ -367,6 +417,20 @@ export async function passarParaGente(
     regra?: RegraDeHandoff;
     deUserId?: string | null;
     agora?: Date;
+    /**
+     * ⭐ D-0E4 — O QUE FAZER QUANDO NÃO HÁ HUMANO. **Sem padrão, de propósito**,
+     * pela mesma razão que `abordarLead` não dá padrão a `autor`: um padrão
+     * faria todo chamador novo herdar a escolha por omissão, e a decisão mais
+     * cara da conversa voltaria a depender de alguém lembrar dela.
+     *
+     *  · `"manterComIA"` — é o caso do ATENDIMENTO. O cliente pediu gente e não
+     *    há gente: passar mesmo assim tira o lead da IA e o entrega ao silêncio.
+     *    A recusa volta nomeada e quem chamou segue conduzindo.
+     *  · `"passarMesmoAssim"` — é o caso da SUPERVISORA e do gerente. Ali o
+     *    ponto é PARAR a IA; deixá-la falando por falta de humano transformaria
+     *    uma trava de segurança em sugestão. Trava não se afrouxa.
+     */
+    seNaoHouverGente: "manterComIA" | "passarMesmoAssim";
   },
 ): Promise<ResultadoDePassar> {
   const agora = params.agora ?? new Date();
@@ -406,6 +470,23 @@ export async function passarParaGente(
     dossie,
   });
   if (recusas.length) return { ok: false, causa: "dossieIncompleto", recusas };
+
+  // ── ⭐ D-0E4: NUNCA ENTREGAR UM LEAD A UMA FILA VAZIA ─────────────────────
+  //
+  // Conferido ANTES de `pedirHumano`, e é o ponto: depois da troca o lead já
+  // não é da IA, o gate 2 do TA passa a calá-la, e desfazer a troca exigiria
+  // uma segunda escrita que pode falhar. Perguntar antes é a única ordem em que
+  // "não há ninguém" nunca produz um lead mudo.
+  if (params.seNaoHouverGente === "manterComIA") {
+    const gente = await genteDisponivelAgora(db, agora);
+    if (!gente.tem) {
+      return {
+        ok: false,
+        causa: "semGenteDisponivel",
+        detalhe: `${gente.noTime} pessoa(s) no time, 0 disponíveis: ${gente.porQueNaoPodem}`,
+      };
+    }
+  }
 
   const trocou = await pedirHumano(db, {
     leadId: params.leadId,

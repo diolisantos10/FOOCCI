@@ -17,9 +17,53 @@ import {
   devolverParaIAComDossie,
   fecharHandoffAbertoDoLead,
   REGRA_PADRAO,
+  REGRA_DE_ONZE_GATILHOS,
 } from "./handoff";
 
 const AGORA = new Date("2026-08-25T12:00:00Z");
+
+/**
+ * ⭐ D-0E4, 18/09/2026 — MARTELO DO CEO:
+ *   *"Todos os clientes serão atendidos pela IA."*
+ *   *"Atendimento humano só entra, por enquanto, por solicitação do cliente."*
+ *
+ * Os casos deste arquivo que medem a MÁQUINA dos onze gatilhos passaram a
+ * declarar `REGRA_DE_ONZE_GATILHOS` explicitamente. Eles continuam valendo: a
+ * máquina não foi demolida, foi desligada. O que mudou é o PADRÃO — e é o
+ * bloco abaixo que o guarda.
+ */
+describe("⭐ D-0E4: no padrão, só o pedido do cliente tira o lead da IA", () => {
+  it("a régua padrão tem UM gatilho ligado, e é o pedido explícito", () => {
+    expect(REGRA_PADRAO.ligados).toEqual(["PEDIU_HUMANO"]);
+  });
+
+  it("⭐ pedido explícito continua disparando — é o único que deve", () => {
+    expect(gatilhosQueDispararam({ pediuHumano: true })).toEqual(["PEDIU_HUMANO"]);
+  });
+
+  for (const [nome, sinais] of [
+    ["pediu desconto", { pediuDesconto: true }],
+    ["pediu proposta", { pediuProposta: true }],
+    ["intenção de compra", { intencaoDeCompra: true }],
+    ["objeção não resolvida", { objecaoNaoResolvida: true }],
+    ["IA insegura", { confiancaDaIA: 0.1 }],
+    ["sentimento negativo", { sentimentoNegativo: true }],
+    ["risco", { risco: true }],
+    ["informação não confirmada", { informacaoNaoConfirmada: true }],
+    ["score no limite", { score: 95 }],
+    ["a IA falhou", { iaFalhou: true }],
+  ] as const) {
+    it(`⛔ ${nome} NÃO tira mais o lead da IA — não é pedido do cliente`, () => {
+      expect(gatilhosQueDispararam(sinais)).toEqual([]);
+    });
+  }
+
+  it("e o cliente pedindo vence mesmo no meio de todos os outros sinais", () => {
+    expect(
+      gatilhosQueDispararam({ pediuHumano: true, risco: true, score: 99, iaFalhou: true }),
+    ).toEqual(["PEDIU_HUMANO"]);
+  });
+});
 
 describe("quando a IA larga", () => {
   it("conversa tranquila NÃO dispara nada", () => {
@@ -34,46 +78,46 @@ describe("quando a IA larga", () => {
 
   it("desconto SEMPRE sai da mão da IA", () => {
     // Negociar é fora da alçada dela, por decisão e não por capacidade.
-    expect(gatilhosQueDispararam({ pediuDesconto: true })).toContain("PEDIU_DESCONTO");
+    expect(gatilhosQueDispararam({ pediuDesconto: true }, REGRA_DE_ONZE_GATILHOS)).toContain("PEDIU_DESCONTO");
   });
 
   it("baixa confiança do próprio modelo dispara", () => {
-    expect(gatilhosQueDispararam({ confiancaDaIA: 0.3 })).toContain("IA_INSEGURA");
+    expect(gatilhosQueDispararam({ confiancaDaIA: 0.3 }, REGRA_DE_ONZE_GATILHOS)).toContain("IA_INSEGURA");
   });
 
   it("confiança alta não dispara", () => {
-    expect(gatilhosQueDispararam({ confiancaDaIA: 0.9 })).not.toContain("IA_INSEGURA");
+    expect(gatilhosQueDispararam({ confiancaDaIA: 0.9 }, REGRA_DE_ONZE_GATILHOS)).not.toContain("IA_INSEGURA");
   });
 
   it("score no limite dispara", () => {
-    expect(gatilhosQueDispararam({ score: 85 })).toContain("SCORE_ATINGIU_LIMITE");
+    expect(gatilhosQueDispararam({ score: 85 }, REGRA_DE_ONZE_GATILHOS)).toContain("SCORE_ATINGIU_LIMITE");
   });
 
   it("score abaixo do limite não dispara", () => {
-    expect(gatilhosQueDispararam({ score: 40 })).not.toContain("SCORE_ATINGIU_LIMITE");
+    expect(gatilhosQueDispararam({ score: 40 }, REGRA_DE_ONZE_GATILHOS)).not.toContain("SCORE_ATINGIU_LIMITE");
   });
 
   it("informação não confirmada dispara — a IA não inventa", () => {
-    expect(gatilhosQueDispararam({ informacaoNaoConfirmada: true }))
+    expect(gatilhosQueDispararam({ informacaoNaoConfirmada: true }, REGRA_DE_ONZE_GATILHOS))
       .toContain("INFORMACAO_NAO_CONFIRMADA");
   });
 });
 
 describe("a ordem dos motivos é o que quem pega o lead vai ler primeiro", () => {
   it("o que o LEAD pediu vem antes do que nós calculamos", () => {
-    const r = gatilhosQueDispararam({ score: 90, pediuDesconto: true });
+    const r = gatilhosQueDispararam({ score: 90, pediuDesconto: true }, REGRA_DE_ONZE_GATILHOS);
     expect(r[0]).toBe("PEDIU_DESCONTO");
   });
 
   it("pedido de humano vence tudo", () => {
     const r = gatilhosQueDispararam({
       pediuHumano: true, pediuDesconto: true, risco: true, score: 95,
-    });
+    }, REGRA_DE_ONZE_GATILHOS);
     expect(r[0]).toBe("PEDIU_HUMANO");
   });
 
   it("risco vem antes dos limites técnicos da IA", () => {
-    const r = gatilhosQueDispararam({ risco: true, confiancaDaIA: 0.1 });
+    const r = gatilhosQueDispararam({ risco: true, confiancaDaIA: 0.1 }, REGRA_DE_ONZE_GATILHOS);
     expect(r.indexOf("RISCO")).toBeLessThan(r.indexOf("IA_INSEGURA"));
   });
 });
@@ -387,6 +431,11 @@ describe("passar o lead para gente, com dossiê e gatilho", () => {
       dossie: DOSSIE,
       // Os dois disparam; "pediu desconto" explica a conversa, "score" não.
       sinais: { pediuDesconto: true, score: 90 },
+      // ⭐ D-0E4: com a régua padrão nenhum dos dois dispara mais. O que este
+      // caso mede é a ORDEM, e ela continua de pé — por isso a régua antiga
+      // entra declarada, nunca por omissão.
+      regra: REGRA_DE_ONZE_GATILHOS,
+      seNaoHouverGente: "passarMesmoAssim",
     });
 
     expect(r.ok && r.motivo).toBe("PEDIU_DESCONTO");
