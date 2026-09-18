@@ -41,6 +41,7 @@
 
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { registrarDecisorIndicado } from "@/services/foocci-sdr/referredDecisionMaker";
+import { podeAbordarAgora } from "../janelaComercial";
 import { conferirInterruptor } from "./interruptor";
 import { ACOES_QUE_FALAM, decidirReabordagem, type DecisaoDaReabordagem } from "./rota";
 import { selecionarProximoLote } from "./selecao";
@@ -71,7 +72,17 @@ export interface ContaDoLote {
 
 export type ResultadoDoDisparo =
   | { rodou: true; conta: ContaDoLote }
-  | { rodou: false; motivo: "interruptorPuxado" | "intervaloEntreLotes" | "filaVazia" | "portaSemTrava"; detalhe: string };
+  | {
+      rodou: false;
+      motivo:
+        | "interruptorPuxado"
+        | "intervaloEntreLotes"
+        | "filaVazia"
+        | "portaSemTrava"
+        /** Fora do horário em que a casa aborda cliente. Ver `janelaComercial.ts`. */
+        | "foraDaJanelaComercial";
+      detalhe: string;
+    };
 
 /** Quando saiu o último lote. `null` = nunca saiu nenhum. */
 export async function ultimoLoteEm(db: Cliente): Promise<Date | null> {
@@ -110,6 +121,20 @@ export async function dispararUmLote(
         "a porta de envio não declara aplicar a trava anti-repetição. A campanha não roda sem ela, " +
         "e afrouxar a trava para caber a campanha não é uma opção.",
     };
+  }
+
+  // ── ⛔ A JANELA COMERCIAL, antes de qualquer leitura de fila ──
+  //
+  // Ordem do CEO, 18/09/2026: seg–sex 09–20, sáb 09–14, domingo não se aborda.
+  // Esta máquina não tinha janela nenhuma: ela só conhecia a janela de 24h da
+  // Meta, que responde outra pergunta (cabe texto livre ou tem de ser
+  // template?). Um lote pedido às 3h de domingo saía.
+  //
+  // ⚠️ Vale para ABORDAR, e só. Responder a quem nos escreveu não passa por
+  // aqui — esta função não é chamada por nenhum caminho de resposta.
+  const janela = podeAbordarAgora(agora);
+  if (!janela.pode) {
+    return { rodou: false, motivo: janela.motivo, detalhe: janela.detalhe };
   }
 
   // ── ⛔ O interruptor, antes de qualquer leitura de fila ──

@@ -25,6 +25,8 @@
  * abordei" quando alguém realmente contou.
  */
 
+import { podeAbordarAgora } from "@/services/salaDeVendas/janelaComercial";
+
 // ─── Motivos ────────────────────────────────────────────────────────────────────
 
 export type LeadBlockReason =
@@ -201,7 +203,15 @@ export function agendaLocal(agora: Date, tz: string = REGRA.fusoHorario): { dia:
 }
 
 /**
- * true quando AGORA está fora da janela de abordagem.
+ * true quando AGORA está fora da janela CONFIGURADA — hoje, a do TA.
+ *
+ * ⚠️ 18/09/2026: esta função **não decide mais quem pode ser ABORDADO**. A
+ * janela de abordagem passou a morar inteira em
+ * `salaDeVendas/janelaComercial.podeAbordarAgora`, porque a ordem do CEO
+ * incluiu o sábado (09–14) e o fim de semana estava embutido aqui como "não
+ * negociável". Quem sobrou usando esta função é `salaDeVendas/ta/atender.ts`,
+ * que é o caminho de RESPONDER a quem escreveu — e responder nunca foi barrado
+ * pela janela comercial.
  *
  * A janela entra por parâmetro porque ela é **ajustável pelo dono**: a
  * configuração do TA guarda `horaInicio`/`horaFim`, e um botão na tela que o
@@ -301,11 +311,14 @@ export function avaliarContatoDeLead(input: LeadSafetyInput): LeadSafetyDecision
 
   // 7. Horário. Por último porque é o único bloqueio que passa sozinho com o
   // tempo — os anteriores exigem que alguém ou alguma coisa mude.
-  if (foraDaJanela(agora)) {
-    return bloqueia(
-      "FORA_DA_JANELA",
-      `Fora da janela de abordagem (${REGRA.janela.inicioHora}h–${REGRA.janela.fimHora}h, dias úteis, horário de São Paulo).`,
-    );
+  // ⚠️ A janela de ABORDAGEM mora em `salaDeVendas/janelaComercial.ts`, e mora
+  // num lugar só: seg–sex 09–20, sáb 09–14, domingo nunca (ordem do CEO,
+  // 18/09/2026). `REGRA.janela` continua descrevendo o padrão de segurança do
+  // desenho, mas quem DECIDE é a função — dois lugares decidindo a mesma coisa
+  // é como o sábado ficou fora da janela sem ninguém perceber.
+  const janela = podeAbordarAgora(agora);
+  if (!janela.pode) {
+    return bloqueia("FORA_DA_JANELA", `Fora da janela de abordagem: ${janela.detalhe}`);
   }
 
   return { sendable: true, reason: null, detail: "Liberado." };
@@ -511,11 +524,14 @@ export function avaliarAbordagemDeProspeccao(
   }
 
   // 7. Horário, por último, pelo mesmo motivo do outro portão.
-  if (foraDaJanela(agora)) {
-    return bloqueia(
-      "FORA_DA_JANELA",
-      `Fora da janela de abordagem (${REGRA.janela.inicioHora}h–${REGRA.janela.fimHora}h, dias úteis, horário de São Paulo).`,
-    );
+  // ⚠️ A janela de ABORDAGEM mora em `salaDeVendas/janelaComercial.ts`, e mora
+  // num lugar só: seg–sex 09–20, sáb 09–14, domingo nunca (ordem do CEO,
+  // 18/09/2026). `REGRA.janela` continua descrevendo o padrão de segurança do
+  // desenho, mas quem DECIDE é a função — dois lugares decidindo a mesma coisa
+  // é como o sábado ficou fora da janela sem ninguém perceber.
+  const janela = podeAbordarAgora(agora);
+  if (!janela.pode) {
+    return bloqueia("FORA_DA_JANELA", `Fora da janela de abordagem: ${janela.detalhe}`);
   }
 
   return { sendable: true, reason: null, detail: "Liberado." };
