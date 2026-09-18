@@ -80,7 +80,8 @@ describe("fila e escopo se SOMAM, nunca se substituem", () => {
       const filtro = filtroDaFila(f.nome, sessao(), AGORA);
       expect(filtro.AND, `fila ${f.nome}`).toBeDefined();
       expect(Array.isArray(filtro.AND), `fila ${f.nome}`).toBe(true);
-      expect((filtro.AND as unknown[]).length, `fila ${f.nome}`).toBe(2);
+      // Três: escopo, o filtro da fila, e a régua "tem conversa".
+      expect((filtro.AND as unknown[]).length, `fila ${f.nome}`).toBe(3);
     }
   });
 
@@ -399,3 +400,64 @@ describe("⛔ a ordem das filas põe quem espera mais primeiro", () => {
     }
   });
 });
+
+
+/**
+ * ── ⭐ A TELA DE CONVERSAS SÓ MOSTRA QUEM CONVERSOU ─────────────────────────
+ *
+ * 18/09/2026: as 3.700 mensagens foram apagadas e a tela continuou com 7.638
+ * linhas — `SiteLead` da base fria, contatos sem mensagem nenhuma. O CEO leu
+ * aquilo como "a limpeza não foi feita".
+ *
+ * Estes testes olham o `where`, e não o resultado: numa base de teste sem leads
+ * mudos qualquer regra passaria, e passaria até o dia em que houvesse um. E são
+ * três, porque o defeito era a régua DIVERGENTE entre a lista e a contagem.
+ */
+describe("conversa é quem tem mensagem", () => {
+  const TEM = { mensagens: { some: {} } };
+
+  it("toda fila exige pelo menos uma mensagem", () => {
+    for (const f of FILAS) {
+      const partes = filtroDaFila(f.nome, sessao({ role: "MASTER_CEO" }), AGORA)
+        .AND as Array<Record<string, unknown>>;
+      expect(partes, `fila ${f.nome}`).toContainEqual(TEM);
+    }
+  });
+
+  it("a exigência entra por AND — nunca por OR, que a deixaria furar", () => {
+    // Um `OR` aqui traria o lead mudo de volta e a tela pareceria certa.
+    const filtro = filtroDaFila("todos", sessao(), AGORA);
+    expect(filtro.OR).toBeUndefined();
+    expect(filtro.AND).toContainEqual(TEM);
+  });
+
+  it("a LISTA e as CONTAGENS usam a mesma régua", async () => {
+    // O defeito era este: a lateral somava a base inteira (7.5xx em tudo) e a
+    // lista não abria nada. Mesmo `filtroDaFila` nos dois lados, ou volta.
+    const db = bancoFalso([]);
+    await listarFila(db as never, { fila: "todos", sessao: sessao(), agora: AGORA });
+
+    const whereDaLista = db.siteLead.findMany.mock.calls[0]![0].where;
+    expect(whereDaLista.AND).toContainEqual(TEM);
+
+    for (const chamada of db.siteLead.count.mock.calls) {
+      expect(chamada[0].where.AND).toContainEqual(TEM);
+    }
+  });
+
+  it("nenhum lead é apagado — é filtro de LISTAGEM", () => {
+    // A régua vive no `where` da leitura. Se um dia alguém a mover para uma
+    // escrita, este teste não a encontra mais aqui e o revisor volta a olhar.
+    const filtro = filtroDaFila("todos", sessao({ role: "MASTER_CEO" }), AGORA);
+    expect(JSON.stringify(filtro)).toContain("mensagens");
+  });
+});
+
+function bancoFalso(linhas: unknown[]) {
+  return {
+    siteLead: {
+      findMany: vi.fn().mockResolvedValue(linhas),
+      count: vi.fn().mockResolvedValue(linhas.length),
+    },
+  };
+}

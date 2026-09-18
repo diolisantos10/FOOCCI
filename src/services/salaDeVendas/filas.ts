@@ -78,10 +78,14 @@ export const FILAS: readonly Fila[] = [
     titulo: "Aguardando humano",
     pergunta: "o que a IA parou e me espera?",
   },
-  { nome: "semResponsavel", titulo: "Sem responsável", pergunta: "o que está largado?" },
+  // ⚠️ "Sem responsável" e "Sem resposta" ficavam IDÊNTICOS quando a coluna
+  // cortava o texto ("Sem re…" e "Sem res…"), e o CEO leu 7.500 no lugar de 720
+  // por causa disso. Os títulos passam a divergir na PRIMEIRA palavra depois de
+  // "Sem" — rótulo que só se distingue no fim é rótulo que não se distingue.
+  { nome: "semResponsavel", titulo: "Sem dono", pergunta: "o que está largado?" },
   { nome: "meusLeads", titulo: "Meus leads", pergunta: "o que é meu?" },
   { nome: "comIA", titulo: "Atendidos pela IA", pergunta: "o que está andando sozinho?" },
-  { nome: "semResposta", titulo: "Sem resposta", pergunta: "quem eu falei e não voltou?" },
+  { nome: "semResposta", titulo: "Não voltou", pergunta: "quem eu falei e não voltou?" },
   {
     nome: "followUpVencido",
     titulo: "Follow-ups vencidos",
@@ -118,6 +122,27 @@ export function escopoDaConsulta(sessao: SessaoInterna): Prisma.SiteLeadWhereInp
     ],
   };
 }
+
+/**
+ * ⭐ A RÉGUA DA TELA DE CONVERSAS: conversa é quem TEM MENSAGEM.
+ *
+ * Medido em 18/09/2026: as 3.700 mensagens foram apagadas, e a tela continuou
+ * mostrando 7.638 linhas. Não eram conversas — eram `SiteLead` da base fria,
+ * contatos com quem ninguém nunca falou. Abrir qualquer um mostrava branco.
+ *
+ * O CEO leu aquilo como "a limpeza não foi feita", e estava certo em ler assim:
+ * uma lista chamada **Conversas** que mostra gente sem mensagem responde à
+ * pergunta errada — diz "quem existe no banco?" quando deveria dizer "com quem
+ * eu estou falando?".
+ *
+ * ⚠️ Isto é mudança de LISTAGEM, não de dado. Ninguém é apagado: quem não tem
+ * mensagem continua inteiro na **Base fria**, que é o lugar dele.
+ *
+ * Entra no `AND` de TODA fila — junto do escopo — para que a contagem da
+ * lateral e a lista usem a mesma régua. Foi a régua divergente que fez as filas
+ * mostrarem 7.5xx em tudo enquanto a lista não abria nada.
+ */
+const TEM_CONVERSA: Prisma.SiteLeadWhereInput = { mensagens: { some: {} } };
 
 /** Dias sem resposta que fazem um lead cair na fila "sem resposta". */
 const DIAS_SEM_RESPOSTA = 3;
@@ -194,7 +219,7 @@ export function filtroDaFila(
     }
   })();
 
-  return { AND: [escopo, daFila] };
+  return { AND: [escopo, daFila, TEM_CONVERSA] };
 }
 
 export interface LeadNaFila {
