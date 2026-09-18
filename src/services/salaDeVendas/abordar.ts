@@ -53,6 +53,10 @@ import { contarAbordagensDeHoje } from "./prospeccao/selecao";
 import { parametrosDoEnvioAgora } from "@/services/foocci-sdr/modelosDaMeta";
 import { escolherModeloLiberado } from "@/services/foocci-sdr/modelosLiberados";
 import {
+  ehPrimeiroContatoFrio,
+  escolherModeloDoPrimeiroContato,
+} from "@/services/foocci-sdr/modelosDoPrimeiroContato";
+import {
   canalDeVendasPronto,
   enviarModeloDeVendas,
   type ModeloDeAbordagem,
@@ -503,9 +507,39 @@ export async function abordarLead(
     return { abordou: false, motivo: "ritmo", detalhe: ritmo.detalhe };
   }
 
-  // ⭐ A escolha fixa do .env não decide mais o que sai. O grupo elegível é
-  // APPROVED na Meta + "Pode enviar" ligado. Sem grupo, falha fechado.
-  const modeloPersistido = await escolherModeloLiberado(db);
+  // ⭐⭐ DOIS ESTÁGIOS, DOIS JOGOS DE TEXTO — decisão do CEO, 18/09/2026.
+  //
+  // ESTÁGIO 1 (número frio): só os três `foocci_contato_inicial_*`. São curtos
+  // de propósito — o destino esperado de um número frio de restaurante é bot de
+  // pedidos, recepção ou SAC, e estes textos existem para atravessar o porteiro
+  // sem queimar o número, NÃO para vender.
+  //
+  // ⛔ É aqui que o panfleto de nove linhas sai do caminho de abordagem: o
+  // sorteio do primeiro contato deixa de correr sobre TODOS os modelos com
+  // "Pode enviar" ligado e passa a correr só sobre os três. Nenhum texto foi
+  // apagado do repositório — o panfleto nunca morou aqui, ele é um modelo
+  // aprovado na Meta, e o que o disparava era o toggle da página do app.
+  //
+  // ESTÁGIO 2 (o responsável comercial, em conversa NOVA aberta depois da
+  // captura do decisor — `fonte = INDICACAO`): continua sorteando entre os
+  // outros modelos liberados, que são os que apresentam o Foocci de verdade.
+  // Nada muda para ele.
+  let modeloPersistido;
+  if (ehPrimeiroContatoFrio(lead.fonte)) {
+    const escolha = await escolherModeloDoPrimeiroContato(db, {
+      // A pergunta é sobre o DADO, não sobre o modelo — e quem responde o que
+      // vai em `{{1}}` já é `saudacaoDoLead`. Sem ela, o modelo com variável
+      // seria recusado pela Meta contato a contato.
+      podePreencherAVariavel: Boolean(saudacaoDoLead(lead)),
+    });
+    if (!escolha.ok) {
+      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };
+    }
+    modeloPersistido = escolha.modelo;
+  } else {
+    modeloPersistido = await escolherModeloLiberado(db);
+  }
+
   if (!modeloPersistido) {
     return {
       abordou: false,
