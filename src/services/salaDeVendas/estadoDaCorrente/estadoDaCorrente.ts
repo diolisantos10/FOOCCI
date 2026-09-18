@@ -152,6 +152,13 @@ export interface JanelaDeEntrada {
    * papel, e **ninguém falou com ele**. É este que mede o abandono agora.
    */
   ninguemFalouComEle: number;
+  /**
+   * A quebra por fonte, INTEIRA — inclusive fontes que a lista fechada de
+   * `FONTES_QUE_NOS_PROCURARAM` não conhece. `contaComoQueNosProcurou` diz se
+   * aquela fonte entra ou não nos números acima, para a divergência ficar
+   * visível em vez de virar zero silencioso.
+   */
+  porFonte: { fonte: string; quantos: number; contaComoQueNosProcurou: boolean }[];
   /** Quantos desses já receberam ao menos uma mensagem nossa. */
   jaReceberamMensagemNossa: number;
 }
@@ -163,6 +170,23 @@ async function lerJanela(
 ): Promise<JanelaDeEntrada> {
   const janela = { createdAt: { gte: desde } };
   const sozinhos = { ...janela, fonte: { in: [...FONTES_QUE_NOS_PROCURARAM] } };
+
+  // ⚠️ ABERTO EM 18/09/2026, DEPOIS DE UM ERRO MEU DE MEDIÇÃO.
+  //
+  // O CEO disse "caíram 3 leads" e esta porta respondeu `chegaramSozinhos: 0`.
+  // Ele estava certo e o instrumento é que estava cego: `FONTES_QUE_NOS_PROCURARAM`
+  // é uma lista FECHADA, e lead que entra por uma fonte fora dela some da conta
+  // sem deixar rastro — some inclusive do "largados", porque nem chega a ser
+  // contado como alguém que nos procurou.
+  //
+  // Instrumento que devolve zero quando a resposta é três é pior que
+  // instrumento nenhum: o zero fecha a pergunta. Agora a quebra por fonte sai
+  // inteira, e a lista fechada deixa de esconder o que não conhece.
+  const porFonteBruto = await db.siteLead.groupBy({
+    by: ["fonte"],
+    where: janela,
+    _count: { _all: true },
+  });
 
   const [chegaram, chegaramSozinhos, ia, esperando, humano, ninguem, contatados, mudos] = await Promise.all([
     db.siteLead.count({ where: janela }),
@@ -186,6 +210,13 @@ async function lerJanela(
     semNinguem: ninguem,
     jaReceberamMensagemNossa: contatados,
     ninguemFalouComEle: mudos,
+    porFonte: porFonteBruto
+      .map((l) => ({
+        fonte: String(l.fonte),
+        quantos: l._count._all,
+        contaComoQueNosProcurou: (FONTES_QUE_NOS_PROCURARAM as readonly string[]).includes(String(l.fonte)),
+      }))
+      .sort((a, b) => b.quantos - a.quantos),
   };
 }
 
