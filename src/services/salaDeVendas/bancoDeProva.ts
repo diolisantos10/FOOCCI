@@ -49,6 +49,23 @@ export interface Tabelas {
   siteLeadInteraction: Linha[];
   /** Reuniões e visitas marcadas. */
   leadCompromisso: Linha[];
+
+  // ── Acrescentadas pela CAMPANHA DE REABORDAGEM DOS CONTATOS FRIOS ────────
+  //
+  // Nada acima foi removido nem alterado. O motor da campanha precisa provar,
+  // de ponta a ponta, que a trava anti-repetição barra o segundo envio — e
+  // isso exige um banco que RECUSE a segunda gravação, como o Postgres recusa.
+  // Um dublê que aceita tudo faria o teste da trava passar sem trava.
+  /** A reserva de ritmo, uma linha por número (`@id telefoneDigits`). */
+  travaDeAbordagemRitmo: Linha[];
+  /** A reserva de conteúdo (`@@unique [telefoneDigits, impressao]`). */
+  travaDeAbordagemEnviada: Linha[];
+  /** Toda recusa da trava, escrita. */
+  travaDeAbordagemRecusa: Linha[];
+  /** O interruptor de pânico da campanha (uma linha, `id = "unico"`). */
+  reabordagemInterruptor: Linha[];
+  /** Uma linha por contato examinado (`@@unique [loteId, leadId]`). */
+  reabordagemExecucao: Linha[];
 }
 
 function combinaCampo(valor: unknown, condicao: unknown): boolean {
@@ -110,6 +127,29 @@ function combina(linha: Linha, where: Linha | undefined): boolean {
       if (!(where.OR as Linha[]).some((w) => combina(linha, w))) return false;
       continue;
     }
+    const condicao = where[campo];
+
+    // ── Filtro de RELAÇÃO (`{ some: {...} }`) ──
+    //
+    // O Prisma resolve isto com uma junção; aqui a relação é uma lista já
+    // pendurada na linha por `comoTabela(..., enriquecer)`. Se a lista não
+    // existir, ESTOURA — lista ausente respondida como "não bate" faria a
+    // consulta errada devolver zero em silêncio.
+    if (
+      typeof condicao === "object" &&
+      condicao !== null &&
+      !(condicao instanceof Date) &&
+      "some" in (condicao as Record<string, unknown>)
+    ) {
+      const lista = linha[campo];
+      if (!Array.isArray(lista)) {
+        throw new Error(`bancoDeProva: '${campo}.some' pediu uma relação que esta linha não carrega`);
+      }
+      const alvo = (condicao as Record<string, unknown>).some as Linha;
+      if (!lista.some((item) => combina(item as Linha, alvo))) return false;
+      continue;
+    }
+
     if (!combinaCampo(linha[campo], where[campo])) return false;
   }
   return true;
@@ -128,12 +168,84 @@ function ordenar(linhas: Linha[], orderBy: Record<string, "asc" | "desc"> | unde
   });
 }
 
-function comoTabela(linhas: Linha[], enriquecer?: (l: Linha) => Linha) {
+/**
+ * ⭐ AS ESCRITAS — e por que elas RECUSAM.
+ *
+ * `unicos` é a lista de chaves únicas da tabela. Uma `create` que repita
+ * qualquer uma delas **lança**, como o Postgres lança. É essa recusa que a
+ * trava anti-repetição usa como trava: sem ela, o teste da trava mediria um
+ * `if`, e não a trava.
+ */
+/**
+ * A chave composta do Prisma vem aninhada (`{ loteId_leadId: { loteId, leadId } }`).
+ * Aqui ela vira um `where` plano, que é o que `combina` entende.
+ */
+function achatarChave(where: Linha): Linha {
+  const plano: Linha = {};
+  for (const campo of Object.keys(where)) {
+    const valor = where[campo];
+    if (campo.includes("_") && typeof valor === "object" && valor !== null && !(valor instanceof Date)) {
+      Object.assign(plano, valor as Linha);
+    } else {
+      plano[campo] = valor;
+    }
+  }
+  return plano;
+}
+
+function comoTabela(
+  linhas: Linha[],
+  enriquecer?: (l: Linha) => Linha,
+  unicos: ReadonlyArray<readonly string[]> = [],
+) {
   const ver = (l: Linha) => (enriquecer ? enriquecer(l) : l);
 
+  const conferirUnicos = (nova: Linha) => {
+    for (const chave of unicos) {
+      const igual = linhas.some((l) => chave.every((campo) => l[campo] === nova[campo]));
+      if (igual) {
+        throw new Error(
+          `bancoDeProva: violação de unicidade (${chave.join(", ")}) — o banco recusou a segunda gravação`,
+        );
+      }
+    }
+  };
+
   return {
+    async create(args: { data: Linha }) {
+      const nova = { ...args.data };
+      if (nova.id === undefined) nova.id = `id-${linhas.length + 1}-${Math.random().toString(36).slice(2, 8)}`;
+      conferirUnicos(nova);
+      linhas.push(nova);
+      return ver(nova);
+    },
+    async update(args: { where: Linha; data: Linha }) {
+      const alvo = linhas.find((l) => combina(l, achatarChave(args.where)));
+      if (!alvo) throw new Error("bancoDeProva: update não achou a linha");
+      Object.assign(alvo, args.data);
+      return ver(alvo);
+    },
+    async updateMany(args: { where?: Linha; data: Linha }) {
+      const alvos = linhas.filter((l) => combina(l, args.where));
+      for (const l of alvos) Object.assign(l, args.data);
+      return { count: alvos.length };
+    },
+    async upsert(args: { where: Linha; create: Linha; update: Linha }) {
+      const alvo = linhas.find((l) => combina(l, achatarChave(args.where)));
+      if (alvo) {
+        Object.assign(alvo, args.update);
+        return ver(alvo);
+      }
+      const nova = { ...args.create };
+      linhas.push(nova);
+      return ver(nova);
+    },
     async count(args?: { where?: Linha }) {
-      return linhas.filter((l) => combina(l, args?.where)).length;
+      // ⚠️ Filtra sobre a linha ENRIQUECIDA, como `findMany`: um `where` que
+      // toca uma relação (`mensagens: { some: … }`) precisa da relação
+      // pendurada. Contar sobre a linha crua devolveria um número diferente do
+      // que a mesma consulta lista — e um teste verde com a conta errada.
+      return linhas.map(ver).filter((l) => combina(l, args?.where)).length;
     },
     async findMany(args?: {
       where?: Linha;
@@ -141,30 +253,31 @@ function comoTabela(linhas: Linha[], enriquecer?: (l: Linha) => Linha) {
       skip?: number;
       take?: number;
     }) {
+      // ⚠️ Enriquece ANTES de filtrar: o `where` pode tocar uma relação.
       const achadas = ordenar(
-        linhas.filter((l) => combina(l, args?.where)),
+        linhas.map(ver).filter((l) => combina(l, args?.where)),
         args?.orderBy,
-      ).map(ver);
+      );
       // `select` é ignorado de propósito: devolver a linha inteira nunca faz um
       // teste passar com a consulta errada — o que ele mediria é o `where`.
       const inicio = args?.skip ?? 0;
       return args?.take === undefined ? achadas.slice(inicio) : achadas.slice(inicio, inicio + args.take);
     },
     async findUnique(args: { where: Linha }) {
-      return linhas.filter((l) => combina(l, args.where)).map(ver)[0] ?? null;
+      return linhas.map(ver).filter((l) => combina(l, achatarChave(args.where)))[0] ?? null;
     },
     async findFirst(args?: { where?: Linha; orderBy?: Record<string, "asc" | "desc"> }) {
       return (
         ordenar(
-          linhas.filter((l) => combina(l, args?.where)),
+          linhas.map(ver).filter((l) => combina(l, args?.where)),
           args?.orderBy,
-        ).map(ver)[0] ?? null
+        )[0] ?? null
       );
     },
     async groupBy(args: { by: string[]; where?: Linha; _count?: unknown }) {
       const campo = args.by[0]!;
       const grupos = new Map<unknown, number>();
-      for (const l of linhas.filter((x) => combina(x, args.where))) {
+      for (const l of linhas.map(ver).filter((x) => combina(x, args.where))) {
         grupos.set(l[campo], (grupos.get(l[campo]) ?? 0) + 1);
       }
       return [...grupos.entries()].map(([valor, total]) => ({
@@ -190,6 +303,11 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     leadHandoff: dados.leadHandoff ?? [],
     siteLeadInteraction: dados.siteLeadInteraction ?? [],
     leadCompromisso: dados.leadCompromisso ?? [],
+    travaDeAbordagemRitmo: dados.travaDeAbordagemRitmo ?? [],
+    travaDeAbordagemEnviada: dados.travaDeAbordagemEnviada ?? [],
+    travaDeAbordagemRecusa: dados.travaDeAbordagemRecusa ?? [],
+    reabordagemInterruptor: dados.reabordagemInterruptor ?? [],
+    reabordagemExecucao: dados.reabordagemExecucao ?? [],
   };
 
   const porId = new Map(t.empresa.map((e) => [e.id as string, e]));
@@ -208,6 +326,9 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
       propostas: t.leadProposta.filter((p) => p.leadId === l.id),
       compromissos: t.leadCompromisso.filter((c) => c.leadId === l.id),
       oportunidades: t.oportunidade.filter((o) => o.leadId === l.id),
+      // A conversa, para o filtro `mensagens: { some: { direcao: "SAIDA" } }`
+      // da fila da reabordagem ser RESOLVIDO, e não dublado.
+      mensagens: t.leadMensagem.filter((m) => m.leadId === l.id),
     })),
     leadProposta: comoTabela(t.leadProposta),
     leadMensagem: comoTabela(t.leadMensagem),
@@ -217,6 +338,14 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     leadCompromisso: comoTabela(t.leadCompromisso),
     // A trilha carrega a empresa junto, porque `amostraDoHunter` precisa da
     // data de descoberta para medir quanto o Hunter demorou.
+    // ⛔ As travas: com unicidade DE VERDADE. Ver o cabeçalho de `comoTabela`.
+    travaDeAbordagemRitmo: comoTabela(t.travaDeAbordagemRitmo, undefined, [["telefoneDigits"]]),
+    travaDeAbordagemEnviada: comoTabela(t.travaDeAbordagemEnviada, undefined, [
+      ["telefoneDigits", "impressao"],
+    ]),
+    travaDeAbordagemRecusa: comoTabela(t.travaDeAbordagemRecusa),
+    reabordagemInterruptor: comoTabela(t.reabordagemInterruptor),
+    reabordagemExecucao: comoTabela(t.reabordagemExecucao, undefined, [["loteId", "leadId"]]),
     eventoDaJornada: comoTabela(t.eventoDaJornada, (l) => ({
       ...l,
       empresa: porId.get(l.empresaId as string) ?? null,

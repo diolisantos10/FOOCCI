@@ -40,6 +40,7 @@ import {
   POR_PAGINA_PADRAO,
   raioXDasConversas,
 } from "@/services/salaDeVendas/raioX/raioXDasConversas";
+import { painelDaReabordagem } from "@/services/salaDeVendas/reabordagem/painel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,6 +103,12 @@ export async function GET(req: NextRequest) {
     formatarTelefone: telefoneParaResposta,
   });
 
+  // ⭐ A CAMPANHA DE REABORDAGEM ENTRA AQUI, e não num painel novo.
+  //
+  // Ordem explícita: reaproveitar o raio-X. Mesma porta, mesmo segredo, mesma
+  // doutrina de NÃO MEDIDO. Só leitura — ver `reabordagem/painel.ts`.
+  const campanha = await painelDaReabordagem(prisma);
+
   console.info("[cron/comercial/raio-x-conversas] raio-x lido", {
     mensagensNaJanela: raioX.mensagensNaJanela,
     abordagemMedida: raioX.abordagem.medido,
@@ -109,5 +116,5 @@ export async function GET(req: NextRequest) {
     telefoneCompleto,
   });
 
-  return NextResponse.json({ ok: true, data: raioX });
+  return NextResponse.json({ ok: true, data: { ...raioX, campanhaDeReabordagem: campanha } });
 }
