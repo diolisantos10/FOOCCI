@@ -63,43 +63,59 @@ export const CATEGORIA_DO_LEAD_DE_FORMULARIO = "MARKETING" as const;
 
 export const LEAD_FORMULARIO_TEMPLATES: readonly ModeloDoEstagio2[] = [
   {
+    /**
+     * ⭐ TEXTO DO CEO, 18/09/2026 — aprovado por ele, palavra por palavra.
+     * Ele recusou a versão anterior ("o que te fez procurar a gente?") porque
+     * devolve uma REDAÇÃO para o cliente escrever. A pergunta daqui responde-se
+     * com uma palavra, e cada resposta já diz ao closer por onde entrar.
+     * ⚠️ Tom e pontuação não se ajustam sem ele.
+     */
     name: "foocci_lead_formulario_01",
     language: "pt_BR",
     category: CATEGORIA_DO_LEAD_DE_FORMULARIO,
     porQueACategoria:
       "a pessoa pediu o contato, mas o propósito é abrir conversa comercial e não dar seguimento a uma transação — UTILITY aqui seria classificação frouxa, e modelo mal classificado a Meta derruba",
-    momento:
-      "primeira mensagem a quem preencheu formulário/campanha e cujo nome de restaurante a casa tem",
+    momento: "o principal: primeira mensagem a quem preencheu formulário/campanha",
     body:
-      "Oi, {{1}}! Aqui é {{2}}, do Foocci. Você deixou seu contato pedindo pra gente te chamar sobre o {{3}}.\n" +
-      "Pra eu te responder do jeito certo: o que te fez procurar a gente?",
-    variaveis: [
-      { posicao: 1, fonte: "SiteLead.nome", exemplo: "Marcos" },
-      { posicao: 2, fonte: "AgenteEscolhido.nome", exemplo: "Ana" },
-      { posicao: 3, fonte: "SiteLead.restaurante", exemplo: "Cantina do Porto" },
-    ],
+      "Oi, {{1}}! Tudo certo? 😊 Aqui é da Foocci. Vi que você deixou seu contato para conhecer a plataforma.\n" +
+      "Hoje vocês vendem mais pelo iFood, pelo WhatsApp ou pelos dois?",
+    variaveis: [{ posicao: 1, fonte: "SiteLead.nome", exemplo: "Marcos" }],
   },
   {
-    /**
-     * ⚠️ A VARIANTE SEM O NOME DA CASA existe porque o formulário do Lead Ads
-     * garante nome, e-mail e telefone — e só. O nome do restaurante é campo
-     * opcional, e sem ele o `_01` seria recusado pela Meta contato a contato.
-     */
+    /** Reserva — só onde "acabou de chegar" é VERDADE. Texto do CEO. */
     name: "foocci_lead_formulario_02",
     language: "pt_BR",
     category: CATEGORIA_DO_LEAD_DE_FORMULARIO,
     porQueACategoria: "mesma natureza do _01",
-    momento:
-      "primeira mensagem a quem preencheu formulário/campanha quando a casa NÃO tem o nome do restaurante",
+    momento: "reserva, quando o contato acabou de chegar e a frase é verdade",
     body:
-      "Oi, {{1}}! Aqui é {{2}}, do Foocci. Você deixou seu contato pedindo pra gente te chamar por aqui.\n" +
-      "Antes de eu te explicar qualquer coisa: o que te fez procurar a gente?",
-    variaveis: [
-      { posicao: 1, fonte: "SiteLead.nome", exemplo: "Marcos" },
-      { posicao: 2, fonte: "AgenteEscolhido.nome", exemplo: "Ana" },
-    ],
+      "Oi, {{1}}! 😊 Aqui é da Foocci. Seu contato acabou de chegar pra gente e eu vim pessoalmente te receber.\n" +
+      "Me conta: como vocês recebem os pedidos hoje?",
+    variaveis: [{ posicao: 1, fonte: "SiteLead.nome", exemplo: "Marcos" }],
+  },
+  {
+    /**
+     * Sem o nome do restaurante — e é ele que a pergunta vai buscar, em vez de
+     * gastar a primeira mensagem com um dado que o Lead Ads não traz.
+     * Texto do CEO.
+     */
+    name: "foocci_lead_formulario_03",
+    language: "pt_BR",
+    category: CATEGORIA_DO_LEAD_DE_FORMULARIO,
+    porQueACategoria: "mesma natureza do _01",
+    momento: "quando a casa NÃO tem o nome do restaurante — a pergunta preenche a ficha",
+    body:
+      "Olá, {{1}}! Que bom ter você por aqui 😊 Vi que você se interessou pela Foocci e deixou seu contato. Me conta: qual é o nome do seu restaurante?",
+    variaveis: [{ posicao: 1, fonte: "SiteLead.nome", exemplo: "Marcos" }],
   },
 ] as const;
+
+/**
+ * ⚠️ NENHUM DELES CITA O NOME DO RESTAURANTE, de propósito: o Lead Ads garante
+ * nome, e-mail e telefone — e só. Variável sem fonte é disparo que falha na
+ * Meta. Só `{{1}}` = nome da pessoa, nos três.
+ */
+export const MODELO_DE_FORMULARIO_QUE_PERGUNTA_O_RESTAURANTE = "foocci_lead_formulario_03";
 
 /** Os nomes — a chave, como em `MODELOS_DO_PRIMEIRO_CONTATO`. */
 export const MODELOS_DO_LEAD_DE_FORMULARIO = LEAD_FORMULARIO_TEMPLATES.map((m) => m.name);

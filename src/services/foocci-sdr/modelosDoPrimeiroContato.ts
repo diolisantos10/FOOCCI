@@ -41,7 +41,10 @@
 
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { modelosLiberadosParaEnvio, escolherAleatorio, type ModeloLiberadoParaEnvio } from "./modelosLiberados";
-import { MODELOS_DO_LEAD_DE_FORMULARIO } from "@/services/sales/leadFormularioTemplates";
+import {
+  MODELOS_DO_LEAD_DE_FORMULARIO,
+  MODELO_DE_FORMULARIO_QUE_PERGUNTA_O_RESTAURANTE,
+} from "@/services/sales/leadFormularioTemplates";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -217,21 +220,21 @@ export function ehLeadDeFormulario(fonte: string | null | undefined): boolean {
 }
 
 /**
- * ⛔ O CRITÉRIO, em uma frase: **o modelo que cita o restaurante só entra
- * quando existe o nome do restaurante.**
+ * ⛔ O CRITÉRIO, em uma frase: **quando a casa NÃO sabe o nome do restaurante,
+ * sai o texto que PERGUNTA o nome do restaurante.**
  *
- * Mesma doutrina de `escolherModeloDoPrimeiroContato`, e mesmo fail-closed:
- * sem modelo elegível liberado, `ok: false` — nunca queda para "qualquer
- * modelo", que é exatamente como o lead de formulário receberia texto frio.
+ * ⚠️ Nenhum dos três cita o nome da casa — os textos são do CEO e só usam
+ * `{{1}}` (o nome da pessoa). Então a escolha não pode mais ser feita pela
+ * contagem de variáveis, como no estágio 1: é pelo NOME do modelo, porque o que
+ * distingue o `_03` é a PERGUNTA que ele faz, não o seu contrato com a Meta.
  *
- * ⚠️ O grupo "sem o nome da casa" é lido do espelho da Meta pela CONTAGEM de
- * variáveis, não pelo nome: o `_01` pede 3, o `_02` pede 2.
+ * Mesmo fail-closed de `escolherModeloDoPrimeiroContato`: sem modelo elegível
+ * liberado, `ok: false` — nunca queda para "qualquer modelo", que é exatamente
+ * como o lead de formulário receberia texto frio.
  */
-export const MODELO_DE_FORMULARIO_SEM_RESTAURANTE = "foocci_lead_formulario_02";
-
 export type MotivoDaEscolhaDeFormulario =
-  | "podeCitarORestaurante"
-  | "semNomeDoRestaurante"
+  | "jaSabeORestaurante"
+  | "vaiPerguntarORestaurante"
   | "nenhumModeloDeFormularioLiberado";
 
 export type EscolhaDoLeadDeFormulario =
@@ -240,7 +243,7 @@ export type EscolhaDoLeadDeFormulario =
 
 export async function escolherModeloDoLeadDeFormulario(
   db: Cliente,
-  p: { podeCitarORestaurante: boolean },
+  p: { jaSabeORestaurante: boolean },
   random: () => number = Math.random,
 ): Promise<EscolhaDoLeadDeFormulario> {
   const liberados = await modelosLiberadosParaEnvio(db);
@@ -258,26 +261,16 @@ export async function escolherModeloDoLeadDeFormulario(
     };
   }
 
-  // O `_01` cita o restaurante e pede 3 variáveis; o `_02` pede 2. Sem o nome
-  // da casa, só o menor serve.
-  const semRestaurante = doFormulario.filter((m) => m.variaveis <= 2);
-  const comRestaurante = doFormulario.filter((m) => m.variaveis > 2);
+  const perguntaORestaurante = doFormulario.filter(
+    (m) => m.nome === MODELO_DE_FORMULARIO_QUE_PERGUNTA_O_RESTAURANTE,
+  );
+  const jaQualificam = doFormulario.filter(
+    (m) => m.nome !== MODELO_DE_FORMULARIO_QUE_PERGUNTA_O_RESTAURANTE,
+  );
 
-  if (!p.podeCitarORestaurante) {
-    const escolhido = escolherAleatorio(semRestaurante, random);
-    if (!escolhido) {
-      return {
-        ok: false,
-        motivo: "semNomeDoRestaurante",
-        detalhe:
-          `este lead não tem o nome do restaurante, e ${MODELO_DE_FORMULARIO_SEM_RESTAURANTE} não está liberado. ` +
-          "Não se inventa o nome da casa para preencher a variável.",
-      };
-    }
-    return { ok: true, modelo: escolhido, motivo: "semNomeDoRestaurante" };
-  }
-
-  const escolhido = escolherAleatorio(comRestaurante.length ? comRestaurante : semRestaurante, random);
+  const preferidos = p.jaSabeORestaurante ? jaQualificam : perguntaORestaurante;
+  const reserva = p.jaSabeORestaurante ? perguntaORestaurante : jaQualificam;
+  const escolhido = escolherAleatorio(preferidos.length ? preferidos : reserva, random);
   if (!escolhido) {
     return {
       ok: false,
@@ -285,5 +278,9 @@ export async function escolherModeloDoLeadDeFormulario(
       detalhe: "os modelos de formulário existem, mas nenhum ficou elegível para este lead.",
     };
   }
-  return { ok: true, modelo: escolhido, motivo: "podeCitarORestaurante" };
+  return {
+    ok: true,
+    modelo: escolhido,
+    motivo: p.jaSabeORestaurante ? "jaSabeORestaurante" : "vaiPerguntarORestaurante",
+  };
 }

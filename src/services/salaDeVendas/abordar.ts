@@ -544,7 +544,7 @@ export async function abordarLead(
     // como estranho quem se apresentou. Pool fechado nos `foocci_lead_formulario_*`,
     // e fail-closed: sem eles liberados, NÃO cai para os frios.
     const escolha = await escolherModeloDoLeadDeFormulario(db, {
-      podeCitarORestaurante: Boolean((lead.restaurante ?? "").trim()),
+      jaSabeORestaurante: Boolean((lead.restaurante ?? "").trim()),
     });
     if (!escolha.ok) {
       return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };
