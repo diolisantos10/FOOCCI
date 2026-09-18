@@ -31,6 +31,7 @@
  */
 
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { devolverReserva } from "./travaDeRepeticao";
 import { limparEntidades } from "./ta/agrupamento";
 import type {
   DirecaoDaMensagem,
@@ -425,7 +426,52 @@ export async function aplicarStatus(
     },
   });
 
+  // ── ⚠️ ENTREGA QUE FALHOU DEVOLVE A RESERVA — 18/09/2026 ──────────────────
+  //
+  // A trava anti-repetição reserva o número ANTES do envio, de propósito: é
+  // isso que impede duas rodadas simultâneas de mandarem a mesma coisa. Quando
+  // o envio falha na hora, `abordar.ts` devolve a reserva. Mas a Meta tem um
+  // segundo jeito de recusar: aceitar a chamada, devolver `wamid`, e só depois
+  // avisar `failed` por webhook — que é por onde chegam os `131042`.
+  //
+  // Nesse caminho a reserva ficava de pé, e o número passava 20 horas bloqueado
+  // por uma mensagem que NINGUÉM leu. Medido nos três leads pagos de hoje: as
+  // três tentativas seguintes foram recusadas com "outra abordagem saiu há
+  // menos de 20h" — por uma abordagem que nunca chegou a existir para eles.
+  //
+  // O que a trava protege é a paciência de quem recebe. Mensagem que não chegou
+  // não gastou paciência nenhuma.
+  if (alterados.count === 1 && params.status === "FALHOU") {
+    await devolverReservaDaMensagem(db, atual.id);
+  }
+
   return { aplicado: alterados.count === 1 };
+}
+
+/**
+ * Devolve a reserva da trava de repetição de uma mensagem que não chegou.
+ *
+ * Lê o telefone e o texto da própria linha — é o mesmo par (número, conteúdo)
+ * que a reserva gravou, e por isso é o único que a apaga com precisão.
+ */
+async function devolverReservaDaMensagem(db: Cliente, mensagemId: string): Promise<void> {
+  try {
+    const linha = await db.leadMensagem.findUnique({
+      where: { id: mensagemId },
+      select: { texto: true, lead: { select: { whatsapp: true } } },
+    });
+    if (!linha?.texto || !linha.lead?.whatsapp) return;
+
+    await devolverReserva(db, {
+      telefone: linha.lead.whatsapp,
+      conteudo: linha.texto,
+      natureza: "abordagem",
+    });
+  } catch (e) {
+    // Não derruba o webhook: o pior caso é o número seguir bloqueado 20h, que
+    // é exatamente o comportamento de antes deste conserto.
+    console.error("[conversa] não consegui devolver a reserva da mensagem que falhou:", e);
+  }
 }
 
 // ── Leitura ──────────────────────────────────────────────────────────────────
