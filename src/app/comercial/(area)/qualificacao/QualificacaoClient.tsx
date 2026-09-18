@@ -26,16 +26,47 @@ import { useCallback, useEffect, useState } from "react";
 import type { PanoramaDaQualificacao } from "@/services/salaDeVendas/telas/qualificacao";
 import {
   buscarPainel,
-  Cabecalho,
   Carregando,
   Cartao,
   Erro,
   NaoMedido,
-  Numero,
   SemAcesso,
   Vazio,
   type Estado,
 } from "../_frenteComercial/Moldura";
+import {
+  Barra,
+  CartaoDeIA,
+  Celula,
+  Corpo,
+  FilaDeIndicadores,
+  Indicador,
+  Linha,
+  Pilula,
+  Tabela,
+  TituloDaPagina,
+  type NomeDeIcone,
+  type Tom,
+} from "../_pecas/Pecas";
+
+/**
+ * O ÍCONE E A COR DE CADA DEGRAU — pelo nome do BANCO, não pelo do desenho.
+ *
+ * O desenho tem quatro degraus (chama, chama, termômetro, floco). O banco tem
+ * seis valores de temperatura, e a régua de hoje só produz quatro deles. Os
+ * extras não ganham cor emprestada de vizinho: saem em cinza, porque cor é
+ * afirmação, e a tela não afirma que DESQUALIFICADO é "quase frio".
+ */
+export const TINTA_DA_TEMPERATURA: Record<string, { icone: NomeDeIcone; tom: Tom }> = {
+  PRIORIDADE_MAXIMA: { icone: "chama", tom: "vermelho" },
+  QUENTE: { icone: "chama", tom: "ambar" },
+  MORNO: { icone: "termometro", tom: "azul" },
+  FRIO: { icone: "floco", tom: "cinza" },
+};
+
+export function tintaDe(temperatura: string): { icone: NomeDeIcone; tom: Tom } {
+  return TINTA_DA_TEMPERATURA[temperatura] ?? { icone: "alvo", tom: "cinza" };
+}
 
 export function QualificacaoClient() {
   const [estado, setEstado] = useState<Estado<PanoramaDaQualificacao>>({ fase: "carregando" });
@@ -60,30 +91,60 @@ export function QualificacaoClient() {
 
   return (
     <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl">
-        <Cabecalho
+      <div className="mx-auto max-w-6xl">
+        <TituloDaPagina
+          contexto="Leads › Qualificação e Lead Score"
           titulo="Qualificação e Lead Score"
-          explicacao={
-            <>
-              O score não é uma nota opaca: ele é uma <strong className="text-ink2">conta</strong>,
-              e esta tela mostra a conta. As faixas abaixo são lidas da régua v
-              {p.versaoDaRegua} que está no código — não há tabela digitada aqui.
-            </>
-          }
+          subtitulo="Analise, priorize e direcione os melhores leads para o time de vendas."
+          atualidade="Tempo real"
         />
+
+        <p className="mt-2 max-w-[80ch] text-[12.5px] leading-relaxed text-muted">
+          O score não é uma nota opaca: ele é uma <strong className="text-ink2">conta</strong>,
+          e esta tela mostra a conta. As faixas abaixo são lidas da régua v
+          {p.versaoDaRegua} que está no código — não há tabela digitada aqui.
+        </p>
 
         <NaoMedido frases={p.naoMedido} />
 
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Numero rotulo="Leads em aberto" valor={p.emAberto} detalhe="fora GANHO, PERDIDO e NUTRIÇÃO" />
-          <Numero
-            rotulo="Ninguém pontuou"
-            valor={p.naoClassificados}
-            detalhe="não é FRIO — é a fila de quem falta qualificar"
-          />
-          <Numero rotulo="Versão da régua" valor={p.versaoDaRegua} detalhe="sobe a cada mudança de peso" />
+        {/* ── OS CARTÕES DE TEMPERATURA ──────────────────────────────────
+            O desenho tem quatro. Nós desenhamos TODOS os degraus que o banco
+            tem, mais a fila de quem ninguém pontuou: mostrar só os quatro
+            faria a soma da tela ficar menor que a base, sem explicação. */}
+        <div className="mb-5 mt-4">
+          <FilaDeIndicadores>
+            {p.termometro.map((d) => {
+              const t = tintaDe(d.temperatura);
+              return (
+                <Indicador
+                  key={d.temperatura}
+                  rotulo={d.nomeNoDesenho ?? d.temperatura.replace(/_/g, " ")}
+                  valor={d.total}
+                  icone={t.icone}
+                  tom={t.tom}
+                  rodape={
+                    d.faixa
+                      ? `${d.faixa.de} a ${d.faixa.ate} pontos · no banco: ${d.temperatura}`
+                      : `fora da régua v${p.versaoDaRegua} · no banco: ${d.temperatura}`
+                  }
+                />
+              );
+            })}
+            <Indicador
+              rotulo="Ninguém pontuou"
+              valor={p.naoClassificados}
+              icone="alerta"
+              tom="cinza"
+              rodape="não é FRIO — é a fila de quem falta qualificar"
+            />
+          </FilaDeIndicadores>
+          <p className="mt-2 max-w-[80ch] text-[11.5px] leading-snug text-muted">
+            <strong className="text-ink2">{p.emAberto}</strong> leads em aberto no escopo
+            (fora GANHO, PERDIDO e NUTRIÇÃO), medidos na régua v{p.versaoDaRegua}.
+          </p>
         </div>
 
+        <Corpo lateral={<SugestoesDePriorizacao p={p} />}>
         {/* ── O TERMÔMETRO ──────────────────────────────────────────────── */}
         <Cartao
           titulo="O termômetro"
@@ -92,42 +153,44 @@ export function QualificacaoClient() {
           {p.emAberto === 0 ? (
             <Vazio motivo="Não há lead em aberto no seu escopo. Vazio aqui é ausência de lead, não temperatura zero." />
           ) : (
-            <ol className="space-y-2">
+            <Tabela colunas={["Temperatura", "No banco", "Faixa na régua", "Leads", "Fatia do aberto"]}>
               {p.termometro.map((d) => {
                 const fatia = p.emAberto ? Math.round((d.total / p.emAberto) * 100) : 0;
+                const t = tintaDe(d.temperatura);
                 return (
-                  <li key={d.temperatura} className="rounded-xl border border-line bg-canvas p-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                      <p className="text-[14px] font-semibold text-ink">
+                  <Linha key={d.temperatura}>
+                    <Celula forte>
+                      <Pilula tom={t.tom}>
                         {d.nomeNoDesenho ?? d.temperatura.replace(/_/g, " ")}
-                        {d.nomeNoDesenho && d.nomeNoDesenho !== d.temperatura && (
-                          <span className="ml-2 text-[11.5px] font-normal text-muted">
-                            no banco: {d.temperatura}
-                          </span>
-                        )}
-                      </p>
-                      <p className="tabular-nums text-[14px] font-semibold text-ink">
-                        {d.total}
-                        <span className="ml-1 text-[11.5px] font-normal text-muted">
-                          ({fatia}% do aberto)
+                      </Pilula>
+                    </Celula>
+                    <Celula>{d.temperatura}</Celula>
+                    <Celula numero>
+                      {d.faixa ? (
+                        `${d.faixa.de} a ${d.faixa.ate} pontos`
+                      ) : (
+                        <span className="block max-w-[32ch] text-[11.5px] italic leading-snug text-muted">
+                          a régua de hoje não produz esta leitura — ela vem de outro caminho
+                          (desqualificação ou nutrição)
                         </span>
-                      </p>
-                    </div>
-                    <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                      {d.faixa
-                        ? `${d.faixa.de} a ${d.faixa.ate} pontos na régua v${p.versaoDaRegua}.`
-                        : "A régua de hoje não produz esta leitura — ela vem de outro caminho (desqualificação ou nutrição)."}
-                    </p>
-                    <div
-                      className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"
-                      role="presentation"
-                    >
-                      <div className="h-full rounded-full bg-ink2" style={{ width: `${fatia}%` }} />
-                    </div>
-                  </li>
+                      )}
+                    </Celula>
+                    <Celula numero forte>
+                      {d.total}
+                    </Celula>
+                    <Celula numero>
+                      {fatia}%
+                      <span className="mt-1 block h-1.5 w-20 overflow-hidden rounded-full bg-canvas">
+                        <span
+                          className="block h-full rounded-full bg-ink2"
+                          style={{ width: `${fatia}%` }}
+                        />
+                      </span>
+                    </Celula>
+                  </Linha>
                 );
               })}
-            </ol>
+            </Tabela>
           )}
 
           <p className="mt-3 max-w-[72ch] text-[12px] leading-relaxed text-muted">
@@ -196,7 +259,66 @@ export function QualificacaoClient() {
             informa por conta própria.
           </p>
         </Cartao>
+        </Corpo>
       </div>
     </div>
+  );
+}
+
+/**
+ * AS "SUGESTÕES DE PRIORIZAÇÃO" DO DESENHO, COM SELO DE IA E SEM PALPITE.
+ *
+ * Cada linha sai de um número que já está na tela: a fila de quem ninguém
+ * pontuou e a lacuna que mais leads têm em aberto. Nenhuma frase aqui aparece
+ * sem o número que a sustenta — sugestão sem número é opinião com cara de
+ * sistema, e é exatamente o que faz um painel perder a confiança de quem o lê.
+ */
+export function SugestoesDePriorizacao({ p }: { p: PanoramaDaQualificacao }) {
+  const prontos = p.termometro.find((d) => d.temperatura === "PRIORIDADE_MAXIMA")?.total ?? 0;
+  const maiorLacuna = [...p.lacunas].sort((a, b) => b.leads - a.leads)[0];
+
+  return (
+    <>
+      <CartaoDeIA titulo="Sugestões de priorização">
+        <ol className="flex flex-col gap-2">
+          {prontos > 0 && (
+            <li>
+              <strong className="text-ink">{prontos}</strong> lead(s) estão em
+              PRIORIDADE_MÁXIMA — o &quot;Pronto para Comprar&quot; do desenho. É a fila que
+              paga o dia; qualquer outra ordem de trabalho custa dinheiro hoje.
+            </li>
+          )}
+          {p.naoClassificados > 0 && (
+            <li>
+              <strong className="text-ink">{p.naoClassificados}</strong> lead(s) em aberto
+              não têm score. Eles não valem FRIO: ninguém perguntou nada a eles ainda, e
+              essa é a diferença entre uma fila de descarte e uma fila de trabalho.
+            </li>
+          )}
+          {maiorLacuna && maiorLacuna.leads > 0 && (
+            <li>
+              A pergunta que mais falta é “{maiorLacuna.pergunta}” —{" "}
+              <strong className="text-ink">{maiorLacuna.leads}</strong> lead(s) sem
+              resposta. É a próxima pergunta da conversa, e a que mais move o score.
+            </li>
+          )}
+          {prontos === 0 && p.naoClassificados === 0 && (!maiorLacuna || maiorLacuna.leads === 0) && (
+            <li>
+              Nenhuma sugestão com número que a sustente. Esta coluna não recomenda por
+              palpite — sugestão sem número é opinião com cara de sistema.
+            </li>
+          )}
+        </ol>
+      </CartaoDeIA>
+
+      <CartaoDeIA titulo="O que esta tela não mede" tom="cinza">
+        <p>
+          O desenho tem Valor Potencial, Probabilidade de Compra e Objeções por lead.
+          Nenhum dos três existe na nossa base hoje, e por isso não aparecem inventados
+          em coluna nenhuma: a régua v{p.versaoDaRegua} pontua o que foi perguntado, e o
+          que ninguém perguntou vira fila de trabalho, não estimativa.
+        </p>
+      </CartaoDeIA>
+    </>
   );
 }
