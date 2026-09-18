@@ -51,7 +51,7 @@ import {
 } from "@/services/foocci-sdr/LeadContactSafety";
 import { contarAbordagensDeHoje } from "./prospeccao/selecao";
 import { parametrosDoEnvioAgora } from "@/services/foocci-sdr/modelosDaMeta";
-import { escolherModeloLiberado } from "@/services/foocci-sdr/modelosLiberados";
+import { escolherModeloLiberado, modelosLiberadosParaEnvio } from "@/services/foocci-sdr/modelosLiberados";
 import {
   ehPrimeiroContatoFrio,
   ehLeadDeFormulario,
@@ -93,7 +93,13 @@ export type ResultadoDaAbordagem =
          * número, ou outra abordagem saiu há menos que o intervalo mínimo.
          * Não é defeito do canal — é o portão do CONTEÚDO fazendo o trabalho.
          */
-        | "travaDeRepeticao";
+        | "travaDeRepeticao"
+        /**
+         * ⛔ Pediram um modelo pelo NOME (`modeloForcado`) e ele não está
+         * APPROVED na Meta com "Pode enviar" ligado. Fail-closed de propósito:
+         * forçar modelo é escolher O TEXTO, nunca pular a aprovação dele.
+         */
+        | "modeloNaoLiberado";
       detalhe: string;
     };
 
@@ -469,6 +475,39 @@ export async function abordarLead(
     autor: "HUMANO" | "SISTEMA";
     autorUserId: string;
     agora?: Date;
+    /**
+     * ⭐ O MODELO ESCOLHIDO À MÃO — 18/09/2026, porta `abordar-agora`.
+     *
+     * Ausente (o padrão, e o de toda chamada que já existia): nada muda, o pool
+     * sorteia como sempre. Presente: este nome, e só ele — se não estiver
+     * APPROVED com "Pode enviar", a resposta é `modeloNaoLiberado`, NUNCA um
+     * sorteio de consolação. Cair em outro modelo por não achar o pedido é
+     * exatamente o defeito que o pool fechado do primeiro contato consertou.
+     *
+     * ⚠️ Forçar o modelo escolhe o TEXTO. Não pula o portão, nem o freio, nem a
+     * Supervisora, nem a trava de repetição, nem a montagem de variáveis —
+     * modelo cujo `{{n}}` não tem fonte continua sendo `semDadoParaOModelo`.
+     */
+    modeloForcado?: string;
+    /**
+     * ⛔ "TENTA DE NOVO NESTE LEAD" — e a lista do que isto ignora é FECHADA.
+     *
+     * Ignora EXATAMENTE dois motivos do portão, os dois que dizem "já falamos
+     * com esta pessoa": `TETO_DE_TENTATIVAS` e `DESCANSO_ATIVO`. Nada mais.
+     *
+     * Continuam barrando, com esta chave ligada e com ela desligada:
+     * `LEAD_OPT_OUT` (lei, não configuração), `LEAD_SEM_TELEFONE`,
+     * `LEAD_TELEFONE_INVALIDO`, `CANAL_INDISPONIVEL`, os dois do
+     * consentimento, `HISTORICO_DESCONHECIDO`, `FORA_DA_JANELA`,
+     * `PROSPECCAO_SEM_BASE_LEGAL` e `PROSPECCAO_DESLIGADA` — além do freio de
+     * ritmo, da Supervisora e da trava de repetição, que rodam depois e não
+     * sabem desta chave.
+     *
+     * A lista é de INCLUSÃO, e por isso motivo novo que apareça amanhã em
+     * `LeadBlockReason` nasce BARRANDO. Uma lista de exclusão faria o
+     * contrário — e o lado errado da dúvida aqui é falar com quem não podia.
+     */
+    ignorarJaContatado?: boolean;
   },
 ): Promise<ResultadoDaAbordagem> {
   const agora = params.agora ?? new Date();
@@ -487,7 +526,8 @@ export async function abordarLead(
   }
 
   // ── Trava 1: o portão do lead, ESCOLHIDO PELA ORIGEM ───────────────────
-  const decisao = await avaliarPortaoDoLead(db, lead, agora);
+  const decisaoDoPortao = await avaliarPortaoDoLead(db, lead, agora);
+  const decisao = perdoarJaContatado(decisaoDoPortao, params.ignorarJaContatado === true);
 
   if (!decisao.sendable) {
     return {
@@ -527,7 +567,22 @@ export async function abordarLead(
   // outros modelos liberados, que são os que apresentam o Foocci de verdade.
   // Nada muda para ele.
   let modeloPersistido;
-  if (ehPrimeiroContatoFrio(lead.fonte)) {
+  if (params.modeloForcado) {
+    // ⛔ Fechado no nome pedido. A fonte continua sendo o espelho da Meta, a
+    // mesma de todos os outros ramos — modelo forçado não é modelo inventado.
+    const liberados = await modelosLiberadosParaEnvio(db);
+    const achado = liberados.find((m) => m.nome === params.modeloForcado);
+    if (!achado) {
+      return {
+        abordou: false,
+        motivo: "modeloNaoLiberado",
+        detalhe:
+          `o modelo "${params.modeloForcado}" não está APPROVED na Meta com "Pode enviar" ligado. ` +
+          "Nenhum outro foi sorteado no lugar dele.",
+      };
+    }
+    modeloPersistido = achado;
+  } else if (ehPrimeiroContatoFrio(lead.fonte)) {
     const escolha = await escolherModeloDoPrimeiroContato(db, {
       // A pergunta é sobre o DADO, não sobre o modelo — e quem responde o que
       // vai em `{{1}}` já é `saudacaoDoLead`. Sem ela, o modelo com variável
@@ -702,6 +757,36 @@ export async function abordarLead(
   return { abordou: true, mensagemId: gravada.mensagemId };
 }
 
+
+/**
+ * ⭐ OS DOIS ÚNICOS MOTIVOS QUE `ignorarJaContatado` PERDOA.
+ *
+ * Separada e exportada de propósito: a lista do que pode ser afrouxado é a
+ * parte perigosa desta porta, e ela precisa de teste próprio, sem banco e sem
+ * envio. Um `if` solto dentro de `abordarLead` seria a mesma regra sem nome e
+ * sem régua.
+ *
+ * ⚠️ É uma lista de INCLUSÃO. Motivo novo em `LeadBlockReason` nasce barrando.
+ */
+export const MOTIVOS_DE_JA_CONTATADO: readonly LeadBlockReason[] = [
+  "TETO_DE_TENTATIVAS",
+  "DESCANSO_ATIVO",
+];
+
+export function perdoarJaContatado(
+  decisao: LeadSafetyDecision,
+  ignorarJaContatado: boolean,
+): LeadSafetyDecision {
+  if (decisao.sendable) return decisao;
+  if (!ignorarJaContatado) return decisao;
+  if (!decisao.reason || !MOTIVOS_DE_JA_CONTATADO.includes(decisao.reason)) return decisao;
+
+  return {
+    sendable: true,
+    reason: null,
+    detail: `liberado por ignorarJaContatado (o portão dizia ${decisao.reason}: ${decisao.detail})`,
+  };
+}
 
 /**
  * Monta EXATAMENTE `quantas` variáveis para o modelo, ou diz o que falta.

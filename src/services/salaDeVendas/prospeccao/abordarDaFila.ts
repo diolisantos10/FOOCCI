@@ -199,6 +199,14 @@ export function reagirA(motivo: MotivoDaFila): Reacao {
     case "aMetaRecusou":
       return "pulaComLimite";
 
+    /**
+     * ⛔ Modelo pedido pelo NOME e não liberado. A fila NUNCA força modelo —
+     * ela sorteia do pool —, então este motivo não nasce aqui: ele é da porta
+     * `abordar-agora`. Se algum dia chegar por este caminho, é configuração
+     * nossa errada (toggle desligado), e vale para TODA a rodada: parar e
+     * gritar é o certo, nunca queimar a lista inteira com o mesmo defeito.
+     */
+    case "modeloNaoLiberado":
     // O caminho está quebrado por razão NOSSA — banco, lead que sumiu. Não é
     // uma linha ruim da lista: é a máquina. Para na primeira, e grita.
     case "leadNaoExiste":
