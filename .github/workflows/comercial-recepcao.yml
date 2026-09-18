@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# A RECEPÇÃO — quem fala com o lead que chegou sozinho, sem ninguém clicar.
+#
+# Ordem do CEO, 18/09/2026: "Eu preciso que o lead que entrou seja abordado e
+# alguém venda um plano pra ele." Um lead que chega hoje tem de ser atendido em
+# MINUTOS, não em dias — e por isso a rodada é de vinte em vinte minutos, e não
+# uma vez ao dia como a da lista fria. O lead que nos procurou está com a página
+# ainda aberta; o da lista fria não está esperando nada.
+#
+# ⚠️ ESTE ARQUIVO É O QUE FAZ A ROTA EXISTIR DE VERDADE. Rota de cron sem quem a
+# chame é a doença crônica desta casa — peça pronta, ninguém chamando. O par
+# rota+agendador nasce junto, de propósito.
+#
+# ⛔ E ELE NÃO LIGA NADA. A rodada só encosta em lead quando
+# `FOOCCI_RECEPCAO_LIGADA=true` estiver no ambiente do serviço; sem ela, cada
+# disparo responde `ligada: false` e não toca em ninguém. Ligar é decisão do
+# dono, e ela se toma na variável — não neste arquivo.
+#
+# Dias úteis, 11:00–23:40 UTC = 8h–20h40 de São Paulo.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Comercial — recepção do lead que chega sozinho
+
+on:
+  schedule:
+    - cron: "*/20 11-23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      teto:
+        description: "Quantos leads esta rodada encosta (vazio = 25)"
+        required: false
+        default: ""
+
+jobs:
+  recepcao:
+    name: "Rodada de recepção"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          if [[ -z "$BASE_URL" ]]; then echo "::error::FOOCCI_BASE_URL não configurado"; exit 1; fi
+          echo "url=${BASE_URL}/api/cron/comercial/recepcao" >> "$GITHUB_OUTPUT"
+
+      - name: "POST recepção"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+          TETO:         ${{ github.event.inputs.teto }}
+        run: |
+          if [[ -z "$CRON_SECRET" ]]; then echo "::error::CRON_SECRET não configurado"; exit 1; fi
+          if [[ -n "$TETO" ]]; then BODY=$(jq -nc --argjson t "$TETO" '{teto:$t}'); else BODY='{}'; fi
+
+          HTTP=$(curl --connect-timeout 20 --max-time 540 -sS -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$BODY" -o /tmp/recepcao.json -w '%{http_code}') || true
+
+          echo "HTTP $HTTP"
+          cat /tmp/recepcao.json || true
+
+          if [[ "$HTTP" != "200" ]]; then echo "::error::a rodada de recepção respondeu $HTTP"; exit 1; fi
+
+          if jq -e '.data.ligada == false' /tmp/recepcao.json >/dev/null 2>&1; then
+            echo "::notice::recepção DESLIGADA (FOOCCI_RECEPCAO_LIGADA) — nenhum lead foi encostado."
+          fi

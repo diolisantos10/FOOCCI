@@ -183,6 +183,9 @@ export async function POST(req: NextRequest) {
     }
 
     const r = await passarParaGente(prisma, {
+      // Uma PESSOA clicou. Ela é o humano disponível — conferir a fila aqui
+      // recusaria o gesto de quem está justamente assumindo a conversa.
+      seNaoHouverGente: "passarMesmoAssim",
       leadId,
       motivoEscrito: motivo,
       // Quando quem chama não nomeia o gatilho, `PEDIU_HUMANO` é a leitura

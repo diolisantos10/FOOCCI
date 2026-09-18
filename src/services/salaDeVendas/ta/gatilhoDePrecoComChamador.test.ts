@@ -152,7 +152,21 @@ function banco(lead: Record<string, unknown> = {}) {
     },
     siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
     leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h1" }) },
-    internalUser: { findMany: vi.fn().mockResolvedValue([]) },
+    // ⭐ D-0E4: o handoff só acontece se houver humano disponível. Estes casos
+    // medem o handoff ACONTECENDO, então a fila tem gente. O caso oposto — fila
+    // vazia, IA segue conduzindo — mora em `pedidoDeGenteSemFila.test.ts`.
+    internalUser: {
+      findMany: vi.fn(async (args: { where?: { role?: unknown } }) => {
+        const role = (args?.where?.role ?? null) as { in?: string[] } | null;
+        return role && Array.isArray(role.in)
+          ? [{
+              id: "u-humano-de-plantao",
+              nome: "Pessoa de plantão",
+              disponibilidade: { estado: "DISPONIVEL", capacidade: 10, especialidades: [], regioes: [], pausadoAte: null },
+            }]
+          : [];
+      }),
+    },
   };
 }
 
