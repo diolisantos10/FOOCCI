@@ -57,6 +57,8 @@ interface Perfil {
   quando: Date | null;
   stage?: string;
   optOut?: boolean;
+  /** A porta de entrada. `undefined` = LISTA_PROSPECCAO (o número frio). */
+  fonte?: string | null;
 }
 
 const PERFIS: Perfil[] = [
@@ -80,9 +82,25 @@ const PERFIS: Perfil[] = [
   // ── Os que NÃO podem entrar na campanha ──
   { nome: "opt-out na ficha", quantos: 20, resposta: null, quando: null, optOut: true },
   { nome: "já em negociação", quantos: 10, resposta: null, quando: null, stage: "EM_NEGOCIACAO" },
+
+  // ⛔ D-0E1: quem deixou o próprio contato é LEAD, não contato frio. Eles
+  // ENTRAM na máquina de propósito — e saem recusados, com a regra escrita.
+  { nome: "formulário do site", quantos: 25, resposta: null, quando: null, fonte: "FORMULARIO_DEMONSTRACAO" },
+  { nome: "campanha paga", quantos: 18, resposta: null, quando: null, fonte: "CAMPANHA_PAGA" },
+  { nome: "Instagram", quantos: 9, resposta: null, quando: null, fonte: "INSTAGRAM" },
+  { nome: "Facebook", quantos: 6, resposta: null, quando: null, fonte: "FACEBOOK" },
+  { nome: "indicação (estágio 2)", quantos: 5, resposta: null, quando: null, fonte: "INDICACAO" },
+  { nome: "origem desconhecida", quantos: 11, resposta: null, quando: null, fonte: null },
 ];
 
-const ELEGIVEIS = 750;
+/** Quantos, por origem, NÃO podiam receber abordagem fria. */
+const LEADS_POR_ORIGEM = { FORMULARIO_DEMONSTRACAO: 25, CAMPANHA_PAGA: 18, INSTAGRAM: 9, FACEBOOK: 6, INDICACAO: 5 } as const;
+const LEADS_QUE_NAO_SAO_FRIOS = 25 + 18 + 9 + 6 + 5;
+const ORIGEM_DESCONHECIDA = 11;
+
+// 750 contatos frios de verdade + 74 que entram e são recusados pela origem.
+const FRIOS = 750;
+const ELEGIVEIS = FRIOS + LEADS_QUE_NAO_SAO_FRIOS + ORIGEM_DESCONHECIDA;
 
 function montarBase() {
   const siteLead: Linha[] = [];
@@ -107,7 +125,7 @@ function montarBase() {
         optOutAt: perfil.optOut ? new Date("2026-08-01") : null,
         empresaId: null,
         contatoId: null,
-        fonte: "LISTA_PROSPECCAO",
+        fonte: perfil.fonte === undefined ? "LISTA_PROSPECCAO" : perfil.fonte,
         createdAt: FORA_DA_JANELA,
       });
 
@@ -222,7 +240,7 @@ async function rodarACampanhaInteira(
 }
 
 describe("a campanha de reabordagem, de ponta a ponta", () => {
-  it("750 candidatos entram, e a conta FECHA", async () => {
+  it("824 candidatos entram (750 frios + 74 que a origem recusa), e a conta FECHA", async () => {
     const db = montarBase();
     const relogio = { valor: new Date(INICIO) };
     const { porta } = portaDeProva(db, () => relogio.valor);
@@ -265,6 +283,21 @@ describe("a campanha de reabordagem, de ponta a ponta", () => {
     console.info("[campanha] por ação:", JSON.stringify(painel.valor.porAcao));
     console.info("[campanha] recusados por regra:", JSON.stringify(painel.valor.recusadosPorRegra));
 
+    // ── ⛔ A CONTAGEM POR ORIGEM, que é o que o CEO pediu ──
+    const porOrigem = new Map<string, number>();
+    for (const e of db.tabelas.reabordagemExecucao) {
+      if (e.acao !== "FORA_DA_CAMPANHA" && e.acao !== "REVISAO") continue;
+      const lead = db.tabelas.siteLead.find((l) => l.id === e.leadId);
+      const origem = (lead?.fonte as string | null) ?? "(sem origem declarada)";
+      if (origem === "LISTA_PROSPECCAO") continue;
+      porOrigem.set(origem, (porOrigem.get(origem) ?? 0) + 1);
+    }
+    console.info("[campanha] ⛔ ficaram de fora POR ORIGEM:", JSON.stringify([...porOrigem.entries()]));
+    for (const [origem, quantos] of Object.entries(LEADS_POR_ORIGEM)) {
+      expect(porOrigem.get(origem), origem).toBe(quantos);
+    }
+    expect(porOrigem.get("(sem origem declarada)")).toBe(ORIGEM_DESCONHECIDA);
+
     expect(painel.valor.contaFecha).toBe(true);
     expect(painel.valor.examinados).toBe(ELEGIVEIS);
 
@@ -278,12 +311,20 @@ describe("a campanha de reabordagem, de ponta a ponta", () => {
     expect(porAcao.CADASTRA_DECISOR).toBe(10);
     expect(porAcao.NAO_ABORDA).toBe(8);
     expect(porAcao.PARA_SDR).toBe(7);
-    expect(porAcao.REVISAO).toBe(40);
+    // 40 bots sem opção para gente + os 11 de origem desconhecida.
+    expect(porAcao.REVISAO).toBe(40 + ORIGEM_DESCONHECIDA);
+    // ⛔ D-0E1: quem deixou o próprio contato NÃO recebe abordagem fria.
+    expect(porAcao.FORA_DA_CAMPANHA).toBe(LEADS_QUE_NAO_SAO_FRIOS);
 
     // ⭐ A MÉTRICA DA CAMPANHA — decisores capturados, não mensagens enviadas.
     expect(painel.valor.decisoresCapturados).toBe(10);
-    const novos = db.tabelas.siteLead.filter((l) => l.fonte === "INDICACAO");
-    expect(novos.length, "cada decisor indicado abre uma conversa NOVA").toBe(10);
+    // ⚠️ Contados pela LIGAÇÃO, e não pela fonte: a base de prova já tem leads
+    // com fonte INDICACAO (que a campanha recusa, por D-0E1), e contar por
+    // fonte somaria os dois grupos num número que não quer dizer nada.
+    const conversasNovas = new Set(
+      execucoes.map((e) => e.leadDoDecisorId).filter((x): x is string => Boolean(x)),
+    );
+    expect(conversasNovas.size, "cada decisor indicado abre uma conversa NOVA").toBe(10);
 
     // ── A CONTA DAS QUE FALAM ──
     //

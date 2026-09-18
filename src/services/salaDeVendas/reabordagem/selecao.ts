@@ -26,6 +26,19 @@ import type { FatosDaConversa } from "./rota";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
+/**
+ * ⚠️ POR QUE A ORIGEM NÃO FILTRA AQUI (D-0E1) — e é de propósito.
+ *
+ * Lead de formulário, campanha, Instagram, Facebook ou indicação **não recebe**
+ * abordagem fria. Mas quem o recusa é `rota.ts`, e não esta consulta: filtrar
+ * na fila faria essas pessoas sumirem sem deixar rastro, e a pergunta *"quantos
+ * ficaram de fora, e por qual origem?"* não teria resposta. Elas entram, saem
+ * recusadas com a regra escrita, e viram número em `ReabordagemExecucao`.
+ *
+ * Corte silencioso é o defeito que a casa já nomeou uma vez, no funil do ciclo
+ * do CRM: quem é cortado antes de virar linha não deixa rastro, e sem o rastro
+ * a conta nunca fecha.
+ */
 export const CRITERIO_DE_ENTRADA =
   "já recebeu ao menos uma mensagem nossa; NÃO pediu silêncio; NÃO está em demo/proposta/negociação/ganho; " +
   "e ainda não foi examinado por esta campanha. A trava anti-repetição age depois, no envio, e a recusa dela fica escrita.";
@@ -86,6 +99,7 @@ export async function selecionarProximoLote(
       id: true,
       whatsapp: true,
       stage: true,
+      fonte: true,
       optOutAt: true,
       empresaId: true,
       contatoId: true,
@@ -94,6 +108,7 @@ export async function selecionarProximoLote(
     id: string;
     whatsapp: string | null;
     stage: SiteLeadStage;
+    fonte: string | null;
     optOutAt: Date | null;
     empresaId: string | null;
     contatoId: string | null;
@@ -148,6 +163,9 @@ export async function selecionarProximoLote(
     return {
       leadId: l.id,
       telefone: l.whatsapp,
+      // ⚠️ Vai CRUA para a rota, inclusive quando é nula: é a rota que decide o
+      // que fazer com "não sei por onde entrou", e ela decide REVISÃO.
+      fonte: l.fonte,
       stage: l.stage,
       optOutAt: l.optOutAt,
       // ⚠️ `null` quando o religamento ainda não ligou a empresa. `null` não é

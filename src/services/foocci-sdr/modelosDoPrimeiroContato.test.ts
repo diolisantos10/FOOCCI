@@ -116,14 +116,38 @@ describe("DEPOIS: o primeiro contato só sorteia os três aprovados", () => {
   });
 });
 
-describe("os dois estágios são caminhos distintos", () => {
-  it("número frio (lista, importação, origem desconhecida) → ESTÁGIO 1", () => {
-    for (const fonte of ["LISTA_PROSPECCAO", "IMPORTACAO", "FORMULARIO_DEMONSTRACAO", null, ""]) {
-      expect(ehPrimeiroContatoFrio(fonte), String(fonte)).toBe(true);
+describe("os dois estágios são caminhos distintos — e a origem é quem separa (D-0E1)", () => {
+  it("só o número que NÓS fomos buscar recebe o texto do ESTÁGIO 1", () => {
+    for (const fonte of ["LISTA_PROSPECCAO", "IMPORTACAO"]) {
+      expect(ehPrimeiroContatoFrio(fonte), fonte).toBe(true);
+    }
+  });
+
+  it("⛔ quem deixou o próprio contato NÃO recebe o texto frio", () => {
+    // Ordem do CEO, 18/09/2026: formulário, campanha, Instagram e Facebook já
+    // são LEADS — eles levantaram a mão. Mandar "este contato é do {{1}}, certo?"
+    // a essa pessoa é tratar como estranho quem pediu para ser chamado.
+    for (const fonte of [
+      "FORMULARIO_DEMONSTRACAO",
+      "AGENDAMENTO",
+      "WHATSAPP_DIRETO",
+      "INSTAGRAM",
+      "FACEBOOK",
+      "CAMPANHA_PAGA",
+      "MANUAL",
+      "OUTRO",
+    ]) {
+      expect(ehPrimeiroContatoFrio(fonte), fonte).toBe(false);
     }
   });
 
   it("conversa aberta com o decisor capturado (INDICACAO) → ESTÁGIO 2", () => {
     expect(ehPrimeiroContatoFrio("INDICACAO")).toBe(false);
+  });
+
+  it("⛔ origem desconhecida não é frio: a lista é de INCLUSÃO", () => {
+    for (const fonte of [null, undefined, "", "   ", "FONTE_QUE_NAO_EXISTE"]) {
+      expect(ehPrimeiroContatoFrio(fonte), String(fonte)).toBe(false);
+    }
   });
 });

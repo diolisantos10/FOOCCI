@@ -153,15 +153,34 @@ export async function escolherModeloDoPrimeiroContato(
 /**
  * ESTÁGIO 1 ou ESTÁGIO 2 — e a distinção é a ORIGEM do contato.
  *
- *   · número frio da lista (prospecção, importação, ou sem origem declarada) →
- *     estágio 1, os três;
- *   · contato que NÓS abrimos depois de capturar o decisor (`INDICACAO`) →
- *     estágio 2, os outros modelos.
+ * ── CORREÇÃO DE DOUTRINA, 18/09/2026 (D-0E1) ────────────────────────────────
  *
- * ⚠️ Origem desconhecida cai no ESTÁGIO 1, que é o texto mais contido. Se um
- * dia alguém criar uma fonte nova e esquecer de classificá-la, o erro tem de ser
- * "mandamos a mensagem curta demais", nunca "apresentamos o produto a um bot".
+ * A primeira versão desta função devolvia `true` para qualquer origem que não
+ * fosse `INDICACAO`, com o argumento de que o texto frio é "o mais contido" e
+ * portanto o lado seguro da dúvida. **Estava errado, e o CEO corrigiu:**
+ *
+ *   *"Clientes que estão vindo da campanha do Facebook, do Instagram, ou que
+ *   deixam formulário, já são leads, porque eles estão deixando o próprio
+ *   contato. A lista fria não é lead."*
+ *
+ * Quem deixou o próprio contato PEDIU para ser chamado. Mandar a essa pessoa
+ * "Olá! Tudo bem? Este contato é do {{1}}, certo?" é tratar como estranho quem
+ * levantou a mão. O texto frio existe para atravessar bot de restaurante; o
+ * lead de formulário não tem bot, tem uma pessoa esperando resposta.
+ *
+ * Então a lista é de INCLUSÃO, e curta: só as duas portas por onde NÓS fomos
+ * atrás de um número que nunca falou com a gente.
+ *
+ * ⚠️ `INDICACAO` fica de fora de propósito: ela é o ESTÁGIO 2 — a conversa que
+ * a casa abre depois de capturar o decisor.
+ * ⚠️ Origem desconhecida também fica de fora: ela não vira abordagem fria "por
+ * ser o texto mais contido". Para o pool de modelos ela mantém o
+ * comportamento que já existia; para a CAMPANHA ela vira revisão, e quem faz
+ * isso é `reabordagem/rota.ts`.
  */
+export const FONTES_DO_NUMERO_FRIO = ["LISTA_PROSPECCAO", "IMPORTACAO"] as const;
+
 export function ehPrimeiroContatoFrio(fonte: string | null | undefined): boolean {
-  return (fonte ?? "").trim().toUpperCase() !== "INDICACAO";
+  const f = (fonte ?? "").trim().toUpperCase();
+  return (FONTES_DO_NUMERO_FRIO as readonly string[]).includes(f);
 }

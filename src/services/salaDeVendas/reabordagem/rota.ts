@@ -42,6 +42,7 @@ import type { SiteLeadStage, EstagioDaEmpresa } from "@prisma/client";
 import { classificarInterlocutor } from "@/services/foocci-sdr/gatekeeper/classificacao";
 import { extrairDecisorIndicado, type DecisorIndicado } from "@/services/foocci-sdr/gatekeeper/decisorIndicado";
 import { objetivoDaProspeccao } from "@/services/foocci-sdr/gatekeeper/objetivo";
+import { ehPrimeiroContatoFrio, FONTES_DO_NUMERO_FRIO } from "@/services/foocci-sdr/modelosDoPrimeiroContato";
 import { naoEhOResponsavel, opcaoParaFalarComGente, pediuParaParar } from "./sinais";
 import { TEXTOS, textoDaOpcaoDoMenu } from "./textos";
 
@@ -90,6 +91,8 @@ export type RegraAplicada =
   | "pediuParaPararNaFicha"
   | "pediuParaPararNoTexto"
   | "jaEstaEmContinuacao"
+  | "ehLeadNaoContatoFrio"
+  | "origemDesconhecida"
   | "decisorJaIdentificado"
   | "decisorIndicadoNaResposta"
   | "indicouDecisorSemTelefone"
@@ -105,6 +108,8 @@ export type RegraAplicada =
 export interface FatosDaConversa {
   leadId: string;
   telefone: string | null;
+  /** A porta de entrada. `null` = desconhecida, e desconhecida NÃO é fria. */
+  fonte: string | null;
   stage: SiteLeadStage;
   optOutAt: Date | null;
   /** Estágio da `Empresa` ligada, quando o religamento já a ligou. */
@@ -183,6 +188,44 @@ export function decidirReabordagem(f: FatosDaConversa, agora: Date): DecisaoDaRe
       explicacao:
         "a última resposta pediu para parar, por escrito. A ficha ainda não foi carimbada — " +
         "e até que seja, a campanha trata como pedido de silêncio.",
+    });
+  }
+
+  // ── 1b. ⛔ ESTA MÁQUINA É DO CONTATO FRIO, E SÓ DELE (D-0E1) ───────────
+  //
+  // Ordem do CEO, 18/09/2026: *"Clientes que estão vindo da campanha do
+  // Facebook, do Instagram, ou que deixam formulário, já são leads, porque eles
+  // estão deixando o próprio contato. A lista fria não é lead."*
+  //
+  // Quem deixou o próprio contato PEDIU para ser chamado. O texto frio existe
+  // para atravessar bot de restaurante; esta pessoa não tem bot, tem alguém
+  // esperando resposta — e a porta dela é outra (D-0E4: o TA assume na hora).
+  // A campanha não fala com ela, e não fala **antes** de ler qualquer texto.
+  const fonte = (f.fonte ?? "").trim();
+
+  if (!fonte) {
+    // ⚠️ Origem desconhecida NÃO cai na abordagem fria "por ser o texto mais
+    // contido". Isso foi um erro meu, corrigido em 18/09/2026: ausência de
+    // informação não é informação, e dúvida não vira mensagem para estranho.
+    return decisao(f, {
+      acao: "REVISAO",
+      canal: "NENHUM",
+      regra: "origemDesconhecida",
+      explicacao:
+        "este contato não declara por onde entrou. Sem saber se ele nos procurou ou se nós fomos " +
+        "atrás dele, não se manda abordagem fria: separa para uma pessoa olhar.",
+    });
+  }
+
+  if (!ehPrimeiroContatoFrio(fonte)) {
+    return decisao(f, {
+      acao: "FORA_DA_CAMPANHA",
+      canal: "NENHUM",
+      regra: "ehLeadNaoContatoFrio",
+      explicacao:
+        `entrou por "${fonte}" — deixou o próprio contato ou foi indicado, ou seja, é LEAD e não ` +
+        `contato frio. Esta campanha só fala com ${FONTES_DO_NUMERO_FRIO.join(" e ")}. ` +
+        "Quem levantou a mão é atendido pela IA na hora, e não por template de porteiro.",
     });
   }
 
