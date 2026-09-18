@@ -25,6 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { escolherAgente } from "@/services/salaDeVendas/quemAtende";
 import { prisma } from "@/lib/prisma";
 import { CABECALHO_DO_SEGREDO, conferirSegredo } from "@/services/salaDeVendas/abordarAgora/guarda";
 import { abordarAgora } from "@/services/salaDeVendas/abordarAgora/abordarAgora";
@@ -33,7 +34,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Quem responde pelas mensagens desta porta, quando o corpo não disser. */
-const AUTOR_PADRAO = "abordar-agora";
 
 function listaDeTextos(v: unknown): string[] | null {
   if (v == null) return [];
@@ -72,9 +72,29 @@ export async function POST(req: NextRequest) {
   // por cima de "este lead já recebeu mensagem" é ato explícito, e na dúvida a
   // resposta é não.
   const ignorarJaContatado = corpo.ignorarJaContatado === true;
-  const autorUserId = typeof corpo.autorUserId === "string" && corpo.autorUserId.trim()
-    ? corpo.autorUserId.trim()
-    : AUTOR_PADRAO;
+  // ⚠️ MEDIDO EM PRODUÇÃO, 18/09/2026: o padrão era a string "abordar-agora",
+  // que NÃO é um usuário do banco — e a gravação da mensagem morria em
+  // `lead_mensagens_autorUserId_fkey`. O lead não era abordado, e o motivo que
+  // chegava era "naoConseguiuGravar", que descreve o sintoma e esconde a causa.
+  //
+  // Toda mensagem que sai em nome da casa é assinada por alguém que EXISTE. Quem
+  // responde essa pergunta já é `escolherAgente` — a mesma que a recepção usa.
+  // Inventar um segundo jeito de assinar é como se cria a divergência.
+  const pedido = typeof corpo.autorUserId === "string" ? corpo.autorUserId.trim() : "";
+  const agente = pedido ? null : await escolherAgente(prisma);
+  const autorUserId = pedido || agente?.userId || "";
+
+  if (!autorUserId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        erro:
+          "não há agente comercial ativo para assinar a mensagem — " +
+          "sem assinatura de alguém que existe, nada sai.",
+      },
+      { status: 409 },
+    );
+  }
 
   console.warn("[admin/comercial/abordar-agora] pedido", {
     em: new Date().toISOString(),
