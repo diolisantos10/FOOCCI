@@ -86,7 +86,24 @@ export type ResultadoDoDisparo =
 
 /** Quando saiu o último lote. `null` = nunca saiu nenhum. */
 export async function ultimoLoteEm(db: Cliente): Promise<Date | null> {
+  // ⚠️ MEDIDO EM PRODUÇÃO, 18/09/2026: o freio olhava a última linha de
+  // execução, QUALQUER uma — inclusive as recusadas. O primeiro lote real da
+  // campanha bateu no portão da prospecção (desligada), gravou 40 recusas e
+  // NÃO enviou nada; ainda assim o lote seguinte foi barrado por "o último
+  // lote saiu há 2 min".
+  //
+  // O freio existe pela saúde do número WABA, e o que machuca o número é
+  // MENSAGEM, não linha de log. Um lote que não entregou ninguém não gastou
+  // nada da paciência da Meta — cobrar meia hora por ele transforma a trava em
+  // pedágio, e pedágio que não protege é o tipo de coisa que alguém remove
+  // inteira no primeiro dia de pressa.
+  //
+  // Então o relógio conta do último envio REAL. Continua fail-closed: sem
+  // nenhum envio na história, não há freio a aplicar, e as outras travas
+  // (janela comercial, interruptor, teto do dia, anti-repetição) seguem antes
+  // desta.
   const ultima = (await db.reabordagemExecucao.findFirst({
+    where: { enviado: true },
     orderBy: { criadoEm: "desc" },
     select: { criadoEm: true },
   })) as { criadoEm: Date } | null;
