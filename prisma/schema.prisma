@@ -8939,3 +8939,61 @@ model ReabordagemExecucao {
   @@index([loteId])
   @@map("reabordagem_execucao")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⭐ ARQUIVO MORTO DAS CONVERSAS — a cópia que se grava ANTES de apagar
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A limpeza de 18/09/2026 (ordem do CEO) apaga as conversas de atendimento e
+// mantém os contatos. Apagar sem cópia é irreversível: no dia em que um
+// restaurante reclamar do que foi dito a ele, a resposta não pode ser "não sei".
+//
+// Esta tabela é de LEITURA. Nada no produto escreve nela fora da limpeza, e
+// nada lê dela em caminho de atendimento — ela existe para consulta humana:
+//
+//   SELECT ocorreu_em, direcao, autor, texto
+//     FROM conversas_arquivadas
+//    WHERE lead_whatsapp_digits = '5511...'
+//    ORDER BY ocorreu_em;
+//
+// `id` é o MESMO id da `LeadMensagem` original, de propósito: é o que torna a
+// cópia idempotente (rodar duas vezes não duplica) e o que permite casar uma
+// linha arquivada com qualquer referência antiga que tenha sobrado em log.
+model ConversaArquivada {
+  /// O id original da `lead_mensagens`. Não é gerado aqui.
+  id     String @id
+  leadId String
+
+  /// Cópia do contato no momento do arquivamento. A ficha do lead continua viva
+  /// em `site_leads`, mas ela MUDA — o arquivo guarda o que valia no dia.
+  leadNome           String?
+  leadWhatsapp       String?
+  leadWhatsappDigits String?
+  leadCodigo         String?
+
+  direcao      String
+  tipo         String
+  status       String
+  autor        String?
+  autorUserId  String?
+  waMessageId  String?
+  templateNome String?
+  texto        String? @db.Text
+  legenda      String? @db.Text
+
+  turnoId       String?
+  papelDoAgente String?
+  origemDaFala  String?
+
+  ocorreuEm    DateTime
+  criadaEm     DateTime
+  arquivadaEm  DateTime @default(now())
+  /// O lote da limpeza que arquivou esta linha. É o que torna a operação
+  /// retomável e auditável: "o que saiu na execução X?" tem resposta.
+  loteDaLimpeza String
+
+  @@index([leadId, ocorreuEm])
+  @@index([leadWhatsappDigits, ocorreuEm])
+  @@index([loteDaLimpeza])
+  @@map("conversas_arquivadas")
+}
