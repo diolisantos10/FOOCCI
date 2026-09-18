@@ -33,9 +33,20 @@ vi.mock("@/services/foocci-sdr/FoocciSalesChannel", async (original) => {
   return { ...real, enviarModeloDeVendas: enviarModelo, canalDeVendasPronto: canalPronto };
 });
 
-vi.mock("@/services/foocci-sdr/modelosLiberados", () => ({
-  escolherModeloLiberado: modeloLiberado,
-}));
+// ⚠️ MOCK PARCIAL, e precisa ser: `modelosDoPrimeiroContato` também lê deste
+// módulo (`modelosLiberadosParaEnvio`, `escolherAleatorio`). Um mock que só
+// devolve `escolherModeloLiberado` derruba o caminho do lead de formulário —
+// que é justamente o lead deste arquivo.
+vi.mock("@/services/foocci-sdr/modelosLiberados", async (original) => {
+  const real = await original<typeof import("@/services/foocci-sdr/modelosLiberados")>();
+  return {
+    ...real,
+    escolherModeloLiberado: modeloLiberado,
+    // O lead deste arquivo é de CAMPANHA_PAGA, então quem escolhe é o pool do
+    // lead de formulário — que lê daqui, e não de `escolherModeloLiberado`.
+    modelosLiberadosParaEnvio: async () => [await modeloLiberado()],
+  };
+});
 
 vi.mock("@/services/salaDeVendas/supervisora/adequacaoDoTemplate", () => ({
   avaliarAdequacaoDoTemplate: supervisora,
@@ -134,7 +145,7 @@ beforeEach(() => {
   enviarModelo.mockResolvedValue({ ok: true, providerMessageId: "wamid.TESTE" });
   canalPronto.mockReturnValue(true);
   modeloLiberado.mockResolvedValue({
-    nome: "foocci_abordagem_inicial",
+    nome: "foocci_lead_formulario_01",
     idioma: "pt_BR",
     variaveis: 1,
     corpo: "Olá, {{1}}! Aqui é a Foocci.",

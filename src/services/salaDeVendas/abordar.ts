@@ -55,16 +55,18 @@ import { escolherModeloLiberado } from "@/services/foocci-sdr/modelosLiberados";
 import {
   ehPrimeiroContatoFrio,
   ehLeadDeFormulario,
-  escolherModeloDoLeadDeFormulario,
-  escolherModeloDoPrimeiroContato,
+  candidatosDoLeadDeFormulario,
+  candidatosDoPrimeiroContato,
 } from "@/services/foocci-sdr/modelosDoPrimeiroContato";
+import { classificarErroDaMeta } from "@/services/foocci-sdr/familiasDeErroDaMeta";
+import type { ModeloLiberadoParaEnvio } from "@/services/foocci-sdr/modelosLiberados";
 import {
   canalDeVendasPronto,
   enviarModeloDeVendas,
   type ModeloDeAbordagem,
 } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { avaliarAdequacaoDoTemplate, type HistoricoDeAbordagens } from "./supervisora/adequacaoDoTemplate";
-import { reservarEnvio, devolverReserva } from "./travaDeRepeticao";
+import { reservarEnvio } from "./travaDeRepeticao";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -526,35 +528,43 @@ export async function abordarLead(
   // captura do decisor — `fonte = INDICACAO`): continua sorteando entre os
   // outros modelos liberados, que são os que apresentam o Foocci de verdade.
   // Nada muda para ele.
-  let modeloPersistido;
+  // ⭐⭐ A FILA DE MODELOS — ordem do CEO, 18/09/2026:
+  // *"porque se uma não dá certo, a gente tenta as outras."*
+  //
+  // Antes daqui, a abordagem escolhia UM modelo; se a Meta recusasse, a
+  // mensagem morria e o lead ficava sem nada. Agora cada estágio devolve uma
+  // FILA, e o laço abaixo desce por ela.
+  //
+  // ⛔ Os grupos não se misturam dentro da fila — essa trava mora nos próprios
+  // `candidatos*` e não foi afrouxada: lead de formulário nunca alcança
+  // `foocci_contato_inicial_01/02`, nem na última posição.
+  let candidatos: ModeloLiberadoParaEnvio[];
   if (ehPrimeiroContatoFrio(lead.fonte)) {
-    const escolha = await escolherModeloDoPrimeiroContato(db, {
+    const fila = await candidatosDoPrimeiroContato(db, {
       // A pergunta é sobre o DADO, não sobre o modelo — e quem responde o que
       // vai em `{{1}}` já é `saudacaoDoLead`. Sem ela, o modelo com variável
-      // seria recusado pela Meta contato a contato.
+      // nem entra na fila: ~10% dos disparos já se perderam com variável vazia.
       podePreencherAVariavel: Boolean(saudacaoDoLead(lead)),
     });
-    if (!escolha.ok) {
-      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };
+    if (!fila.ok) {
+      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: fila.detalhe };
     }
-    modeloPersistido = escolha.modelo;
+    candidatos = fila.modelos;
   } else if (ehLeadDeFormulario(lead.fonte)) {
     // ⭐ ESTÁGIO 1-B — quem preencheu formulário/campanha PEDIU o contato.
-    // Mandar "Este contato é do {{1}}, certo?" a quem levantou a mão é tratar
-    // como estranho quem se apresentou. Pool fechado nos `foocci_lead_formulario_*`,
-    // e fail-closed: sem eles liberados, NÃO cai para os frios.
-    const escolha = await escolherModeloDoLeadDeFormulario(db, {
+    const fila = await candidatosDoLeadDeFormulario(db, {
       jaSabeORestaurante: Boolean((lead.restaurante ?? "").trim()),
     });
-    if (!escolha.ok) {
-      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: escolha.detalhe };
+    if (!fila.ok) {
+      return { abordou: false, motivo: "semDadoParaOModelo", detalhe: fila.detalhe };
     }
-    modeloPersistido = escolha.modelo;
+    candidatos = fila.modelos;
   } else {
-    modeloPersistido = await escolherModeloLiberado(db);
+    const um = await escolherModeloLiberado(db);
+    candidatos = um ? [um] : [];
   }
 
-  if (!modeloPersistido) {
+  if (candidatos.length === 0) {
     return {
       abordou: false,
       motivo: "semDadoParaOModelo",
@@ -562,144 +572,157 @@ export async function abordarLead(
     };
   }
 
-  // ⛔ O PAYLOAD TEM DE TER SEMPRE O MESMO TAMANHO — agora usando o contrato do
-  // próprio modelo sorteado, e não o contrato do modelo antigo do ambiente.
-  const montagem = montarParametros(modeloPersistido.variaveis, {
-    ...lead,
-    proveniencia: await provenienciaDoLead(db, lead),
-  });
-  if (!montagem.ok) {
-    return { abordou: false, motivo: "semDadoParaOModelo", detalhe: montagem.falta };
-  }
-
-  const modelo: ModeloDeAbordagem = {
-    nome: modeloPersistido.nome,
-    idioma: modeloPersistido.idioma,
-    parametros: montagem.parametros,
-  };
-
-  const textoIntegral = renderizarCorpoDoModelo(modeloPersistido.corpo, modelo.parametros);
-  if (!textoIntegral.ok) {
-    return { abordou: false, motivo: "semDadoParaOModelo", detalhe: textoIntegral.falta };
-  }
-
-  // ⚠️ CONTADO ANTES DE `registrarSaida`, e é essencial que seja: a linha
-  // PENDENTE desta MESMA abordagem ainda não existe neste ponto. Contar
+  // ⚠️ CONTADO ANTES de qualquer `registrarSaida`, e é essencial que seja: a
+  // linha PENDENTE desta MESMA abordagem ainda não existe neste ponto. Contar
   // DEPOIS de gravar faria a abordagem se contar como "a última abordagem",
-  // sempre "0.0h atrás" — todo lead, mesmo o nunca abordado, seria julgado
-  // como se tivesse acabado de ser abordado. Medido no primeiro run da
-  // jornada (`jornada-supervisora-abordagem.test.ts`), não hipotético.
+  // sempre "0.0h atrás". Fica FORA do laço pelo mesmo motivo: a segunda volta
+  // não pode enxergar a linha que a primeira acabou de gravar.
   const historico = await historicoDeAbordagens(db, lead.id, lead.optOutAt);
 
-  // ── Trava 3: gravar antes de enviar ────────────────────────────────────
-  const gravada = await registrarSaida(db, {
-    leadId: lead.id,
-    texto: textoIntegral.texto,
-    autor: params.autor,
-    autorUserId: params.autorUserId,
-    tipo: "TEMPLATE",
-    templateNome: modelo.nome || null,
-    agora,
-  });
+  // ⭐ O DIÁRIO DA FILA — qual modelo foi tentado, em que ordem, e por que cada
+  // um caiu. Não só o último erro: sem a lista inteira, amanhã ninguém consegue
+  // dizer se o problema era o TEXTO ou a CONTA, que é exatamente a pergunta que
+  // custou o dia 18/09/2026.
+  const tentativas: string[] = [];
+  /** Quantas de fato bateram na Meta — as puladas por falta de fonte não contam. */
+  let bateramNaMeta = 0;
+  const anotar = (nome: string, porque: string) =>
+    tentativas.push(`${tentativas.length + 1}) ${nome}: ${porque}`);
+  const diario = () => `modelos tentados — ${tentativas.join(" | ")}`;
 
-  if (!gravada.ok) {
-    // O `detalhe` carrega a mensagem do banco quando existe. Sem ela, quem
-    // investiga recebe "naoGravou" — que é o nome do problema, não o problema.
-    const porque = gravada.causa === "naoGravou" ? `naoGravou: ${gravada.detalhe}` : gravada.causa;
-    return { abordou: false, motivo: "naoConseguiuGravar", detalhe: porque };
-  }
+  for (const [posicao, modeloPersistido] of candidatos.entries()) {
+    // ⛔ SÓ ENTRA NA TENTATIVA O MODELO CUJAS VARIÁVEIS TÊM FONTE. Modelo sem
+    // dado para `{{1}}` não vira disparo com variável vazia: ele é pulado, e a
+    // fila segue para o próximo. Isto não é falha de envio — nada bateu na Meta.
+    const montagem = montarParametros(modeloPersistido.variaveis, {
+      ...lead,
+      proveniencia: await provenienciaDoLead(db, lead),
+    });
+    if (!montagem.ok) {
+      anotar(modeloPersistido.nome, `nem tentado — sem fonte para a variável: ${montagem.falta}`);
+      continue;
+    }
 
-  // ── ⭐ A SUPERVISORA — encaixe do CEO, 12/09/2026 ────────────────────────
-  //
-  // ENTRE gravar (trava 3) e enviar (trava 4): a linha PENDENTE já existe
-  // (`gravada.mensagemId`), então há a quem ligar o veredito por
-  // `SupervisoraAvaliacao.mensagemId`; e ainda não bateu na Meta, então um
-  // "impedir" aqui de fato impede — nunca reescreve o template (ver o
-  // cabeçalho de `supervisora/adequacaoDoTemplate.ts`).
-  const revisaoDoTemplate = await avaliarAdequacaoDoTemplate(db, {
-    mensagemId: gravada.mensagemId,
-    leadId: lead.id,
-    autor: params.autor,
-    autorUserId: params.autorUserId,
-    historico,
-    agora,
-  });
-
-  if (!revisaoDoTemplate.prosseguir) {
-    // ⛔ NUNCA `registrarFalhaDeEnvio` aqui, pela mesma razão que `entrega.ts`
-    // já documenta para a retenção da Supervisora: FALHOU é vocabulário da
-    // Meta/rede, não de uma decisão de qualidade. A linha fica PENDENTE,
-    // visível, e o motivo mora em `SupervisoraAvaliacao`.
-    return {
-      abordou: false,
-      motivo: "supervisoraRecusou",
-      detalhe: revisaoDoTemplate.motivoDeRetencao ?? "retido pela Supervisora",
+    const modelo: ModeloDeAbordagem = {
+      nome: modeloPersistido.nome,
+      idioma: modeloPersistido.idioma,
+      parametros: montagem.parametros,
     };
-  }
 
-  // ── ⛔ TRAVA 3.5: A TRAVA DE REPETIÇÃO — 17/09/2026 ─────────────────────
-  //
-  // A ÚLTIMA pergunta antes de a mensagem bater na Meta: **este mesmo conteúdo
-  // já foi para este mesmo número?** As travas acima respondem "esta pessoa
-  // pode ser abordada?" lendo o estado do lead — e é justamente essa leitura
-  // que duas rodadas simultâneas fazem ao mesmo tempo, as duas vendo zero.
-  //
-  // Aqui não há leitura: há uma reserva com `@@unique` no banco. Ver
-  // `travaDeRepeticao.ts`. Fail-closed: na dúvida, não sai.
-  const reserva = await reservarEnvio(db, {
-    telefone: lead.whatsapp,
-    // O texto RENDERIZADO, que é o que a pessoa lê — e não o nome do modelo.
-    // Dois modelos diferentes que produzem a mesma frase são a mesma mensagem
-    // para quem recebe.
-    conteudo: textoIntegral.texto,
-    natureza: "abordagem",
-    leadId: lead.id,
-    origem: "abordar.ts",
-    agora,
-  });
+    const textoIntegral = renderizarCorpoDoModelo(modeloPersistido.corpo, modelo.parametros);
+    if (!textoIntegral.ok) {
+      anotar(modeloPersistido.nome, `nem tentado — corpo não renderizou: ${textoIntegral.falta}`);
+      continue;
+    }
 
-  if (!reserva.liberado) {
-    // ⛔ NUNCA `registrarFalhaDeEnvio`: FALHOU é vocabulário da Meta, e uma
-    // retentativa automática mandaria a repetição de novo. A linha fica
-    // PENDENTE, visível, e o motivo mora em `TravaDeAbordagemRecusa`.
-    return { abordou: false, motivo: "travaDeRepeticao", detalhe: reserva.detalhe };
-  }
+    // ── Trava 3: gravar antes de enviar ────────────────────────────────────
+    const gravada = await registrarSaida(db, {
+      leadId: lead.id,
+      texto: textoIntegral.texto,
+      autor: params.autor,
+      autorUserId: params.autorUserId,
+      tipo: "TEMPLATE",
+      templateNome: modelo.nome || null,
+      agora,
+    });
 
-  // ── Trava 4: a entrega, com o resultado escrito na própria linha ───────
-  const envio = await enviarModeloDeVendas(decisao, lead.whatsapp ?? "", modelo);
+    if (!gravada.ok) {
+      // ⛔ Falha NOSSA, de banco — não é caso de tentar outro modelo: o próximo
+      // bateria na mesma parede, e cada volta grava mais uma linha.
+      const porque = gravada.causa === "naoGravou" ? `naoGravou: ${gravada.detalhe}` : gravada.causa;
+      return { abordou: false, motivo: "naoConseguiuGravar", detalhe: porque };
+    }
 
-  if (!envio.ok) {
-    // A entrega não aconteceu: a reserva volta. Sem isto, uma recusa da Meta
-    // bloqueia o número por 20h por uma mensagem que ninguém leu — e a próxima
-    // tentativa, com outro modelo, é recusada por "já falei com essa pessoa".
-    await devolverReserva(db, {
+    // ── ⭐ A SUPERVISORA ────────────────────────────────────────────────────
+    const revisaoDoTemplate = await avaliarAdequacaoDoTemplate(db, {
+      mensagemId: gravada.mensagemId,
+      leadId: lead.id,
+      autor: params.autor,
+      autorUserId: params.autorUserId,
+      historico,
+      agora,
+    });
+
+    if (!revisaoDoTemplate.prosseguir) {
+      // ⛔ NUNCA `registrarFalhaDeEnvio`: FALHOU é vocabulário da Meta, não de
+      // uma decisão de qualidade. E NUNCA tentar outro modelo: a Supervisora
+      // falou do MOMENTO desta abordagem, não do texto — trocar de texto seria
+      // contornar o veredito dela.
+      return {
+        abordou: false,
+        motivo: "supervisoraRecusou",
+        detalhe: revisaoDoTemplate.motivoDeRetencao ?? "retido pela Supervisora",
+      };
+    }
+
+    // ── ⛔ TRAVA 3.5: A TRAVA DE REPETIÇÃO ─────────────────────────────────
+    const reserva = await reservarEnvio(db, {
       telefone: lead.whatsapp,
       conteudo: textoIntegral.texto,
       natureza: "abordagem",
+      leadId: lead.id,
+      origem: "abordar.ts",
+      // Da segunda volta em diante é a MESMA abordagem tentando outro texto —
+      // a anterior não chegou a ninguém. O ritmo já foi reservado na primeira
+      // volta; a trava de CONTEÚDO continua valendo em todas.
+      retentativaDaMesmaAbordagem: posicao > 0 && bateramNaMeta > 0,
+      agora,
     });
 
-    await registrarFalhaDeEnvio(db, {
-      mensagemId: gravada.mensagemId,
-      erro: envio.error ?? "erro sem motivo",
-    });
-    return { abordou: false, motivo: "aMetaRecusou", detalhe: envio.error ?? "erro sem motivo" };
+    if (!reserva.liberado) {
+      // ⛔ Para, e não desce a fila: a trava falou do NÚMERO (já saiu isto, ou
+      // saiu algo há pouco), não do texto. Descer a fila aqui seria mandar
+      // outra mensagem ao mesmo número no intervalo que a trava acabou de
+      // proibir — a repetição de volta com outro texto.
+      return { abordou: false, motivo: "travaDeRepeticao", detalhe: reserva.detalhe };
+    }
+
+    // ── Trava 4: a entrega ─────────────────────────────────────────────────
+    const envio = await enviarModeloDeVendas(decisao, lead.whatsapp ?? "", modelo);
+
+    if (envio.ok) {
+      await confirmarEnvio(db, {
+        mensagemId: gravada.mensagemId,
+        waMessageId: envio.providerMessageId ?? `local:${gravada.mensagemId}`,
+      });
+      return { abordou: true, mensagemId: gravada.mensagemId };
+    }
+
+    // ⛔⛔ A DISTINÇÃO QUE EVITA QUEIMAR O NÚMERO. A tabela mora em
+    // `familiasDeErroDaMeta.ts`; aqui só se obedece a ela.
+    bateramNaMeta++;
+    const erro = envio.error ?? "erro sem motivo";
+    const classe = classificarErroDaMeta(envio.errorCode);
+    anotar(
+      modeloPersistido.nome,
+      `${erro} [codigo=${classe.codigo ?? "sem codigo"} · familia=${classe.familia}] ${classe.explicacao}`,
+    );
+
+    // O diário INTEIRO vai para a linha, e não só o erro desta volta: é a linha
+    // da mensagem que responde amanhã "era o texto ou era a conta?".
+    await registrarFalhaDeEnvio(db, { mensagemId: gravada.mensagemId, erro: diario() });
+
+    if (classe.familia !== "doModelo") {
+      // ⛔ PARA. Nenhum outro modelo passa — foi a conta, o destinatário, o
+      // limite ou a credencial. Repetir aqui só gasta tentativa e piora a
+      // reputação do número. Desconhecido cai aqui também, de propósito.
+      return {
+        abordou: false,
+        motivo: "aMetaRecusou",
+        detalhe: `PAROU a fila (familia=${classe.familia}, não é o modelo que está errado) — ${diario()}`,
+      };
+    }
   }
 
-  // ⭐ O `wamid` REAL da Meta, e nunca mais um id nosso.
-  //
-  // Até 10/09/2026 esta linha gravava `local:<mensagemId>` — um id que a Meta
-  // nunca viu. Os eventos de `sent`, `delivered`, `read` e `failed` chegam pelo
-  // webhook carregando o `wamid` da Meta e não casavam com linha nenhuma: a
-  // Sala não sabia se a mensagem tinha chegado.
-  //
-  // `enviarModeloDeVendas` agora RECUSA um 200 sem id, então chegar aqui já
-  // garante que ele existe — o `??` abaixo é cinto, não regra.
-  await confirmarEnvio(db, {
-    mensagemId: gravada.mensagemId,
-    waMessageId: envio.providerMessageId ?? `local:${gravada.mensagemId}`,
-  });
-
-  return { abordou: true, mensagemId: gravada.mensagemId };
+  // Fila esgotada. O motivo carrega a lista do que foi tentado — nunca só o
+  // último erro.
+  return {
+    abordou: false,
+    motivo: bateramNaMeta > 0 ? "aMetaRecusou" : "semDadoParaOModelo",
+    detalhe: tentativas.length
+      ? `acabaram os modelos elegíveis — ${diario()}`
+      : "nenhum modelo elegível para este contato; nada foi enviado",
+  };
 }
 
 

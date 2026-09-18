@@ -370,6 +370,16 @@ export interface EnvioDeVendasResult {
   /** Motivo real, mascarado. Nunca um booleano mudo (guardrail 6). */
   error?: string;
   /**
+   * ⭐ O CÓDIGO da Meta, cru, quando ela devolve um.
+   *
+   * A mensagem de erro é texto livre e muda sem aviso; o código é o contrato.
+   * É só por ele que `familiasDeErroDaMeta` sabe distinguir "o modelo está
+   * errado" (tenta outro) de "a conta está errada" (para) — a distinção que
+   * custou o dia 18/09/2026. Ausente quando a recusa é nossa, antes da rede:
+   * e ausência de código é fail-closed, nunca "tenta outro".
+   */
+  errorCode?: string;
+  /**
    * ⭐ O `wamid` que a Meta devolveu — o ÚNICO id que o webhook de status usa.
    *
    * ── O DEFEITO, ATÉ 10/09/2026 ─────────────────────────────────────────────
@@ -437,8 +447,13 @@ export async function enviarTextoDeVendas(
     const json: unknown = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const err = (json as { error?: { message?: string } }).error ?? {};
-      return { ok: false, error: maskGraphResponse(err.message ?? `HTTP_${res.status}`) };
+      const err = (json as { error?: { message?: string; code?: number | string } }).error ?? {};
+      const codigo = err.code === null || err.code === undefined ? undefined : String(err.code);
+      return {
+        ok: false,
+        error: maskGraphResponse(err.message ?? `HTTP_${res.status}`),
+        errorCode: codigo,
+      };
     }
 
     // ⛔ 200 SEM `wamid` NÃO É SUCESSO, e esta é a linha que decide.
@@ -571,8 +586,13 @@ export async function enviarModeloDeVendas(
     const json: unknown = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const err = (json as { error?: { message?: string } }).error ?? {};
-      return { ok: false, error: maskGraphResponse(err.message ?? `HTTP_${res.status}`) };
+      const err = (json as { error?: { message?: string; code?: number | string } }).error ?? {};
+      const codigo = err.code === null || err.code === undefined ? undefined : String(err.code);
+      return {
+        ok: false,
+        error: maskGraphResponse(err.message ?? `HTTP_${res.status}`),
+        errorCode: codigo,
+      };
     }
 
     // ⛔ 200 SEM `wamid` NÃO É SUCESSO, e esta é a linha que decide.
