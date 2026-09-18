@@ -16,6 +16,7 @@ function fatos(p: Partial<FatosDaConversa> = {}): FatosDaConversa {
   return {
     leadId: "lead-1",
     telefone: "5511988887777",
+    fonte: "LISTA_PROSPECCAO",
     stage: "DISPONIVEL_PARA_PROSPECCAO",
     optOutAt: null,
     estagioDaEmpresa: "GATEKEEPER",
@@ -184,10 +185,77 @@ describe("a tabela de decisão da reabordagem", () => {
   });
 });
 
+/**
+ * ⛔ A SEPARAÇÃO POR ORIGEM — D-0E1, ordem do CEO de 18/09/2026.
+ *
+ * *"Clientes que estão vindo da campanha do Facebook, do Instagram, ou que
+ * deixam formulário, já são leads, porque eles estão deixando o próprio
+ * contato. A lista fria não é lead."*
+ */
+describe("⛔ esta máquina é do contato frio, e só dele", () => {
+  const ORIGENS_DE_LEAD = [
+    "FORMULARIO_DEMONSTRACAO",
+    "AGENDAMENTO",
+    "WHATSAPP_DIRETO",
+    "INSTAGRAM",
+    "FACEBOOK",
+    "CAMPANHA_PAGA",
+    "MANUAL",
+    "OUTRO",
+    // Indicação é o ESTÁGIO 2: a conversa que a casa abre depois de capturar
+    // o decisor. Também não é reabordagem fria.
+    "INDICACAO",
+  ];
+
+  for (const fonte of ORIGENS_DE_LEAD) {
+    it(`${fonte} → RECUSADO: quem deixou o próprio contato é lead, não estranho`, () => {
+      const d = decidirReabordagem(fatos({ fonte }), AGORA);
+      expect(d.acao).toBe("FORA_DA_CAMPANHA");
+      expect(d.regra).toBe("ehLeadNaoContatoFrio");
+      expect(d.canal).toBe("NENHUM");
+      expect(d.texto).toBeNull();
+    });
+
+    it(`${fonte} é recusado mesmo tendo respondido dentro da janela`, () => {
+      const d = decidirReabordagem(
+        fatos({ fonte, ultimaEntradaEm: ONTEM, textoDaUltimaEntrada: "Oi, quero saber mais!" }),
+        AGORA,
+      );
+      expect(d.acao).toBe("FORA_DA_CAMPANHA");
+      expect(d.texto).toBeNull();
+    });
+  }
+
+  for (const fonte of ["LISTA_PROSPECCAO", "IMPORTACAO"]) {
+    it(`${fonte} → CONTINUA entrando: este é o número que nós fomos buscar`, () => {
+      const d = decidirReabordagem(fatos({ fonte }), AGORA);
+      expect(d.acao).toBe("ABORDAGEM_INICIAL");
+      expect(d.canal).toBe("TEMPLATE");
+    });
+  }
+
+  it("⛔ origem DESCONHECIDA não vira abordagem fria — vai para revisão", () => {
+    for (const fonte of [null, "", "   "]) {
+      const d = decidirReabordagem(fatos({ fonte }), AGORA);
+      expect(d.acao, String(fonte)).toBe("REVISAO");
+      expect(d.regra).toBe("origemDesconhecida");
+      expect(d.texto).toBeNull();
+    }
+  });
+
+  it("⛔ o silêncio pedido vem ANTES da origem — nem o motivo muda", () => {
+    const d = decidirReabordagem(fatos({ fonte: "INSTAGRAM", optOutAt: new Date() }), AGORA);
+    expect(d.acao).toBe("NAO_ABORDA");
+    expect(d.regra).toBe("pediuParaPararNaFicha");
+  });
+});
+
 describe("⛔ nenhuma decisão produz texto quando a ação não fala", () => {
   it("toda ação que não fala sai com canal NENHUM ou texto nulo", () => {
     const casos: FatosDaConversa[] = [
       fatos({ optOutAt: new Date() }),
+      fatos({ fonte: "FORMULARIO_DEMONSTRACAO" }),
+      fatos({ fonte: null }),
       fatos({ stage: "GANHO" }),
       fatos({ contatoEhDecisor: true }),
       fatos({ telefone: null }),
