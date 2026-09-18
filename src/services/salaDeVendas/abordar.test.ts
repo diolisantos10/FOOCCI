@@ -209,14 +209,14 @@ beforeEach(() => {
       3: "Olá, {{1}}! Estou falando com o {{2}} porque encontramos vocês em {{3}}.",
     };
     return {
-      nome: "foocci_abordagem_inicial",
+      nome: "foocci_contato_inicial_01",
       idioma: "pt_BR",
       situacao: "APPROVED",
       variaveis: n,
       corpo: corpos[n] ?? "Olá, {{1}}! Aqui é a Foocci.",
     };
   });
-  process.env.FOOCCI_SDR_MODELO_ABORDAGEM = "foocci_abordagem_inicial";
+  process.env.FOOCCI_SDR_MODELO_ABORDAGEM = "foocci_contato_inicial_01";
   process.env.FOOCCI_SDR_MODELO_IDIOMA = "pt_BR";
 });
 
@@ -232,7 +232,7 @@ describe("o caminho feliz", () => {
 
     expect(r.abordou).toBe(true);
     expect(gravadas[0]!.tipo).toBe("TEMPLATE");
-    expect(gravadas[0]!.templateNome).toBe("foocci_abordagem_inicial");
+    expect(gravadas[0]!.templateNome).toBe("foocci_contato_inicial_01");
     expect(gravadas[0]!.status).toBe("PENDENTE");
     expect(atualizadas[0]!.status).toBe("ENVIADA");
   });
@@ -413,8 +413,8 @@ describe("a configuração do modelo", () => {
 
   it("o resumo gravado na conversa diz qual modelo saiu", () => {
     // Bolha vazia na tela do vendedor é pior que uma que diz o nome do modelo.
-    expect(resumoDoModelo({ nome: "foocci_abordagem_inicial", idioma: "pt_BR", parametros: ["Marina"] }))
-      .toBe("[modelo: foocci_abordagem_inicial] (Marina)");
+    expect(resumoDoModelo({ nome: "foocci_contato_inicial_01", idioma: "pt_BR", parametros: ["Marina"] }))
+      .toBe("[modelo: foocci_contato_inicial_01] (Marina)");
   });
 
   it("grava na conversa exatamente o texto renderizado que o cliente recebe", async () => {
@@ -423,7 +423,7 @@ describe("a configuração do modelo", () => {
 
     expect(r.abordou, JSON.stringify(r)).toBe(true);
     expect(gravadas[0]?.texto).toBe("Olá, Marina! Aqui é a Foocci.");
-    expect(gravadas[0]?.templateNome).toBe("foocci_abordagem_inicial");
+    expect(gravadas[0]?.templateNome).toBe("foocci_contato_inicial_01");
   });
 
   it("recusa antes do envio quando o corpo integral não está sincronizado", async () => {

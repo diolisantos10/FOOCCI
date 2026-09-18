@@ -1,0 +1,167 @@
+/**
+ * ⭐ ESTÁGIO 1 — OS TRÊS MODELOS DO PRIMEIRO CONTATO, E SÓ ELES.
+ *
+ * ── DECISÃO DO CEO, 18/09/2026 ──────────────────────────────────────────────
+ *
+ * *"Esses são para abordagem e reabordagem de FRIO, porque tudo vai cair em
+ * automação. O SDR pega o número do responsável por comercial do restaurante, e
+ * aí usa os OUTROS templates para abordar os responsáveis."*
+ *
+ * São **dois estágios, e dois jogos de texto**:
+ *
+ *   ESTÁGIO 1 — o número frio. Objetivo: atravessar o porteiro e achar quem
+ *   decide. Os três abaixo, curtos DE PROPÓSITO. Não vendem, e não devem
+ *   vender: o destino esperado do número frio de restaurante é bot de pedidos,
+ *   recepção ou SAC.
+ *
+ *   ESTÁGIO 2 — o responsável comercial, em conversa NOVA. Objetivo: apresentar
+ *   o Foocci. Usa os OUTROS modelos aprovados, e este arquivo não mexe neles.
+ *
+ * ── ⛔ O QUE ISTO TIRA DO AR ────────────────────────────────────────────────
+ *
+ * Até aqui, o primeiro contato sorteava entre **todos** os modelos com "Pode
+ * enviar" ligado — inclusive o panfleto de nove linhas, com emoji e quatro check
+ * verdes, que foi para 750 contatos e capturou zero decisores. A partir daqui o
+ * sorteio do primeiro contato é fechado nestes três nomes: nenhum outro modelo
+ * entra, mesmo com o toggle ligado.
+ *
+ * ⚠️ O texto do panfleto **não mora neste repositório** — ele é um modelo
+ * aprovado na Meta, e o que o disparava era o toggle "Pode enviar" na página do
+ * app. Por isso a troca é feita aqui, no POOL, e não apagando texto nenhum:
+ * retrofit, não demolição. Desligar o toggle continua sendo o ato certo na
+ * tela, e este arquivo garante que, ligado ou não, ele não sai mais no primeiro
+ * contato.
+ *
+ * ── ⛔ FAIL-CLOSED ──────────────────────────────────────────────────────────
+ *
+ * Se nenhum dos três estiver aprovado e liberado, a resposta é `null` — e
+ * `abordarLead` recusa a abordagem. Nunca há queda para "qualquer modelo".
+ * Cair no modelo errado é exatamente o defeito que isto veio consertar.
+ */
+
+import type { PrismaClient, Prisma } from "@prisma/client";
+import { modelosLiberadosParaEnvio, escolherAleatorio, type ModeloLiberadoParaEnvio } from "./modelosLiberados";
+
+type Cliente = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Os três, pelo nome exato. Conferidos na tela da Meta: `pt_BR · MARKETING ·
+ * aprovado · Pode enviar`.
+ *
+ *   foocci_contato_inicial_01 — "Olá! Tudo bem? Este contato é do {{1}}, certo?"
+ *   foocci_contato_inicial_02 — "Olá! Tudo bem? Falo com o {{1}} por aqui?"
+ *   foocci_contato_inicial_03 — "Olá! Tudo bem?"
+ *
+ * ⚠️ O CORPO não é copiado para cá como verdade: a fonte continua sendo o
+ * espelho da Meta (`modelos_de_vendas`), e é de lá que `abordarLead` renderiza.
+ * Texto colado em código envelhece no dia em que alguém aprova outra versão.
+ * Aqui ficam os NOMES, que são a chave.
+ */
+export const MODELOS_DO_PRIMEIRO_CONTATO = [
+  "foocci_contato_inicial_01",
+  "foocci_contato_inicial_02",
+  "foocci_contato_inicial_03",
+] as const;
+
+/** O único que não pede variável nenhuma — ver `escolherModeloDoPrimeiroContato`. */
+export const MODELO_SEM_VARIAVEL = "foocci_contato_inicial_03";
+
+export type MotivoDaEscolha =
+  | "podePreencherAVariavel"
+  | "semDadoParaAVariavel"
+  | "nenhumModeloDoPrimeiroContatoLiberado";
+
+export type EscolhaDoPrimeiroContato =
+  | { ok: true; modelo: ModeloLiberadoParaEnvio; motivo: MotivoDaEscolha }
+  | { ok: false; motivo: MotivoDaEscolha; detalhe: string };
+
+/**
+ * ⭐ O CRITÉRIO DE ESCOLHA ENTRE OS TRÊS, em uma frase: **quem tem `{{1}}` só
+ * entra quando existe dado para pôr lá.**
+ *
+ *   · COM dado para a variável (o nome da casa, ou o nome de quem atende, na
+ *     ordem que `saudacaoDoLead` já define) → sorteia entre `_01` e `_02`. Os
+ *     dois perguntam a mesma coisa de dois jeitos, e o sorteio existe para o
+ *     número não mandar sempre a mesma frase.
+ *   · SEM esse dado → `_03`, o único sem variável. E isto não é caso de canto:
+ *     a base tem contatos sem o nome da casa, e para eles os outros dois seriam
+ *     recusados pela Meta contato a contato — queimando a lista para aprender o
+ *     que uma consulta responde antes de começar.
+ *
+ * ⚠️ Quem decide se há dado NÃO é este arquivo: é `saudacaoDoLead`, em
+ * `abordar.ts`, que já é a definição da casa para "o que vai em {{1}}". Uma
+ * segunda definição aqui seria a fonte de um lead preenchido de um jeito no
+ * envio e julgado de outro na escolha.
+ *
+ * ⚠️ E o grupo "sem variável" é lido do espelho da Meta (`variaveis === 0`),
+ * não do nome: se um dia o `_03` passar a pedir variável, ele sai sozinho do
+ * grupo, sem ninguém precisar lembrar de mudar este arquivo.
+ */
+export async function escolherModeloDoPrimeiroContato(
+  db: Cliente,
+  p: { podePreencherAVariavel: boolean },
+  random: () => number = Math.random,
+): Promise<EscolhaDoPrimeiroContato> {
+  const liberados = await modelosLiberadosParaEnvio(db);
+  const doPrimeiroContato = liberados.filter((m) =>
+    (MODELOS_DO_PRIMEIRO_CONTATO as readonly string[]).includes(m.nome),
+  );
+
+  if (doPrimeiroContato.length === 0) {
+    return {
+      ok: false,
+      motivo: "nenhumModeloDoPrimeiroContatoLiberado",
+      detalhe:
+        "nenhum dos três modelos de primeiro contato está APPROVED e com 'Pode enviar' ligado. " +
+        "A abordagem NÃO cai para outro modelo: o sorteio do primeiro contato é fechado nestes três.",
+    };
+  }
+
+  const semVariavel = doPrimeiroContato.filter((m) => m.variaveis === 0);
+  const comVariavel = doPrimeiroContato.filter((m) => m.variaveis > 0);
+
+  // Sem nome do restaurante, só os sem variável servem. Fail-closed: se não
+  // houver nenhum, recusa — nunca manda um `{{1}}` vazio nem inventa o nome.
+  if (!p.podePreencherAVariavel) {
+    const escolhido = escolherAleatorio(semVariavel, random);
+    if (!escolhido) {
+      return {
+        ok: false,
+        motivo: "semDadoParaAVariavel",
+        detalhe:
+          `este contato não tem nome de restaurante, e nenhum modelo sem variável (${MODELO_SEM_VARIAVEL}) ` +
+          "está liberado. Não se inventa o nome da casa para preencher {{1}}.",
+      };
+    }
+    return { ok: true, modelo: escolhido, motivo: "semDadoParaAVariavel" };
+  }
+
+  // Com nome, preferimos os que o USAM — a mensagem com o nome da casa é a que
+  // se parece com gente. O sem-variável fica de reserva quando nenhum outro
+  // estiver liberado.
+  const escolhido = escolherAleatorio(comVariavel.length ? comVariavel : semVariavel, random);
+  if (!escolhido) {
+    return {
+      ok: false,
+      motivo: "nenhumModeloDoPrimeiroContatoLiberado",
+      detalhe: "os três modelos de primeiro contato existem, mas nenhum ficou elegível para este contato.",
+    };
+  }
+  return { ok: true, modelo: escolhido, motivo: "podePreencherAVariavel" };
+}
+
+/**
+ * ESTÁGIO 1 ou ESTÁGIO 2 — e a distinção é a ORIGEM do contato.
+ *
+ *   · número frio da lista (prospecção, importação, ou sem origem declarada) →
+ *     estágio 1, os três;
+ *   · contato que NÓS abrimos depois de capturar o decisor (`INDICACAO`) →
+ *     estágio 2, os outros modelos.
+ *
+ * ⚠️ Origem desconhecida cai no ESTÁGIO 1, que é o texto mais contido. Se um
+ * dia alguém criar uma fonte nova e esquecer de classificá-la, o erro tem de ser
+ * "mandamos a mensagem curta demais", nunca "apresentamos o produto a um bot".
+ */
+export function ehPrimeiroContatoFrio(fonte: string | null | undefined): boolean {
+  return (fonte ?? "").trim().toUpperCase() !== "INDICACAO";
+}

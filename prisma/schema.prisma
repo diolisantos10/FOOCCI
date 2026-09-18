@@ -8876,3 +8876,66 @@ model CrmCicloFunil {
   @@index([campaignId, ocorridoEm])
   @@map("crm_ciclo_funil")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A REABORDAGEM DOS CONTATOS FRIOS — o interruptor e a conta
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// O INTERRUPTOR DE PÂNICO da campanha de reabordagem.
+///
+/// Uma linha só (`id = "unico"`). `paradoEm` preenchido = **parada total**, e a
+/// máquina confere esta linha ANTES DE CADA CONTATO — não uma vez por lote. É
+/// por isso que ele funciona com lote em andamento: o lote não é atômico, ele é
+/// uma sequência, e cada passo pergunta de novo.
+///
+/// ⚠️ Fail-closed: se a leitura desta linha falhar, a máquina PARA. Não saber se
+/// mandaram parar é a mesma coisa que ter mandado parar.
+model ReabordagemInterruptor {
+  id           String    @id
+  paradoEm     DateTime?
+  motivo       String?
+  quemParou    String?
+  atualizadoEm DateTime  @updatedAt
+
+  @@map("reabordagem_interruptor")
+}
+
+/// UMA LINHA POR CONTATO EXAMINADO, em cada lote. É a conta que fecha.
+///
+/// Todo candidato que entra no lote sai daqui com uma linha — enviado, recusado
+/// ou separado para revisão —, com a REGRA que decidiu. Sem isto, "750 entraram
+/// e 312 saíram" seria um número sem conferência possível.
+///
+/// `@@unique([loteId, leadId])` é trava, não enfeite: o mesmo contato não é
+/// processado duas vezes dentro do mesmo lote, nem por duas execuções
+/// simultâneas — a segunda gravação é recusada pelo Postgres.
+model ReabordagemExecucao {
+  id     String @id @default(cuid())
+  loteId String
+  leadId String
+
+  /// A ação decidida pela rota de decisão (`reabordagem/rota.ts`).
+  acao   String
+  /// `JANELA` (texto livre dentro das 24h) ou `TEMPLATE` (fora dela), ou `NENHUM`.
+  canal  String
+
+  enviado    Boolean @default(false)
+  mensagemId String?
+
+  /// Por qual REGRA não saiu. Enumerado pela rota; nunca texto solto.
+  motivoDaRecusa String?
+  detalhe        String? @db.Text
+
+  /// ⭐ A MÉTRICA DA CAMPANHA. Não é "mensagens enviadas": é isto.
+  decisorCapturado Boolean @default(false)
+  /// O lead novo aberto para o decisor indicado, quando houve.
+  leadDoDecisorId  String?
+
+  criadoEm DateTime @default(now())
+
+  @@unique([loteId, leadId])
+  @@index([criadoEm])
+  @@index([acao, criadoEm])
+  @@index([loteId])
+  @@map("reabordagem_execucao")
+}
