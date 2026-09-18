@@ -63,7 +63,7 @@
  * esperando uma resposta que nunca vem, e culpa o cliente.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useSalaDeVendas, mudarResponsavel } from "../_dados";
 import {
   useConversa, escrever, marcarLidas, salvarFicha, moverEtapa,
@@ -151,6 +151,40 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
    * ser sugestão, e não mensagem enviada pela IA. */
   const [texto, setTexto] = useState("");
 
+  /* ── ⭐ A COLUNA DA ESQUERDA VIROU AJUSTÁVEL ────────────────────────────────
+   *
+   * Ela era fixa em 160px (`lg:w-40`), e o CEO disse que não conseguia ler o que
+   * estava escrito nela. Largura fixa é uma aposta sobre a fonte, o zoom e o
+   * idioma de quem olha — e "Aguardando qualificação" perde essa aposta.
+   *
+   * A largura é do OLHO de quem está olhando, então mora no navegador dele
+   * (`localStorage`) e não no banco: é preferência de pessoa, não dado da
+   * empresa. Piso de 140 e teto de 320 porque o orçamento de largura do
+   * cabeçalho deste arquivo é real — acima de 320 a conversa volta a quebrar em
+   * uma palavra por linha, que é o defeito que já custou duas tentativas. */
+  const [larguraFilas, setLarguraFilas] = useState(176);
+
+  useEffect(() => {
+    try {
+      const salva = Number(window.localStorage.getItem(CHAVE_LARGURA_FILAS));
+      if (Number.isFinite(salva) && salva >= LARGURA_MIN && salva <= LARGURA_MAX) {
+        setLarguraFilas(salva);
+      }
+    } catch {
+      // Armazenamento bloqueado é caso normal (aba anônima). Fica o padrão.
+    }
+  }, []);
+
+  function ajustarLargura(px: number) {
+    const limitada = Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, Math.round(px)));
+    setLarguraFilas(limitada);
+    try {
+      window.localStorage.setItem(CHAVE_LARGURA_FILAS, String(limitada));
+    } catch {
+      // idem
+    }
+  }
+
   // Trocar de conversa limpa o rascunho. Sem isto, a sugestão preparada para um
   // lead ficaria no campo do lead seguinte — e alguém mandaria.
   useEffect(() => {
@@ -216,11 +250,14 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
       <div className="flex min-h-0 flex-1">
         {/* ── 1. FILAS ─────────────────────────────────────────────────── */}
         <aside
+          style={{ "--w-filas": `${larguraFilas}px` } as CSSProperties}
           className={cx(
-            "w-full shrink-0 overflow-y-auto border-r border-line bg-paper lg:block lg:w-40",
+            "relative w-full shrink-0 overflow-y-auto border-r border-line bg-paper",
+            "lg:block lg:w-[var(--w-filas)]",
             painel === "filas" ? "block" : "hidden",
           )}
         >
+          <PegaDeLargura valor={larguraFilas} aoAjustar={ajustarLargura} />
           <ColunaDeFilas
             estado={estadoDaLista}
             fila={fila}
@@ -342,6 +379,56 @@ export function AtendimentoClient({ leadInicial = null }: { leadInicial?: string
 // 1. FILAS
 // ═══════════════════════════════════════════════════════════════════════════
 
+const CHAVE_LARGURA_FILAS = "salaDeVendas.larguraFilas";
+const LARGURA_MIN = 140;
+const LARGURA_MAX = 320;
+
+/**
+ * A pega que arrasta a borda da coluna de filas.
+ *
+ * ⚠️ Ela também responde ao TECLADO (setas ← →). Uma pega que só existe para o
+ * mouse deixa de fora quem mais precisa dela — quem aumenta a fonte do sistema
+ * é exatamente quem não estava conseguindo ler a coluna.
+ */
+function PegaDeLargura({
+  valor,
+  aoAjustar,
+}: {
+  valor: number;
+  aoAjustar: (px: number) => void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ajustar a largura da coluna de filas"
+      aria-valuenow={valor}
+      aria-valuemin={LARGURA_MIN}
+      aria-valuemax={LARGURA_MAX}
+      tabIndex={0}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        const alvo = e.currentTarget;
+        alvo.setPointerCapture(e.pointerId);
+        const esquerda = alvo.parentElement?.getBoundingClientRect().left ?? 0;
+        const mover = (ev: PointerEvent) => aoAjustar(ev.clientX - esquerda);
+        const soltar = () => {
+          window.removeEventListener("pointermove", mover);
+          window.removeEventListener("pointerup", soltar);
+        };
+        window.addEventListener("pointermove", mover);
+        window.addEventListener("pointerup", soltar);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") { e.preventDefault(); aoAjustar(valor - 16); }
+        if (e.key === "ArrowRight") { e.preventDefault(); aoAjustar(valor + 16); }
+      }}
+      className="absolute inset-y-0 right-0 z-10 hidden w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-brand-200 focus:bg-brand-300 focus:outline-none lg:block"
+      title="Arraste para ajustar a largura"
+    />
+  );
+}
+
 function ColunaDeFilas({
   estado,
   fila,
@@ -370,7 +457,14 @@ function ColunaDeFilas({
               ativa ? "bg-brand-50 text-brand-700" : "text-ink2 hover:bg-canvas",
             )}
           >
-            <span className="truncate text-[13.5px] font-semibold">{f.titulo}</span>
+            {/* ⚠️ Sem `truncate`. Era ele que transformava "Sem responsável" e
+                "Sem resposta" em "Sem re…" e "Sem res…" — dois rótulos
+                idênticos, e foi assim que o CEO leu 7.500 no lugar de 720.
+                Título que não cabe agora QUEBRA em duas linhas: uma linha a
+                mais custa altura; um rótulo ambíguo custa uma decisão errada. */}
+            <span className="min-w-0 break-words text-[13.5px] font-semibold leading-snug">
+              {f.titulo}
+            </span>
             <span
               className={cx(
                 "shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums",
@@ -411,11 +505,27 @@ function ColunaDeConversas({
     return <p className="p-4 text-[13px] text-muted">Carregando…</p>;
   }
 
+  // ⭐ O vazio precisa DIZER algo. A tela listava contatos sem mensagem nenhuma,
+  // e por isso nunca chegava aqui — a lista fantasma escondia o estado vazio de
+  // verdade. Agora que a régua é "tem mensagem", este é o texto que o CEO vê
+  // enquanto os leads novos não chegam, e ele tem de apontar para onde a base
+  // está: ela não foi apagada.
   if (estado.dados.leads.length === 0) {
     return (
-      <p className="p-4 text-[13px] leading-relaxed text-muted">
-        Nenhuma conversa nesta fila.
-      </p>
+      <div className="p-4 text-[13px] leading-relaxed text-muted">
+        <p className="font-semibold text-ink2">Nenhuma conversa ainda.</p>
+        <p className="mt-1">
+          Aqui só aparece quem já trocou mensagem. Os contatos que ainda não
+          falaram com ninguém continuam na{" "}
+          <a
+            href="/comercial/base-fria"
+            className="font-semibold text-brand-600 underline underline-offset-2"
+          >
+            Base fria
+          </a>
+          .
+        </p>
+      </div>
     );
   }
 
