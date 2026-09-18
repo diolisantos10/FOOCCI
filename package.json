@@ -34,7 +34,8 @@
     "db:conferir-v3": "tsx scripts/conferir-v3.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:jornada": "vitest run --config vitest.jornada.config.ts"
+    "test:jornada": "vitest run --config vitest.jornada.config.ts",
+    "frio:acordar": "tsx scripts/acordar-consciencia-do-frio.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

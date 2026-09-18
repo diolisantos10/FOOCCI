@@ -50,6 +50,7 @@ import type {
   ConfiancaDaInformacao,
   PrioridadeDaEmpresa,
 } from "@prisma/client";
+import { veioDeListaFria } from "./frioOuLead";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -783,6 +784,107 @@ export async function vincularLead(
   });
 
   return { ok: true, vinculou: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐ A PROMOÇÃO: CONTATO FRIO → LEAD
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ResultadoDaPromocao =
+  | { promoveu: true; em: Date }
+  | { promoveu: false; motivo: "jaEraLead" | "naoExiste" | "naoEhFrio" };
+
+/**
+ * ⭐ O CONTATO FRIO DEMONSTROU INTERESSE E VIROU LEAD.
+ *
+ * ── A ORDEM ─────────────────────────────────────────────────────────────────
+ * CEO, 17/09/2026: *"A lista fria não é lead. Ela só é lead quando se interessa
+ * sobre o produto e quer escutar."*
+ *
+ * Esta é a única porta por onde alguém deixa de ser lista fria. Está aqui, junto
+ * das outras transições da jornada, pelo mesmo motivo que elas: é o único lugar
+ * onde a transição é validada E a trilha é gravada na mesma operação. Escrever
+ * `virouLeadEm` de dentro de uma rota ou de um agente produziria o carimbo sem a
+ * prova, e prova que falta não se recupera depois.
+ *
+ * ── ⚠️ O QUE ELA NÃO FAZ ────────────────────────────────────────────────────
+ * Não muda etapa do funil, não muda responsável, não muda consentimento e
+ * **não manda mensagem nenhuma**. Virar lead não afrouxa `LeadContactSafety`
+ * nem `freioDeRitmo`: interesse demonstrado é motivo para o vendedor trabalhar,
+ * não autorização para a máquina falar.
+ *
+ * ── IDEMPOTENTE, E A GARANTIA É DO BANCO ────────────────────────────────────
+ * A condição `virouLeadEm: null` vai DENTRO do `updateMany`. Duas mensagens
+ * interessadas no mesmo segundo: uma promove, a outra recebe `count: 0` e lê
+ * `jaEraLead`. Ler-conferir-escrever deixaria as duas passarem, e a segunda
+ * sobrescreveria o instante verdadeiro da promoção pelo instante da repetição.
+ */
+export async function promoverFrioParaLead(
+  db: Cliente,
+  params: {
+    leadId: string;
+    /** O que a pessoa disse. É a PROVA da promoção — obrigatório de propósito. */
+    motivo: string;
+    autoria: Autoria;
+    agora?: Date;
+  },
+): Promise<ResultadoDaPromocao> {
+  const agora = params.agora ?? new Date();
+
+  const lead = await db.siteLead.findUnique({
+    where: { id: params.leadId },
+    select: { id: true, fonte: true, virouLeadEm: true, empresaId: true, contatoId: true },
+  });
+  if (!lead) return { promoveu: false, motivo: "naoExiste" };
+  if (lead.virouLeadEm) return { promoveu: false, motivo: "jaEraLead" };
+
+  // Quem já entrou pela porta da frente NÃO é promovido: ele nunca foi frio, e
+  // carimbá-lo aqui inventaria um instante de interesse que nunca existiu — a
+  // ficha passaria a dizer que a pessoa "se converteu" no dia em que, na
+  // verdade, ela só respondeu uma pergunta.
+  if (!veioDeListaFria({ fonte: lead.fonte })) {
+    return { promoveu: false, motivo: "naoEhFrio" };
+  }
+
+  const escrita = await db.siteLead.updateMany({
+    where: { id: lead.id, virouLeadEm: null },
+    data: { virouLeadEm: agora, virouLeadMotivo: params.motivo.slice(0, 500) },
+  });
+  if (escrita.count === 0) return { promoveu: false, motivo: "jaEraLead" };
+
+  // ── A TRILHA, EM DOIS LUGARES, E CADA UM RESPONDE A UMA PERGUNTA ──────────
+  //
+  // `SiteLeadInteraction` é a linha do tempo que o vendedor abre na ficha — sem
+  // ela a promoção seria uma data que apareceu sozinha. `EventoDaJornada` é a
+  // trilha da jornada, e só existe quando há empresa para pendurá-la.
+  await db.siteLeadInteraction.create({
+    data: {
+      leadId: lead.id,
+      tipo: "NOTA_INTERNA",
+      actor: params.autoria.userId ?? params.autoria.label ?? params.autoria.autor,
+      nota: `Contato frio virou LEAD: demonstrou interesse — ${params.motivo}`,
+      // O lead nunca vê esta linha: é o registro de como ele foi classificado, e
+      // classificação interna exposta ao cliente é o pior defeito desta tela.
+      interna: true,
+      createdAt: agora,
+    },
+  });
+
+  if (lead.empresaId) {
+    await registrarNaTrilha(db, {
+      entidade: "EMPRESA",
+      entidadeId: lead.empresaId,
+      empresaId: lead.empresaId,
+      contatoId: lead.contatoId ?? null,
+      leadId: lead.id,
+      tipo: "NOTA",
+      autoria: params.autoria,
+      nota: `Contato frio virou lead: ${params.motivo}`,
+      chaveDeIdempotencia: `lead:virouLead:${lead.id}`,
+    });
+  }
+
+  return { promoveu: true, em: agora };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

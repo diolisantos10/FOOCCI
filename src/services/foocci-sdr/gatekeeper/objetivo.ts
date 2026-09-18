@@ -75,10 +75,38 @@ const CONDUTA_DEPOIS_DO_DECISOR = [
   "Só depois da descoberta é que se qualifica. Pular para preço aqui queima a conversa.",
 ].join("\n- ");
 
+/**
+ * ⭐ QUEM ESTÁ FALANDO — a apresentação, e por que ela é a PRIMEIRA linha.
+ *
+ * Ordem do CEO, 17/09/2026, sobre abordagem fria com gente do outro lado: *"o
+ * agente se apresenta — representante do Foocci, veio apresentar um negócio
+ * novo — e só então trabalha."*
+ *
+ * ── POR QUE NÃO É SÓ UM COMENTÁRIO, E NÃO É SÓ DO PORTEIRO ─────────────────
+ *
+ * A conduta de antes do decisor já mandava dizer quem se é. Faltava o outro
+ * lado: depois que o decisor aparece, o agente **também** está falando com
+ * alguém que nunca ouviu falar da Foocci — este é um número FRIO, nós fomos
+ * atrás dele. Um agente que abre pela hipótese de dor sem dizer quem é soa
+ * exatamente como o golpe que ele não é, e a conversa morre na primeira linha.
+ *
+ * Por isso a apresentação entra nos DOIS blocos, e entra primeiro: é o que muda
+ * numa conversa onde a pessoa não pediu para ser abordada.
+ *
+ * ⚠️ E ela não é licença para pitch. "Veio apresentar um negócio novo" é uma
+ * frase de identificação; o que vem DEPOIS continua sendo o que cada objetivo
+ * manda — no porteiro, uma pergunta só.
+ */
+const APRESENTACAO_NA_ABORDAGEM_FRIA = [
+  "ESTE NÚMERO É FRIO: a pessoa não pediu contato, nós fomos atrás dela. A primeira coisa é se apresentar.",
+  "Diga, na primeira fala e sem rodeio: você é representante do Foocci e veio apresentar um negócio novo para o restaurante.",
+  "⛔ Nunca comece como se já existisse relação, pedido ou conversa anterior. Não existe.",
+].join("\n- ");
+
 /** O bloco pronto para entrar na conduta do turno. `""` quando não se aplica. */
 export function blocoDoObjetivoDaProspeccao(objetivo: ObjetivoDaProspeccao | null): string {
   if (!objetivo) return "";
-  return objetivo === "DESCOBRIR_DECISOR"
-    ? `- ${CONDUTA_ANTES_DO_DECISOR}`
-    : `- ${CONDUTA_DEPOIS_DO_DECISOR}`;
+  const conduta =
+    objetivo === "DESCOBRIR_DECISOR" ? CONDUTA_ANTES_DO_DECISOR : CONDUTA_DEPOIS_DO_DECISOR;
+  return `- ${APRESENTACAO_NA_ABORDAGEM_FRIA}\n- ${conduta}`;
 }
