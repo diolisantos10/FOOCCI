@@ -40,7 +40,10 @@ import { normalizaWhatsapp } from "@/services/foocci-crm/leadOrigin";
 import { analisarWhatsappBr } from "@/lib/whatsapp-br";
 import { POLITICA_PRIVACIDADE_VERSAO } from "@/lib/site/politicaPrivacidade";
 import { semearEntrevistaDoLead } from "@/services/foocci-sdr/LeadParaSondagem";
-import { prazoDaPrimeiraResposta } from "@/services/salaDeVendas/recepcao/prazoDaPrimeiraResposta";
+import {
+  marcarPrazoDePrimeiraResposta,
+  prazoDaPrimeiraResposta,
+} from "@/services/salaDeVendas/recepcao/prazoDaPrimeiraResposta";
 import { iaAssumeSeEstaLivre } from "@/services/salaDeVendas/responsavel";
 
 /** Sender identity. Resend's shared onboarding domain works with zero DNS setup. */
@@ -146,6 +149,46 @@ export const SiteLeadService = {
       // atendimento perderia a ligação justamente com quem já demonstrou interesse
       // duas vezes.
       if (codigo === null) codigo = await atribuiCodigo(leadId);
+
+      /* ── ⭐ O RELÓGIO DE QUEM JÁ ESTAVA NA BASE (buraco B-02) ──────────────
+       * Quem é PROMOVIDO ganha relógio como quem NASCE. Até aqui `slaVenceEm`
+       * nascia só no ramo que cria ficha (`createWithCode`), e a ficha que já
+       * existia era atualizada sem prazo nenhum. É exatamente por este ramo que
+       * passa o lead da campanha paga (`meta-leads/importarMetaLead.ts` →
+       * `capture` → promoção): o contato da lista fria que acabou de levantar a
+       * mão, o lead mais caro e mais quente da casa, entrava no funil sem prazo
+       * de primeira resposta e NUNCA aparecia em `leadsComSlaEstourado`
+       * (`distribuicao.ts:434`, que filtra `slaVenceEm: { not: null }`).
+       * "SLA estourado: 0" lia-se como "ninguém atrasado" quando a verdade era
+       * "quase ninguém tem relógio".
+       *
+       * UM ÚNICO DONO DO RELÓGIO. A escrita é aqui e só aqui — não em
+       * `importarMetaLead`. Duas definições do mesmo prazo é o defeito que esta
+       * casa nomeia em meia dúzia de arquivos.
+       *
+       * (a) FICHA QUE JÁ TINHA PRAZO: PRESERVA. `marcarPrazoDePrimeiraResposta`
+       *     é `updateMany` com `slaVenceEm: null` no `where`. Empurrar o prazo a
+       *     cada reenvio seria a maneira mais silenciosa possível de um lead
+       *     atrasado nunca aparecer como atrasado.
+       * (b) LEAD JÁ ATENDIDO: liga do mesmo jeito, e é inofensivo de propósito.
+       *     Quem lê o relógio já exige `primeiraRespostaEm: null`
+       *     (`distribuicao.ts:435`) — lead que já foi respondido não conta como
+       *     estourado nem com prazo vencido. Filtrar aqui também seria uma
+       *     segunda regra de SLA fora do lugar que a define.
+       *
+       * `chegouEm` é AGORA, não o `createdAt` da ficha fria: o que começou a
+       * correr foi a demora desta manifestação de interesse, não a de um
+       * cadastro antigo a quem nunca devemos resposta.
+       *
+       * Best-effort: o contato já está salvo, e falhar em ligar um relógio não
+       * pode derrubar a captura. */
+      try {
+        await marcarPrazoDePrimeiraResposta(prisma, { leadId, chegouEm: agora });
+      } catch (e) {
+        console.error("[site-lead] não deu para ligar o relógio de SLA do contato existente:", e, {
+          leadId,
+        });
+      }
     } else {
       const criado = await createWithCode(input, whatsappDigits);
       leadId = criado.id;

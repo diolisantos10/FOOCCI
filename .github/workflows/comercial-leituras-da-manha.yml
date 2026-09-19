@@ -1,0 +1,126 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AS DUAS LEITURAS DA MANHÃ — o raio-x das conversas e o estado da corrente.
+#
+# ⚠️ ESTE ARQUIVO É O QUE FAZ AS ROTAS EXISTIREM DE VERDADE. Rota de cron sem
+# quem a chame é a doença crônica desta casa — peça pronta, ninguém chamando —
+# e era exatamente o estado destas duas: elas respondem "o lead entrou, foi
+# abordado e vendemos?" e só existiam se um humano digitasse a URL à mão.
+# O par rota+agendador nasce junto, de propósito.
+#
+# ⛔ ELAS SÓ LEEM. Não enviam mensagem, não agendam envio, não escrevem no
+# banco, não mudam etapa nem dono — e há teste de contrato que lê o fonte e
+# reprova se isso mudar (`raioX/contrato.test.ts`,
+# `estadoDaCorrente/contrato.test.ts`). Por serem LEITURA, uma vez por dia de
+# manhã basta: não há teto de envio para gastar nem janela comercial a respeitar.
+#
+# ⛔ E ELAS NÃO USAM `CRON_SECRET`. Cada uma tem segredo PRÓPRIO, e isso é
+# deliberado (`raioX/guarda.ts`, `estadoDaCorrente/guarda.ts`): o raio-x devolve
+# conversa e telefone de terceiro, e o estado devolve a saúde comercial inteira
+# da empresa. Raio de alcance de segredo se escolhe, não se herda. Sem a
+# variável configurada no serviço, a porta responde 503 — fechada por omissão,
+# nunca aberta por sorte de ambiente.
+#
+# 11:00 UTC = 8h de São Paulo (SP é UTC-3). Todos os dias: a leitura de segunda
+# perderia o fim de semana se o agendador parasse na sexta.
+#
+# Um agendamento só, dois jobs: as duas leituras nascem do mesmo disparo e são
+# independentes uma da outra — se uma porta estiver fechada, a outra ainda é
+# lida, e o job vermelho diz qual das duas faltou.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Comercial — leituras da manhã (raio-x e estado da corrente)
+
+on:
+  schedule:
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  raio-x-conversas:
+    name: "Raio-x das conversas"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          if [[ -z "$BASE_URL" ]]; then echo "::error::FOOCCI_BASE_URL não configurado"; exit 1; fi
+          echo "url=${BASE_URL}/api/cron/comercial/raio-x-conversas" >> "$GITHUB_OUTPUT"
+
+      - name: "GET raio-x das conversas"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          RAIOX_SECRET: ${{ secrets.RAIOX_COMERCIAL_SECRET }}
+        run: |
+          if [[ -z "$RAIOX_SECRET" ]]; then echo "::error::RAIOX_COMERCIAL_SECRET não configurado"; exit 1; fi
+
+          HTTP=$(curl --connect-timeout 20 --max-time 540 -sS -X GET "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $RAIOX_SECRET" \
+            -o /tmp/raiox.json -w '%{http_code}') || true
+
+          echo "HTTP $HTTP"
+          echo "← mensagens na janela : $(jq -r '.data.mensagensNaJanela // "-"' /tmp/raiox.json 2>/dev/null)"
+          echo "← abordagem medida    : $(jq -r '.data.abordagem.medido // "-"' /tmp/raiox.json 2>/dev/null)"
+          echo "← conversas na amostra: $(jq -r '.data.amostra | length' /tmp/raiox.json 2>/dev/null)"
+
+          # 503 é "a porta não está protegida, está DESLIGADA"; 401 é "o segredo
+          # não serve". As duas reprovam o job: leitura que não aconteceu não
+          # pode passar por leitura que deu zero.
+          if [[ "$HTTP" == "503" ]]; then
+            echo "::error::porta fechada — RAIOX_COMERCIAL_SECRET não está configurado no serviço"
+            cat /tmp/raiox.json; exit 1
+          fi
+          if [[ "$HTTP" != "200" ]]; then
+            echo "::error::o raio-x das conversas respondeu $HTTP"; cat /tmp/raiox.json; exit 1
+          fi
+
+          echo "✅ raio-x lido"
+
+  estado-da-corrente:
+    name: "Estado da corrente"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          if [[ -z "$BASE_URL" ]]; then echo "::error::FOOCCI_BASE_URL não configurado"; exit 1; fi
+          echo "url=${BASE_URL}/api/cron/comercial/estado-da-corrente" >> "$GITHUB_OUTPUT"
+
+      - name: "GET estado da corrente"
+        env:
+          ENDPOINT_URL:    ${{ steps.params.outputs.url }}
+          CORRENTE_SECRET: ${{ secrets.CORRENTE_COMERCIAL_SECRET }}
+        run: |
+          if [[ -z "$CORRENTE_SECRET" ]]; then echo "::error::CORRENTE_COMERCIAL_SECRET não configurado"; exit 1; fi
+
+          HTTP=$(curl --connect-timeout 20 --max-time 540 -sS -X GET "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CORRENTE_SECRET" \
+            -o /tmp/corrente.json -w '%{http_code}') || true
+
+          echo "HTTP $HTTP"
+          echo "← lead que chega sozinho é atendido: $(jq -rc '.data.interruptores.oLeadQueChegaSozinhoEAtendido // "-"' /tmp/corrente.json 2>/dev/null)"
+          echo "← sem dono                         : $(jq -r  '.data.largados.semDono // "-"' /tmp/corrente.json 2>/dev/null)"
+
+          # ⚠️ "não medido" e "zero" produzem telas idênticas e decisões opostas.
+          # O que a rota não mediu sai nomeado aqui, nunca somado a zero.
+          echo "← falta ligar:"
+          jq -r '.data.interruptores.oQueFaltaLigar[]? | "  · \(.)"' /tmp/corrente.json 2>/dev/null \
+            || echo "  (indisponível)"
+          echo "← não medido:"
+          jq -r '.data.naoMedido[]? | "  · \(.)"' /tmp/corrente.json 2>/dev/null \
+            || echo "  (indisponível)"
+
+          if [[ "$HTTP" == "503" ]]; then
+            echo "::error::porta fechada — CORRENTE_COMERCIAL_SECRET não está configurado no serviço"
+            cat /tmp/corrente.json; exit 1
+          fi
+          if [[ "$HTTP" != "200" ]]; then
+            echo "::error::o estado da corrente respondeu $HTTP"; cat /tmp/corrente.json; exit 1
+          fi
+
+          echo "✅ estado da corrente lido"
