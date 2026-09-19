@@ -63,7 +63,7 @@ import { registrarSaida } from "../conversa";
 import { entregarMensagem } from "../entrega";
 import { passarParaGente } from "../handoff";
 import { iaAssumeSeEstaLivre } from "../responsavel";
-import { pediuSilencio, foraDaJanela } from "@/services/foocci-sdr/LeadContactSafety";
+import { pediuSilencio } from "@/services/foocci-sdr/LeadContactSafety";
 import { consultarGerente } from "./consultarGerente";
 import {
   atenderComOConector,
@@ -146,7 +146,6 @@ export type MotivoDeCalar =
   | "taDesligado"
   | "leadNaoEDaIA"
   | "pediuSilencio"
-  | "foraDeHorario"
   | "insistiuDemais"
   | "leadNaoExiste"
   /** O gatilho de gente disparou e o handoff recusou. Ninguém fala. */
@@ -280,12 +279,19 @@ async function executarTurno(
 ): Promise<ResultadoDoTurno> {
   const agora = pedido.agora ?? new Date();
 
-  const calar = (motivo: MotivoDeCalar, detalhe: string): ResultadoDoTurno => ({
-    falou: false,
-    chamouGente: false,
-    motivo,
-    detalhe,
-  });
+  // ⛔ CALAR SEM DIZER FOI O DEFEITO DE 19/09/2026, e não só o sintoma.
+  //
+  // O turno do lead do anúncio rodou, bateu num portão e voltou calado. O log de
+  // produção tinha a recepção inteira e **nenhuma linha do agente** — do lado de
+  // fora era indistinguível de "a IA nem foi chamada", e foi exatamente assim
+  // que o dia inteiro se perdeu procurando no lugar errado.
+  //
+  // Agora todo silêncio do TA deixa rastro. Nenhum caminho daqui termina sem uma
+  // linha dizendo qual portão fechou e por quê.
+  const calar = (motivo: MotivoDeCalar, detalhe: string): ResultadoDoTurno => {
+    console.info(`[ta] lead ${pedido.leadId} — o TA CALOU: ${motivo} — ${detalhe}`);
+    return { falou: false, chamouGente: false, motivo, detalhe };
+  };
 
   // ── 1. A chave mestra ───────────────────────────────────────────────────
   const config = await db.sdrIaConfig.findUnique({
@@ -294,8 +300,6 @@ async function executarTurno(
       ligado: true,
       maxSemResposta: true,
       versaoAtivaId: true,
-      horaInicio: true,
-      horaFim: true,
     },
   });
 
@@ -368,22 +372,20 @@ async function executarTurno(
     return calar("pediuSilencio", "esta pessoa pediu para não receber mensagens");
   }
 
-  // ── 4. Janela de horário ────────────────────────────────────────────────
+  // ── 4. A JANELA DE HORÁRIO — REVOGADA EM 19/09/2026 ────────────────────
   //
-  // A janela vem da CONFIGURAÇÃO, não da constante do SDR de abordagem: a tela
-  // do TA mostra `horaInicio`/`horaFim` como ajuste do dono, e um botão que o
-  // código ignora ensina que a configuração vale quando ela não vale.
+  // Aqui havia um portão que calava o TA fora de 9h–20h e nos fins de semana.
+  // Ele custou o lead do anúncio de 19/09/2026: o cliente escreveu às 16:02 de
+  // um SÁBADO e a casa não respondeu nada até o dia acabar.
   //
-  // ⚠️ Anotado e NÃO resolvido: quem escreve às 23 h está esperando resposta
-  // agora, e calar pode ser pior que responder fora do horário. A janela foi
-  // desenhada para proteger quem NÃO chamou. Soltar o TA da madrugada é decisão
-  // do CEO, não minha — enquanto ela não vier, vale o horário configurado.
-  if (foraDaJanela(agora, { inicioHora: config.horaInicio, fimHora: config.horaFim })) {
-    return calar(
-      "foraDeHorario",
-      `fora da janela do TA (${config.horaInicio}h–${config.horaFim}h, dias úteis, horário de São Paulo)`,
-    );
-  }
+  // A janela é régua de ABORDAGEM: ela existe para a casa não bater na porta de
+  // um estranho de madrugada. `atenderComOTA` tem um chamador só — o webhook de
+  // mensagem recebida — então todo turno seu é resposta a quem escreveu
+  // primeiro. Calar quem está esperando é usar a proteção contra a pessoa que
+  // ela protege.
+  //
+  // ⚠️ Disparo frio NÃO é afetado: a janela da abordagem e `avaliarContatoDeLead`
+  // continuam intactos, e é lá — no ato de ABORDAR — que ela vale.
 
   // ── 5. Insistiu demais? ─────────────────────────────────────────────────
   const semResposta = await db.leadMensagem.count({

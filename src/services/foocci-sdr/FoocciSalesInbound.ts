@@ -144,7 +144,10 @@ const TRANSACAO_TA = { maxWait: 5_000, timeout: 60_000 } as const;
  */
 async function chamarOTA(leadId:string,msg:MensagemDeVendas,leitura:LeituraDaMensagem,agora:Date):Promise<ResultadoDoTurno|undefined>{
  const paraOTA=descricaoParaIA({tipo:msg.tipo??"TEXTO",texto:msg.text??null,legenda:msg.legenda??null,midiaNome:msg.midiaNome??null,tipoCru:msg.tipoCru??null}).trim();
- if(!paraOTA)return undefined;
+ // ⛔ NENHUM DESCARTE SAI DAQUI EM SILÊNCIO — 19/09/2026. Este `return undefined`
+ // era mudo, e um turno descartado sem linha de log é indistinguível de um turno
+ // que rodou e respondeu. Foi o silêncio que custou o dia, não o descarte.
+ if(!paraOTA){console.warn(`[foocci-sdr] turno DESCARTADO no lead ${leadId}: a mensagem (tipo ${msg.tipo??"TEXTO"}/${msg.tipoCru??"-"}) não tem nada legível para a IA`);return undefined}
  const palavrasDoCliente=(msg.text??msg.legenda??"").trim();
  void leitura;
  try{
@@ -155,7 +158,11 @@ async function chamarOTA(leadId:string,msg:MensagemDeVendas,leitura:LeituraDaMen
   // gravado na conversa e perdido em todo o resto. Era um chamador que faltava.
   const gate=await comIdentidade(prisma,comoSistema("webhook da Meta: política comercial antes do TA"),(tx)=>aplicarPoliticaAntesDoTA(tx,{leadId,fromPhone:msg.fromPhone,text:palavrasDoCliente,agora}));
   if(gate.gatekeeper?.aplicado)console.info(`[foocci-sdr] gatekeeper ${leadId}: ${gate.gatekeeper.detalhe} — objetivo ${gate.gatekeeper.objetivo??"inalterado"}`);
-  if(gate.intercepted){if(msg.waMessageId){await prisma.leadMensagem.updateMany({where:{leadId,waMessageId:msg.waMessageId,direcao:"ENTRADA"},data:{turnoId:`bot-gate:${gate.kind}`}}).catch((e)=>console.error(`[foocci-sdr] falha ao carimbar entrada do BotGate ${leadId}:`,e))}console.info(`[foocci-sdr] política ${leadId}: interceptado por ${gate.kind}`);return undefined}const r=await comATravaDaConversa(prisma,{leadId,agora},async(dono)=>turnoConsolidado(leadId,dono,agora,paraOTA));return r===null?undefined:r}catch(e){console.error(`[foocci-sdr] o TA não conseguiu atender o lead ${leadId}:`,e);return undefined}}
+  if(gate.intercepted){if(msg.waMessageId){await prisma.leadMensagem.updateMany({where:{leadId,waMessageId:msg.waMessageId,direcao:"ENTRADA"},data:{turnoId:`bot-gate:${gate.kind}`}}).catch((e)=>console.error(`[foocci-sdr] falha ao carimbar entrada do BotGate ${leadId}:`,e))}console.info(`[foocci-sdr] política ${leadId}: interceptado por ${gate.kind}`);return undefined}const r=await comATravaDaConversa(prisma,{leadId,agora},async(dono)=>turnoConsolidado(leadId,dono,agora,paraOTA));
+  if(r===null){console.info(`[foocci-sdr] turno NÃO rodou no lead ${leadId}: a conversa já estava travada por um turno vizinho, que responde por esta mensagem também`);return undefined}
+  if(r===undefined){console.warn(`[foocci-sdr] turno TERMINOU SEM RESULTADO no lead ${leadId} — nenhuma volta do agrupamento produziu resposta`);return undefined}
+  console.info(`[foocci-sdr] turno do lead ${leadId}: ${r.falou?`FALOU (entregue=${r.entregue===true})`:r.chamouGente?`chamou gente (${r.motivo})`:`calou — ${r.motivo}: ${r.detalhe}`}`);
+  return r}catch(e){console.error(`[foocci-sdr] o TA não conseguiu atender o lead ${leadId}:`,e);return undefined}}
 async function turnoConsolidado(leadId:string,dono:string,agora:Date,chao:string):Promise<ResultadoDoTurno|undefined>{let ultimo:ResultadoDoTurno|undefined;for(let volta=0;volta<VOLTAS_DO_TURNO;volta++){if(volta===0)await esperar(janelaDeAgrupamento());const entradas=await juntarEntradasDoTurno(prisma,leadId).catch(()=>null);if(!entradas){if(volta>0)return ultimo;return comIdentidade(prisma,comoSistema("webhook da Meta: o TA respondendo, sem usuário logado"),(tx)=>atenderComOTA(tx,{leadId,mensagem:chao,agora,turnoId:`${dono}:chao`}),TRANSACAO_TA)}const turnoId=`${dono}:${volta}`;await carimbarTurno(prisma,entradas.ids,turnoId);ultimo=await comIdentidade(prisma,comoSistema("webhook da Meta: o TA respondendo, sem usuário logado"),(tx)=>atenderComOTA(tx,{leadId,mensagem:entradas.texto,agora,turnoId}),TRANSACAO_TA);const novo=await chegouEntradaDepois(prisma,leadId,entradas.ateQuando).catch(()=>false);if(!novo)return ultimo}return ultimo}
 async function encontrarLead(codigo:string|null,digitos:string|null,fromPhone:string):Promise<LeadResumo|null>{const select={id:true,codigo:true,optOutAt:true,fonte:true,virouLeadEm:true} as const;if(codigo){const x=await prisma.siteLead.findUnique({where:{codigo},select});if(x)return x}const cauda=(digitos??fromPhone).replace(/\D/g,"").slice(-8);if(cauda.length<8)return null;return prisma.siteLead.findFirst({where:{whatsappDigits:{contains:cauda}},orderBy:{createdAt:"desc"},select})}
 /**

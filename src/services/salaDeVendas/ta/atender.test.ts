@@ -352,23 +352,28 @@ describe("portão 3 — quem pediu silêncio não recebe, nem se escrever", () =
   });
 });
 
-// ── Portão 4: horário ───────────────────────────────────────────────────────
+// ── Portão 4: horário — REVOGADO em 19/09/2026 ──────────────────────────────
 
-describe("portão 4 — a janela, e ela é a CONFIGURADA", () => {
-  it("madrugada cala", async () => {
-    const db = banco();
-    const r = await atenderComOTA(db as never, {
-      leadId: "l1",
-      mensagem: PERGUNTA,
-      agora: MADRUGADA,
-    });
-
-    expect(r).toMatchObject({ motivo: "foraDeHorario" });
-  });
-
-  it("sábado cala, mesmo em pleno horário comercial", async () => {
-    // Fim de semana não é configurável, e é de propósito: deixá-lo ajustável
-    // abriria a regra pela porta dos fundos.
+/**
+ * ⛔ O SÁBADO QUE CUSTOU O DIA — 19/09/2026, medido em produção.
+ *
+ * O CEO clicou no próprio anúncio clique-para-WhatsApp às 16:02 de São Paulo e
+ * escreveu *"Olá! Posso ter mais informações sobre isso?"*. Era **sábado**. O
+ * turno rodou, bateu no portão da janela comercial e devolveu `foraDeHorario`
+ * — sem log, sem resposta, sem nada. Até 17:23 a conversa seguia muda.
+ *
+ * A janela foi desenhada para proteger quem NÃO nos chamou: ela existe para que
+ * a casa não bata na porta de um estranho de madrugada. `atenderComOTA` tem UM
+ * chamador — o webhook de mensagem recebida — e portanto todo turno dele é
+ * resposta a alguém que escreveu primeiro. Aplicar a régua da abordagem ao
+ * atendimento é usar a proteção contra a pessoa que ela protege: o cliente
+ * escreveu, está esperando, e a casa fica calada porque é fim de semana.
+ *
+ * ⚠️ Isto NÃO religa disparo frio. A janela da abordagem (`janelaComercial`,
+ * `avaliarContatoDeLead`, `abordarDaFila`) continua exatamente como estava.
+ */
+describe("a janela comercial não cala quem nos escreveu primeiro", () => {
+  it("⭐ sábado às 16h — o lead do anúncio É respondido", async () => {
     const db = banco();
     const r = await atenderComOTA(db as never, {
       leadId: "l1",
@@ -376,14 +381,11 @@ describe("portão 4 — a janela, e ela é a CONFIGURADA", () => {
       agora: SABADO,
     });
 
-    expect(r).toMatchObject({ motivo: "foraDeHorario" });
+    expect(falou(r)).toBe(true);
   });
 
-  it("⭐ ampliar a janela na configuração REALMENTE amplia", async () => {
-    // A prova de que o botão da tela não é enfeite. Sem ela, a ponte podia usar
-    // a constante fixa do SDR de abordagem e passar em tudo — deixando o dono
-    // mexendo num controle desconectado.
-    const db = banco({ config: { horaInicio: 0, horaFim: 24 } });
+  it("⭐ madrugada também: quem escreve às 3h está esperando agora", async () => {
+    const db = banco();
     const r = await atenderComOTA(db as never, {
       leadId: "l1",
       mensagem: PERGUNTA,
@@ -391,17 +393,6 @@ describe("portão 4 — a janela, e ela é a CONFIGURADA", () => {
     });
 
     expect(falou(r)).toBe(true);
-  });
-
-  it("e estreitar REALMENTE estreita", async () => {
-    const db = banco({ config: { horaInicio: 14, horaFim: 18 } });
-    const r = await atenderComOTA(db as never, {
-      leadId: "l1",
-      mensagem: PERGUNTA,
-      agora: AGORA, // 09:00 em São Paulo
-    });
-
-    expect(r).toMatchObject({ motivo: "foraDeHorario" });
   });
 });
 

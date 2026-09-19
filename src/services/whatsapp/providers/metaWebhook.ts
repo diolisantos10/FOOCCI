@@ -128,6 +128,11 @@ type RawMessage = {
     type?: string;
     button_reply?: { id?: string; title?: string };
     list_reply?: { id?: string; title?: string; description?: string };
+    // ⭐ 19/09/2026 — a resposta de FORMULÁRIO do anúncio ("Participar agora").
+    // Não é botão nem lista: vem como `nfm_reply`, e o que a pessoa preencheu
+    // está em `response_json`. Sem este campo declarado, tudo o que ela
+    // escreveu virava "Resposta interativa recebida" e a IA lia um placeholder.
+    nfm_reply?: { name?: string; body?: string; response_json?: string };
   };
   button?: { text?: string; payload?: string };
   reaction?: { message_id?: string; emoji?: string };
@@ -213,7 +218,10 @@ function extractStructuredText(m: RawMessage): string | null {
     const listTitle = textoLimpo(list?.title) ?? textoLimpo(list?.id);
     const listDescription = textoLimpo(list?.description);
     if (listTitle && listDescription) return `${listTitle} — ${listDescription}`;
-    return listTitle ?? "Resposta interativa recebida";
+    if (listTitle) return listTitle;
+    const formulario = textoDoFormulario(m.interactive?.nfm_reply);
+    if (formulario) return formulario;
+    return "Resposta interativa recebida";
   }
 
   if (type === "button") {
@@ -226,6 +234,35 @@ function extractStructuredText(m: RawMessage): string | null {
   }
 
   return null;
+}
+
+/**
+ * O que a pessoa respondeu no formulário do anúncio, em texto que a IA lê.
+ *
+ * `response_json` é uma string com JSON. Malformado não pode derrubar o
+ * webhook: sem leitura, devolve-se o rótulo do formulário e segue.
+ */
+function textoDoFormulario(
+  nfm: { name?: string; body?: string; response_json?: string } | undefined,
+): string | null {
+  if (!nfm) return null;
+  const cru = textoLimpo(nfm.response_json);
+  if (cru) {
+    try {
+      const obj = JSON.parse(cru) as Record<string, unknown>;
+      const pares = Object.entries(obj)
+        .filter(([chave]) => chave !== "flow_token")
+        .map(([chave, valor]) => {
+          const v = Array.isArray(valor) ? valor.join(", ") : String(valor ?? "");
+          return v.trim() ? `${chave}: ${v.trim()}` : "";
+        })
+        .filter((x) => x !== "");
+      if (pares.length > 0) return pares.join("\n");
+    } catch {
+      // JSON estranho não é motivo para perder a mensagem — cai no rótulo.
+    }
+  }
+  return textoLimpo(nfm.body) ?? textoLimpo(nfm.name);
 }
 
 function displayType(rawType: string | undefined, structuredText: string | null): string {
