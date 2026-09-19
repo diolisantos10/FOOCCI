@@ -43,6 +43,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/robots\.txt$/,                   // crawler rules — must never redirect to /login
   /^\/sitemap\.xml$/,                  // marketing sitemap
   /^\/api\/webhooks\/meta\/whatsapp$/, // Meta WhatsApp Cloud API webhook (GET verify token + POST X-Hub-Signature-256)
+  /^\/api\/webhooks\/meta\/leads$/,    // Meta Lead Ads webhook (GET verify token + POST X-Hub-Signature-256)
   /^\/api\/webhooks\/instagram$/,      // Instagram Direct (Meta) webhook (GET verify token + POST X-Hub-Signature-256)
   /^\/setup$/,                         // First-time browser setup (blocked after first restaurant exists)
   /^\/api\/setup$/,                    // Setup API

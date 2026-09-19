@@ -8997,3 +8997,35 @@ model ConversaArquivada {
   @@index([loteDaLimpeza])
   @@map("conversas_arquivadas")
 }
+
+/// ⛔ O LEAD DA META QUE CHEGOU MAS AINDA NÃO PÔDE NASCER.
+///
+/// O evento `leadgen` do webhook traz só o `leadgen_id` — os dados da pessoa
+/// ficam na Graph API e precisam ser buscados. Quando essa busca falha (token
+/// de página ausente, Graph fora do ar, limite de chamadas), responder 200 e
+/// seguir em frente perderia o lead PARA SEMPRE: a Meta considera entregue.
+///
+/// Então o `leadgen_id` é gravado aqui, e a rodada de reprocessamento tenta de
+/// novo. Uma linha nesta tabela com `resolvidoEm` nulo é um lead pago que a
+/// casa sabe que existe e ainda não conseguiu atender — é alarme, não log.
+model MetaLeadPendente {
+  id         String  @id @default(cuid())
+  /// A chave da idempotência, a MESMA que `importarMetaLead` usa.
+  leadgenId  String  @unique
+  pageId     String?
+  formId     String?
+  /// O `created_time` do evento (epoch em segundos), preservado como veio.
+  criadoNaMeta String?
+  tentativas Int     @default(0)
+  ultimoErro String? @db.Text
+  ultimaTentativaEm DateTime?
+  /// Preenchido quando o lead finalmente nasceu. Nulo = ainda pendente.
+  resolvidoEm DateTime?
+  /// O `SiteLead` que nasceu deste pendente, quando nasceu.
+  leadId      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([resolvidoEm, createdAt])
+  @@map("meta_lead_pendentes")
+}
