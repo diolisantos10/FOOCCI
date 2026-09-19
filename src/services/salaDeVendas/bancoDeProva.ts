@@ -50,6 +50,16 @@ export interface Tabelas {
   /** Reuniões e visitas marcadas. */
   leadCompromisso: Linha[];
 
+  // ── Acrescentadas pelas SEIS ABAS do CRM 360 (peça 04 do desenho) ────────
+  //
+  // A ficha passou a ler a aba Atividades e a ficha de qualificação. Sem estas
+  // duas tabelas o teste teria de dublar as duas consultas — e dublê de
+  // consulta é régua verde sobre o componente errado.
+  /** As tarefas do lead. A aba Atividades do desenho. */
+  leadTarefa: Linha[];
+  /** A ficha que o SDR preenche para o closer. Uma linha por lead. */
+  leadQualificacao: Linha[];
+
   // ── Acrescentadas pela CAMPANHA DE REABORDAGEM DOS CONTATOS FRIOS ────────
   //
   // Nada acima foi removido nem alterado. O motor da campanha precisa provar,
@@ -150,9 +160,55 @@ function combina(linha: Linha, where: Linha | undefined): boolean {
       continue;
     }
 
+    // ── Filtro de relação PARA UM (`{ qualificacao: { is: {...} } }`, ou o
+    //    `{ lead: {...} }` que o Prisma aceita sem o `is`) ──
+    //
+    // A relação é um objeto pendurado por `comoTabela(..., enriquecer)`.
+    // Ausente = a relação não existe = não bate, que é o que o Postgres faz
+    // num `INNER JOIN`. Só `is: null` casa com a ausência.
+    if (
+      typeof condicao === "object" &&
+      condicao !== null &&
+      !(condicao instanceof Date) &&
+      !Array.isArray(condicao) &&
+      ehRelacaoParaUm(linha[campo])
+    ) {
+      const c = condicao as Record<string, unknown>;
+      const alvo = "is" in c ? c.is : "isNot" in c ? null : c;
+      if ("is" in c && alvo === null) {
+        if (linha[campo] !== null && linha[campo] !== undefined) return false;
+        continue;
+      }
+      if ("isNot" in c) {
+        if (linha[campo] === null || linha[campo] === undefined) return false;
+        continue;
+      }
+      const relacao = linha[campo];
+      if (relacao === null || relacao === undefined) return false;
+      if (!combina(relacao as Linha, alvo as Linha)) return false;
+      continue;
+    }
+
     if (!combinaCampo(linha[campo], where[campo])) return false;
   }
   return true;
+}
+
+/**
+ * ⚠️ Só o que FOI PENDURADO como relação entra neste caminho.
+ *
+ * `null` sozinho não basta — `optOutAt: null` também é null, e tratá-lo como
+ * relação faria `{ optOutAt: null }` virar uma recursão em vez da comparação
+ * que ele é. Por isso a relação para um só é reconhecida quando o valor é um
+ * objeto que não é Date nem lista.
+ */
+function ehRelacaoParaUm(valor: unknown): boolean {
+  return (
+    typeof valor === "object" &&
+    valor !== null &&
+    !(valor instanceof Date) &&
+    !Array.isArray(valor)
+  );
 }
 
 function ordenar(linhas: Linha[], orderBy: Record<string, "asc" | "desc"> | undefined): Linha[] {
@@ -303,6 +359,8 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
     leadHandoff: dados.leadHandoff ?? [],
     siteLeadInteraction: dados.siteLeadInteraction ?? [],
     leadCompromisso: dados.leadCompromisso ?? [],
+    leadTarefa: dados.leadTarefa ?? [],
+    leadQualificacao: dados.leadQualificacao ?? [],
     travaDeAbordagemRitmo: dados.travaDeAbordagemRitmo ?? [],
     travaDeAbordagemEnviada: dados.travaDeAbordagemEnviada ?? [],
     travaDeAbordagemRecusa: dados.travaDeAbordagemRecusa ?? [],
@@ -329,13 +387,33 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
       // A conversa, para o filtro `mensagens: { some: { direcao: "SAIDA" } }`
       // da fila da reabordagem ser RESOLVIDO, e não dublado.
       mensagens: t.leadMensagem.filter((m) => m.leadId === l.id),
+      // As relações que o `select` da ficha pede aninhadas. `select` é ignorado
+      // por este banco, então o que ele NÃO pendurar aqui chega `undefined` —
+      // e `undefined` viraria "não medido" num teste que deveria falhar.
+      qualificacao: t.leadQualificacao.find((q) => q.leadId === l.id) ?? null,
+      atendente: t.internalUser.find((u) => u.id === l.atendenteUserId) ?? null,
     })),
     leadProposta: comoTabela(t.leadProposta),
-    leadMensagem: comoTabela(t.leadMensagem),
+    leadMensagem: comoTabela(t.leadMensagem, (m) => ({
+      ...m,
+      autorUser: t.internalUser.find((u) => u.id === m.autorUserId) ?? null,
+    })),
     internalUser: comoTabela(t.internalUser),
     leadHandoff: comoTabela(t.leadHandoff),
     siteLeadInteraction: comoTabela(t.siteLeadInteraction),
-    leadCompromisso: comoTabela(t.leadCompromisso),
+    leadCompromisso: comoTabela(t.leadCompromisso, (c) => ({
+      ...c,
+      responsavel: t.internalUser.find((u) => u.id === c.responsavelId) ?? null,
+    })),
+    leadTarefa: comoTabela(t.leadTarefa, (x) => ({
+      ...x,
+      responsavel: t.internalUser.find((u) => u.id === x.responsavelId) ?? null,
+    })),
+    leadQualificacao: comoTabela(t.leadQualificacao, (q) => ({
+      ...q,
+      // O `where: { lead: <escopo> }` das opções de filtro da qualificação.
+      lead: t.siteLead.find((l) => l.id === q.leadId) ?? null,
+    })),
     // A trilha carrega a empresa junto, porque `amostraDoHunter` precisa da
     // data de descoberta para medir quanto o Hunter demorou.
     // ⛔ As travas: com unicidade DE VERDADE. Ver o cabeçalho de `comoTabela`.

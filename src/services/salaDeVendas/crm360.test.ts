@@ -64,6 +64,18 @@ function lead(campos: Record<string, unknown> = {}) {
     ultimaMensagemEm: null,
     ultimaMensagemDeQuem: null,
     empresaId: null,
+    // ── O que as seis abas do desenho 04 passaram a ler ──────────────────
+    // Sem estes campos o dublê devolveria `undefined` onde o Postgres devolve
+    // valor — e a tela leria "não medido" num teste que deveria reprovar.
+    stageChangedAt: new Date("2026-09-10T00:00:00.000Z"),
+    fonte: "FORMULARIO_DEMONSTRACAO",
+    utmCampaign: null,
+    utmSource: null,
+    utmMedium: null,
+    referrer: null,
+    lastInteractionAt: null,
+    naoLidas: 0,
+    atendenteDesde: null,
     ...campos,
   };
 }
@@ -473,5 +485,217 @@ describe("os formatadores da ficha", () => {
     expect(simNaoOuNaoApurado(true)).toBe("sim");
     expect(simNaoOuNaoApurado(false)).toBe("não");
     expect(simNaoOuNaoApurado(null)).toContain("não medido");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ⭐ AS SEIS ABAS DA PEÇA 04 — e as três coisas que elas se recusam a inventar
+//
+// A auditoria de 19/09/2026 mediu que esta tela *"tem a substância e não tem a
+// forma"*: sem abas, sem rosca de score, sem tags, sem barra de probabilidade.
+// O que segue prova a forma — e prova que ela não trouxe número inventado junto.
+// ═════════════════════════════════════════════════════════════════════════════
+
+function htmlDaFicha(f: FichaDoLead): string {
+  return renderToStaticMarkup(React.createElement(Crm360View, { f }));
+}
+
+describe("⭐ as seis abas existem, e todas ficam no HTML", () => {
+  it("Resumo · Histórico · Compras · Conversas · Tags · Atividades", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+
+    for (const rotulo of ["Resumo", "Histórico", "Compras", "Conversas", "Tags", "Atividades"]) {
+      expect(h).toContain(`>${rotulo}`);
+    }
+    // Seis painéis, e as cinco inativas escondidas — não descartadas: a busca
+    // do navegador e o leitor de tela precisam do que está na aba ao lado.
+    expect(h.match(/role="tabpanel"/g)).toHaveLength(6);
+    expect(h.match(/role="tab"/g)).toHaveLength(6);
+  });
+
+  it("a migalha diz LEADS — o desenho acende 'Painel', e é incoerência dele", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+    expect(h).toContain("Leads");
+    expect(h).toContain("Perfil do Lead");
+  });
+});
+
+describe('⛔ "Como nos conheceu?" — o campo do desenho que NÃO existe no banco', () => {
+  it("a tela não finge que é a resposta da pessoa: declara que é medição nossa", async () => {
+    const h = htmlDaFicha(
+      await ficha({ siteLead: [lead({ utmSource: "instagram" })] }),
+    );
+
+    expect(h).toContain("Como nos conheceu?");
+    expect(h).toContain("não é a resposta da pessoa");
+    expect(h).toContain("instagram");
+  });
+
+  it("sem utm nem referrer, fica dito que ninguém perguntou — e não em branco", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+    expect(h).toContain("Como nos conheceu?");
+    expect(h).toContain("não informado — ninguém perguntou");
+  });
+});
+
+describe("⛔ a rosca do Lead Score não desenha nota que ninguém deu", () => {
+  it("score nulo NÃO vira anel de zero: vira a frase de quem não foi pontuado", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead({ score: null })] }));
+
+    expect(h).toContain("ninguém pontuou este lead");
+    expect(h).not.toContain('role="img"');
+  });
+
+  it("score 92 desenha o anel com 92 no meio — e não o total da volta", async () => {
+    const h = htmlDaFicha(
+      await ficha({ siteLead: [lead({ score: 92, temperatura: "PRIORIDADE_MAXIMA" })] }),
+    );
+
+    expect(h).toContain('role="img"');
+    expect(h).toContain(">92<");
+    expect(h).toContain("Muito alto");
+  });
+});
+
+describe("⛔ a barra de probabilidade não existe sem oportunidade", () => {
+  it("sem oportunidade, o cartão da IA diz onde a probabilidade mora", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+
+    expect(h).toContain("não há oportunidade aberta — a probabilidade mora nela");
+    expect(h).not.toContain("0%");
+  });
+
+  it("com oportunidade estimada, a barra aparece com o número que a sustenta", async () => {
+    const h = htmlDaFicha(
+      await ficha({
+        siteLead: [lead()],
+        oportunidade: [
+          {
+            id: "op-1",
+            leadId: "lead-1",
+            empresaId: "emp-1",
+            estagio: "NEGOCIACAO",
+            estagioMudouEm: new Date("2026-09-12T00:00:00.000Z"),
+            valorPotencialCents: 90000,
+            produtoDeInteresse: "Plano Profissional",
+            probabilidade: 80,
+            dorIdentificada: null,
+            objecoes: ["quer comparar com outra solução"],
+            previsaoDeFechamento: null,
+            fechadaEm: null,
+            criadoEm: new Date("2026-09-12T00:00:00.000Z"),
+          },
+        ],
+      }),
+    );
+
+    expect(h).toContain("80%");
+    expect(h).toContain("quer comparar com outra solução");
+  });
+});
+
+describe("⛔ a coluna da IA não escreve análise que ninguém gravou", () => {
+  it("o parágrafo de leitura do desenho é declarado ausente, não redigido", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+
+    expect(h).toContain("Nenhuma tabela guarda um resumo desses");
+    expect(h).not.toContain("alto potencial de compra");
+  });
+});
+
+describe("as tags e a ficha de qualificação", () => {
+  it("sem tag, o vazio diz que ninguém marcou — não que o lead não tem nada", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead({ tags: [] })] }));
+    expect(h).toContain("é um lead que ninguém marcou");
+  });
+
+  it("a ficha do SDR aparece campo a campo, inclusive o que ninguém perguntou", async () => {
+    const h = htmlDaFicha(
+      await ficha({
+        siteLead: [lead()],
+        leadQualificacao: [
+          {
+            id: "q1",
+            leadId: "lead-1",
+            segmento: "Japonesa",
+            unidades: null,
+            volumeMensal: null,
+            canaisAtuais: [],
+            sistemaAtual: null,
+            marketplaceAtual: null,
+            dorPrincipal: "Reduzir tempo de resposta",
+            objetivo: null,
+            planoDeInteresse: "Plano Profissional",
+            urgencia: "Alta",
+            poderDeDecisao: null,
+            faixaDeOrcamento: null,
+            objecoes: [],
+            funcionalidadesDeInteresse: [],
+            pedidoExplicito: null,
+            observacoes: null,
+            pediuHumano: false,
+            pediuPararSondagem: false,
+          },
+        ],
+      }),
+    );
+
+    expect(h).toContain("Reduzir tempo de resposta");
+    expect(h).toContain("Plano Profissional");
+    // As perguntas sem resposta continuam na tela: a lista do que falta é o que
+    // faz a próxima conversa acontecer.
+    expect(h).toContain("Quem decide");
+    expect(h).toContain("não informado — ninguém perguntou");
+  });
+});
+
+describe('⛔ os atos do desenho que esta casa NÃO tem não viram botão', () => {
+  it('"Alterar" o vendedor não é desenhado — e a tela diz por quê', async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+
+    expect(h).toContain("Passar o lead para outra pessoa não é");
+    expect(h).not.toContain(">Alterar<");
+  });
+
+  it('"Adicionar tag" e "Marcar como realizado" não aparecem como botão', async () => {
+    const h = htmlDaFicha(
+      await ficha({
+        siteLead: [lead({ proximaAcaoEm: new Date("2026-09-18T19:00:00.000Z") })],
+      }),
+    );
+
+    expect(h).not.toContain("Adicionar tag<");
+    expect(h).not.toContain("Marcar como realizado<");
+    expect(h).toContain("Dar o follow-up por");
+  });
+
+  it("a caixa de anotação interna não é desenhada: não há onde guardar a anotação", async () => {
+    const h = htmlDaFicha(await ficha({ siteLead: [lead()] }));
+
+    expect(h).toContain("Anotação interna não tem tabela nesta base");
+    expect(h).not.toContain("<textarea");
+  });
+});
+
+describe("a aba Conversas anuncia o recorte", () => {
+  it("mostrando 5 de muitas, a tela diz quantas existem", async () => {
+    const mensagens = Array.from({ length: 8 }, (_, i) => ({
+      id: `m${i}`,
+      leadId: "lead-1",
+      direcao: i % 2 === 0 ? "ENTRADA" : "SAIDA",
+      tipo: "TEXTO",
+      status: "ENTREGUE",
+      texto: `mensagem ${i}`,
+      legenda: null,
+      autor: i % 2 === 0 ? null : "IA",
+      autorUserId: null,
+      ocorreuEm: new Date(2026, 8, 10 + i),
+    }));
+
+    const f = await ficha({ siteLead: [lead()], leadMensagem: mensagens });
+    expect(f.totalDeMensagens).toBe(8);
+
+    const h = htmlDaFicha(f);
+    expect(h).toContain("Mostrando 5 de 8 mensagens");
   });
 });

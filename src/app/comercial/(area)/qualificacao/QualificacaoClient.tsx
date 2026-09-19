@@ -22,8 +22,12 @@
  * `temperaturaDe` varrendo a régua. Nenhum número desta tela é constante.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import type { PanoramaDaQualificacao } from "@/services/salaDeVendas/telas/qualificacao";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  ConversaoPorTemperatura,
+  PanoramaDaQualificacao,
+  TelaDaQualificacao,
+} from "@/services/salaDeVendas/telas/qualificacao";
 import {
   buscarPainel,
   Carregando,
@@ -43,45 +47,114 @@ import {
   Indicador,
   Linha,
   Pilula,
+  Rosca,
+  Seletor,
   Tabela,
   TituloDaPagina,
-  type NomeDeIcone,
-  type Tom,
+  type FatiaDaRosca,
 } from "../_pecas/Pecas";
+import { TINTA_DA_TEMPERATURA, tintaDe } from "./tintaDaTemperatura";
+import {
+  FILTROS_VAZIOS,
+  MesaDeLeads,
+  rotuloDaEtapa,
+  type EstadoDosFiltros,
+} from "./MesaDeLeads";
 
 /**
- * O ÍCONE E A COR DE CADA DEGRAU — pelo nome do BANCO, não pelo do desenho.
- *
- * O desenho tem quatro degraus (chama, chama, termômetro, floco). O banco tem
- * seis valores de temperatura, e a régua de hoje só produz quatro deles. Os
- * extras não ganham cor emprestada de vizinho: saem em cinza, porque cor é
- * afirmação, e a tela não afirma que DESQUALIFICADO é "quase frio".
+ * ⚠️ `tintaDe` mora em `tintaDaTemperatura.ts` desde que a mesa de trabalho
+ * passou a pintar a mesma pílula. Reexportado aqui porque este é o endereço que
+ * o resto da casa (e o teste desta tela) já conhece — mudar o endereço junto
+ * com a regra esconderia qual das duas coisas mudou.
  */
-export const TINTA_DA_TEMPERATURA: Record<string, { icone: NomeDeIcone; tom: Tom }> = {
-  PRIORIDADE_MAXIMA: { icone: "chama", tom: "vermelho" },
-  QUENTE: { icone: "chama", tom: "ambar" },
-  MORNO: { icone: "termometro", tom: "azul" },
-  FRIO: { icone: "floco", tom: "cinza" },
-};
-
-export function tintaDe(temperatura: string): { icone: NomeDeIcone; tom: Tom } {
-  return TINTA_DA_TEMPERATURA[temperatura] ?? { icone: "alvo", tom: "cinza" };
-}
+export { TINTA_DA_TEMPERATURA, tintaDe };
 
 export function QualificacaoClient() {
-  const [estado, setEstado] = useState<Estado<PanoramaDaQualificacao>>({ fase: "carregando" });
+  const [estado, setEstado] = useState<Estado<TelaDaQualificacao>>({ fase: "carregando" });
   const [tentativa, setTentativa] = useState(0);
+  const [filtros, setFiltros] = useState<EstadoDosFiltros>(FILTROS_VAZIOS);
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [recusas, setRecusas] = useState<Record<string, string>>({});
+
   const recarregar = useCallback(() => setTentativa((t) => t + 1), []);
+
+  const consulta = useMemo(() => {
+    const p = new URLSearchParams();
+    if (filtros.busca.trim()) p.set("busca", filtros.busca.trim());
+    if (filtros.origem) p.set("origem", filtros.origem);
+    if (filtros.produto) p.set("produto", filtros.produto);
+    if (filtros.temperatura) p.set("temperatura", filtros.temperatura);
+    if (filtros.stage) p.set("stage", filtros.stage);
+    p.set("pagina", String(filtros.pagina));
+    return p.toString();
+  }, [filtros]);
 
   useEffect(() => {
     let vivo = true;
-    void buscarPainel<PanoramaDaQualificacao>("/api/admin/sala-de-vendas/qualificacao").then((e) => {
+    void buscarPainel<TelaDaQualificacao>(
+      `/api/admin/sala-de-vendas/qualificacao?${consulta}`,
+    ).then((e) => {
       if (vivo) setEstado(e);
     });
     return () => {
       vivo = false;
     };
-  }, [tentativa]);
+  }, [tentativa, consulta]);
+
+  /**
+   * ⭐ O SELETOR DE STAGE DA LINHA — o único ato desta tela.
+   *
+   * Ele fala com `/funil`, que é onde a regra de movimento mora: as recusas
+   * (etapa que exige motivo, lead que outra pessoa moveu antes) já estão
+   * escritas lá. Reescrevê-las aqui criaria uma segunda régua de funil, e as
+   * duas divergiriam no primeiro conserto.
+   *
+   * ⚠️ A recusa aparece NA LINHA, não num alerta que some. Movimento recusado
+   * em silêncio é o defeito que faz o vendedor achar que salvou.
+   */
+  const mover = useCallback(
+    (leadId: string, para: string) => {
+      setSalvandoId(leadId);
+      setRecusas((r) => {
+        const { [leadId]: _fora, ...resto } = r;
+        return resto;
+      });
+
+      void (async () => {
+        try {
+          const r = await fetch("/api/admin/sala-de-vendas/funil", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ leadId, para }),
+          });
+          const j = (await r.json()) as { ok: boolean; error?: string; recusas?: unknown };
+          if (!j.ok) {
+            setRecusas((x) => ({
+              ...x,
+              [leadId]: j.error ?? "A etapa não foi aceita, e a rota não disse por quê.",
+            }));
+          }
+        } catch (e) {
+          setRecusas((x) => ({
+            ...x,
+            [leadId]: e instanceof Error ? e.message : "Falha de rede ao mover.",
+          }));
+        } finally {
+          setSalvandoId(null);
+          // Recarrega sempre: o movimento mexe no termômetro e na contagem da
+          // página, e uma tabela que só muda a própria linha mente no total.
+          setTentativa((t) => t + 1);
+        }
+      })();
+    },
+    [],
+  );
+
+  const mudarFiltro = useCallback((campo: keyof EstadoDosFiltros, valor: string) => {
+    // Filtro novo volta para a página 1: manter a página 7 com um filtro que só
+    // tem duas páginas devolveria tela em branco sem explicação.
+    setFiltros((f) => ({ ...f, [campo]: valor, pagina: 1 }));
+  }, []);
 
   if (estado.fase === "carregando") return <Carregando oQue="Lendo o termômetro da base…" />;
   if (estado.fase === "semAcesso") return <SemAcesso porque={estado.porque} />;
@@ -91,7 +164,7 @@ export function QualificacaoClient() {
 
   return (
     <div className="min-h-full bg-canvas px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1400px]">
         <TituloDaPagina
           contexto="Leads › Qualificação e Lead Score"
           titulo="Qualificação e Lead Score"
@@ -110,7 +183,12 @@ export function QualificacaoClient() {
         {/* ── OS CARTÕES DE TEMPERATURA ──────────────────────────────────
             O desenho tem quatro. Nós desenhamos TODOS os degraus que o banco
             tem, mais a fila de quem ninguém pontuou: mostrar só os quatro
-            faria a soma da tela ficar menor que a base, sem explicação. */}
+            faria a soma da tela ficar menor que a base, sem explicação.
+
+            ⚠️ O desenho traz "↑ 35% vs. última semana" em cada cartão. Nós NÃO
+            temos foto da base da semana passada — a temperatura é sobrescrita,
+            não versionada — e por isso a variação não aparece. Seta inventada
+            ali seria a mentira mais cara desta tela: ela vira meta. */}
         <div className="mb-5 mt-4">
           <FilaDeIndicadores>
             {p.termometro.map((d) => {
@@ -138,18 +216,110 @@ export function QualificacaoClient() {
               rodape="não é FRIO — é a fila de quem falta qualificar"
             />
           </FilaDeIndicadores>
-          <p className="mt-2 max-w-[80ch] text-[11.5px] leading-snug text-muted">
+          <p className="mt-2 max-w-[90ch] text-[11.5px] leading-snug text-muted">
             <strong className="text-ink2">{p.emAberto}</strong> leads em aberto no escopo
-            (fora GANHO, PERDIDO e NUTRIÇÃO), medidos na régua v{p.versaoDaRegua}.
+            (fora GANHO, PERDIDO e NUTRIÇÃO), medidos na régua v{p.versaoDaRegua}. O desenho
+            compara cada cartão com a semana passada; aqui não há essa comparação, porque a
+            temperatura é sobrescrita e ninguém guardou a foto de sete dias atrás.
           </p>
         </div>
 
-        <Corpo lateral={<SugestoesDePriorizacao p={p} />}>
-        {/* ── O TERMÔMETRO ──────────────────────────────────────────────── */}
+        {/* ── A MESA DE TRABALHO — busca, filtros e a tabela larga ─────── */}
         <Cartao
-          titulo="O termômetro"
-          aviso="O nome do desenho aparece ao lado do nome que existe no banco. Os degraus sem faixa não são produzidos pela régua de hoje — foram gravados por outro caminho, e some-los seria fazer a tela não bater com a base."
+          titulo="Os leads, um a um"
+          aviso="A mesa de trabalho do desenho. Cada linha abre a ficha do lead, e o seletor de Stage move o lead de etapa de verdade — é o único ato desta tela."
         >
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <input
+              value={filtros.busca}
+              onChange={(e) => mudarFiltro("busca", e.target.value)}
+              placeholder="Buscar por nome, empresa, produto…"
+              aria-label="Buscar por nome, empresa ou produto"
+              className="min-w-0 flex-1 basis-56 rounded-full border border-line bg-paper px-3.5 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-muted focus:border-brand-400"
+            />
+            <Seletor
+              rotulo="Origem"
+              valor={filtros.origem}
+              todos="Todas"
+              aoMudar={(v) => mudarFiltro("origem", v)}
+              opcoes={p.mesa.opcoes.origens.map((o) => ({ valor: o, rotulo: rotuloDaEtapa(o) }))}
+            />
+            <Seletor
+              rotulo="Produto"
+              valor={filtros.produto}
+              aoMudar={(v) => mudarFiltro("produto", v)}
+              opcoes={p.mesa.opcoes.produtos.map((o) => ({ valor: o, rotulo: o }))}
+            />
+            <Seletor
+              rotulo="Lead Score"
+              valor={filtros.temperatura}
+              aoMudar={(v) => mudarFiltro("temperatura", v)}
+              opcoes={p.mesa.opcoes.temperaturas.map((o) => ({
+                valor: o,
+                rotulo: o.replace(/_/g, " "),
+              }))}
+            />
+            <Seletor
+              rotulo="Stage"
+              valor={filtros.stage}
+              aoMudar={(v) => mudarFiltro("stage", v)}
+              opcoes={p.mesa.opcoes.stages.map((o) => ({ valor: o, rotulo: rotuloDaEtapa(o) }))}
+            />
+          </div>
+
+          <NaoMedido frases={p.mesa.naoMedido} />
+
+          {p.mesa.total === 0 ? (
+            <Vazio
+              motivo={
+                filtros.busca || filtros.origem || filtros.produto || filtros.temperatura || filtros.stage
+                  ? "Nenhum lead em aberto bate com estes filtros. Vazio aqui é o recorte, não a base."
+                  : "Não há lead em aberto no seu escopo. Vazio aqui é ausência de lead, não temperatura zero."
+              }
+            />
+          ) : (
+            <MesaDeLeads
+              mesa={p.mesa}
+              aoMover={mover}
+              salvandoId={salvandoId}
+              recusas={recusas}
+              aoPaginar={(pagina) => setFiltros((f) => ({ ...f, pagina }))}
+            />
+          )}
+
+          <p className="mt-3 max-w-[90ch] text-[11.5px] leading-relaxed text-muted">
+            <strong className="text-ink2">Correção do desenho:</strong> a imagem traz{" "}
+            <em>duas colunas seguidas chamadas &quot;Stage&quot;</em> — a primeira é o número do
+            score. Aqui ela se chama <strong className="text-ink2">Score</strong> e ficou junto
+            da pílula de temperatura, como a própria imagem já as desenhava lado a lado.
+          </p>
+        </Cartao>
+
+        {/* ── O RODAPÉ DO DESENHO: rosca, barras e as sugestões da IA ──── */}
+        <Corpo lateral={<SugestoesDePriorizacao p={p} />}>
+          <Cartao
+            titulo="Distribuição de leads por score"
+            aviso="A mesma contagem dos cartões do topo, vista como fatia do aberto. Quem ninguém pontuou entra como fatia própria — some-lo faria o total do anel ficar menor que a base."
+          >
+            <Rosca
+              rotuloDoCentro="Total"
+              total={p.emAberto}
+              motivo="não há lead em aberto no seu escopo — anel fechado aqui pareceria medição"
+              fatias={fatiasDoAnel(p)}
+            />
+          </Cartao>
+
+          <Cartao
+            titulo="Taxa de conversão por score"
+            aviso="Ganhos sobre quem JÁ teve desfecho, por degrau. O denominador não é a base inteira: incluir quem ainda negocia faria a conversão cair sozinha a cada lead novo."
+          >
+            <ConversaoPorScore linhas={p.conversao} />
+          </Cartao>
+
+          <Cartao
+            titulo="O termômetro"
+            aviso="O nome do desenho aparece ao lado do nome que existe no banco. Os degraus sem faixa não são produzidos pela régua de hoje — foram gravados por outro caminho, e some-los seria fazer a tela não bater com a base."
+          >
           {p.emAberto === 0 ? (
             <Vazio motivo="Não há lead em aberto no seu escopo. Vazio aqui é ausência de lead, não temperatura zero." />
           ) : (
@@ -313,12 +483,81 @@ export function SugestoesDePriorizacao({ p }: { p: PanoramaDaQualificacao }) {
 
       <CartaoDeIA titulo="O que esta tela não mede" tom="cinza">
         <p>
-          O desenho tem Valor Potencial, Probabilidade de Compra e Objeções por lead.
-          Nenhum dos três existe na nossa base hoje, e por isso não aparecem inventados
-          em coluna nenhuma: a régua v{p.versaoDaRegua} pontua o que foi perguntado, e o
+          O desenho tem <strong className="text-ink">Valor Potencial</strong>,{" "}
+          <strong className="text-ink">Probabilidade de Compra</strong> e{" "}
+          <strong className="text-ink">Objeções</strong> por lead. Os três existem na base,
+          mas na <strong className="text-ink">Oportunidade</strong> da jornada comercial — e
+          lead sem negócio aberto não tem nenhum deles. Nessas linhas a célula fica vazia
+          com o motivo; os três <strong className="text-ink">não aparecem inventados</strong>{" "}
+          em coluna nenhuma, porque a régua v{p.versaoDaRegua} pontua o que foi perguntado, e o
           que ninguém perguntou vira fila de trabalho, não estimativa.
+        </p>
+        <p className="mt-2">
+          E não há comparação <em>vs. última semana</em> nos cartões do topo: a temperatura é
+          sobrescrita a cada pontuação, e ninguém guardou a foto de sete dias atrás. Seta
+          inventada ali viraria meta.
         </p>
       </CartaoDeIA>
     </>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AS DUAS PEÇAS DO RODAPÉ DO DESENHO
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * As fatias do anel de distribuição.
+ *
+ * ⚠️ Quem ninguém pontuou entra como fatia própria, em cinza. Deixá-lo de fora
+ * faria o total do anel ficar menor que os leads em aberto do topo da tela — e
+ * duas somas diferentes na mesma tela destroem a confiança nas duas.
+ */
+export function fatiasDoAnel(p: PanoramaDaQualificacao): FatiaDaRosca[] {
+  const fatias: FatiaDaRosca[] = p.termometro
+    .filter((d) => d.total > 0)
+    .map((d) => ({
+      rotulo: d.nomeNoDesenho ?? d.temperatura.replace(/_/g, " "),
+      valor: d.total,
+      tom: tintaDe(d.temperatura).tom,
+    }));
+
+  if (p.naoClassificados > 0) {
+    fatias.push({ rotulo: "Ninguém pontuou", valor: p.naoClassificados, tom: "cinza" });
+  }
+  return fatias;
+}
+
+/**
+ * As barras de conversão por degrau.
+ *
+ * `taxa: null` NÃO vira barra de largura zero: barra zerada pareceria "tentamos
+ * e não vendemos", e a verdade é "ninguém desta faixa chegou ao desfecho ainda".
+ */
+export function ConversaoPorScore({ linhas }: { linhas: ConversaoPorTemperatura[] }) {
+  if (linhas.every((l) => l.decididos === 0)) {
+    return (
+      <Vazio motivo="Nenhum lead chegou a GANHO ou PERDIDO ainda no seu escopo. Sem desfecho não existe taxa de conversão — e 0% diria que tentamos e não vendemos." />
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {linhas.map((l) => (
+        <Barra
+          key={l.temperatura}
+          rotulo={l.nomeNoDesenho ?? l.temperatura.replace(/_/g, " ")}
+          /* O número é o que foi contado; a % ao lado é a própria `Barra` quem
+             escreve a partir da fração. Repetir "62%" nos dois lugares faria a
+             linha parecer duas medições diferentes da mesma coisa. */
+          valor={l.taxa === null ? null : `${l.ganhos} de ${l.decididos}`}
+          fracao={l.taxa === null ? null : l.taxa / 100}
+          motivo={l.porque ?? "sem motivo declarado — e isso também é um defeito"}
+          tom={tintaDe(l.temperatura).tom}
+          nota={l.decididos > 0 ? "ganhos sobre quem já teve desfecho" : undefined}
+        />
+      ))}
+    </ul>
   );
 }

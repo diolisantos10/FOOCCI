@@ -538,3 +538,165 @@ export function emDia(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A ROSCA — o gráfico de anel das peças 04 e 06 do desenho
+//
+// ── POR QUE DESENHADA À MÃO, E NÃO POR BIBLIOTECA ───────────────────────────
+//
+// São dois arcos e um texto no meio. Uma biblioteca de gráficos entraria no
+// pacote inteiro — e depois viraria a resposta padrão para todo gráfico da
+// casa, com a paleta dela por cima dos tokens daqui. `DESIGN.md` proíbe
+// exatamente esse drift.
+//
+// ── E ELA NÃO DESENHA ANEL VAZIO ────────────────────────────────────────────
+//
+// Total zero não vira um anel cinza fechado: anel fechado parece medição, e
+// "ninguém foi pontuado" não é uma medição. Nesse caso quem chama recebe
+// `null` de volta e escreve o motivo no lugar.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface FatiaDaRosca {
+  rotulo: string;
+  valor: number;
+  tom: Tom;
+}
+
+/** A cor do traço de cada fatia — o mesmo acento das pílulas e das barras. */
+const TRACO_DA_FATIA: Record<Tom, string> = {
+  azul: "#3B82F6",
+  verde: "#10B981",
+  ambar: "#F59E0B",
+  vermelho: "#EF4444",
+  roxo: "#8B5CF6",
+  cinza: "#E5E5E5",
+};
+
+export function Rosca({
+  fatias,
+  total,
+  rotuloDoCentro,
+  motivo,
+  centro,
+  semLegenda,
+}: {
+  fatias: FatiaDaRosca[];
+  total: number;
+  rotuloDoCentro: string;
+  /** O que escrever quando não há o que desenhar. */
+  motivo: string;
+  /**
+   * O número grande do meio, quando ele NÃO é o total.
+   *
+   * O anel do Lead Score é o caso: o desenho põe **92** no meio de um anel cuja
+   * volta inteira vale 100. Mostrar o total ali escreveria 100 em todo lead, e
+   * o número que a pessoa foi ler é a nota.
+   */
+  centro?: number | string;
+  /** Sem a lista ao lado — para o anel pequeno de um número só. */
+  semLegenda?: boolean;
+}) {
+  if (total <= 0) return <NaoMedido motivo={motivo} />;
+
+  const raio = 42;
+  const volta = 2 * Math.PI * raio;
+  let percorrido = 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+      <div className="relative h-[124px] w-[124px] shrink-0">
+        <svg viewBox="0 0 110 110" className="h-full w-full -rotate-90" role="img"
+          aria-label={`${rotuloDoCentro}: ${total}`}>
+          <circle cx="55" cy="55" r={raio} fill="none" stroke="#F6F6F4" strokeWidth="14" />
+          {fatias.map((f) => {
+            const fracao = f.valor / total;
+            const traco = fracao * volta;
+            const deslocamento = -percorrido * volta;
+            percorrido += fracao;
+            if (f.valor === 0) return null;
+            return (
+              <circle
+                key={f.rotulo}
+                cx="55"
+                cy="55"
+                r={raio}
+                fill="none"
+                stroke={TRACO_DA_FATIA[f.tom]}
+                strokeWidth="14"
+                strokeDasharray={`${traco} ${volta - traco}`}
+                strokeDashoffset={deslocamento}
+              />
+            );
+          })}
+        </svg>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+          <span>
+            <span className="block text-[10.5px] uppercase tracking-[.04em] text-muted">
+              {rotuloDoCentro}
+            </span>
+            <span className="block text-[20px] font-semibold leading-none tabular-nums text-ink">
+              {centro ?? total}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {semLegenda ? null : (
+      <ul className="min-w-0 flex-1 space-y-1.5">
+        {fatias.map((f) => (
+          <li key={f.rotulo} className="flex items-baseline gap-2 text-[12.5px]">
+            <span
+              className="mt-[3px] h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: TRACO_DA_FATIA[f.tom] }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1 truncate text-ink2">{f.rotulo}</span>
+            <span className="shrink-0 tabular-nums font-semibold text-ink">{f.valor}</span>
+            <span className="w-12 shrink-0 text-right tabular-nums text-muted">
+              {((f.valor / total) * 100).toFixed(1).replace(".", ",")}%
+            </span>
+          </li>
+        ))}
+      </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * O SELETOR DE VERDADE — o menu arredondado do desenho.
+ *
+ * Ele existe porque FILTRA. A régua desta casa (`TituloDaPagina`) recusa menu
+ * que não recorta nada; este recorta, e por isso é `<select>` e não pastilha.
+ */
+export function Seletor({
+  rotulo,
+  valor,
+  opcoes,
+  aoMudar,
+  todos = "Todos",
+}: {
+  rotulo: string;
+  valor: string;
+  opcoes: Array<{ valor: string; rotulo: string }>;
+  aoMudar: (v: string) => void;
+  todos?: string;
+}) {
+  return (
+    <label className="flex min-w-0 items-center gap-1.5">
+      <span className="shrink-0 text-[11.5px] text-muted">{rotulo}</span>
+      <select
+        value={valor}
+        onChange={(e) => aoMudar(e.target.value)}
+        className="min-w-0 max-w-[16ch] truncate rounded-full border border-line bg-paper px-2.5 py-1.5 text-[12px] text-ink outline-none focus:border-brand-400"
+      >
+        <option value="">{todos}</option>
+        {opcoes.map((o) => (
+          <option key={o.valor} value={o.valor}>
+            {o.rotulo}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
