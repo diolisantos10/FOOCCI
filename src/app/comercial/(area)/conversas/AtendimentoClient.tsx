@@ -67,15 +67,12 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useSalaDeVendas, mudarResponsavel } from "../_dados";
 import {
   useConversa, escrever, marcarLidas, salvarFicha, moverEtapa,
-  desde, hora, dataHoraCurta, type LeadNaConversa,
+  desde, dataHoraCurta, type LeadNaConversa,
 } from "./_dados";
 import type { EventoDaFicha } from "@/services/salaDeVendas/linhaDoTempo";
 import { rotuloCurto, ETAPAS_NA_SALA } from "@/services/salaDeVendas/rotulosDaSala";
 import type { NomeDaFila, LeadNaFila } from "@/services/salaDeVendas/filas";
-import type { MensagemNaTela } from "@/services/salaDeVendas/conversa";
-// Módulo PURO de propósito (sem Prisma): é o que permite a tela usar o mesmo
-// rótulo do servidor sem arrastar o cliente do banco para o bundle.
-import { rotuloDoNaoSuportado, rotuloDeMidiaQueNaoAbriu } from "@/services/salaDeVendas/rotuloDeMidia";
+import { Bolha, AvisoDaJanela } from "../_conversa/Fio";
 import { useCopiloto } from "./_copiloto";
 import { PainelDoCopiloto } from "./PainelDoCopiloto";
 
@@ -487,6 +484,36 @@ function ColunaDeFilas({
 // 2. LISTA DE CONVERSAS
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * ⭐ AS ABAS `Todas · Em atendimento · Aguardando` — o que faltava da peça 05.
+ *
+ * O desenho põe três abas com contador no topo da lista de conversas. Elas são
+ * um recorte da lista JÁ CARREGADA da fila escolhida, e não uma segunda
+ * consulta: o número que aparece na aba é o número de linhas que a aba mostra
+ * ao ser clicada, sempre. Um contador vindo de outra consulta divergiria da
+ * própria lista no primeiro segundo de diferença entre as duas — e é assim que
+ * uma tela passa a dar duas respostas para a mesma pergunta.
+ *
+ * ⚠️ Por isso o rodapé diz, em texto, que a contagem é da fila aberta. Sem essa
+ * frase, "Aguardando 3" se lê como "três em toda a operação".
+ */
+type AbaDaLista = "todas" | "emAtendimento" | "aguardando";
+
+function naAba(aba: AbaDaLista, atendidoPor: string): boolean {
+  switch (aba) {
+    case "emAtendimento":
+      return atendidoPor === "HUMANO";
+    case "aguardando":
+      // "Aguardando" é quem espera gente: a IA devolveu e ninguém pegou, ou
+      // ninguém nunca pegou. São os dois estados em que a conversa está parada
+      // esperando uma pessoa — juntá-los é a leitura do desenho.
+      return atendidoPor === "AGUARDANDO_HUMANO" || atendidoPor === "NINGUEM";
+    case "todas":
+    default:
+      return true;
+  }
+}
+
 function ColunaDeConversas({
   estado,
   selecionado,
@@ -496,6 +523,8 @@ function ColunaDeConversas({
   selecionado: string | null;
   aoAbrir: (id: string) => void;
 }) {
+  const [aba, setAba] = useState<AbaDaLista>("todas");
+
   if (estado.fase === "semAcesso") {
     return (
       <p className="p-4 text-[13px] text-muted">
@@ -532,17 +561,57 @@ function ColunaDeConversas({
     );
   }
 
+  const abas: Array<{ nome: AbaDaLista; rotulo: string }> = [
+    { nome: "todas", rotulo: "Todas" },
+    { nome: "emAtendimento", rotulo: "Em atendimento" },
+    { nome: "aguardando", rotulo: "Aguardando" },
+  ];
+
+  const visiveis = estado.dados.leads.filter((l) => naAba(aba, l.atendidoPor));
+
   return (
-    <ul>
-      {estado.dados.leads.map((l) => (
-        <LinhaDaConversa
-          key={l.id}
-          lead={l}
-          ativo={l.id === selecionado}
-          aoAbrir={() => aoAbrir(l.id)}
-        />
-      ))}
-    </ul>
+    <>
+      <div className="sticky top-0 z-10 flex flex-wrap gap-1 border-b border-line bg-paper px-2 py-1.5">
+        {abas.map((a) => {
+          const total = estado.dados.leads.filter((l) => naAba(a.nome, l.atendidoPor)).length;
+          return (
+            <button
+              key={a.nome}
+              onClick={() => setAba(a.nome)}
+              className={cx(
+                "flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-[11.5px] font-semibold transition-colors",
+                aba === a.nome ? "bg-brand-500 text-white" : "text-ink2 hover:bg-canvas",
+              )}
+            >
+              <span className="truncate">{a.rotulo}</span>
+              <span className="shrink-0 tabular-nums opacity-80">{total}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {visiveis.length === 0 ? (
+        <p className="p-4 text-[12.5px] leading-relaxed text-muted">
+          Nenhuma conversa nesta aba, dentro da fila aberta.
+        </p>
+      ) : (
+        <ul>
+          {visiveis.map((l) => (
+            <LinhaDaConversa
+              key={l.id}
+              lead={l}
+              ativo={l.id === selecionado}
+              aoAbrir={() => aoAbrir(l.id)}
+            />
+          ))}
+        </ul>
+      )}
+
+      <p className="px-3 py-2 text-[11px] leading-relaxed text-muted">
+        As três contagens são da <strong>fila aberta</strong> ao lado — não da operação
+        inteira.
+      </p>
+    </>
   );
 }
 
@@ -810,168 +879,6 @@ function PainelDaConversa({
       </footer>
     </>
   );
-}
-
-/**
- * O aviso da janela de 24h.
- *
- * Ele existe porque, sem ele, o vendedor digita a mensagem, aperta enviar, e
- * recebe um erro de API que não explica nada. A informação precisa chegar ANTES
- * de ele escrever.
- */
-function AvisoDaJanela({ janela }: { janela: { aberta: boolean; motivo?: string } }) {
-  if (janela.aberta) return null;
-
-  return (
-    <p className="mb-2 rounded-lg bg-canvas px-2.5 py-1.5 text-[12.5px] text-ink2">
-      {janela.motivo === "nuncaFalou"
-        ? "Esta pessoa ainda não escreveu. Pelas regras da Meta, o primeiro contato exige modelo aprovado."
-        : "A janela de 24 horas fechou. Fora dela, só sai modelo aprovado pela Meta."}
-    </p>
-  );
-}
-
-function Bolha({ m }: { m: MensagemNaTela }) {
-  const daFoocci = m.direcao === "SAIDA";
-
-  return (
-    <li className={cx("flex", daFoocci ? "justify-end" : "justify-start")}>
-      <div
-        className={cx(
-          "max-w-[85%] rounded-2xl px-3 py-2 text-[13.5px] leading-relaxed sm:max-w-[70%]",
-          daFoocci
-            ? "rounded-br-sm bg-brand-50 text-ink"
-            : "rounded-bl-sm border border-line bg-paper text-ink",
-        )}
-      >
-        {/* ⭐ A MÍDIA VEM ANTES DO TEXTO, porque é ela o que o cliente mandou:
-            a legenda é comentário sobre a foto, não a mensagem. */}
-        <AnexoDoCliente m={m} />
-
-        {m.texto || m.legenda ? (
-          <p className="whitespace-pre-wrap break-words">{m.texto ?? m.legenda}</p>
-        ) : m.temMidia ? null : (
-          <p className="italic text-muted">{descricaoDaMidia(m)}</p>
-        )}
-
-        <div className="mt-1 flex items-center justify-end gap-1.5 text-[10.5px] text-muted">
-          {daFoocci && m.autor && (
-            <span>{m.autor === "IA" ? "IA" : (m.autorNome ?? "equipe")}</span>
-          )}
-          <span>{hora(m.ocorreuEm)}</span>
-          {daFoocci && <MarcaDeEntrega status={m.status} />}
-        </div>
-
-        {/* A falha aparece na própria bolha. Uma mensagem que não chegou e se
-            parece com uma que chegou faz o vendedor esperar resposta que não vem. */}
-        {m.status === "FALHOU" && (
-          <p className="mt-1 rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">
-            Não foi entregue{m.erro ? `: ${m.erro}` : ""}
-          </p>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/**
- * O ARQUIVO QUE O CLIENTE MANDOU, na bolha.
- *
- * ── O defeito que isto conserta (visto pelo CEO em 19/09/2026) ───────────────
- * O lead mandou três mensagens e a tela mostrou três caixas vazias: "📦
- * Conteúdo não suportado" e duas "🖼️ Imagem". O cliente falou com a gente e
- * ninguém via o que ele disse — nem o humano que assume a conversa.
- *
- * 🔒 O `src` é a rota autenticada da Sala, pedindo pelo ID DA MENSAGEM. Não é
- * a url da Meta, e não leva token: a url da Meta é temporária e autenticada, e
- * colocá-la aqui vazaria a credencial para a rede do navegador. Quem confere se
- * esta conversa é sua é o servidor, a cada pedido.
- *
- * ⚠️ `onError` existe porque a Meta EXPIRA a mídia (a janela é de dias, não de
- * sempre). Uma imagem quebrada com o ícone padrão do navegador faria o vendedor
- * achar que o sistema perdeu a mensagem; o rótulo diz que o arquivo existe e
- * que o download falhou, que é outra coisa e é verdade.
- */
-function AnexoDoCliente({ m }: { m: MensagemNaTela }) {
-  const [falhou, setFalhou] = useState(false);
-
-  if (!m.temMidia) return null;
-
-  const src = `/api/admin/sala-de-vendas/conversa/midia/${m.id}`;
-
-  if (falhou) {
-    return <p className="italic text-muted">{rotuloDeMidiaQueNaoAbriu(m.tipo, m.midiaNome)}</p>;
-  }
-
-  if (m.tipo === "IMAGEM") {
-    return (
-      <a href={src} target="_blank" rel="noreferrer" className="block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={m.legenda ?? "Imagem enviada pelo cliente"}
-          onError={() => setFalhou(true)}
-          className="mb-1 max-h-72 w-full rounded-lg object-contain"
-        />
-      </a>
-    );
-  }
-
-  if (m.tipo === "AUDIO") {
-    return (
-      <audio controls src={src} onError={() => setFalhou(true)} className="mb-1 w-full max-w-[16rem]">
-        {rotuloDeMidiaQueNaoAbriu(m.tipo, m.midiaNome)}
-      </audio>
-    );
-  }
-
-  if (m.tipo === "VIDEO") {
-    return (
-      <video controls src={src} onError={() => setFalhou(true)} className="mb-1 max-h-72 w-full rounded-lg" />
-    );
-  }
-
-  // Documento e qualquer outro arquivo: nome + link. Não se tenta renderizar um
-  // PDF na bolha — o navegador já sabe fazer isso melhor numa aba.
-  return (
-    <a
-      href={src}
-      target="_blank"
-      rel="noreferrer"
-      className="mb-1 flex items-center gap-1.5 rounded-lg border border-line bg-chip px-2 py-1.5 text-[12.5px] underline"
-    >
-      📎 {m.midiaNome ?? "Arquivo enviado pelo cliente"}
-    </a>
-  );
-}
-
-/**
- * O rótulo de quando NÃO HÁ arquivo para mostrar.
- *
- * "📦 Conteúdo não suportado" não informava ninguém. Agora o rótulo diz o que
- * é e por que não aparece — e vem do mesmo módulo que o servidor usa na lista,
- * para as duas telas nunca contarem histórias diferentes.
- */
-function descricaoDaMidia(m: MensagemNaTela): string {
-  switch (m.tipo) {
-    case "AUDIO": return "🎤 Áudio — o arquivo não foi guardado por nós";
-    case "IMAGEM": return "🖼️ Imagem — o arquivo não foi guardado por nós";
-    case "VIDEO": return "🎬 Vídeo — o arquivo não foi guardado por nós";
-    case "DOCUMENTO": return m.midiaNome ? `📎 ${m.midiaNome}` : "📎 Documento — o arquivo não foi guardado por nós";
-    case "NAO_SUPORTADO": return rotuloDoNaoSuportado(m.tipoCru);
-    default: return rotuloDoNaoSuportado(m.tipoCru);
-  }
-}
-
-function MarcaDeEntrega({ status }: { status: string }) {
-  switch (status) {
-    case "PENDENTE": return <span title="Registrada, não enviada">◷</span>;
-    case "ENVIADA": return <span title="Enviada">✓</span>;
-    case "ENTREGUE": return <span title="Entregue">✓✓</span>;
-    case "LIDA": return <span className="text-sky-600" title="Lida">✓✓</span>;
-    case "FALHOU": return <span className="text-red-600" title="Falhou">!</span>;
-    default: return null;
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

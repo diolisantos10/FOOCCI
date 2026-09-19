@@ -31,6 +31,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import type { PainelDoVendedor, ItemDoPainel } from "@/services/salaDeVendas/painelDoVendedor";
 import { ROTULO_DO_ITEM } from "@/services/salaDeVendas/painelDoVendedor";
 import type { LeituraDoCopiloto } from "@/services/salaDeVendas/copiloto";
@@ -40,7 +41,7 @@ import {
   devolverParaIA,
   type EstadoDoCopiloto,
 } from "./_copiloto";
-import { dataHoraCurta, desde } from "./_dados";
+import { dataHoraCurta, desde, criarTarefa } from "./_dados";
 
 function cx(...p: Array<string | false | null | undefined>): string {
   return p.filter(Boolean).join(" ");
@@ -110,6 +111,8 @@ export function PainelDoCopiloto({
         pedirLeitura={pedirLeitura}
         aoUsarSugestao={aoUsarSugestao}
       />
+
+      <OfertaRecomendada painel={painel} />
 
       <Atalhos
         painel={painel}
@@ -360,7 +363,7 @@ function BlocoDaIA({
     <section className="mb-4 rounded-2xl border border-brand-200 bg-brand-50/40 p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
-          Leitura do copiloto
+          Copiloto do Vendedor (IA)
         </h3>
         <button
           onClick={pedirLeitura}
@@ -393,48 +396,87 @@ function BlocoDaIA({
 
       {leitura && (
         <>
-          <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">
+          {/* ── Resumo da conversa ─────────────────────────────────────── */}
+          <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
+            Resumo da conversa
+          </p>
+          <p className="mt-0.5 whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">
             {leitura.resumo}
           </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full border border-line2 bg-paper px-2 py-0.5 text-[11.5px] font-semibold text-ink2">
+          {/* ── Intenção detectada ─────────────────────────────────────── */}
+          <div className="mt-3 rounded-xl border border-line bg-paper p-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
+                Intenção detectada
+              </p>
+              {/* ⚠️ ESTE NÚMERO NÃO É O DO DESENHO, e a diferença importa.
+                  O desenho mostra "85%" como a força da INTENÇÃO de compra.
+                  O que temos é `leitura.confianca`: o quanto o modelo confia na
+                  própria leitura. São duas medidas diferentes, e trocar uma pela
+                  outra faria o vendedor priorizar pelo número errado. Fica a que
+                  é verdade, com o nome dela — ver o relatório da peça 05. */}
+              <span
+                title="Confiança do modelo nesta leitura — NÃO é a chance de fechar"
+                className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-paper"
+              >
+                {leitura.confianca}%
+              </span>
+            </div>
+            <span className="mt-1 inline-flex rounded-full border border-line2 bg-chip px-2 py-0.5 text-[11.5px] font-semibold text-ink2">
               {leitura.rotuloDaIntencao}
             </span>
-            {/* A confiança é do MODELO sobre a própria leitura — não é
-                probabilidade de venda. O título deixa isso escrito porque a
-                confusão entre as duas faz vendedor priorizar pelo número errado. */}
-            <span
-              title="O quanto o modelo confia nesta leitura — não é chance de fechar"
-              className="rounded-full bg-ink px-2 py-0.5 text-[11.5px] font-semibold tabular-nums text-paper"
-            >
-              {leitura.confianca}%
-            </span>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted">
+              O percentual é a <strong>confiança da leitura</strong>, não a chance de
+              compra — essa não é medida hoje.
+            </p>
           </div>
 
-          {leitura.objecoes.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1">
-              {leitura.objecoes.map((o, i) => (
-                <li
-                  key={`${o.codigo}-${i}`}
-                  className="rounded-lg bg-amber-50 px-2 py-1 text-[12px] leading-relaxed text-amber-900"
-                >
-                  <span className="font-semibold">{o.rotulo}</span>
-                  {o.detalhe && <span className="block italic">“{o.detalhe}”</span>}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* ── Objeções identificadas ─────────────────────────────────── */}
+          <div className="mt-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
+                Objeções identificadas
+              </p>
+              <span className="shrink-0 rounded-full bg-chip px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink2">
+                {leitura.objecoes.length}
+              </span>
+            </div>
+            {leitura.objecoes.length > 0 ? (
+              <ul className="mt-1 flex flex-col gap-1">
+                {leitura.objecoes.map((o, i) => (
+                  <li
+                    key={`${o.codigo}-${i}`}
+                    className="rounded-lg bg-amber-50 px-2 py-1 text-[12px] leading-relaxed text-amber-900"
+                  >
+                    <span className="font-semibold">{o.rotulo}</span>
+                    {o.detalhe && <span className="block italic">“{o.detalhe}”</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
+                Nenhuma objeção na leitura — o que não quer dizer que não exista.
+              </p>
+            )}
+          </div>
 
           {leitura.proximaAcao && (
-            <p className="mt-2 rounded-lg bg-paper px-2 py-1.5 text-[12.5px] leading-relaxed text-ink">
-              <span className="font-semibold">Melhor próxima ação:</span>{" "}
-              {leitura.proximaAcao}
-            </p>
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
+                Próxima melhor ação
+              </p>
+              <p className="mt-0.5 rounded-lg bg-paper px-2 py-1.5 text-[12.5px] leading-relaxed text-ink">
+                {leitura.proximaAcao}
+              </p>
+            </div>
           )}
 
           {leitura.sugestoes.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
+                Respostas sugeridas
+              </p>
               {leitura.sugestoes.map((s, i) => (
                 <div key={i} className="rounded-xl border border-line bg-paper p-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-muted">
@@ -470,7 +512,61 @@ function BlocoDaIA({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 3. OS ATALHOS
+// 3. A OFERTA RECOMENDADA
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * ⛔ O CARTÃO QUE O DESENHO PEDE E QUE NÃO TEM FONTE.
+ *
+ * `desenho-05` mostra "Oferta recomendada" com foto do produto, o selo
+ * *"Mais vendido · Alto índice de conversão"*, preço e o botão **Gerar oferta**.
+ *
+ * Nada disso existe aqui, e cada pedaço falta por um motivo diferente:
+ *
+ *  - **recomendação** — não há motor que escolha plano por conversa. Escolher
+ *    "o mais caro" ou "o primeiro do catálogo" e chamar de recomendação seria
+ *    inventar uma leitura que ninguém fez;
+ *  - **"mais vendido" / "alto índice de conversão"** — são medições de venda que
+ *    a Sala não calcula por plano;
+ *  - **preço** — `LeadProposta.valorMensalCent` nasce vazio de propósito
+ *    enquanto o CEO não fechar os valores. O código já diz isso.
+ *
+ * O cartão fica, escrito como falta (regra 2 de `00-MOLDURA-COMUM.md`), e leva
+ * ao lugar onde a oferta é montada de verdade. **Gerar oferta** não vira botão:
+ * ato que não existe não vira botão (regra 3).
+ */
+function OfertaRecomendada({ painel }: { painel: PainelDoVendedor }) {
+  return (
+    <section className="mb-4 rounded-2xl border border-dashed border-line2 bg-canvas p-3">
+      <h3 className="mb-1 text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+        Oferta recomendada
+      </h3>
+      <p className="text-[12px] leading-relaxed text-ink2">
+        <strong className="font-semibold">Não medido.</strong> Não existe motor que
+        recomende plano por conversa, e os preços dos planos ainda não estão fechados —
+        um cartão com produto e valor aqui seria número inventado.
+      </p>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+        O que se sabe deste lead:{" "}
+        {painel.produto ? (
+          <span className="font-semibold text-ink2">interesse em {painel.produto}</span>
+        ) : (
+          "ninguém registrou produto de interesse"
+        )}
+        .
+      </p>
+      <Link
+        href="/comercial/oferta"
+        className="mt-2 inline-block rounded-xl border border-line2 bg-paper px-3 py-1.5 text-[12.5px] font-semibold text-ink2 transition-colors hover:bg-canvas"
+      >
+        Abrir o catálogo e as propostas
+      </Link>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. OS ATALHOS
 // ═══════════════════════════════════════════════════════════════════════════
 
 function Atalhos({
@@ -487,6 +583,9 @@ function Atalhos({
   const [ocupado, setOcupado] = useState(false);
   const [objetivo, setObjetivo] = useState("");
   const [devolvendo, setDevolvendo] = useState(false);
+  const [criandoTarefa, setCriandoTarefa] = useState(false);
+  const [tituloDaTarefa, setTituloDaTarefa] = useState("");
+  const [venceEm, setVenceEm] = useState("");
 
   const temOQueGravar = Boolean(
     leitura && (leitura.objecoes.length || leitura.proximaAcao || painel.necessidade),
@@ -539,11 +638,49 @@ function Atalhos({
     aoMudar();
   }
 
+  async function agendar() {
+    const titulo = tituloDaTarefa.trim();
+    if (!titulo || !venceEm || ocupado) return;
+
+    setOcupado(true);
+    // ⚠️ `venceEm` sai de um `datetime-local`, que é hora LOCAL sem fuso. O
+    // `Date` do navegador resolve para o fuso de quem está olhando antes de
+    // virar ISO — mandar a string crua faria a tarefa vencer três horas fora do
+    // lugar para metade do time.
+    const r = await criarTarefa({
+      leadId: painel.leadId,
+      titulo,
+      venceEm: new Date(venceEm).toISOString(),
+    });
+    setOcupado(false);
+
+    if (!r.ok) {
+      aoAvisar(r.mensagem);
+      return;
+    }
+    setTituloDaTarefa("");
+    setVenceEm("");
+    setCriandoTarefa(false);
+    aoAvisar("Tarefa criada. Ela aparece na agenda de quem a recebeu.");
+    aoMudar();
+  }
+
   return (
     <section className="mb-4 rounded-2xl border border-line bg-paper p-3">
       <h3 className="mb-2 text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
         Atalhos
       </h3>
+
+      {/* ⭐ "Buscar no catálogo" é LINK, e não busca dentro desta coluna: o
+          catálogo e as propostas são uma tela inteira, com preço, validade e
+          alçada. Uma caixinha de busca aqui mostraria nome de plano sem nada
+          disso — e é assim que alguém promete um valor que não confere. */}
+      <Link
+        href="/comercial/oferta"
+        className="mb-2 block w-full rounded-xl border border-line2 px-3 py-2 text-center text-[12.5px] font-semibold text-ink2 transition-colors hover:bg-canvas"
+      >
+        Buscar no catálogo
+      </Link>
 
       <button
         onClick={gravar}
@@ -556,6 +693,57 @@ function Atalhos({
         <p className="mb-2 text-[11px] leading-relaxed text-muted">
           Peça a leitura acima primeiro — não há nada aprendido para gravar.
         </p>
+      )}
+
+      {!criandoTarefa ? (
+        <button
+          onClick={() => setCriandoTarefa(true)}
+          className="mb-2 w-full rounded-xl border border-line2 px-3 py-2 text-[12.5px] font-semibold text-ink2 transition-colors hover:bg-canvas"
+        >
+          Criar tarefa
+        </button>
+      ) : (
+        <div className="mb-2 rounded-xl border border-line2 bg-canvas p-2">
+          <label className="block text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+            O que fazer
+          </label>
+          <input
+            value={tituloDaTarefa}
+            onChange={(e) => setTituloDaTarefa(e.target.value)}
+            placeholder="Ex.: ligar para confirmar a demonstração"
+            className="mt-1 w-full rounded-xl border border-line2 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-brand-400"
+          />
+          {/* ⚠️ Prazo é obrigatório, e é pedido AQUI. Tarefa sem data não entra
+              em nenhum plano do dia: ela vira uma lista que ninguém abre. */}
+          <label className="mt-1.5 block text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+            Para quando
+          </label>
+          <input
+            type="datetime-local"
+            value={venceEm}
+            onChange={(e) => setVenceEm(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-line2 bg-paper px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-brand-400"
+          />
+          <div className="mt-1.5 flex gap-1.5">
+            <button
+              onClick={agendar}
+              disabled={!tituloDaTarefa.trim() || !venceEm || ocupado}
+              className="flex-1 rounded-xl bg-brand-500 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+            >
+              {ocupado ? "…" : "Criar"}
+            </button>
+            <button
+              onClick={() => {
+                setCriandoTarefa(false);
+                setTituloDaTarefa("");
+                setVenceEm("");
+              }}
+              className="rounded-xl border border-line2 px-3 py-1.5 text-[12.5px] font-semibold text-ink2 hover:bg-paper"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       {!devolvendo ? (

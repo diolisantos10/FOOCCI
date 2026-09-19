@@ -295,14 +295,20 @@ export const GRUPOS: readonly Grupo[] = [
     ],
   },
   {
-    // Lá se atende UMA pessoa; aqui se enxerga a fila inteira. O menu leva a
-    // Conversas porque é a tela do dia de quem responde — a visão de cima é a
-    // aba ao lado, e ela segue a régua de gestão.
+    // As duas telas do desenho do CEO que vivem no menu Atendimento:
+    // `Conversas` é a peça 05 (Copiloto do Vendedor) e `Central de Atendimento`
+    // é a peça 03 (a mesa de três colunas com as Caixas de Conversa).
+    //
+    // ⭐ A Central deixou de ser painel de gestão em 19/09/2026 e virou a mesa
+    // de trabalho do desenho — por isso saiu de `PAPEIS_DO_PAINEL`. Quem atende
+    // precisa alcançá-la, ou a tela fica sem o público dela. O que ela mostra
+    // continua preso ao `escopoDaConsulta`, no `where`: a porta abriu, o dado
+    // não. A visão de cima é a Torre, e ela segue a régua de gestão.
     rotulo: "Atendimento",
     href: ROTAS.conversas,
     abas: [
       { href: ROTAS.conversas, rotulo: "Conversas" },
-      { href: ROTAS.atendimento, rotulo: "Central de atendimento", papeis: PAPEIS_DO_PAINEL },
+      { href: ROTAS.atendimento, rotulo: "Central de atendimento" },
     ],
   },
   {
