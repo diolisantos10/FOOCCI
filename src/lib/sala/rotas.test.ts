@@ -184,9 +184,14 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
     ROTAS.importacoes, ROTAS.torre, ROTAS.atendimento, ROTAS.sdr,
     ROTAS.qualificacao, ROTAS.roteamento, ROTAS.oferta, ROTAS.crm,
     ROTAS.relacionamento, ROTAS.acessos,
+    /* 19/09/2026 — a 25ª. NÃO é uma tela "aproveitando a faxina": é a porta de
+     * entrada manual que não existia, e cuja ausência deixou um lead pago 20
+     * horas fora do sistema. Ela entra aqui para que a contagem continue sendo
+     * uma DECISÃO escrita, e não um número que cresce sozinho. */
+    ROTAS.cadastro,
   ];
 
-  it("⛔ nenhum dos 24 endereços antigos sumiu do menu", () => {
+  it("⛔ nenhum dos endereços do menu sumiu", () => {
     const hoje = new Set(GRUPOS.flatMap((g) => g.abas.map((a) => a.href)));
     const sumidos = ANTES.filter((h) => !hoje.has(h));
     expect(sumidos, `endereço que deixou de ser alcançável: ${sumidos.join(", ")}`).toEqual([]);
