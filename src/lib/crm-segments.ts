@@ -4,8 +4,13 @@
  * Defines the day-threshold rules that classify customers into:
  *   QUENTE  — ordered within hotMaxDays
  *   MORNO   — ordered between hotMaxDays+1 and warmMaxDays days ago
- *   FRIO    — ordered warmMaxDays+1 days ago or more (up to lostMinDays)
+ *   FRIO    — ordered between warmMaxDays+1 and lostMinDays-1 days ago
+ *             (has BOTH a ceiling and a floor — see coldWhere/isCold)
  *   PERDIDO — ordered lostMinDays+ days ago (or never, depending on context)
+ *
+ * FRIO and PERDIDO are mutually exclusive: the floor on FRIO is enforced by the
+ * shared predicates at the bottom of this file, which the audience preview, the
+ * send-path audience resolution and the journey x-ray all use.
  *
  * Stored in RestaurantCRMProfile.segmentConfig (JSONB).
  * Enforced by CrmAudienceService and CRMService.getOverviewStats.
@@ -34,7 +39,7 @@ export const DEFAULT_SEGMENT_CONFIG: Readonly<SegmentConfig> = {
 
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
-/** Days from which a customer is considered FRIO (= warmMaxDays + 1). */
+/** Days from which a customer is considered FRIO (= warmMaxDays + 1). FRIO ends at lostMinDays. */
 export function coldMinDays(cfg: SegmentConfig): number {
   return cfg.warmMaxDays + 1;
 }
@@ -68,7 +73,8 @@ export async function getSegmentConfig(restaurantId: string): Promise<SegmentCon
 export interface SegmentCutoffs {
   hotCutoff:  Date; // customers with lastOrder >= hotCutoff are QUENTE
   warmCutoff: Date; // customers with lastOrder >= warmCutoff (and < hotCutoff) are MORNO
-  lostCutoff: Date; // customers with lastOrder < lostCutoff are PERDIDO
+  lostCutoff: Date; // customers with lastOrder in [lostCutoff, warmCutoff) are FRIO;
+                    // customers with lastOrder < lostCutoff are PERDIDO
 }
 
 export function buildCutoffs(cfg: SegmentConfig, now: Date = new Date()): SegmentCutoffs {
@@ -77,5 +83,64 @@ export function buildCutoffs(cfg: SegmentConfig, now: Date = new Date()): Segmen
     hotCutoff:  new Date(ms - cfg.hotMaxDays  * 86_400_000),
     warmCutoff: new Date(ms - cfg.warmMaxDays * 86_400_000),
     lostCutoff: new Date(ms - cfg.lostMinDays * 86_400_000),
+  };
+}
+
+// ─── Predicados de segmento — FONTE ÚNICA ─────────────────────────────────────
+//
+// FRIO tem TETO e PISO: [lostCutoff, warmCutoff). PERDIDO começa exatamente onde
+// o frio acaba: < lostCutoff. Os dois são mutuamente excludentes — um cliente
+// perdido NÃO recebe mais a mensagem de frio.
+//
+// Antes disso a definição vivia copiada em três lugares (prévia de audiência,
+// resolução de audiência de envio e raio-x da jornada) e nenhum deles aplicava o
+// piso. Quem mexer aqui muda os três de uma vez; é para isso que este trecho
+// existe. Não duplique.
+
+/** Última data de pedido efetiva (nativa, com a importada como COALESCE). */
+export function effectiveLastOrder(c: {
+  lastOrderAt: Date | null;
+  importedLastOrderAt?: Date | null;
+}): Date | null {
+  return c.lastOrderAt ?? c.importedLastOrderAt ?? null;
+}
+
+/** FRIO: pedido entre warmMaxDays e lostMinDays dias atrás (piso incluído). */
+export function isCold(effective: Date, cutoffs: SegmentCutoffs): boolean {
+  return effective >= cutoffs.lostCutoff && effective < cutoffs.warmCutoff;
+}
+
+/** PERDIDO: pedido há lostMinDays dias ou mais. */
+export function isLost(effective: Date, cutoffs: SegmentCutoffs): boolean {
+  return effective < cutoffs.lostCutoff;
+}
+
+type DateWindow = { gte?: Date; lt?: Date };
+type SegmentWhere = {
+  OR: [
+    { lastOrderAt: DateWindow },
+    { lastOrderAt: null; importedLastOrderAt: DateWindow },
+  ];
+};
+
+/** Fragmento Prisma do segmento FRIO — com o piso do perdido. */
+export function coldWhere(cutoffs: SegmentCutoffs): SegmentWhere {
+  const janela = { gte: cutoffs.lostCutoff, lt: cutoffs.warmCutoff };
+  return {
+    OR: [
+      { lastOrderAt: janela },
+      { lastOrderAt: null, importedLastOrderAt: janela },
+    ],
+  };
+}
+
+/** Fragmento Prisma do segmento PERDIDO. */
+export function lostWhere(cutoffs: SegmentCutoffs): SegmentWhere {
+  const janela = { lt: cutoffs.lostCutoff };
+  return {
+    OR: [
+      { lastOrderAt: janela },
+      { lastOrderAt: null, importedLastOrderAt: janela },
+    ],
   };
 }

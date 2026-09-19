@@ -28,7 +28,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { SegmentConfig } from "@/lib/crm-segments";
-import { DEFAULT_SEGMENT_CONFIG, buildCutoffs } from "@/lib/crm-segments";
+import { DEFAULT_SEGMENT_CONFIG, buildCutoffs, isCold, isLost } from "@/lib/crm-segments";
 
 /** Cliente Prisma, ou qualquer coisa com a mesma forma (o teste injeta um duplo). */
 export type LeitorDeClientes = Pick<PrismaClient, "customer">;
@@ -133,21 +133,18 @@ export function estagiosDoCliente(
     // Cliente morno — entre o corte morno e o quente.
     if (eff >= cutoffs.warmCutoff && eff < cutoffs.hotCutoff) estagios.push("reativar-mornos");
 
-    // Cliente frio — mais velho que o corte morno. SEM PISO: ver o aviso abaixo.
-    if (eff < cutoffs.warmCutoff) estagios.push("recuperar-frios");
-
-    // Cliente perdido — mais velho que o corte de perdido.
+    // Cliente frio — entre o corte de perdido e o corte morno. COM PISO.
     //
-    // ⚠️ AQUI MORA O DEFEITO QUE ESTE MÓDULO FOI ESCRITO PARA MEDIR.
-    // `lostCutoff` é MAIS ANTIGO que `warmCutoff` (120 dias contra 60). Logo
-    // `eff < lostCutoff` IMPLICA `eff < warmCutoff`: todo PERDIDO é também FRIO,
-    // por construção, sempre, 100% das vezes. Não é um caso de borda — é a
-    // definição. O cabeçalho de `src/lib/crm-segments.ts` descreve FRIO como
-    // "ordered warmMaxDays+1 days ago or more (UP TO lostMinDays)", ou seja COM
-    // piso; `CrmAudienceService.recuperar-frios` chama
-    // `effectiveLastOrderBefore(warmCutoff)` SEM piso nenhum. A documentação e o
-    // código discordam, e é o código que manda mensagem.
-    if (eff < cutoffs.lostCutoff) estagios.push("recuperar-perdidos");
+    // O piso entrou em 19/09/2026. Antes, `eff < warmCutoff` sem piso fazia com
+    // que TODO perdido fosse também frio, por construção (lostCutoff é mais
+    // antigo que warmCutoff): 3.037 perdidos dentro de 3.172 frios na tela do
+    // CEO, todos recebendo a mensagem errada para o estágio deles. Agora os dois
+    // predicados vêm de `@/lib/crm-segments`, a mesma fonte que a prévia e o
+    // envio usam — medir por um segundo critério seria inventar outra verdade.
+    if (isCold(eff, cutoffs)) estagios.push("recuperar-frios");
+
+    // Cliente perdido — mais velho que o corte de perdido. Excludente do frio.
+    if (isLost(eff, cutoffs)) estagios.push("recuperar-perdidos");
   }
 
   return estagios;

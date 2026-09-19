@@ -19,7 +19,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { SegmentConfig } from "@/lib/crm-segments";
-import { DEFAULT_SEGMENT_CONFIG, buildCutoffs } from "@/lib/crm-segments";
+import { DEFAULT_SEGMENT_CONFIG, buildCutoffs, coldWhere, lostWhere } from "@/lib/crm-segments";
 import { RelationshipProgramService } from "./RelationshipProgramService";
 
 const PREVIEW_LIMIT = 20;
@@ -95,23 +95,6 @@ const ELIGIBLE_FILTERS = {
   phone:          { not: null as null },
 };
 
-/**
- * Build a Prisma `where` condition that matches customers whose
- * effective last order (real OR imported) is before `cutoff`.
- *
- * This mirrors the COALESCE("lastOrderAt","importedLastOrderAt") logic in the
- * overview stats raw SQL, so both paths count the same customers.
- */
-function effectiveLastOrderBefore(cutoff: Date) {
-  return {
-    OR: [
-      // Customer has a real Foocci order before the cutoff
-      { lastOrderAt: { lt: cutoff } },
-      // Customer has no real order yet but has an imported date before cutoff
-      { lastOrderAt: null, importedLastOrderAt: { lt: cutoff } },
-    ],
-  };
-}
 
 /**
  * Build a Prisma `where` condition that matches customers whose
@@ -138,9 +121,11 @@ export class CrmAudienceService {
     const cutoffs = buildCutoffs(segCfg, ts);
 
     switch (templateId) {
-      // ── Segment: FRIO — effective last order older than warmMaxDays ──────────
+      // ── Segment: FRIO — effective last order between warmMaxDays and lostMinDays.
+      //    COM PISO: quem passou de lostMinDays é PERDIDO e não entra aqui. A janela
+      //    vem de crm-segments (fonte única), compartilhada com o envio e o raio-x. ──
       case "recuperar-frios": {
-        const dateCond  = effectiveLastOrderBefore(cutoffs.warmCutoff);
+        const dateCond  = coldWhere(cutoffs);
         const segWhere  = { restaurantId, isGuest: false, ...dateCond };
         const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond };
         const [total, eligible, preview] = await Promise.all([
@@ -247,7 +232,7 @@ export class CrmAudienceService {
 
       // ── Segment: PERDIDO — effective last order older than lostMinDays ───────
       case "recuperar-perdidos": {
-        const dateCond  = effectiveLastOrderBefore(cutoffs.lostCutoff);
+        const dateCond  = lostWhere(cutoffs);
         const segWhere  = { restaurantId, isGuest: false, ...dateCond };
         const eligWhere = { restaurantId, ...ELIGIBLE_FILTERS, ...dateCond };
         const [total, eligible, preview] = await Promise.all([
