@@ -291,3 +291,370 @@ async function contarLacunas(
     }))
     .sort((a, b) => b.leads - a.leads);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A MESA DE TRABALHO — a tabela de leads do desenho 06
+//
+// ── POR QUE ELA PASSOU A EXISTIR ────────────────────────────────────────────
+//
+// Auditado em 19/09/2026: *"o desenho é uma mesa de trabalho e nós entregamos
+// um relatório"*. O painel agregado acima responde "como está a base"; esta
+// tabela responde a pergunta de quem trabalha: **qual lead eu pego agora, e o
+// que eu já sei dele.**
+//
+// ── DE ONDE VEM CADA COLUNA DO DESENHO ──────────────────────────────────────
+//
+//   Nome / Empresa    → SiteLead.nome + SiteLead.restaurante
+//   Origem            → SiteLead.fonte (e utmSource quando a fonte é campanha)
+//   Produto           → LeadQualificacao.planoDeInteresse
+//   Necessidade       → LeadQualificacao.dorPrincipal
+//   Urgência          → LeadQualificacao.urgencia
+//   Orçamento         → LeadQualificacao.faixaDeOrcamento
+//   Objeções          → LeadQualificacao.objecoes (e as da Oportunidade)
+//   Valor Potencial   → Oportunidade.valorPotencialCents  ⚠️ só existe se houver
+//   Prob. de Compra   → Oportunidade.probabilidade        ⚠️ oportunidade aberta
+//   Score / pílula    → SiteLead.score + SiteLead.temperatura
+//   Stage             → SiteLead.stage (o seletor da linha move de verdade)
+//
+// ⛔ **Nenhuma destas colunas ganha valor por dedução.** Ausente é `null`, a
+// tela escreve o motivo, e nada aqui vira zero, "—" mudo ou média da base.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Uma linha da mesa de trabalho. Todo campo que pode faltar é `null`. */
+export interface LinhaDaMesa {
+  id: string;
+  nome: string;
+  /** A casa da pessoa. `null` = ninguém registrou o restaurante. */
+  empresa: string | null;
+  /** Porta de entrada (`fonte`). Sempre existe: é enum com padrão. */
+  origem: string;
+  /** A peça de campanha, quando a origem veio de anúncio. */
+  origemDetalhe: string | null;
+  produto: string | null;
+  necessidade: string | null;
+  urgencia: string | null;
+  faixaDeOrcamento: string | null;
+  objecoes: string[];
+  /** Em centavos. `null` = não há oportunidade, ou ninguém estimou. */
+  valorPotencialCents: number | null;
+  /** 0 a 100. `null` = não há oportunidade, ou ninguém estimou. */
+  probabilidade: number | null;
+  /** Por que valor e probabilidade estão vazios, quando estão. */
+  porqueSemOportunidade: string | null;
+  score: number | null;
+  temperatura: string | null;
+  /** Como o desenho chama a temperatura. `null` quando ele não a previu. */
+  temperaturaNoDesenho: string | null;
+  stage: string;
+  stageDesde: string;
+  criadoEm: string;
+}
+
+export interface FiltrosDaMesa {
+  busca?: string | null;
+  origem?: string | null;
+  produto?: string | null;
+  temperatura?: string | null;
+  stage?: string | null;
+  pagina?: number;
+  porPagina?: number;
+}
+
+/** O que os quatro seletores do desenho oferecem — lido da base, não digitado. */
+export interface OpcoesDosFiltros {
+  origens: string[];
+  produtos: string[];
+  temperaturas: string[];
+  stages: string[];
+}
+
+export interface MesaDeTrabalho {
+  linhas: LinhaDaMesa[];
+  total: number;
+  pagina: number;
+  porPagina: number;
+  paginas: number;
+  opcoes: OpcoesDosFiltros;
+  /** Por que uma coluna inteira pode estar vazia. A tela repete, não inventa. */
+  naoMedido: string[];
+}
+
+const POR_PAGINA_PADRAO = 10;
+const POR_PAGINA_TETO = 100;
+
+/** A busca do desenho: nome, empresa, produto. Nada de varredura em texto livre. */
+function recorteDaBusca(termo: string): Prisma.SiteLeadWhereInput {
+  const t = termo.trim();
+  return {
+    OR: [
+      { nome: { contains: t, mode: "insensitive" } },
+      { restaurante: { contains: t, mode: "insensitive" } },
+      { qualificacao: { is: { planoDeInteresse: { contains: t, mode: "insensitive" } } } },
+    ],
+  };
+}
+
+/**
+ * ⭐ A MESA DE TRABALHO, paginada, no escopo de quem pergunta.
+ *
+ * ⚠️ O escopo é o MESMO das filas e do termômetro. Uma tabela de leads que
+ * ignorasse o escopo entregaria a carteira alheia a qualquer SDR autenticado —
+ * e é exatamente por uma tabela que isso vazaria primeiro, porque ela mostra
+ * nome, telefone da casa e valor do negócio numa linha só.
+ */
+export async function mesaDaQualificacao(
+  db: Cliente,
+  params: { escopo: Prisma.SiteLeadWhereInput; filtro?: FiltrosDaMesa },
+): Promise<MesaDeTrabalho> {
+  const f = params.filtro ?? {};
+  const porPagina = Math.min(Math.max(f.porPagina ?? POR_PAGINA_PADRAO, 1), POR_PAGINA_TETO);
+  const pagina = Math.max(f.pagina ?? 1, 1);
+
+  const where: Prisma.SiteLeadWhereInput = {
+    AND: [
+      params.escopo,
+      { stage: { notIn: [...ETAPAS_ENCERRADAS] } },
+      f.busca?.trim() ? recorteDaBusca(f.busca) : {},
+      f.origem ? { fonte: f.origem as never } : {},
+      f.temperatura ? { temperatura: f.temperatura as never } : {},
+      f.stage ? { stage: f.stage as never } : {},
+      f.produto ? { qualificacao: { is: { planoDeInteresse: f.produto } } } : {},
+    ],
+  };
+
+  const total = await db.siteLead.count({ where });
+  const paginas = Math.max(Math.ceil(total / porPagina), 1);
+  // Filtro apertado depois da página 3 não pode devolver tela em branco sem
+  // explicação: a página é presa ao último intervalo que ainda tem linha.
+  const paginaReal = Math.min(pagina, paginas);
+
+  const leads = await db.siteLead.findMany({
+    where,
+    // A ordem da mesa é a ordem do trabalho: o mais quente primeiro, e quem
+    // ninguém pontuou vai para o fim — ele é fila de qualificação, não de venda.
+    orderBy: [{ score: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    skip: (paginaReal - 1) * porPagina,
+    take: porPagina,
+    select: {
+      id: true, nome: true, restaurante: true, fonte: true, utmCampaign: true,
+      utmSource: true, score: true, temperatura: true, stage: true,
+      stageChangedAt: true, createdAt: true,
+      qualificacao: {
+        select: {
+          planoDeInteresse: true, dorPrincipal: true, urgencia: true,
+          faixaDeOrcamento: true, objecoes: true,
+        },
+      },
+    },
+  });
+
+  const oportunidadePor = new Map<
+    string,
+    { valorPotencialCents: number | null; probabilidade: number | null; objecoes: string[] }
+  >();
+
+  if (leads.length > 0) {
+    // Uma consulta para todas as linhas, e não uma por linha: dez linhas na
+    // tela não podem custar onze idas ao banco.
+    const oportunidades = await db.oportunidade.findMany({
+      where: { leadId: { in: leads.map((l) => l.id) }, estagio: { notIn: ["GANHA", "PERDIDA"] } },
+      orderBy: { criadoEm: "desc" },
+      select: {
+        leadId: true, valorPotencialCents: true, probabilidade: true, objecoes: true,
+      },
+    });
+    for (const o of oportunidades) {
+      if (!o.leadId || oportunidadePor.has(o.leadId)) continue;
+      oportunidadePor.set(o.leadId, {
+        valorPotencialCents: o.valorPotencialCents,
+        probabilidade: o.probabilidade,
+        objecoes: o.objecoes ?? [],
+      });
+    }
+  }
+
+  const linhas: LinhaDaMesa[] = leads.map((l) => {
+    const q = l.qualificacao;
+    const op = oportunidadePor.get(l.id) ?? null;
+    const objecoes = [...new Set([...(q?.objecoes ?? []), ...(op?.objecoes ?? [])])];
+
+    return {
+      id: l.id,
+      nome: l.nome,
+      empresa: l.restaurante,
+      origem: String(l.fonte),
+      origemDetalhe: l.utmCampaign ?? l.utmSource ?? null,
+      produto: q?.planoDeInteresse ?? null,
+      necessidade: q?.dorPrincipal ?? null,
+      urgencia: q?.urgencia ?? null,
+      faixaDeOrcamento: q?.faixaDeOrcamento ?? null,
+      objecoes,
+      valorPotencialCents: op?.valorPotencialCents ?? null,
+      probabilidade: op?.probabilidade ?? null,
+      porqueSemOportunidade: op
+        ? null
+        : "nenhuma oportunidade aberta — valor e probabilidade moram nela, e ninguém abriu o negócio ainda",
+      score: l.score,
+      temperatura: l.temperatura,
+      temperaturaNoDesenho: l.temperatura
+        ? (COMO_O_DESENHO_CHAMA[l.temperatura] ?? null)
+        : null,
+      stage: String(l.stage),
+      stageDesde: l.stageChangedAt.toISOString(),
+      criadoEm: l.createdAt.toISOString(),
+    };
+  });
+
+  const opcoes = await opcoesDosFiltros(db, params.escopo);
+
+  const naoMedido: string[] = [];
+  if (linhas.length > 0 && linhas.every((l) => l.valorPotencialCents === null)) {
+    naoMedido.push(
+      "Nenhuma linha desta página tem Valor Potencial: ele mora na Oportunidade da jornada comercial, e nenhum destes leads tem negócio aberto. A coluna fica, vazia e com o motivo — número inventado aqui viraria previsão de receita falsa.",
+    );
+  }
+  if (linhas.length > 0 && linhas.every((l) => l.objecoes.length === 0)) {
+    naoMedido.push(
+      "Nenhuma objeção registrada nesta página. Objeção é o que o lead disse, e ninguém gravou — não é ausência de objeção.",
+    );
+  }
+
+  return { linhas, total, pagina: paginaReal, porPagina, paginas, opcoes, naoMedido };
+}
+
+/**
+ * O que cada seletor oferece, **lido da base dentro do escopo**.
+ *
+ * Uma lista digitada aqui ofereceria filtro para valor que não existe em lead
+ * nenhum — e filtro que sempre devolve vazio ensina a operação a achar que a
+ * base secou.
+ */
+export async function opcoesDosFiltros(
+  db: Cliente,
+  escopo: Prisma.SiteLeadWhereInput,
+): Promise<OpcoesDosFiltros> {
+  const emAberto: Prisma.SiteLeadWhereInput = {
+    AND: [escopo, { stage: { notIn: [...ETAPAS_ENCERRADAS] } }],
+  };
+
+  const [origens, temperaturas, stages, produtos] = await Promise.all([
+    db.siteLead.groupBy({ by: ["fonte"], where: emAberto }),
+    db.siteLead.groupBy({ by: ["temperatura"], where: emAberto }),
+    db.siteLead.groupBy({ by: ["stage"], where: emAberto }),
+    db.leadQualificacao.groupBy({
+      by: ["planoDeInteresse"],
+      where: { lead: emAberto, planoDeInteresse: { not: null } },
+    }),
+  ]);
+
+  return {
+    origens: origens.map((o) => String(o.fonte)).sort(),
+    temperaturas: temperaturas
+      .map((t) => t.temperatura)
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+      .map(String)
+      .sort(),
+    stages: stages.map((s) => String(s.stage)).sort(),
+    produtos: produtos
+      .map((p) => p.planoDeInteresse)
+      .filter((p): p is string => Boolean(p))
+      .sort(),
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A CONVERSÃO POR SCORE — o gráfico de barras do rodapé do desenho
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface ConversaoPorTemperatura {
+  temperatura: string;
+  nomeNoDesenho: string | null;
+  /** Leads que JÁ tiveram desfecho nesta temperatura (ganhos + perdidos). */
+  decididos: number;
+  ganhos: number;
+  /** `null` quando ninguém decidiu ainda nesta faixa — e isso NÃO é 0%. */
+  taxa: number | null;
+  /** Por que a taxa é nula, quando é. */
+  porque: string | null;
+}
+
+/**
+ * A taxa de conversão de cada degrau — medida, não estimada.
+ *
+ * ⚠️ O denominador é **quem já teve desfecho**, não a base inteira. Dividir os
+ * ganhos pelo total incluiria no denominador todo lead que ainda está em
+ * negociação — e uma base crescendo faria a conversão *cair* sem que ninguém
+ * tivesse vendido menos. É o erro que faz painel de vendas perder a confiança.
+ *
+ * Faixa sem nenhum desfecho devolve `taxa: null` com o motivo. Zero por cento
+ * diria "tentamos e não vendemos"; nulo diz "ainda não deu tempo".
+ */
+export async function conversaoPorScore(
+  db: Cliente,
+  params: { escopo: Prisma.SiteLeadWhereInput },
+): Promise<ConversaoPorTemperatura[]> {
+  const decidido: Prisma.SiteLeadWhereInput = {
+    AND: [params.escopo, { stage: { in: ["GANHO", "PERDIDO"] } }],
+  };
+
+  const [decididos, ganhos] = await Promise.all([
+    db.siteLead.groupBy({ by: ["temperatura"], where: decidido, _count: { _all: true } }),
+    db.siteLead.groupBy({
+      by: ["temperatura"],
+      where: { AND: [params.escopo, { stage: "GANHO" }] },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const totalPor = new Map<string, number>();
+  for (const d of decididos) if (d.temperatura) totalPor.set(d.temperatura, d._count._all);
+  const ganhoPor = new Map<string, number>();
+  for (const g of ganhos) if (g.temperatura) ganhoPor.set(g.temperatura, g._count._all);
+
+  return faixasDaRegua().map((faixa) => {
+    const t = faixa.temperatura;
+    const dec = totalPor.get(t) ?? 0;
+    const gan = ganhoPor.get(t) ?? 0;
+    return {
+      temperatura: String(t),
+      nomeNoDesenho: COMO_O_DESENHO_CHAMA[t] ?? null,
+      decididos: dec,
+      ganhos: gan,
+      taxa: dec === 0 ? null : Math.round((gan / dec) * 100),
+      porque:
+        dec === 0
+          ? "nenhum lead desta faixa chegou a GANHO ou PERDIDO ainda — sem desfecho não há taxa, e 0% diria que tentamos e não vendemos"
+          : null,
+    };
+  });
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A TELA INTEIRA — o painel, a mesa e a conversão, numa leitura só
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tudo o que a peça 06 do desenho mostra.
+ *
+ * Existe como tipo próprio, e não como campos novos em `PanoramaDaQualificacao`,
+ * porque o panorama responde "como está a base" e é lido por quem não desenha
+ * tabela nenhuma. Juntar os dois obrigaria toda leitura do termômetro a pagar a
+ * paginação da mesa.
+ */
+export interface TelaDaQualificacao extends PanoramaDaQualificacao {
+  mesa: MesaDeTrabalho;
+  conversao: ConversaoPorTemperatura[];
+}
+
+export async function telaDaQualificacao(
+  db: Cliente,
+  params: { escopo: Prisma.SiteLeadWhereInput; filtro?: FiltrosDaMesa },
+): Promise<TelaDaQualificacao> {
+  const [panorama, mesa, conversao] = await Promise.all([
+    panoramaDaQualificacao(db, { escopo: params.escopo }),
+    mesaDaQualificacao(db, { escopo: params.escopo, filtro: params.filtro }),
+    conversaoPorScore(db, { escopo: params.escopo }),
+  ]);
+
+  return { ...panorama, mesa, conversao };
+}
