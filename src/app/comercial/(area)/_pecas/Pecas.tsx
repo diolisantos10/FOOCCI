@@ -872,3 +872,267 @@ export function SerieNoTempo({
     </div>
   );
 }
+// ═════════════════════════════════════════════════════════════════════════════
+// ACRESCENTADO EM 19/09/2026 PELA FRENTE DAS PEÇAS 11 (CRM IA) E 09 (FOLLOW-UP)
+//
+// ⚠️ Só ACRÉSCIMO. Nada acima desta linha foi reescrito: outras frentes de tela
+// estavam neste mesmo arquivo hoje, e reescrever peça alheia para caber a minha
+// é como se perde o trabalho de outra pessoa sem ninguém notar.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * O VAZIO, escrito — e ele é diferente do NÃO MEDIDO.
+ *
+ * `NaoMedido` diz *"eu não sei"*. `Vazio` diz *"eu olhei e não havia nada"*.
+ * São respostas opostas, e colapsá-las num traço só é como um painel ensina a
+ * operação a ler ausência de dado como ausência de problema.
+ */
+export function Vazio({ motivo }: { motivo: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-line bg-paper px-3 py-4">
+      <p className="text-[12.5px] font-medium text-ink2">nada nesta lista</p>
+      <p className="mt-0.5 max-w-[70ch] text-[11.5px] leading-snug text-muted">{motivo}</p>
+    </div>
+  );
+}
+
+/** As abas do desenho: pílulas com ícone, a ativa em azul claro. */
+export function Abas<T extends string>({
+  abas,
+  ativa,
+  aoTrocar,
+}: {
+  abas: Array<{ chave: T; rotulo: string; icone?: NomeDeIcone }>;
+  ativa: T;
+  aoTrocar: (c: T) => void;
+}) {
+  return (
+    <div role="tablist" aria-label="Seções da tela" className="flex flex-wrap gap-2">
+      {abas.map((a) => {
+        const sel = a.chave === ativa;
+        return (
+          <button
+            key={a.chave}
+            type="button"
+            role="tab"
+            aria-selected={sel}
+            onClick={() => aoTrocar(a.chave)}
+            className={cx(
+              "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12.5px] font-semibold transition-colors",
+              sel
+                ? "border-brand-200 bg-brand-50 text-brand-600"
+                : "border-line bg-paper text-ink2 hover:bg-chip hover:text-ink",
+            )}
+          >
+            {a.icone ? <Icone nome={a.icone} className="h-[15px] w-[15px]" /> : null}
+            {a.rotulo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * O GRÁFICO DE COLUNAS VERTICAIS do rodapé do desenho 11, com o valor no topo.
+ *
+ * ⚠️ Barra de altura zero NÃO é desenhada como um fiapo: a coluna some e o zero
+ * fica escrito, porque um fiapo de 1px se confunde com "muito pouco" quando na
+ * verdade é "nenhum". E uma lista inteira zerada não vira gráfico nenhum — quem
+ * chama trata o vazio com `Vazio`, que diz o que foi olhado.
+ */
+export function Colunas({
+  itens,
+  tons,
+}: {
+  itens: Array<{ rotulo: string; valor: number }>;
+  /** Um tom por coluna, na ordem. Falta de tom cai em azul. */
+  tons?: Tom[];
+}) {
+  const teto = Math.max(...itens.map((i) => i.valor), 0);
+
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-3">
+      <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ minHeight: 160 }}>
+        {itens.map((i, n) => {
+          const t = TINTA[tons?.[n] ?? "azul"];
+          const altura = teto > 0 ? Math.round((i.valor / teto) * 110) : 0;
+          return (
+            <div key={i.rotulo} className="flex min-w-[64px] flex-1 flex-col items-center justify-end gap-1">
+              <span className="text-[12px] font-semibold tabular-nums text-ink">{i.valor}</span>
+              {i.valor > 0 ? (
+                <div
+                  className={cx("w-full max-w-[56px] rounded-t-lg", t.barra)}
+                  style={{ height: Math.max(altura, 4) }}
+                  role="presentation"
+                />
+              ) : (
+                <div className="h-[4px] w-full max-w-[56px] rounded-full bg-line2" role="presentation" />
+              )}
+              <span className="w-full break-words text-center text-[10.5px] leading-tight text-muted">
+                {i.rotulo}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * O INTERRUPTOR do desenho — e ele é SEMPRE só leitura.
+ *
+ * ── ⛔ POR QUE ELE NÃO CLICA ────────────────────────────────────────────────
+ *
+ * No desenho, "Ações automáticas" tem três chaves que se viram com o dedo. Na
+ * nossa realidade, cada uma dessas chaves é o que separa "dar uma olhada" de
+ * "mandar mensagem para setecentas pessoas" — e o envio está pausado por ordem
+ * do CEO. Um interruptor clicável na tela seria o disparo em massa a um toque.
+ *
+ * Então a peça mostra o estado MEDIDO e diz, na própria tela, onde a chave se
+ * muda de verdade. Ela é `<span>`, não `<button>`: não há o que apertar, e um
+ * botão desabilitado ainda ensina que um dia vai funcionar aqui.
+ *
+ * `ligado === null` é NÃO MEDIDO, e ele não desenha um interruptor desligado —
+ * "não sei" pintado de cinza-apagado vira "está desligado" na cabeça de quem lê.
+ */
+export function Interruptor({
+  rotulo,
+  descricao,
+  ligado,
+  motivo,
+  ondeSeMuda,
+}: {
+  rotulo: string;
+  descricao: string;
+  /** `null` = não medido. Exige `motivo`. */
+  ligado: boolean | null;
+  motivo?: string;
+  ondeSeMuda: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 border-b border-line py-2.5 last:border-0">
+      <span className="mt-0.5 shrink-0" aria-hidden="true">
+        {ligado === null ? (
+          <span className="grid h-5 w-9 place-items-center rounded-full bg-chip text-[10px] font-bold text-muted">
+            ?
+          </span>
+        ) : (
+          <span
+            className={cx(
+              "flex h-5 w-9 items-center rounded-full px-0.5 transition-colors",
+              ligado ? "bg-emerald-500" : "bg-line2",
+            )}
+          >
+            <span
+              className={cx(
+                "h-4 w-4 rounded-full bg-paper shadow-sm transition-transform",
+                ligado && "translate-x-4",
+              )}
+            />
+          </span>
+        )}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[12.5px] font-semibold text-ink">
+          {rotulo}{" "}
+          <span className="font-normal text-muted">
+            {ligado === null ? "· não medido" : ligado ? "· ligado" : "· desligado"}
+          </span>
+        </p>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-muted">{descricao}</p>
+        {ligado === null && motivo ? (
+          <p className="mt-0.5 text-[11.5px] leading-snug italic text-muted">{motivo}</p>
+        ) : null}
+        <p className="mt-0.5 text-[11px] leading-snug text-muted">
+          <span className="font-semibold">não se muda aqui:</span> {ondeSeMuda}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** O tipo de bloco do construtor, e o tom de cada um — as cores do desenho. */
+export type TipoDoBloco = "GATILHO" | "CONDICAO" | "ESPERA" | "TEMPLATE" | "TAREFA" | "MENSAGEM" | "PARADA" | "SAIDA";
+
+const TOM_DO_BLOCO: Record<TipoDoBloco, { tom: Tom; icone: NomeDeIcone }> = {
+  GATILHO: { tom: "verde", icone: "faisca" },
+  CONDICAO: { tom: "roxo", icone: "funil" },
+  ESPERA: { tom: "azul", icone: "relogio" },
+  TEMPLATE: { tom: "verde", icone: "coracao" },
+  MENSAGEM: { tom: "roxo", icone: "coracao" },
+  TAREFA: { tom: "ambar", icone: "pessoas" },
+  PARADA: { tom: "vermelho", icone: "alerta" },
+  SAIDA: { tom: "cinza", icone: "porta" },
+};
+
+/**
+ * UM BLOCO da jornada: quadro colorido com ícone, título e a linha de detalhe.
+ *
+ * `condicao` é o que o desenho não tem e a nossa realidade tem: a regra escrita
+ * que decide se o passo executa ou é pulado. Ela aparece no bloco porque é
+ * justamente ela que faz a jornada ser uma jornada, e não uma fila.
+ */
+export function BlocoDaJornada({
+  tipo,
+  titulo,
+  detalhe,
+  condicao,
+  rodape,
+}: {
+  tipo: TipoDoBloco;
+  titulo: string;
+  detalhe: string;
+  condicao?: string | null;
+  rodape?: React.ReactNode;
+}) {
+  const { tom, icone } = TOM_DO_BLOCO[tipo];
+  const t = TINTA[tom];
+  return (
+    <div className="w-full max-w-[420px] rounded-2xl border border-line bg-paper p-3">
+      <div className="flex items-start gap-2.5">
+        <span className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-xl", t.quadro)}>
+          <Icone nome={icone} className="h-[16px] w-[16px]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold text-ink">{titulo}</p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-ink2">{detalhe}</p>
+          {condicao ? (
+            <p className={cx("mt-1 text-[11px] leading-snug", t.texto)}>
+              <span className="font-semibold">se:</span> {condicao}
+            </p>
+          ) : null}
+          {rodape ? <div className="mt-1 text-[11px] leading-snug text-muted">{rodape}</div> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A seta que liga dois blocos. Vertical, como no desenho. */
+export function SetaDaJornada({ rotulo }: { rotulo?: string }) {
+  return (
+    <div className="flex flex-col items-center py-1" aria-hidden="true">
+      {rotulo ? (
+        <span className="mb-1 rounded-full bg-chip px-2 py-0.5 text-[10px] font-semibold text-ink2">
+          {rotulo}
+        </span>
+      ) : null}
+      <svg viewBox="0 0 12 28" className="h-6 w-3 text-line2" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M6 0v22" strokeLinecap="round" />
+        <path d="M2 18l4 5 4-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
+/** A coluna de blocos ligados — o canvas do construtor, empilhado. */
+export function Jornada({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-line bg-canvas p-3 sm:p-4">
+      {children}
+    </div>
+  );
+}
