@@ -38,6 +38,7 @@ import { isBuildOsPhoneNumberId } from "@/services/buildos/BuildOsMetaChannel";
 import { isFoocciSalesPhoneNumberId, decidirDesvioParaVendas } from "@/services/foocci-sdr/FoocciSalesChannel";
 import { receberMensagemDeVendas } from "@/services/foocci-sdr/FoocciSalesInbound";
 import { tipoDaMeta, statusDaMeta, aplicarStatus } from "@/services/salaDeVendas/conversa";
+import { enfileirarEnvelope, profundidadeDaFila, jaProcessado, amostrar } from "./tempestade";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const sp = req.nextUrl.searchParams;
@@ -68,11 +69,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let payload: unknown;
   try { payload = JSON.parse(raw); } catch { return NextResponse.json({ ok: true }, { status: 200 }); }
 
-  try {
-    await processMetaWebhook(payload);
-  } catch (err) {
-    console.error("[webhook/meta/whatsapp] processing error", err);
+  // ⛔ O 200 SAI AQUI, ANTES DO TRABALHO — 19/09/2026. NÃO REVERTER SEM LER.
+  //
+  // Até hoje esta linha era `await processMetaWebhook(payload)`, e o 200 só saía
+  // depois de atualizar status no banco, ler config e gravar mensagem. A Meta
+  // reentrega o que não recebe 200 rápido, então isso é um laço que se alimenta:
+  // demoramos → ela reentrega → chega mais → demoramos mais. Em 19/09/2026 a
+  // rodada de prospecção das 13:12 ficou 5 minutos sem resposta e morreu em 502
+  // com o processo inteiro ocupado atendendo reentrega.
+  //
+  // A fila é SERIAL, não `void` solto: responder rápido soltando mil
+  // processamentos em paralelo trocaria a saturação de CPU pela do banco.
+  // **Nada é descartado** — perder evento é pior que processar devagar.
+  const espera = profundidadeDaFila();
+  if (espera > 0) {
+    const a = amostrar("fila-de-envelopes");
+    if (a.logar) {
+      console.warn(
+        `[webhook/meta/whatsapp] ${espera} envelope(s) esperando na fila` +
+        (a.ocorrencias > 1 ? ` — ${a.ocorrencias} avisos deste tipo no período` : ""),
+      );
+    }
   }
+  void enfileirarEnvelope(() => processMetaWebhook(payload));
   return NextResponse.json({ ok: true }, { status: 200 });
 }
 
@@ -122,9 +141,27 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
   // `aprenderWabaDaSala` só grava quando o número do envelope é EXATAMENTE o de
   // vendas, e nunca lança — o recebimento da mensagem de um cliente não pode
   // depender de uma escrita de configuração dar certo.
+  //
+  // ⭐ 19/09/2026 — AMOSTRADO E APRENDIDO UMA VEZ SÓ. Este bloco rodava por
+  // ENVELOPE: uma linha de log e uma leitura no banco para cada notificação da
+  // Meta. Durante a tempestade de avisos de entrega da lista fria isso virou
+  // ~1 linha por segundo ocupando o log inteiro, e uma consulta por segundo que
+  // ninguém precisava — o id da conta não muda entre um envelope e o seguinte.
+  // A informação não se perde: a primeira ocorrência aparece e o resumo diz
+  // quantas vieram depois.
   for (const waba of wabasDaSalaNoEnvelope(payload, foocciSalesPhoneNumberId())) {
-    console.info(`[webhook/meta/whatsapp] WABA da Sala de Vendas visto no envelope: ${waba}`);
-    void aprenderWabaDaSala({ phoneNumberId: foocciSalesPhoneNumberId(), wabaId: waba });
+    const a = amostrar(`waba-da-sala:${waba}`);
+    if (a.logar) {
+      console.info(
+        `[webhook/meta/whatsapp] WABA da Sala de Vendas visto no envelope: ${waba}` +
+        (a.ocorrencias > 1 ? ` (${a.ocorrencias} envelopes desde a última linha)` : ""),
+      );
+    }
+    // A gravação é idempotente por natureza, mas a LEITURA que a precede não é
+    // de graça: sem esta trava ela acontecia a cada envelope.
+    if (!jaProcessado(`waba:${waba}`)) {
+      void aprenderWabaDaSala({ phoneNumberId: foocciSalesPhoneNumberId(), wabaId: waba });
+    }
   }
 
   // ── Coexistência: eco da mensagem que o ATENDENTE mandou do celular ─────────
@@ -165,6 +202,12 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
 
   // Delivery statuses → update the matching OUTBOUND message.
   for (const s of norm.statuses) {
+    // ⭐ IDEMPOTÊNCIA — 19/09/2026. A chave é o EVENTO, não a mensagem: `sent`,
+    // `delivered` e `read` do mesmo `wamid` são três avisos distintos e os três
+    // têm de passar. O que ela barra é a REENTREGA do mesmo aviso, que era
+    // exatamente o que a tempestade trazia aos milhares — cada uma custando dois
+    // `UPDATE` no banco para não mudar nada.
+    if (jaProcessado(`status:${s.providerMessageId}:${s.status}`)) continue;
     const failed = s.status === "failed";
     await prisma.message.updateMany({
       where: { externalMessageId: s.providerMessageId },
@@ -204,6 +247,12 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
   // Inbound customer messages → Central de Conversas.
   for (const m of norm.messages) {
     if (!m.phoneNumberId) continue;
+
+    // ⭐ IDEMPOTÊNCIA DE PROCESSO — 19/09/2026. A trava de verdade continua sendo
+    // a unicidade de `externalMessageId` no banco, e ela não sai daqui. Esta é a
+    // trava BARATA, que evita chegar até o banco (e até o desvio de vendas, e até
+    // o agente) quando a Meta reentrega o mesmo `wamid` segundos depois.
+    if (jaProcessado(`msg:${m.providerMessageId}`)) continue;
 
     // Número DEDICADO do Agente de TI: desvia ANTES do fluxo de restaurante — a
     // equipe fala com o suporte técnico, não com o garçom. Gated: se o número de
@@ -332,7 +381,18 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
     }
 
     const cfg = await MetaConfigService.getByPhoneNumberId(m.phoneNumberId);
-    if (!cfg) { console.warn(`[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched`); continue; }
+    if (!cfg) {
+      // Amostrado por NÚMERO: um número mal configurado produzia uma linha por
+      // mensagem. A contagem preserva o volume, que é o dado que importa aqui.
+      const a = amostrar(`numero-desconhecido:${m.phoneNumberId}`);
+      if (a.logar) {
+        console.warn(
+          `[webhook/meta/whatsapp] unknown phone_number_id=${m.phoneNumberId} — no restaurant matched` +
+          (a.ocorrencias > 1 ? ` (${a.ocorrencias} mensagens desde a última linha)` : ""),
+        );
+      }
+      continue;
+    }
 
     // Supressão dura de comando interno num número de RESTAURANTE. Um `/build`
     // aqui nunca é executado (o portão de canal do Build OS reprova), mas também
