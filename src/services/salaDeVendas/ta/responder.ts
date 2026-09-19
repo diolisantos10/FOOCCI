@@ -102,6 +102,30 @@ export function lerSinaisDoTexto(mensagem: string): SinaisDaConversa {
 }
 
 /**
+ * ⛔ O QUE ELE DIZ QUANDO O GATILHO DE GENTE DISPARA — 19/09/2026.
+ *
+ * ── O TEXTO ANTERIOR PROMETIA, E A CASA NÃO CUMPRIA ─────────────────────────
+ *
+ * Dizia *"vou chamar alguém do time para falar com você agora"* — composto
+ * AQUI, três camadas antes de alguém perguntar se existe alguém disponível.
+ * Quem responde essa pergunta é `genteDisponivelAgora`, lá em `handoff.ts`, e
+ * a resposta medida hoje é **não**. Então a frase saía como promessa e nunca
+ * virava ligação: o lead parava de escrever porque achava que já estava na fila
+ * de uma pessoa, e a fila não tinha dono.
+ *
+ * ── A REGRA NOVA, E ELA VALE PARA TODA FALA DO AGENTE ───────────────────────
+ *
+ * Registrar é verdade — o pedido fica gravado, e fica. **Chamar** é promessa, e
+ * promessa só se faz com quem vai cumprir. Então: registra, diz que registrou,
+ * não inventa prazo, e **continua conduzindo** em vez de encerrar a conversa
+ * num "aguarde" que não acaba nunca.
+ */
+export const TEXTO_DO_PEDIDO_DE_GENTE =
+  "Certo — registrei aqui o seu pedido, com tudo o que você já me contou. " +
+  "Não vou te prometer ligação nem prazo que não depende de mim. " +
+  "Enquanto isso eu sigo com você: me conta o que precisa que eu já adianto.";
+
+/**
  * A saudação do primeiro contato. Uma vez só, e curta.
  *
  * ── ⛔ POR QUE "TA" SAIU DAQUI, EM 07/09/2026 ───────────────────────────────
@@ -201,8 +225,7 @@ export function responder(turno: Turno, ficha: TextoDaVersao = VERSAO_1): Respos
     return {
       texto:
         `${primeiroContato ? abertura(turno.nome) + " " : ""}` +
-        "Perfeito — vou chamar alguém do time para falar com você agora. " +
-        "Já deixei aqui o que você me contou.",
+        TEXTO_DO_PEDIDO_DE_GENTE,
       apoiadoEm: [],
       perguntouIndice: null,
       handoff: { deve: true, motivo },

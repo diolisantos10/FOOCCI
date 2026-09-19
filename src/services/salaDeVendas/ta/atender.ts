@@ -74,6 +74,7 @@ import { ligacaoDoFoocci } from "@/services/connect/conector/foocci/ligacao";
 import { traduzirAssuntos } from "@/services/connect/conector/foocci/traducao";
 import type { ArmazemDePendencias } from "@/services/connect/conector/pendencias";
 import { foraDaAlcadaNaMensagem } from "../precos";
+import { comAvisoDeHorario } from "../janelaComercial";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
 import {
@@ -112,10 +113,19 @@ type Cliente = PrismaClient | Prisma.TransactionClient;
  * ⚠️ E ele **não promete prazo**. "Volto ainda hoje" seria inventar um SLA que
  * não existe em lugar nenhum do sistema — e a mensagem de um agente é o pior
  * lugar do mundo para uma promessa que ninguém confere.
+ *
+ * ⚠️ 19/09/2026: ele também parou de dizer *"alguém vem falar com você"*. Este
+ * texto só sai depois de `passarParaGente` ter CONSEGUIDO — ou seja, depois de
+ * `genteDisponivelAgora` confirmar uma pessoa apta e o lead ter trocado de
+ * dono. "Está com uma pessoa agora" é um fato conferível no banco; "alguém vem
+ * falar com você" é uma previsão sobre o que essa pessoa vai fazer, e isso a
+ * casa não controla. E ele termina dizendo que a IA continua ali: o pior
+ * desfecho de um handoff é o cliente ficar achando que a conversa acabou.
  */
 export const AVISO_DE_QUE_VEM_GENTE =
   "Entendi o que você precisa. Isso aí é decisão que eu não posso tomar sozinho, " +
-  "então já passei pro time com tudo o que você me contou — alguém vem falar com você.";
+  "então já passei pro time com tudo o que você me contou, e o seu caso está " +
+  "com uma pessoa agora. Eu sigo aqui com você enquanto isso.";
 
 /**
  * ⭐ D-0E4 — O CLIENTE PEDIU GENTE E NÃO HÁ GENTE AGORA.
@@ -137,10 +147,28 @@ export const AVISO_DE_QUE_VEM_GENTE =
  *    defeito que o gatilho `PEDIU_HUMANO` existe para evitar.
  *
  * Ele diz a verdade e mantém a conversa viva, que é exatamente a ordem do CEO.
+ *
+ * ── ⛔ E ELE AINDA PROMETIA, ATÉ 19/09/2026 ─────────────────────────────────
+ *
+ * O texto anterior começava em *"Anotei que você quer falar com alguém do time
+ * — vou chamar."* — e este ramo é, por definição, o ramo em que **NÃO HÁ
+ * NINGUÉM PARA CHAMAR**: `passarParaGente` acabou de recusar por
+ * `semGenteDisponivel`. A frase mais desonesta do sistema estava exatamente no
+ * lugar onde a casa mais sabia que não podia cumprir.
+ *
+ * Quem mediu foi o CEO, escrevendo no WhatsApp do anúncio em 19/09/2026 e
+ * recebendo essa resposta de volta. Um lead anterior já tinha escrito *"Vc
+ * pegou meu contato e disse q um humano ia me ligar. Vou ficar no aguardo."*
+ *
+ * **Registrar é verdade. Chamar é promessa.** O pedido fica gravado na ficha
+ * (`motivoDoPedido`) e na linha do tempo (`PEDIU_HUMANO`), as duas coisas que
+ * alguém olha. O que não sai mais é o "vou chamar".
  */
-export const AVISO_DE_QUE_VOU_CHAMAR_ALGUEM =
-  "Anotei que você quer falar com alguém do time — vou chamar. Enquanto isso eu " +
-  "sigo aqui com você: pode me contar o que precisa que eu já adianto tudo.";
+export const AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA =
+  "Anotei aqui o seu pedido de falar com uma pessoa do time, e ele fica " +
+  "registrado. Não vou te prometer ligação nem prazo, porque isso não depende " +
+  "de mim. O que eu posso fazer é seguir com você agora: me conta o que precisa " +
+  "que eu já adianto o que dá.";
 
 export type MotivoDeCalar =
   | "taDesligado"
@@ -721,7 +749,7 @@ async function executarTurno(
       // corresponde a uma consulta REGISTRADA, com protocolo e conversa de
       // volta. Este aqui é o chão de quando não houve consulta nenhuma.
       if (!oConectorJaAvisou(conector)) {
-        const texto = r.handoff.deve ? r.texto : AVISO_DE_QUE_VEM_GENTE;
+        const texto = comAvisoDeHorario(r.handoff.deve ? r.texto : AVISO_DE_QUE_VEM_GENTE, agora);
 
         const avisoGravado = await registrarSaida(db, {
           leadId: lead.id,
@@ -801,6 +829,36 @@ async function executarTurno(
           // falha aqui nunca pode roubar a resposta dele.
         });
 
+      // ── ⭐ O RASTRO, E ELE PRECISA DE DOIS LUGARES ─────────────────────
+      //
+      // `motivoDoPedido` acima é um CAMPO: ele é sobrescrito pelo próximo
+      // pedido e some quando o lead troca de mão (`responsavel.ts` o zera ao
+      // assumir). Sozinho, ele responde "por que este lead está parado agora" e
+      // não responde "quantas vezes alguém pediu uma pessoa e não teve".
+      //
+      // A linha do tempo é o que não se apaga. `PEDIU_HUMANO` já é o tipo que
+      // `responsavel.pedirHumano` usa — o mesmo evento, contado no mesmo lugar,
+      // com ou sem fila do outro lado. Sem isto, o pedido que NÃO virou handoff
+      // seria o único que não deixaria história, e é justamente o que mais
+      // precisa ser contado: é a medida de quanta gente a casa está devendo.
+      //
+      // ⚠️ `interna: true`: é nota de dentro, o lead nunca vê.
+      // ⚠️ `.catch`: registrar é importante; responder ao cliente é obrigatório.
+      await db.siteLeadInteraction
+        .create({
+          data: {
+            leadId: lead.id,
+            tipo: "PEDIU_HUMANO",
+            actor: "agente-sdr-ia",
+            interna: true,
+            nota:
+              `O cliente pediu falar com uma pessoa e NÃO havia ninguém disponível ` +
+              `(${h.detalhe}). A IA registrou o pedido, disse a verdade e seguiu ` +
+              `conduzindo — nenhuma ligação foi prometida.`,
+          },
+        })
+        .catch(() => {});
+
       console.warn("[ta] o cliente pediu gente e NÃO há humano disponível — a IA segue conduzindo", {
         leadId: lead.id,
         detalhe: h.detalhe,
@@ -808,7 +866,7 @@ async function executarTurno(
 
       const pedidoGravado = await registrarSaida(db, {
         leadId: lead.id,
-        texto: AVISO_DE_QUE_VOU_CHAMAR_ALGUEM,
+        texto: comAvisoDeHorario(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA, agora),
         autor: "IA",
         autorUserId: assina,
         agora,
@@ -818,12 +876,12 @@ async function executarTurno(
       });
 
       if (!pedidoGravado.ok) {
-        return calar("naoConseguiuGravar", `o aviso de que vou chamar alguém não foi gravado: ${pedidoGravado.causa}`);
+        return calar("naoConseguiuGravar", `o aviso de pedido registrado não foi gravado: ${pedidoGravado.causa}`);
       }
 
       const entrega = await entregarMensagem(db, pedidoGravado.mensagemId, "maquina");
       if (!entrega.entregue) {
-        console.error("[ta] o aviso de que vou chamar alguém NÃO chegou ao lead", {
+        console.error("[ta] o aviso de pedido registrado NÃO chegou ao lead", {
           leadId: lead.id,
           mensagemId: pedidoGravado.mensagemId,
           motivo: entrega.motivo,
@@ -836,7 +894,7 @@ async function executarTurno(
         porPolitica: false,
         pediuGenteSemFila: true,
         mensagemId: pedidoGravado.mensagemId,
-        texto: AVISO_DE_QUE_VOU_CHAMAR_ALGUEM,
+        texto: AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA,
         entregue: entrega.entregue,
       };
     }
@@ -861,7 +919,9 @@ async function executarTurno(
     // precisa dos dois: sem o primeiro, um dia alguém conta fala de robô como
     // produtividade de gente; sem o segundo, a conversa não tem nome.
     autorUserId: assina,
-    texto: r.texto,
+    // ⭐ 19/09/2026: fora do expediente, o aviso de horário se SOMA à resposta
+    // — nunca a substitui. Ver `comAvisoDeHorario`.
+    texto: comAvisoDeHorario(r.texto, agora),
     agora,
     turnoId: pedido.turnoId ?? null,
     papelDoAgente,

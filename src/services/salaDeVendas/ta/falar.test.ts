@@ -65,11 +65,25 @@ describe("⭐ escalar para gente é decisão de CÓDIGO, nunca do modelo", () =>
   });
 
   it("⭐ e o modelo NÃO consegue criar um handoff que o código não decidiu", () => {
-    // O outro lado da mesma trava: o modelo escrevendo "vou chamar alguém" não
-    // muda o estado da conversa. Quem passa o bastão é a ponte, lendo `handoff`.
-    modeloResponde("Claro, vou chamar alguém do time para falar com você agora!");
+    // O outro lado da mesma trava: o texto do modelo não muda o estado da
+    // conversa. Quem passa o bastão é a ponte, lendo `handoff`.
+    modeloResponde("O cardápio digital fica num link seu, e você edita item a item.");
     return falar({ mensagem: "como funciona o cardápio digital?" }).then((r) => {
       expect(r.handoff.deve).toBe(false);
+    });
+  });
+
+  it("⭐ 19/09/2026: e se ele PROMETER um humano, a promessa não chega ao cliente", () => {
+    // ⛔ A frase abaixo é a que o CEO mediu em produção. Antes desta data ela
+    // saía inteira: o modelo prometia uma ligação que não existe, e o handoff
+    // por "não sei" era CANCELADO porque ele "tinha respondido". Duas mentiras
+    // no mesmo turno — a ligação, e o dever de casa dado por feito.
+    modeloResponde("Claro, vou chamar alguém do time para falar com você agora!");
+    return falar({ mensagem: "como funciona o cardápio digital?" }).then((r) => {
+      expect(r.reprovacoes[0]!.motivos).toContain("prometeuHumano");
+      // Cai no chão determinístico — que não promete ninguém.
+      expect(r.origem).toBe("chao-deterministico");
+      expect(r.texto).not.toMatch(/vou chamar/i);
     });
   });
 

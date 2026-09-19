@@ -296,3 +296,134 @@ export function foraDaJanelaComercial(
 ): boolean {
   return !podeAbordarAgora(agora, env).pode;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ⭐ O AVISO DE FORA DE HORÁRIO — ordem do CEO, 19/09/2026
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ * *"Tem que dizer que está fora do horário e que assim que voltarmos………"*
+ *
+ * ── POR QUE ISTO MORA AQUI, E NÃO NO ATENDIMENTO ────────────────────────────
+ *
+ * O horário da casa já está escrito neste arquivo, uma vez só. Montar a frase
+ * em `ta/atender.ts` obrigaria a digitar "das nove às oito" num segundo lugar —
+ * e no dia em que a janela mudasse, a máquina mudaria e a fala continuaria
+ * dizendo o horário velho. Fala e regra têm que nascer da mesma fonte, ou a
+ * casa passa a mentir sem ninguém ter mentido.
+ *
+ * ── ⛔ E ISTO NÃO REINTRODUZ O PORTÃO DE HORÁRIO ────────────────────────────
+ *
+ * O cabeçalho deste arquivo continua valendo inteiro: a janela NÃO barra
+ * resposta a quem nos escreveu. O que entra aqui é uma FRASE, que se soma à
+ * resposta — nunca a substitui e nunca cala ninguém. Quem chama isto está
+ * respondendo; só está dizendo também que horas são.
+ *
+ * ── ⛔ FAIL-CLOSED, NA DIREÇÃO CERTA ────────────────────────────────────────
+ *
+ * Não dá para ler a janela, o fuso ou o relógio? **Nenhum aviso sai.** Aqui o
+ * fail-closed é não afirmar: um "voltamos segunda às 9h" chutado é exatamente a
+ * promessa inventada que esta casa acabou de proibir. Silêncio sobre o horário
+ * é barato; horário errado dito com confiança é o defeito.
+ */
+
+/** Quando a casa abre de novo, do ponto de vista de quem escreveu agora. */
+export interface ProximaAbertura {
+  /** 0=domingo … 6=sábado. */
+  dia: number;
+  /** Minutos desde a meia-noite local — o início da faixa daquele dia. */
+  minutosDoDia: number;
+  /** 0 = ainda hoje, 1 = amanhã, … */
+  emDias: number;
+  /** Pronto para entrar numa frase: "hoje às 09:00", "na segunda às 09:00". */
+  escrito: string;
+}
+
+function comoDiaDaSemana(dia: number): string {
+  const nome = NOME_DO_DIA[dia] ?? "?";
+  // "no domingo", "no sábado", "na segunda". Errar o artigo é o tipo de detalhe
+  // que denuncia texto montado por máquina mais rápido que qualquer outra coisa.
+  return dia === 0 || dia === 6 ? `no ${nome}` : `na ${nome}`;
+}
+
+/**
+ * O próximo instante em que a casa está aberta, a partir de `agora`.
+ *
+ * `null` quando a janela, o fuso ou o relógio não puderam ser lidos, e também
+ * quando NENHUM dia da semana tem faixa (janela inteira fechada) — sem dia
+ * aberto não existe "quando voltamos", e inventar um é o defeito.
+ *
+ * ⛔ Função PURA: sem banco, sem rede, sem relógio próprio.
+ */
+export function proximaAberturaDaCasa(
+  agora: Date = new Date(),
+  env: NodeJS.ProcessEnv = process.env,
+): ProximaAbertura | null {
+  const lida = janelaDoAmbiente(env);
+  if (!lida.ok) return null;
+
+  const local = agoraNoFuso(agora, lida.fuso);
+  if (!local) return null;
+
+  // Sete dias e não mais: se a semana inteira estiver fechada, um oitavo laço
+  // só devolveria o mesmo "não abre nunca" com outra cara.
+  for (let emDias = 0; emDias < 7; emDias++) {
+    const dia = (local.dia + emDias) % 7;
+    const faixa = lida.janela[dia] ?? null;
+    if (!faixa) continue;
+    // Hoje só conta se a abertura ainda está por vir. Às 21h de uma terça, a
+    // faixa 09:00–20:00 de hoje já passou — dizer "hoje às 09:00" seria mandar
+    // a pessoa para um horário que não existe mais.
+    if (emDias === 0 && local.minutosDoDia >= faixa.inicioMin) continue;
+
+    const hora = comoHora(faixa.inicioMin);
+    const escrito =
+      emDias === 0 ? `hoje às ${hora}`
+      : emDias === 1 ? `amanhã às ${hora}`
+      : `${comoDiaDaSemana(dia)} às ${hora}`;
+
+    return { dia, minutosDoDia: faixa.inicioMin, emDias, escrito };
+  }
+
+  return null;
+}
+
+/**
+ * ⭐ A frase que se SOMA à resposta quando a casa está fechada.
+ *
+ * `null` dentro do horário — e isso é regra, não economia: quem escreve às 11h
+ * de uma quarta não pode receber um aviso de horário, porque não há nada a
+ * alinhar e o aviso vira ruído no meio de um atendimento normal.
+ */
+export function avisoDeForaDeHorario(
+  agora: Date = new Date(),
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (podeAbordarAgora(agora, env).pode) return null;
+
+  const proxima = proximaAberturaDaCasa(agora, env);
+  if (!proxima) return null;
+
+  return (
+    `Só pra te alinhar: a gente está fora do horário de atendimento agora — ` +
+    `o time volta ${proxima.escrito}. Eu sigo aqui com você de qualquer jeito.`
+  );
+}
+
+/**
+ * O texto do agente com o aviso de horário colado no fim, quando for o caso.
+ *
+ * Uma função em vez de duas linhas repetidas em cada ponto de saída de
+ * `ta/atender.ts`: quatro cópias do mesmo `if` são quatro chances de uma delas
+ * ficar para trás — e a que ficasse para trás seria invisível, porque a
+ * conversa continuaria saindo normal.
+ */
+export function comAvisoDeHorario(
+  texto: string,
+  agora: Date = new Date(),
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const aviso = avisoDeForaDeHorario(agora, env);
+  if (!aviso) return texto;
+  const base = (texto ?? "").trim();
+  return base ? `${base}\n\n${aviso}` : aviso;
+}

@@ -71,6 +71,7 @@ export const VERSAO_1: TextoDaVersao = {
     "negociar desconto além do que a tabela já traz",
     "combinar forma de pagamento fora do checkout",
     "dizer que já fez alguma coisa no sistema do cliente",
+    "prometer ligação, retorno ou que alguém do time vai chamar — não há fila humana",
     "escrever nota interna no canal do cliente",
     "falar com quem pediu silêncio",
     "mandar mais de uma pergunta por mensagem",
@@ -102,7 +103,20 @@ export const VERSAO_1: TextoDaVersao = {
  * Ela é parte da ficha, e não do código do composer, porque é **a fala mais
  * importante que ele tem**: é o que separa um agente que admite o limite de um
  * que preenche o silêncio. Vive aqui para poder ser revisada como texto.
+ *
+ * ── ⛔ E ELA PROMETIA UM HUMANO, ATÉ 19/09/2026 ─────────────────────────────
+ *
+ * O texto terminava em *"Vou chamar alguém do time que te responde direito."* —
+ * e **não há time humano para chamar**. Pior: esta é a fala que sai quando o
+ * cliente apenas perguntou algo que a base não cobre. Ou seja, a casa prometia
+ * uma ligação a quem nunca pediu uma pessoa. Promessa espontânea, cliente
+ * esperando, conversa morta: a fábrica dos 6.273 leads largados.
+ *
+ * O que ela diz agora é a verdade inteira: não sei, ficou registrado, e eu
+ * continuo aqui. A escalada interna continua acontecendo — o que sumiu foi a
+ * promessa que ia para o cliente.
  */
 export const QUANDO_NAO_SEI =
   "Essa eu não sei te responder com precisão, e prefiro não chutar. " +
-  "Vou chamar alguém do time que te responde direito.";
+  "Já deixei registrado aqui pro time, e sigo com você: me conta o que mais " +
+  "você precisa saber que eu já adianto o que dá.";

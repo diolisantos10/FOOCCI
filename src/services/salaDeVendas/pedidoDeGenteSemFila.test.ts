@@ -156,12 +156,25 @@ describe("⛔ a trava continua sendo trava", () => {
 });
 
 describe("o texto que o cliente ouve quando não há ninguém", () => {
-  it("diz a verdade, não promete prazo e mantém a conversa aberta", async () => {
-    const { AVISO_DE_QUE_VOU_CHAMAR_ALGUEM } = await import("./ta/atender");
+  it("⭐ 19/09/2026: NÃO promete chamar ninguém — registra, diz a verdade e continua", async () => {
+    const { AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA } = await import("./ta/atender");
 
-    expect(AVISO_DE_QUE_VOU_CHAMAR_ALGUEM).toContain("vou chamar");
-    expect(AVISO_DE_QUE_VOU_CHAMAR_ALGUEM).toContain("sigo aqui com você");
+    // ⛔ O defeito medido pelo CEO em produção: o texto anterior começava em
+    // "Anotei que você quer falar com alguém do time — vou chamar." — neste
+    // ramo, que é EXATAMENTE o ramo em que não há ninguém para chamar.
+    expect(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA).not.toMatch(/vou chamar|vou te chamar|vou acionar/i);
+    expect(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA).not.toMatch(
+      /algu[ée]m (vai|vem)|te lig|entra(mos|rão|remos)? em contato/i,
+    );
+
+    // ✅ O que ele faz: registra, e diz que registrou.
+    expect(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA).toMatch(/anotei|registr/i);
+    // ✅ E não some: a conversa continua com uma pergunta.
+    expect(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA).toMatch(/seguir com você|sigo com você/);
+
     // ⛔ Nada de prazo inventado, nada de "já encaminhei".
-    expect(AVISO_DE_QUE_VOU_CHAMAR_ALGUEM).not.toMatch(/minutos?|horas?|já (passei|encaminhei)/i);
+    expect(AVISO_DE_PEDIDO_REGISTRADO_SEM_FILA).not.toMatch(
+      /minutos?|horas?|em breve|em instantes|ainda hoje|j[áa] (passei|encaminhei)/i,
+    );
   });
 });

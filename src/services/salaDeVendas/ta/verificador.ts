@@ -70,6 +70,11 @@ export type MotivoDaReprovacao =
   | "fechouPeloCliente"
   | "negouSerAgente"
   /**
+   * ⛔ PROMETEU QUE UM HUMANO VEM — medido em produção em 19/09/2026, pelo
+   * próprio CEO, no WhatsApp do anúncio. Ver `PROMETEU_HUMANO`, abaixo.
+   */
+  | "prometeuHumano"
+  /**
    * ⛔ Sobrou um espaço reservado no texto: `[link do site]`, `{{2}}`,
    * `undefined`. O cliente recebeu `[link do site]` literal em 09/09/2026.
    */
@@ -200,6 +205,79 @@ const GARANTE_RESULTADO =
 const NEGOU_SER_AGENTE =
   /(?:n[ãa]o sou (?:um |uma )?(?:rob[ôo]|m[áa]quina|intelig[êe]ncia artificial|ia\b|bot|sistema|programa)|sou (?:uma )?pessoa(?: de verdade| real)?|sou (?:um |uma )?(?:humano|humana|atendente de verdade)|carne e osso|sou gente|est[áa] falando com (?:uma pessoa|um humano|gente))/i;
 
+/**
+ * ⛔ A IA PROMETENDO UM HUMANO QUE NÃO EXISTE.
+ *
+ * ── O DEFEITO, MEDIDO EM PRODUÇÃO EM 19/09/2026 ─────────────────────────────
+ *
+ * O CEO escreveu no WhatsApp do anúncio e recebeu de volta: *"Anotei que você
+ * quer falar com alguém do time — vou chamar."* **Não existe time humano para
+ * chamar.** E não foi a primeira vez: uma conversa anterior tem um lead
+ * escrevendo *"Vc pegou meu contato e disse q um humano ia me ligar. Vou ficar
+ * no aguardo."* — e a ligação nunca aconteceu.
+ *
+ * Prometer gente onde não há gente não é um exagero de vendedor: é a fábrica
+ * dos 6.273 leads largados desta casa. O cliente para de conversar porque
+ * acredita que já está na fila de alguém, e a fila não tem dono.
+ *
+ * ── POR QUE ISTO PODE SER TRAVA CEGA, SEM SABER O CONTEXTO ──────────────────
+ *
+ * Porque **o modelo nunca é consultado num turno em que o cliente pediu uma
+ * pessoa.** `falar.ts` decide o handoff em código ANTES do modelo e devolve o
+ * texto determinístico sem chamá-lo. Então toda promessa de humano que sai da
+ * boca do MODELO é, por construção, espontânea — ninguém pediu. Não existe caso
+ * legítimo a preservar, e por isso esta expressão não precisa de contexto.
+ *
+ * O que continua passando: dizer que NÃO vai chamar, dizer que anotou o pedido,
+ * e falar do time sem prometer contato. A negação colada no verbo é lida como
+ * negação, do mesmo jeito que em `integracaoAfirmadaQueNaoExiste`.
+ */
+const GENTE = "(?:algu[ée]m|alguem|uma pessoa|um humano|uma humana|um atendente|uma atendente|um consultor|uma consultora|um especialista|o time|nosso time|a equipe)";
+
+const PROMETEU_HUMANO = new RegExp(
+  [
+    // "vou chamar", "vou chamar alguém do time", "vou te chamar uma pessoa".
+    // Sozinho já basta: ninguém "chama" um link — chamar é sempre sobre gente.
+    "vou\\s+(?:te\\s+)?(?:chamar|acionar)\\b",
+    // "vou pedir pra alguém te ligar", "vou falar com o time".
+    `vou\\s+(?:pedir|falar)\\s+(?:pra|para|com)\\s+${GENTE}`,
+    // ⚠️ "passar/encaminhar/transferir" EXIGEM destino humano. Sem isto,
+    // "vou te passar o link de planos" — a frase mais útil que o agente tem —
+    // seria reprovada, e a trava viraria um freio na venda.
+    `vou\\s+(?:te\\s+)?(?:passar|encaminhar|transferir)\\s+(?:voc[êe]\\s+)?(?:pra|para|pro|ao|a)\\s+${GENTE}`,
+    // "alguém do time vai falar com você", "uma pessoa já vem", "o time retorna".
+    `${GENTE}(?:\\s+do\\s+time)?\\s+(?:j[áa]\\s+)?(?:vai|vem|entra|entrar[áa]|ir[áa]|retorna|retornar[áa]|liga|ligar[áa]|fala|falar[áa])\\b`,
+    // "te ligo mais tarde", "a gente te retorna".
+    "(?:te|lhe)\\s+(?:ligo|liga|ligamos|ligam|retorno|retorna|retornamos)\\b",
+    // "entramos em contato", "entrarão em contato".
+    "entra(?:mos|m|rei|remos|r[ãa]o|r[áa])?\\s+em\\s+contato\\b",
+    // "já encaminhei pro time", "já acionei alguém" — o fingimento de que já foi.
+    "j[áa]\\s+(?:passei|encaminhei)\\s+(?:isso\\s+)?(?:pro|pra|para\\s+o|para)\\s+time\\b",
+    `j[áa]\\s+(?:acionei|chamei|avisei)\\s+${GENTE}`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * A negação colada no verbo — "**não** vou chamar ninguém", "**não** vou te
+ * prometer ligação". Mesma lição de 26/08/2026 que está escrita em
+ * `NEGA_ANTES_DO_VERBO`: quem nega diz "não" logo antes do verbo, e procurar
+ * negação no parágrafo inteiro deixa passar exatamente a frase mais perigosa.
+ */
+const NEGA_A_PROMESSA = /\b(n[ãa]o|nunca|jamais|sem)\s*$/i;
+
+/** A promessa de humano que NÃO está sendo negada, ou `null`. */
+function promessaDeHumanoAfirmada(texto: string): string | null {
+  for (const frase of texto.split(/(?<=[.!?])\s+|\n+/)) {
+    const m = PROMETEU_HUMANO.exec(frase);
+    if (!m) continue;
+    const antes = frase.slice(Math.max(0, m.index - 20), m.index);
+    if (NEGA_A_PROMESSA.test(antes)) continue;
+    return m[0].trim();
+  }
+  return null;
+}
+
 const FECHOU_PELO_CLIENTE =
   /\b(j[áa] (?:deixei|deixamos|contratei|contratamos|ativei|ativamos)|acabei de contratar|deixei contratado|j[áa] est[áa] contratado)\b/i;
 
@@ -304,6 +382,18 @@ export function verificarResposta(texto: string): Veredito {
   if (negou) {
     motivos.push("negouSerAgente");
     detalhes.push(`negou ser um agente ("${negou[0].trim()}")`);
+  }
+
+  // 6b. Prometeu um humano que ninguém garantiu.
+  //
+  // ⚠️ Vem logo depois de "negou ser um agente" porque é o mesmo tipo de dano:
+  // não é sobre a proposta, é sobre a pessoa acreditar numa coisa que não vai
+  // acontecer. Aqui a consequência é medida — o lead para de responder porque
+  // acha que já está na fila de alguém, e a fila não tem dono.
+  const prometeu = promessaDeHumanoAfirmada(limpo);
+  if (prometeu) {
+    motivos.push("prometeuHumano");
+    detalhes.push(`prometeu que um humano vem ("${prometeu}") — a casa não tem fila humana para cumprir isso`);
   }
 
   // 7. Espaço reservado que não foi preenchido.

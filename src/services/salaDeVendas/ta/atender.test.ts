@@ -456,7 +456,10 @@ describe("portão 7a — chama gente e PARA", () => {
     // UMA mensagem, e ela é o aviso — não a resposta de venda.
     expect(db.leadMensagem.create).toHaveBeenCalledTimes(1);
     const dita = db.leadMensagem.create.mock.calls[0]![0]!.data.texto as string;
-    expect(dita).toMatch(/chamar algu[ée]m/i);
+    // ⭐ 19/09/2026: o aviso REGISTRA o pedido e NÃO promete chamar ninguém —
+    // a casa não tem fila humana para cumprir. Ver `TEXTO_DO_PEDIDO_DE_GENTE`.
+    expect(dita).toMatch(/registrei/i);
+    expect(dita).not.toMatch(/vou chamar|algu[ée]m (vai|vem)|te lig/i);
     expect(dita, "mandou preço junto com o pedido de gente").not.toMatch(/R\$/);
   });
 

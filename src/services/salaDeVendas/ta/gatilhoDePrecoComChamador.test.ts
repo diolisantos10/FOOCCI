@@ -241,7 +241,9 @@ describe("⭐⭐ QUEM CHAMA ISSO — o caminho de produção, de ponta a ponta",
     expect(escritas).toHaveLength(1);
     // Aqui quem também disparou foi `PEDE_PROPOSTA` (a palavra "proposta" está
     // na mensagem), então o texto é o aviso determinístico do próprio `falar()`.
-    expect(escritas[0]).toMatch(/chamar alguém do time/i);
+    // ⭐ 19/09/2026: ele registra o pedido, e não promete que alguém chama.
+    expect(escritas[0]).toMatch(/registrei/i);
+    expect(escritas[0]).not.toMatch(/vou chamar|algu[ée]m (vai|vem)|te lig/i);
     // ⚠️ E ele não promete prazo nenhum — SLA que ninguém confere é invenção.
     expect(escritas[0]).not.toMatch(/hoje|amanhã|\d+ ?h(oras)?|minutos/i);
   });

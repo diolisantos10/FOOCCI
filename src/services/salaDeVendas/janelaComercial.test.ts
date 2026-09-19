@@ -185,12 +185,35 @@ const CAMINHOS_DE_RESPOSTA = [
 ];
 
 describe("⛔ a janela é de ABORDAR — nenhum caminho de RESPOSTA a consulta", () => {
-  it.each(CAMINHOS_DE_RESPOSTA)("%s não conhece a janela comercial", (arquivo) => {
-    // Se alguém pendurar `podeAbordarAgora` aqui, um cliente que escrever às
-    // 22h de domingo fica falando sozinho — e o estrago não apareceria em
-    // nenhum outro teste, porque tudo continuaria "funcionando".
-    expect(ler(arquivo)).not.toContain("janelaComercial");
+  it.each(CAMINHOS_DE_RESPOSTA)("%s nunca BARRA uma resposta por causa da janela", (arquivo) => {
+    // ⛔ A régua continua sendo a mesma: se alguém pendurar `podeAbordarAgora`
+    // ou `foraDaJanelaComercial` num caminho de RESPOSTA, um cliente que
+    // escrever às 22h de domingo fica falando sozinho — e o estrago não
+    // apareceria em nenhum outro teste, porque tudo continuaria "funcionando".
+    //
+    // ── ⭐ O QUE MUDOU EM 19/09/2026, E POR QUE NÃO AFROUXA NADA ───────────
+    //
+    // Ordem do CEO: *"Tem que dizer que está fora do horário e que assim que
+    // voltarmos………"*. `ta/atender.ts` passou a somar UMA FRASE à resposta
+    // quando a casa está fechada — `comAvisoDeHorario`, que devolve texto e
+    // nunca um booleano de permissão. Avisar não é barrar: a resposta sai
+    // inteira, na mesma hora, com o horário de volta lido desta mesma fonte.
+    //
+    // O teste continua proibindo tudo o que DECIDE. Só o que FALA passa.
     expect(ler(arquivo)).not.toContain("podeAbordarAgora");
+    expect(ler(arquivo)).not.toContain("foraDaJanelaComercial");
+  });
+
+  it("⭐ e o único que toca a janela num caminho de resposta só a usa para FALAR", () => {
+    const fonte = ler("src/services/salaDeVendas/ta/atender.ts");
+    // O import é nominal: `comAvisoDeHorario`, e nada mais. Um `import *` ou um
+    // segundo nome abriria a porta para alguém decidir por aqui um dia.
+    expect(fonte).toContain('import { comAvisoDeHorario } from "../janelaComercial"');
+
+    // Os outros três não a conhecem de forma nenhuma.
+    for (const arquivo of CAMINHOS_DE_RESPOSTA.filter((a) => !a.endsWith("ta/atender.ts"))) {
+      expect(ler(arquivo), arquivo).not.toContain("janelaComercial");
+    }
   });
 
   it("⭐ e os caminhos de ABORDAR a consultam, todos", () => {
