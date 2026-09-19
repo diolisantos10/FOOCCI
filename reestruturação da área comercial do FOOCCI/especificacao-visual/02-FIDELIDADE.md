@@ -1,7 +1,8 @@
-# Auditoria de fidelidade — desenho × código (19/09/2026)
+# Auditoria de fidelidade — desenho × código (19/09/2026, revisada com as 14 imagens)
 
 > Feita pelo agente de **interface** do Foocci, a pedido do Diretor Geral.
-> Régua: `00-MOLDURA-COMUM.md`, `01-TELAS.md`, `MANIFESTO_IMAGENS.md`,
+> Régua, **nesta ordem**: **as 14 imagens em `../imagens/`** (a fonte),
+> `03-AS-14-TELAS.md`, `00-MOLDURA-COMUM.md`, `01-TELAS.md`, `MANIFESTO_IMAGENS.md`,
 > `HISTORICO_INTEGRAL.md`, `DESIGN.md`, `.claude/agents/interface.md` e
 > `.claude/agents/experiencia.md`.
 >
@@ -9,33 +10,32 @@
 
 ---
 
-## ⚠️ O limite honesto desta auditoria, dito antes de tudo
+## ✅ O limite desta auditoria foi FECHADO em 19/09/2026
 
-O `MANIFESTO_IMAGENS.md` inventaria **14 imagens** e aponta cada uma para um
-arquivo `.webp` em `imagens/`. **Esses arquivos não existem no repositório.**
-O que está commitado em `imagens/` é **uma** imagem:
+> **Esta seção dizia que as imagens não estavam no repositório. Não diz mais.**
+> As **14 peças do desenho do CEO estão arquivadas** em `../imagens/`, com nome
+> que se lê sozinho (`desenho-NN-<slug>.png`), e **cada uma foi aberta e
+> conferida**. O índice está em `../imagens/LEIA-ME.md`; a leitura peça a peça,
+> revisada contra o pixel, em `03-AS-14-TELAS.md`.
 
-- `ChatGPT Image 17_09_2026, 12_25_31 (2).png` — lida de verdade nesta sessão.
-  É o **desenho nº 12, Central SDR / Gatekeeper**, e é a única tela cuja
-  fidelidade pôde ser conferida **contra o pixel**. Todas as outras foram
-  conferidas contra a *leitura literal* do Diretor Geral em `01-TELAS.md`.
+Consequência: **nenhuma linha desta tabela é mais "palavra do Diretor contra o
+código"**. Onde este documento dizia *"depende de imagem não arquivada"* — telas
+**01, 02, 03 e 04** — o veredito agora está completo, com o arquivo do código e
+o que falta. O pedido de subir as imagens está **atendido**.
 
-Consequência, escrita e não escondida:
+**Duas descobertas da conferência mudam a régua da moldura**, e valem para tudo
+o que vem abaixo:
 
-| Fonte usada para julgar | Telas |
-|---|---|
-| **A imagem de verdade** | 12 (Central SDR) |
-| **Leitura literal em `01-TELAS.md`** | 05, 06, 07, 08, 09, 10, 11, 13, 14 |
-| **Nada além do título no manifesto** — *depende de imagem não arquivada* | 01, 02, 03, 04 |
-
-O `01-TELAS.md` documenta **10 das 14**. As telas **01, 02, 03 e 04** não têm
-nem imagem nem leitura literal: para elas esta auditoria mede apenas se existe
-um endereço com o propósito descrito no título, e **não** julga fidelidade
-visual. Onde este documento diz *depende de imagem não arquivada*, é isso.
-
-**Primeiro pedido, e é barato:** subir as 13 imagens que faltam em
-`imagens/`. Sem elas, metade desta tabela é palavra do Diretor contra o
-código, e o desenho do CEO — que é a régua — não está no repositório.
+1. **Não existe uma lateral única.** O desenho tem **três**: curta de 8 itens
+   (peças 02–09), de 9 com Pós-venda (peça 10) e completa de 11 com
+   Prospecção/SDR/CRM (peças 11–14). **Nenhuma peça mostra Pós-venda junto com
+   Prospecção/SDR/CRM.** O menu da nossa área precisa dos dois — isso é decisão
+   nossa, não leitura do desenho, e o §1 abaixo julgava contra uma lateral que
+   o CEO nunca desenhou.
+2. **Seletor de data e fila de indicadores não são universais.** Não há seletor
+   de data em 03, 04, 05, 06, 07, 08 e 09; não há fila de indicadores em 03, 04,
+   05, 07, 08 e 09. Cobrar os dois em toda tela é cobrar do código o que o
+   desenho não pede.
 
 ---
 
@@ -96,17 +96,54 @@ leitura do CEO: *"não é mais coisas que a gente precisa, é um upgrade."*
 
 ### O que falta, uma a uma
 
-#### 02 — Control Tower → `/comercial/torre` 🟡
-*Depende de imagem não arquivada* para julgar layout. Contra o propósito do
-título e o que `rotas.ts` promete, a tela entrega: "travado agora" (7 filas),
+#### 02 — Control Tower → `/comercial/torre` 🟡 — **agora medido contra a imagem**
+`desenho-02-sala-do-supervisor-control-tower.png`. A tela entrega: "travado agora" (7 filas),
 alertas com causa, funil, hoje×ontem, raio-X, Supervisora, carga do time.
-Falta, medindo contra a moldura: cabeçalho/lateral (§1) e o seletor de data
-real. **A tela é a mais bem construída da área** e serve de padrão para as
-outras.
+**A tela é a mais bem construída da área** e serve de padrão para as outras.
+Medido contra o pixel, falta:
 
-#### 03 — Central de Atendimento → `/comercial/atendimento` 🟡
-*Depende de imagem não arquivada.* O endereço existe e responde à pergunta do
-título ("quem espera, quem atende, qual a carga"). Três defeitos medidos:
+| Na imagem | No código |
+|---|---|
+| **9 indicadores** (Leads Entrando · IA Atendendo · Aguardando Vendedor · SLA Médio · Leads Quentes sem Dono · Conversão da IA · Conversão por Agente · Receita do Dia · Perdas) | **outros 7**, sobre filas (`FilaDeIndicadores`, `TorreClient.tsx:199`). **Conversão da IA, Conversão por Agente e Receita do Dia não existem na Torre** |
+| **Funil em Tempo Real** de 6 degraus com % em cada | ✅ `SecaoFunil` (`:290`) — existe, com barras |
+| **Volume de Leads ao Longo do Tempo** (duas séries, 24 h, tooltip) | ❌ **não existe** — nenhum gráfico de série temporal |
+| **Saúde da Fila** em rosca (Total 184) + alerta "18 leads aguardam há mais de 10 minutos" | 🟡 os números existem em `SecaoTravado`/`SecaoAlertas`, **a rosca não** |
+| **Ranking de Vendedores** (#, nome, atendimentos, conversão, vendas, SLA, coroa no 1º) | 🟡 `SecaoTime` ("Quem está de pé") mostra **carga sobre capacidade**, não conversão nem vendas nem ranking |
+| **Principais Motivos de Perda** (7 barras com n e %) | ❌ **não existe** |
+| Cabeçalho escuro, lateral, busca, cartão de plano | ❌ ver §1 |
+| Seletor de data + "Tempo real" **de verdade** | ❌ string fixa — ver §4, item 3 |
+
+**Veredito: existe parcialmente.** O que falta é de duas naturezas: gráfico
+(série temporal, rosca, barras de perda) e **dado de venda** — conversão e
+receita do dia, que a Torre não lê. O *ranking de vendedores* existe em espírito
+e responde outra pergunta.
+
+#### 03 — Central de Atendimento → `/comercial/atendimento` 🟡 — **agora medido contra a imagem**
+`desenho-03-central-de-atendimento.png`. O endereço existe e responde à pergunta
+do título ("quem espera, quem atende, qual a carga").
+
+**⛔ Mas o desenho não pede esta tela.** A imagem é uma **mesa de trabalho de
+três colunas** — caixas de conversa, lista de conversas e a conversa aberta com
+campo de digitar. `CentralDeAtendimentoView.tsx` é um **painel de supervisão**:
+"O que exige ação agora", "Quem está esperando há mais tempo", "Quem está
+atendendo", "Carga por atendente", "Fila do SDR". É a mesma infidelidade de
+propósito diagnosticada na tela 12, e aqui é total.
+
+| Na imagem | No código |
+|---|---|
+| **Caixas de Conversa** com 8 baldes e contagem (Meus leads · Novos · Quentes · Aguardando cliente · Follow-up · Pagamento pendente · Fechados · Perdidos) | ❌ **não existe** aqui (a coluna de filas vive em `/comercial` e `/comercial/conversas`, sobre outros nomes) |
+| **Canais de Origem** com contagem (WhatsApp · Instagram · Facebook · Site · Indicação · Outros) | ❌ **não existe em lugar nenhum da área** — zero ocorrências |
+| Lista **Conversas (12)** com pílula de estágio + pílula de canal | ❌ não nesta tela |
+| A conversa aberta, **Atribuir a mim · Transferir · Prioridade · Encerrar** | ❌ — e está **certo** pela regra 3 da moldura enquanto for tela de leitura |
+| Rodapé **Respostas rápidas · Modelos · Anotações internas** + 6 frases prontas | ❌ não existe |
+| Topo: **Todos os atendentes · Filtros · Abertas** (e **nenhum seletor de data**) | ❌ os filtros não existem — mas **cobrar seletor de data aqui era engano nosso**: o desenho não tem |
+| **Nenhuma fila de indicadores** no topo | a tela **tem** cartões — não é infidelidade, é a mais |
+
+**Veredito: existe parcialmente, e no propósito errado.** Ou esta tela vira a
+mesa de trabalho do desenho, ou se funde com `/comercial/torre` (ver §3) e o
+desenho 03 passa a ser atendido por `/comercial/conversas`.
+
+Três defeitos medidos, que valem de qualquer modo:
 - **Sem estado de carregando.** `CentralCarregando()` está **exportado e nunca
   é chamado** — a página é de servidor. Controle morto no arquivo.
 - **Erro sem "Tentar de novo".** `CentralComErro` não tem botão de retomada,
@@ -114,11 +151,28 @@ título ("quem espera, quem atende, qual a carga"). Três defeitos medidos:
 - **"SLA estourado" sem a ressalva.** Ver §4, item 1 — é o pior achado desta
   auditoria.
 
-#### 04 — Perfil do Lead / CRM 360 → `/comercial/lead/[id]` 🟡
-*Depende de imagem não arquivada.* Existe, com contato, empresa, decisor e
-porteiro, oportunidade, propostas, estado de follow-up e **linha do tempo** —
-que é a peça central do desenho 10 e está aqui. Não julgo a hierarquia visual
-sem a imagem.
+#### 04 — Perfil do Lead / CRM 360 → `/comercial/lead/[id]` 🟡 — **agora medido contra a imagem**
+`desenho-04-perfil-do-lead-crm-360.png`. Existe, com contato, empresa, decisor e
+porteiro, oportunidade, propostas, estado de follow-up e **linha do tempo** — a
+peça central do desenho, e ela está aqui (`Crm360View.tsx:469`).
+
+| Na imagem | No código |
+|---|---|
+| Cabeçalho do lead: foto, **pílula de temperatura**, telefone **copiável**, e-mail, cidade | 🟡 `Bloco "O contato"` tem os campos; **sem foto, sem pílula de temperatura, sem copiar** |
+| **Lead Score em rosca** (92 · "Muito alto") | 🟡 existe como **campo de texto** (`:274`), com "ninguém pontuou" quando nulo — a honestidade está certa, a rosca não existe |
+| Canal de Origem · Produto de Interesse · **Vendedor Responsável** com "Alterar" · **Status do Lead** em seletor | 🟡 há "Etapa do funil" e "Estágio" como texto; **trocar dono e trocar status são atos e não existem** — correto pela regra 3 |
+| **Seis abas** (Resumo · Histórico · Compras · Conversas · Tags · Atividades) | ❌ **não existem** — a tela é uma coluna única de blocos empilhados |
+| **"Como nos conheceu?"** nas Informações do Lead | ❌ não existe |
+| **Linha do Tempo** de eventos com data e hora | ✅ existe (`:469`), do mais recente para o mais antigo |
+| **Últimas Conversas** com caixa de **anotação interna** | ❌ não existe |
+| **Tags** com "Adicionar tag" | ❌ não existem |
+| **Compras / Oportunidades** com "+ Nova oportunidade" | 🟡 blocos "Oportunidade" e "Propostas" existem; o ato de criar, não — correto |
+| **Análise e Insights da IA**: objeções, **Probabilidade de Compra em barra**, próximo follow-up com "Marcar como realizado", campanha de atribuição, observações com autor e data | 🟡 `Probabilidade` existe como **número**, e declara "não estimada" quando falta (`:162`); a **barra**, as objeções, a campanha de atribuição e as observações **não existem**; "Marcar como realizado" é ato e não existe — correto |
+
+**Veredito: existe parcialmente.** É a tela cuja *substância* está mais perto do
+desenho e cuja *forma* está mais longe: todos os dados centrais estão lá, mas
+empilhados numa coluna, sem abas, sem rosca, sem barra, sem tags. É trabalho de
+`interface`, não de domínio.
 
 #### 05 — Atendimento com IA / Copiloto → `/comercial/conversas` 🟡
 O mais perto de pronto. Tem as três colunas, os balões, a coluna de IA com
@@ -211,7 +265,7 @@ Falta:
 - "Automação em destaque" (jornada em blocos): não existe.
 
 #### 12 — Central SDR → `/comercial/sdr` 🟡 — **medido contra a imagem**
-Única tela conferida no pixel. O que **bate**: título, subtítulo (palavra por
+`desenho-12-central-sdr-gatekeeper.png`. O que **bate**: título, subtítulo (palavra por
 palavra), 5 indicadores, a fila vertical com ícone+nome+número, "Tipo de
 gatekeeper detectado", "Decisor encontrado", "Resumo da situação", a coluna
 direita de copiloto.
