@@ -36,7 +36,10 @@ import { isGuestIdentifier } from "@/lib/guest";
 // administrador usa para validar (`@/lib/crm-contact-budget`, puro, sem banco).
 // Antes eram números soltos aqui e nada garantia que os dois caminhos de
 // escrita concordassem — regra repetida é regra que um dia diverge.
-import { CONTACT_BUDGET_MIN, CONTACT_BUDGET_MAX } from "@/lib/crm-contact-budget";
+import {
+  CONTACT_BUDGET_MIN, CONTACT_BUDGET_MAX,
+  CONTACT_BUDGET_COPY, describeContactBudget,
+} from "@/lib/crm-contact-budget";
 
 // ── Label maps ─────────────────────────────────────────────────────────────────
 
@@ -4135,6 +4138,12 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   // Global daily send limit (shown above the table). In safe mode it's the warmup
   // number that grows on its own; in manual mode it's the owner-set cap (0 = none).
   const [sendLimit, setSendLimit] = useState<{ manual: boolean; cap: number; safe: number } | null>(null);
+  // O TETO DE CONTATOS (pessoas únicas na vida toda) vem no MESMO GET que já
+  // trazia o limite diário — `/api/settings/crm-safety` devolve
+  // `contactBudgetTotal` e `contactBudgetUsed`. Não há rota nova: o dado já
+  // chegava aqui e a tela é que o calava. Foi essa omissão que deixou o Sushi
+  // Cazza dias sem abordar ninguém novo enquanto o cartão exibia "900/dia".
+  const [contactBudget, setContactBudget] = useState<{ used: number; total: number } | null>(null);
   // How the daily budget is split across campaigns (EQUAL | AUDIENCE | MANUAL) —
   // saved through the full raw safety config (the PATCH replaces the whole object).
   const [safetyRaw, setSafetyRaw]   = useState<Record<string, unknown> | null>(null);
@@ -4149,6 +4158,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           manual: !!data.manualOverride,
           cap:    typeof data.dailyGlobalCap === "number" ? data.dailyGlobalCap : 0,
           safe:   data.warmup?.safeDailyLimit ?? 0,
+        });
+        setContactBudget({
+          used:  typeof data.contactBudgetUsed  === "number" ? data.contactBudgetUsed  : 0,
+          total: typeof data.contactBudgetTotal === "number" ? data.contactBudgetTotal : 0,
         });
         setSafetyRaw(data);
         setDistMode((data.crmWhatsAppSafety as { distributionMode?: string } | undefined)?.distributionMode ?? "AUDIENCE");
@@ -4330,6 +4343,57 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
             <p className="mt-1 text-[10px] leading-snug text-muted">
               {sendLimit.manual ? "controle manual" : "modo seguro (automático)"}
             </p>
+
+            {/* ── Limite de Contatos ──────────────────────────────────────────
+                Só aparece quando está LIGADO (`contactBudgetTotal > 0`) — o
+                mesmo critério da tela de Configurações. Com 0 (sem limite) o
+                cartão fica como sempre foi: quem não tem a trava não precisa
+                ler sobre ela.
+
+                A grandeza é PESSOA, não mensagem. As duas se confundem, e foi
+                exatamente essa confusão que custou dias de CRM parado. ────── */}
+            {(() => {
+              const cb = describeContactBudget(contactBudget ?? {});
+              if (!cb.on) return null;
+              const tone = cb.exhausted
+                ? { border: "border-red-200",   bg: "bg-red-50",   num: "text-red-600",     bar: "bg-red-500" }
+                : cb.low
+                ? { border: "border-amber-200", bg: "bg-amber-50", num: "text-amber-700",   bar: "bg-amber-500" }
+                : { border: "border-line",      bg: "bg-paper",    num: "text-emerald-600", bar: "bg-emerald-500" };
+              return (
+                <div className={`mt-3 rounded-xl border ${tone.border} ${tone.bg} px-2.5 py-2`}>
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted">
+                    {CONTACT_BUDGET_COPY.label}
+                  </p>
+                  <p className={`mt-0.5 text-lg font-semibold leading-none ${tone.num}`}>
+                    {cb.remaining!.toLocaleString("pt-BR")}{" "}
+                    <span className="text-[11px] font-normal text-muted">
+                      de {cb.total.toLocaleString("pt-BR")}
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-muted">{CONTACT_BUDGET_COPY.unit}</p>
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line2">
+                    <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${cb.pct}%` }} />
+                  </div>
+                  {cb.exhausted ? (
+                    <p className="mt-1.5 text-[10px] leading-snug text-red-700">
+                      ⚠️ <strong>{CONTACT_BUDGET_COPY.exhaustedTitle}</strong>{" "}
+                      {CONTACT_BUDGET_COPY.exhaustedBody} Ajuste em{" "}
+                      <strong>{CONTACT_BUDGET_COPY.path}</strong>.
+                    </p>
+                  ) : cb.low ? (
+                    <p className="mt-1.5 text-[10px] leading-snug text-amber-800">
+                      Saldo curto — {CONTACT_BUDGET_COPY.lowHint} Em{" "}
+                      <strong>{CONTACT_BUDGET_COPY.path}</strong>.
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-[10px] leading-snug text-muted">
+                      {cb.used.toLocaleString("pt-BR")} pessoas já abordadas.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="mt-auto pt-3">
               <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">Distribuição</p>

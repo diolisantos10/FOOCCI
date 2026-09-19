@@ -13,6 +13,7 @@ import {
 } from "../_shared";
 import type { CRMWhatsAppSafetyConfig, CRMWhatsAppBudgetConfig } from "@/lib/crm-safety";
 import { DEFAULT_SAFETY_CONFIG, DEFAULT_BUDGET_CONFIG } from "@/lib/crm-safety";
+import { describeContactBudget, CONTACT_BUDGET_COPY } from "@/lib/crm-contact-budget";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -331,12 +332,14 @@ export default function MarketingSettingsPage() {
         </p>
 
         {(() => {
-          const used  = (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed ?? 0;
-          const total = cfg.contactBudgetTotal || 0;
-          const on    = total > 0;
-          const remaining = on ? Math.max(0, total - used) : null;
-          const pct   = on ? Math.min(100, Math.round((used / total) * 100)) : 0;
-          const low   = on && remaining !== null && remaining <= Math.max(1, Math.round(total * 0.1));
+          // A conta do saldo (ligado / pouco / esgotado) mora em
+          // `@/lib/crm-contact-budget` — a MESMA que o cartão da tela de
+          // Campanhas lê. Antes ela existia só aqui, e por isso a outra tela
+          // não tinha como mostrar o teto sem reescrever a régua.
+          const { on, used, total, remaining, pct, low } = describeContactBudget({
+            used:  (cfg as unknown as { contactBudgetUsed?: number }).contactBudgetUsed,
+            total: cfg.contactBudgetTotal,
+          });
           return (
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
               {/* Fora do "Assumir controle manual" desde 23/08/2026 (decisão do
@@ -374,13 +377,13 @@ export default function MarketingSettingsPage() {
                     </div>
                     {remaining !== null && remaining <= 0 ? (
                       <p className="mt-2 text-xs text-amber-800">
-                        <strong>O CRM está parado para gente nova.</strong> Já foram abordadas <strong>{used}</strong> pessoas
+                        <strong>{CONTACT_BUDGET_COPY.exhaustedTitle}</strong> Já foram abordadas <strong>{used}</strong> pessoas
                         {used > total ? <> — <strong>{used - total} a mais que o teto</strong>, de quando ele ainda não travava nada</> : null}.
                         Quem já está nessa conta continua recebendo; para falar com clientes novos, aumente o limite ao lado
                         (ou use <strong>0 = sem limite</strong>).
                       </p>
                     ) : (
-                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? " · pouco restante, aumente o limite se precisar." : "."}</p>
+                      <p className="mt-2 text-xs text-muted">{used} contatos já abordados{low ? ` · ${CONTACT_BUDGET_COPY.lowHint}` : "."}</p>
                     )}
                   </>
                 ) : (
