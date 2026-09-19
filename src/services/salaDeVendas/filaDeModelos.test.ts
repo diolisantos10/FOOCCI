@@ -362,7 +362,9 @@ describe("⛔ a trava de grupo não afrouxa com a fila", () => {
     expect(tentados()).not.toContain("foocci_contato_inicial_01");
     expect(tentados()).not.toContain("foocci_contato_inicial_02");
     expect(tentados()).toContain("foocci_lead_formulario_01");
-    // O `_03` é a ÚNICA ponte entre os grupos: neutro, não trata como estranho.
-    expect(tentados()).toContain("foocci_contato_inicial_03");
+    // ⛔ NENHUMA ponte entre os grupos — nem o `_03`. "Neutro" é julgamento
+    // nosso sobre o texto; quem preencheu o formulário lê uma abordagem a
+    // desconhecido. Sem modelo morno, não sai nada (fail-closed).
+    expect(tentados()).not.toContain("foocci_contato_inicial_03");
   });
 });

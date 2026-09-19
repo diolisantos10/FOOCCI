@@ -169,34 +169,33 @@ describe("os dois estágios são caminhos distintos — e a origem é quem separ
 });
 
 /**
- * ⚠️ A RESERVA NEUTRA — ordem do CEO em 18/09/2026.
+ * ⛔ FAIL-CLOSED: SEM MODELO MORNO LIBERADO, NÃO SAI NADA.
  *
- * Três leads pagos entraram, a recepção os assumiu, e ninguém falou com eles:
- * os textos mornos tinham acabado de ser submetidos e a Meta só analisa no dia
- * seguinte. Ele foi direto: *"a Meta só vai aprovar amanhã, esses clientes têm
- * que ser abordados AGORA."*
- *
- * A regra antiga recusava a abordagem inteira nesse caso. A intenção estava
- * certa — quem pediu contato não pode receber texto de estranho — mas o preço
- * era um lead quente esperando um dia pela fila de análise da Meta.
+ * Em 18/09/2026 existiu aqui uma "reserva neutra": faltando texto morno, saía o
+ * `foocci_contato_inicial_03`, do jogo do NÚMERO FRIO, para não deixar lead
+ * quente esperando a análise da Meta. Isso furava a trava que o arquivo dos
+ * modelos de formulário existe para manter — quem preencheu um formulário nosso
+ * recebendo texto de abordagem a desconhecido — e derrubava
+ * `leadFormularioTemplates.test.ts`. A régua voltou a ser: não abordar, e dizer
+ * por escrito por quê.
  */
-describe("reserva neutra quando nenhum modelo morno está aprovado", () => {
+describe("sem modelo morno aprovado, a abordagem não acontece", () => {
   const MORNO = { jaSabeORestaurante: false };
 
-  it("sai o 'Olá! Tudo bem?' em vez de recusar a abordagem", async () => {
+  it("NÃO empresta o 'Olá! Tudo bem?' do jogo frio", async () => {
     const db = bancoComModelos(["foocci_contato_inicial_01", "foocci_contato_inicial_03"]);
 
     const r = await escolherModeloDoLeadDeFormulario(db, MORNO);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.modelo.nome).toBe("foocci_contato_inicial_03");
-    expect(r.motivo).toBe("reservaNeutra");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.motivo).toBe("nenhumModeloDeFormularioLiberado");
+    // O motivo tem de ser legível no raio-x: quem ler precisa saber o que houve
+    // e o que destrava, sem abrir o código.
+    expect(r.detalhe).toMatch(/NADA FOI ENVIADO/);
+    expect(r.detalhe).toMatch(/Pode enviar/);
   });
 
-  // A trava que a reserva NÃO pode afrouxar: "este contato é do {{1}}, certo?"
-  // continua vedado a quem pediu contato. Era esse o insulto que a regra
-  // original existia para impedir, e ele continua impedido.
-  it("mas NUNCA cai para os frios que tratam a pessoa como estranha", async () => {
+  it("e NUNCA cai para os frios que tratam a pessoa como estranha", async () => {
     const db = bancoComModelos(["foocci_contato_inicial_01", "foocci_contato_inicial_02"]);
 
     const r = await escolherModeloDoLeadDeFormulario(db, MORNO);
@@ -205,7 +204,7 @@ describe("reserva neutra quando nenhum modelo morno está aprovado", () => {
     expect(r.motivo).toBe("nenhumModeloDeFormularioLiberado");
   });
 
-  it("e quando o morno existe, ele ganha do neutro", async () => {
+  it("e quando o morno existe, ele sai", async () => {
     const db = bancoComModelos(["foocci_contato_inicial_03", "foocci_lead_formulario_03"]);
 
     const r = await escolherModeloDoLeadDeFormulario(db, MORNO);

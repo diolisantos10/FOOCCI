@@ -276,8 +276,6 @@ export function ehLeadDeFormulario(fonte: string | null | undefined): boolean {
 export type MotivoDaEscolhaDeFormulario =
   | "jaSabeORestaurante"
   | "vaiPerguntarORestaurante"
-  /** Nenhum modelo morno aprovado ainda: saiu o neutro "Olá! Tudo bem?". */
-  | "reservaNeutra"
   | "nenhumModeloDeFormularioLiberado";
 
 export type EscolhaDoLeadDeFormulario =
@@ -285,13 +283,25 @@ export type EscolhaDoLeadDeFormulario =
   | { ok: false; motivo: MotivoDaEscolhaDeFormulario; detalhe: string };
 
 /**
- * O único texto frio que serve de reserva para um lead morno.
+ * ⛔ NÃO EXISTE RESERVA FRIA PARA O LEAD DE FORMULÁRIO — e a ausência é a trava.
  *
- * "Olá! Tudo bem?" — nada nele pressupõe estranho, e por isso ele pode receber
- * quem pediu contato sem ofender. Os outros dois modelos frios perguntam se o
- * contato é do restaurante X, e esses continuam vedados aqui.
+ * Em 18/09/2026 entrou aqui uma "reserva neutra": na falta de modelo morno
+ * liberado, saía o `foocci_contato_inicial_03` ("Olá! Tudo bem?"), do jogo do
+ * NÚMERO FRIO. A intenção era não deixar lead quente esperando a fila de
+ * análise da Meta. O efeito era o defeito que este arquivo inteiro existe para
+ * impedir: quem preencheu um formulário NOSSO recebendo o texto de abordagem a
+ * desconhecido — porque "neutro" é julgamento nosso sobre o texto, não sobre o
+ * que a pessoa lê depois de ter deixado nome e telefone pedindo contato.
+ *
+ * A régua voltou a ser fail-closed: **sem modelo de formulário liberado, não
+ * sai nada**, e o motivo fica escrito e legível no raio-x. Lead não abordado
+ * hoje se aborda amanhã; lead abordado como estranho não se desabordar — e o
+ * custo do erro não é só o lead, é a conta na Meta.
+ *
+ * O caminho certo para o lead quente que não pode esperar é o modelo morno
+ * aprovado (ou a conversa dentro da janela de 24h), não um empréstimo do jogo
+ * frio.
  */
-export const MODELO_NEUTRO_DE_RESERVA = "foocci_contato_inicial_03";
 
 export type CandidatosDoLeadDeFormulario =
   | { ok: true; modelos: ModeloLiberadoParaEnvio[]; motivo: MotivoDaEscolhaDeFormulario }
@@ -315,19 +325,17 @@ export async function candidatosDoLeadDeFormulario(
   const doFormulario = liberados.filter((m) =>
     (MODELOS_DO_LEAD_DE_FORMULARIO as readonly string[]).includes(m.nome),
   );
-  const neutro = liberados.filter((m) => m.nome === MODELO_NEUTRO_DE_RESERVA);
 
   if (doFormulario.length === 0) {
-    if (neutro.length) {
-      return { ok: true, modelos: [...neutro], motivo: "reservaNeutra" };
-    }
     return {
       ok: false,
       motivo: "nenhumModeloDeFormularioLiberado",
       detalhe:
-        "nenhum modelo de lead de formulário está APPROVED, e nem a reserva neutra " +
-        `(${MODELO_NEUTRO_DE_RESERVA}) está liberada. A abordagem NÃO cai para os ` +
-        "outros textos frios: quem pediu contato não recebe 'este contato é do X, certo?'.",
+        "NADA FOI ENVIADO, de propósito: nenhum dos modelos de lead de formulário " +
+        `(${MODELOS_DO_LEAD_DE_FORMULARIO.join(", ")}) está APPROVED na Meta com ` +
+        "'Pode enviar' ligado. Este lead preencheu um formulário nosso, e a abordagem " +
+        "NÃO cai para os textos do número frio — nem para o mais curto deles. " +
+        "Para destravar: aprovar/liberar um modelo de formulário na Meta.",
     };
   }
 
@@ -340,9 +348,8 @@ export async function candidatosDoLeadDeFormulario(
 
   const preferidos = p.jaSabeORestaurante ? jaQualificam : perguntaORestaurante;
   const reserva = p.jaSabeORestaurante ? perguntaORestaurante : jaQualificam;
-  // A reserva neutra fecha a fila: é o último texto que ainda pode sair sem
-  // ofender quem pediu contato.
-  const fila = [...filaDeTentativas(preferidos, reserva, random), ...neutro];
+  // ⛔ A fila é fechada nos modelos de formulário: nada do jogo frio a fecha.
+  const fila = filaDeTentativas(preferidos, reserva, random);
   if (fila.length === 0) {
     return {
       ok: false,
