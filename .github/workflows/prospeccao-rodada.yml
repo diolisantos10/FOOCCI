@@ -14,9 +14,14 @@
 
 name: Prospecção — rodada das 9h
 
+# ⛔ PAUSADO POR ORDEM DO CEO em 19/09/2026: "pausa o disparo de clientes frios".
+# O agendamento automático está desligado — a rodada só sai quando alguém aperta
+# "Run workflow" à mão. Nada foi apagado: para religar, basta descomentar as duas
+# linhas de `schedule` abaixo. A pausa é do AGENDAMENTO, não da máquina: todas as
+# travas continuam de pé, e a recepção do lead que nos procurou segue rodando.
 on:
-  schedule:
-    - cron: "0 12 * * 1-6"
+  # schedule:
+  #   - cron: "0 12 * * 1-6"
   workflow_dispatch:
     inputs:
       teto:
