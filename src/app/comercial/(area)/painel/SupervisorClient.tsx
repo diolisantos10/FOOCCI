@@ -34,7 +34,11 @@ import {
   Indicador,
   Linha,
   Pilula,
+  Rosca,
+  SerieNoTempo,
+  TituloDaPagina,
   Tabela,
+  emReais,
   type NomeDeIcone,
   type Tom,
 } from "../_pecas/Pecas";
@@ -132,6 +136,26 @@ type Diagnostico =
     }
   | { medido: false; motivo: string; detalhe: string };
 
+type Medida<T> = { medido: true; valor: T } | { medido: false; motivo: string };
+
+type Receita =
+  | { medido: true; centavos: number; propostas: number }
+  | { medido: false; motivo: "semValores"; propostas: number }
+  | { medido: false; motivo: "semPropostas" };
+
+/** Os quatro blocos da peça 13 medidos em `telas/inteligenciaDeReceita.ts`. */
+export interface ExtrasDaReceita {
+  reunioes: { marcadas: number; realizadas: number; naoCompareceram: number; semDesfecho: number };
+  reativacao: { reativados: Medida<number>; aReativar: number };
+  risco: { emRisco: number; limiar: number; semAvaliacao: number; total: number };
+  receitaNoTempo: {
+    pontos: Array<{ dia: string; acumuladoCents: number; propostas: number }>;
+    aceitasSemValor: number;
+    meta: Medida<number>;
+    previsao: Medida<number>;
+  };
+}
+
 export interface Visao {
   funil: { degraus: Degrau[]; pontaAPonta: Taxa | null };
   eficiencia: { etapas: EtapaMedida[]; gargalos: EtapaMedida[]; cegas: string[] };
@@ -141,6 +165,9 @@ export interface Visao {
   diagnostico: Diagnostico;
   acoes: Array<{ origem: string; texto: string; porque: string }>;
   cegas: string[];
+  /** Já vinham no corpo da resposta; a tela só não os declarava. */
+  receita: Receita;
+  extras: ExtrasDaReceita;
 }
 
 type Estado =
@@ -246,26 +273,71 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ── A FILA DE INDICADORES ─────────────────────────────────────────
-          Os oito cartões do desenho saem DOS DEGRAUS DO FUNIL, e não de uma
-          lista digitada: o que o serviço mede é o que aparece. Degrau sem
-          fonte ligada vira "não medido" com o motivo — nunca um zero, que
-          diria "medimos e não houve nenhum". */}
+      {/* O título da peça 13. Ele existe mesmo a seção morando dentro do
+          Painel: o desenho dá nome e propósito próprios a esta metade da
+          página, e sem o nome ela vira "mais gráficos embaixo do painel". */}
+      <TituloDaPagina
+        titulo="Revenue Supervisor / Inteligência de Receita"
+        subtitulo="Diagnostique gargalos e oportunidades em toda a operação: Hunter, SDR, Vendas e CRM."
+      />
+
+      {/* ── OS OITO INDICADORES DA PEÇA 13 ───────────────────────────────
+          O desenho não pede os degraus do funil aqui: pede oito números de
+          NEGÓCIO. Quatro saem do funil, e os outros quatro de fontes que o
+          supervisor não lia — reuniões, receita, reativações e risco. Dois
+          deles **não têm fonte** e dizem isso no lugar do número. */}
       <FilaDeIndicadores>
-        {v.funil.degraus.slice(0, 8).map((d, i) => {
-          const t = TINTA_DO_DEGRAU[i] ?? { icone: "grafico" as NomeDeIcone, tom: "azul" as Tom };
-          return (
-            <Indicador
-              key={d.etapa}
-              rotulo={d.rotulo}
-              valor={d.volume.medido ? d.volume.total : null}
-              motivo={d.volume.medido ? undefined : "nenhuma fonte grava esta etapa hoje"}
-              icone={t.icone}
-              tom={t.tom}
-              variacao={d.ehRetrato ? "retrato de agora" : textoDaTendencia(d.tendencia)}
-            />
-          );
-        })}
+        <IndicadorDeDegrau v={v} etapa="PRONTAS_PARA_SDR" rotulo="Prospects qualificados" icone="alvo" tom="azul" />
+        <IndicadorDeDegrau v={v} etapa="DECISORES_ENCONTRADOS" rotulo="Decisores encontrados" icone="chave" tom="roxo" />
+        <Indicador
+          rotulo="Reuniões"
+          valor={v.extras.reunioes.marcadas}
+          icone="agenda"
+          tom="azul"
+          rodape={
+            `${v.extras.reunioes.realizadas} realizadas · ${v.extras.reunioes.naoCompareceram} não compareceram` +
+            (v.extras.reunioes.semDesfecho > 0
+              ? ` · ${v.extras.reunioes.semDesfecho} sem desfecho marcado`
+              : "")
+          }
+        />
+        <IndicadorDeDegrau v={v} etapa="OPORTUNIDADES" rotulo="Oportunidades abertas" icone="porta" tom="ambar" />
+      </FilaDeIndicadores>
+
+      <FilaDeIndicadores>
+        <Indicador
+          rotulo="Conversão em vendas"
+          valor={v.funil.pontaAPonta?.medido ? `${(v.funil.pontaAPonta.valor * 100).toFixed(1).replace(".", ",")}%` : null}
+          motivo={
+            v.funil.pontaAPonta
+              ? textoDaTaxa(v.funil.pontaAPonta)
+              : "o topo do funil não tem fonte ligada — sem denominador não há conversão"
+          }
+          icone="grafico"
+          tom="verde"
+          rodape={v.funil.pontaAPonta?.medido ? `da primeira etapa medida até Vendas, sobre ${v.funil.pontaAPonta.base}` : undefined}
+        />
+        <IndicadorDeReceita r={v.receita} />
+        <Indicador
+          rotulo="Reativações"
+          valor={v.extras.reativacao.reativados.medido ? v.extras.reativacao.reativados.valor : null}
+          motivo={v.extras.reativacao.reativados.medido ? undefined : v.extras.reativacao.reativados.motivo}
+          icone="coracao"
+          tom="verde"
+          rodape={`o número vizinho que existe: ${v.extras.reativacao.aReativar} contas paradas sem cancelamento — candidatas, não reativações`}
+        />
+        <Indicador
+          rotulo="Clientes em risco"
+          valor={v.extras.risco.emRisco}
+          icone="alerta"
+          tom={v.extras.risco.emRisco > 0 ? "vermelho" : "verde"}
+          rodape={
+            `risco ≥ ${v.extras.risco.limiar}, a mesma régua que move a conta para EM_RISCO` +
+            (v.extras.risco.semAvaliacao > 0
+              ? ` · ${v.extras.risco.semAvaliacao} de ${v.extras.risco.total} contas nunca foram avaliadas — é “quantos achamos”, não “quantos existem”`
+              : "")
+          }
+        />
       </FilaDeIndicadores>
 
       <Corpo
@@ -340,9 +412,17 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
           </>
         }
       >
-        {/* ── SAÚDE ───────────────────────────────────────────────────── */}
+        {/* ── SAÚDE, NA ROSCA DO DESENHO ──────────────────────────────── */}
         <Secao titulo="Saúde da operação">
-          <CartaoDeSaude s={v.saude} />
+          <RoscaDaSaude s={v.saude} />
+          <div className="mt-3">
+            <CartaoDeSaude s={v.saude} />
+          </div>
+        </Secao>
+
+        {/* ── RECEITA AO LONGO DO MÊS ─────────────────────────────────── */}
+        <Secao titulo="Receita ao longo do mês">
+          <ReceitaNoTempo e={v.extras.receitaNoTempo} />
         </Secao>
 
         {/* ── FUNIL DE RECEITA, EM BARRAS DECRESCENTES ────────────────── */}
@@ -424,12 +504,223 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
             carimbada, porque etapa que some do radar é etapa que ninguém conserta.
           </p>
         </Secao>
+
+        {/* ── PREVISÃO E META ─────────────────────────────────────────── */}
+        <Secao titulo="Previsão e meta">
+          <PrevisaoEMeta r={v.receita} e={v.extras.receitaNoTempo} />
+        </Secao>
       </Corpo>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Um indicador cujo número sai de um DEGRAU do funil, pelo nome do desenho.
+ *
+ * O desenho chama "Prospects qualificados" ao que o funil chama "Prontas para
+ * SDR" — é o mesmo número, e o desenho estampa os dois iguais (3.411). O rótulo
+ * do desenho vai na frente e o nome do funil vai no rodapé, para ninguém
+ * procurar uma segunda medição que não existe.
+ */
+function IndicadorDeDegrau({
+  v,
+  etapa,
+  rotulo,
+  icone,
+  tom,
+}: {
+  v: Visao;
+  etapa: string;
+  rotulo: string;
+  icone: NomeDeIcone;
+  tom: Tom;
+}) {
+  const d = v.funil.degraus.find((x) => x.etapa === etapa);
+
+  if (!d) {
+    return (
+      <Indicador
+        rotulo={rotulo}
+        valor={null}
+        motivo={`o funil de receita não devolveu a etapa ${etapa} — e isso também é um defeito`}
+        icone={icone}
+        tom={tom}
+      />
+    );
+  }
+
+  return (
+    <Indicador
+      rotulo={rotulo}
+      valor={d.volume.medido ? d.volume.total : null}
+      motivo={d.volume.medido ? undefined : "nenhuma fonte grava esta etapa hoje"}
+      icone={icone}
+      tom={tom}
+      variacao={d.ehRetrato ? "retrato de agora" : textoDaTendencia(d.tendencia)}
+      rodape={`no funil, este degrau se chama “${d.rotulo}” · ${d.comoSeMede}`}
+    />
+  );
+}
+
+/** Receita do mês — e a recusa honesta quando fechou sem preço no sistema. */
+function IndicadorDeReceita({ r }: { r: Receita }) {
+  if (r.medido) {
+    return (
+      <Indicador
+        rotulo="Receita do mês"
+        valor={emReais(r.centavos)}
+        icone="dinheiro"
+        tom="verde"
+        rodape={`soma das ${r.propostas} propostas aceitas com valor gravado`}
+      />
+    );
+  }
+
+  return (
+    <Indicador
+      rotulo="Receita do mês"
+      valor={null}
+      motivo={
+        r.motivo === "semValores"
+          ? `${r.propostas} propostas foram aceitas e nenhuma tem valor gravado — o preço foi combinado fora do sistema. R$ 0,00 ao lado de ${r.propostas} fechamentos seria defeito com cara de notícia`
+          : "nenhuma proposta aceita no período — não há receita a somar"
+      }
+      icone="dinheiro"
+      tom="verde"
+    />
+  );
+}
+
+/** O índice 0–100 do desenho, no anel. A conta aberta continua logo abaixo. */
+function RoscaDaSaude({ s }: { s: Visao["saude"] }) {
+  if (!s.medido) {
+    return (
+      <p className="max-w-[70ch] rounded-2xl border border-line bg-paper p-4 text-[13.5px] leading-relaxed text-ink2">
+        <strong>Índice não medido.</strong> {s.motivo}. Um anel em 0 aqui diria
+        &quot;operação morta&quot;, que é uma afirmação — e ninguém a apurou.
+      </p>
+    );
+  }
+
+  const naoMedido = Math.max(0, s.pesoTotal - s.pesoMedido);
+
+  return (
+    <Rosca
+      centro={s.indice}
+      sobCentro="de 100"
+      /* ⚠️ As fatias são o PESO da conta, não o índice: o anel mostra quanto da
+         régua pôde ser apurado. Desenhar 78/100 como "78% verde" esconderia
+         que os 78 saíram de 45 pontos de peso, e não de 100. */
+      fatias={[
+        { rotulo: `Peso apurado (${s.indice} pontos de índice)`, valor: s.pesoMedido, tom: "verde" },
+        ...(naoMedido > 0
+          ? [{ rotulo: "Peso sem medição — fora da conta", valor: naoMedido, tom: "cinza" as Tom }]
+          : []),
+      ]}
+      alerta={
+        naoMedido > 0 ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-snug text-amber-950">
+            O índice saiu de <strong>{s.pesoMedido} de {s.pesoTotal}</strong> pontos de peso.
+            Parcela não medida não entra como zero: ela sai da conta e o peso total cai junto
+            — {s.indice} sobre {s.pesoMedido} pontos não é a mesma afirmação que {s.indice} sobre {s.pesoTotal}.
+          </p>
+        ) : null
+      }
+    />
+  );
+}
+
+/**
+ * A CURVA DE RECEITA — cheia, e sem a tracejada que o desenho tem.
+ *
+ * ⛔ O desenho traz "Meta projetada" como segunda linha. **Ela não existe neste
+ * sistema**, e por isso não é desenhada: uma tracejada tirada do ritmo do mês
+ * pareceria alvo, e alvo é decisão do CEO. O lugar dela fica escrito, vazio.
+ */
+function ReceitaNoTempo({ e }: { e: ExtrasDaReceita["receitaNoTempo"] }) {
+  const temReceita = e.pontos.some((p) => p.acumuladoCents > 0);
+
+  if (!temReceita) {
+    return (
+      <div className="rounded-2xl border border-line bg-paper p-4">
+        <p className="max-w-[80ch] text-[13px] leading-relaxed text-ink2">
+          <strong>Nenhuma receita acumulada no período.</strong> Nenhuma proposta
+          aceita com valor gravado — a curva ficaria colada no chão, e uma linha
+          no zero diria &quot;vendemos e não entrou nada&quot;.
+          {e.aceitasSemValor > 0 && (
+            <>
+              {" "}
+              <strong>{e.aceitasSemValor}</strong> propostas foram aceitas SEM valor: fecharam,
+              e o preço está fora do sistema.
+            </>
+          )}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <SerieNoTempo
+      rotulos={e.pontos.map((p) =>
+        new Date(p.dia).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+      )}
+      series={[
+        {
+          rotulo: "Receita realizada (acumulada)",
+          tom: "azul",
+          valores: e.pontos.map((p) => p.acumuladoCents),
+        },
+      ]}
+      formatar={(c) => emReais(c)}
+      nota={
+        <>
+          <p>
+            <strong className="text-ink2">A linha tracejada do desenho — &quot;meta projetada&quot; — não
+            está aqui.</strong> {e.meta.medido ? "" : e.meta.motivo}.
+          </p>
+          {e.aceitasSemValor > 0 && (
+            <p className="mt-1">
+              <strong className="text-ink2">{e.aceitasSemValor}</strong> propostas aceitas no período
+              não têm valor gravado e ficam fora da curva — somá-las como zero achataria a linha.
+            </p>
+          )}
+        </>
+      }
+    />
+  );
+}
+
+/**
+ * PREVISÃO E META — o bloco em que dois dos três números do desenho não existem.
+ *
+ * O desenho mostra Meta R$ 600.000, Realizada R$ 482.300, Previsão R$ 560.000 e
+ * a barra "80% da meta atingida". **Só a realizada tem fonte.** A barra some
+ * junto com a meta: barra de progresso sem alvo é a forma mais convincente de
+ * inventar um alvo.
+ */
+function PrevisaoEMeta({ r, e }: { r: Receita; e: ExtrasDaReceita["receitaNoTempo"] }) {
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <Indicador
+        rotulo="Meta do mês"
+        valor={e.meta.medido ? emReais(e.meta.valor) : null}
+        motivo={e.meta.medido ? undefined : e.meta.motivo}
+        icone="alvo"
+        tom="azul"
+      />
+      <IndicadorDeReceita r={r} />
+      <Indicador
+        rotulo="Previsão do mês"
+        valor={e.previsao.medido ? emReais(e.previsao.valor) : null}
+        motivo={e.previsao.medido ? undefined : e.previsao.motivo}
+        icone="grafico"
+        tom="roxo"
+      />
+    </div>
+  );
+}
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (

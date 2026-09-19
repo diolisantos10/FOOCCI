@@ -32,6 +32,8 @@ import { useEffect, useState } from "react";
 import {
   Aviso,
   Barra,
+  Rosca,
+  SerieNoTempo,
   Caixa,
   Carregando,
   CartaoDeIA,
@@ -51,6 +53,7 @@ import {
   TituloDaPagina,
   cx,
   emDia,
+  emReais,
   textoDaVariacao,
   type Fase,
   type Medida,
@@ -71,6 +74,11 @@ export const RESSALVA_DO_PRAZO =
 // ─────────────────────────────────────────────────────────────────────────────
 // O QUE A ROTA DEVOLVE — o mesmo formato dos serviços, sem tradução pelo meio
 // ─────────────────────────────────────────────────────────────────────────────
+
+export type Receita =
+  | { medido: true; centavos: number; propostas: number }
+  | { medido: false; motivo: "semValores"; propostas: number }
+  | { medido: false; motivo: "semPropostas" };
 
 type Taxa =
   | { medido: true; valor: number; base: number }
@@ -101,6 +109,9 @@ export interface DadosDaTorre {
       perdidos: number;
       emNutricao: number;
     };
+    /** Já vinha no corpo da resposta; a tela só não o declarava. */
+    perdas: Array<{ rotulo: string; grupo: string | null; total: number }>;
+    receita: Receita;
   };
   supervisora: {
     conversasAcompanhadas: number;
@@ -117,6 +128,33 @@ export interface DadosDaTorre {
     hoje: { funil: { degraus: Array<{ etapa: string; rotulo: string; total: number }>; ganhos: number } };
     ontem: { funil: { degraus: Array<{ etapa: string; rotulo: string; total: number }>; ganhos: number } };
   };
+  /** As seis medições da peça 02 — ver `services/salaDeVendas/telas/controlTower.ts`. */
+  serie: {
+    janelaHoras: number;
+    pontos: Array<{ instante: string; recebidos: number; qualificados: number }>;
+    comoSeMede: { recebidos: string; qualificados: string };
+  };
+  fila: {
+    emAtendimento: number;
+    aguardandoVendedor: number;
+    total: number;
+    esperandoDemais: number;
+    limiarMin: number;
+  };
+  quentes: { quantos: number; semScore: number };
+  conversoes: { ia: Taxa; agente: Taxa; comoSeMede: string };
+  ranking: {
+    linhas: Array<{
+      userId: string;
+      nome: string;
+      atendimentos: number;
+      vendas: number;
+      conversao: Taxa;
+    }>;
+    slaPorPessoa: Medida<never>;
+  };
+  sla: Medida<{ minutos: number; base: number; semResposta: number }>;
+  receitaDoDia: { hoje: Receita; ontem: Receita };
   raioX: {
     mensagensNaJanela: number;
     abordadosSemFicha: number;
@@ -189,6 +227,178 @@ export function alertasDoAgora(agora: DadosDaTorre["painel"]["agora"]): Alerta[]
   return candidatos.filter((a) => a.quantos > 0).sort((a, b) => b.quantos - a.quantos);
 }
 
+/**
+ * ⚠️ O "SLA MÉDIO" DO DESENHO MEDE O TEMPO **DA CASA**, NÃO O DO LEAD.
+ *
+ * `painel.ts` tem `tempoDePrimeiraResposta`, que mede o tempo até o LEAD
+ * responder. Tem o mesmo nome no português da operação e mede o contrário: se
+ * menos gente responde, ele MELHORA. O número deste cartão sai de
+ * `slaMedioDeResposta`, que cronometra da primeira mensagem do lead até a
+ * primeira nossa depois dela.
+ */
+export function textoDoSla(sla: DadosDaTorre["sla"]): { valor: string | null; motivo?: string; rodape?: string } {
+  if (!sla.medido) return { valor: null, motivo: sla.motivo };
+  const { minutos, base, semResposta } = sla.valor;
+  const valor = minutos < 60 ? `${minutos}m` : `${Math.floor(minutos / 60)}h ${minutos % 60}m`;
+  return {
+    valor,
+    rodape:
+      `sobre ${base} conversas com pergunta e resposta no período` +
+      (semResposta > 0
+        ? ` · ${semResposta} escreveram e ainda não foram respondidos — fora da média, de propósito`
+        : ""),
+  };
+}
+
+/** Uma receita medida, ou o motivo. Nunca R$ 0,00 no lugar de "não sei". */
+export function textoDaReceita(r: Receita): { valor: string | null; motivo?: string; rodape?: string } {
+  if (r.medido) {
+    return { valor: emReais(r.centavos), rodape: `${r.propostas} propostas aceitas com valor` };
+  }
+  if (r.motivo === "semValores") {
+    return {
+      valor: null,
+      motivo:
+        `${r.propostas} propostas foram aceitas e nenhuma tem valor gravado — o preço foi combinado ` +
+        `fora do sistema. Somar como zero diria "fechou e não entrou dinheiro"`,
+    };
+  }
+  return { valor: null, motivo: "nenhuma proposta aceita no período — não há receita a somar" };
+}
+
+function textoDaTaxa(t: Taxa): { valor: string | null; motivo?: string; rodape?: string } {
+  if (t.medido) {
+    return {
+      valor: `${(t.valor * 100).toFixed(1).replace(".", ",")}%`,
+      rodape: `sobre ${t.base} leads`,
+    };
+  }
+  if (t.motivo === "amostraPequena") {
+    return { valor: null, motivo: `amostra pequena demais para uma taxa honesta (base ${t.base})` };
+  }
+  return { valor: null, motivo: "nenhum lead nesta trilha no período" };
+}
+
+/**
+ * OS NOVE INDICADORES DA PEÇA 02, em 4 + 5 como no desenho.
+ *
+ * ── O QUE MUDOU, E POR QUE ──────────────────────────────────────────────────
+ *
+ * A fileira antiga mostrava sete contagens de FILA ("sem dono", "prazo
+ * estourado", "follow-up vencido"…). Elas não sumiram — desceram para "Alertas,
+ * com a causa", que é onde uma fila travada de fato pede ação. O topo passa a
+ * ser o que o CEO desenhou: entrada, atendimento, espera, prazo, quentes,
+ * conversões, receita e perdas.
+ *
+ * ⛔ **Três dos nove não têm número, e por motivos diferentes.** Cada um estampa
+ * o seu. Nenhum estampa zero.
+ */
+export function SecaoIndicadores({ dados }: { dados: DadosDaTorre }) {
+  const a = dados.painel.agora;
+  const sla = textoDoSla(dados.sla);
+  const receita = textoDaReceita(dados.receitaDoDia.hoje);
+  const ia = textoDaTaxa(dados.conversoes.ia);
+  const agente = textoDaTaxa(dados.conversoes.agente);
+  const perdas = dados.painel.perdas.reduce((s, p) => s + p.total, 0);
+
+  return (
+    <Secao
+      titulo="Os números do dia"
+      descricao="Retrato deste instante para as filas; o período do recorte para conversão, receita e perdas."
+    >
+      <FilaDeIndicadores>
+        <Indicador
+          rotulo="Leads entrando"
+          valor={a.entrandoAgora}
+          icone="pessoas"
+          tom="azul"
+          rodape="criados nas últimas 24 h"
+        />
+        <Indicador rotulo="IA atendendo" valor={a.comIA} icone="faisca" tom="roxo" />
+        <Indicador
+          rotulo="Aguardando vendedor"
+          valor={a.aguardandoHumano}
+          icone="relogio"
+          tom={a.aguardandoHumano > 0 ? "ambar" : "verde"}
+        />
+        <Indicador
+          rotulo="SLA médio"
+          valor={sla.valor}
+          motivo={sla.motivo}
+          icone="relogio"
+          tom="verde"
+          rodape={sla.rodape}
+        />
+      </FilaDeIndicadores>
+
+      <FilaDeIndicadores colunas={5}>
+        <Indicador
+          rotulo="Leads quentes sem dono"
+          valor={dados.quentes.quantos}
+          icone="chama"
+          tom={dados.quentes.quantos > 0 ? "vermelho" : "verde"}
+          rodape={
+            dados.quentes.semScore > 0
+              ? `${dados.quentes.semScore} leads ativos nunca foram pontuados — este número é “quantos achamos”, não “quantos existem”`
+              : undefined
+          }
+        />
+        <Indicador
+          rotulo="Conversão da IA"
+          valor={ia.valor}
+          motivo={ia.motivo}
+          icone="grafico"
+          tom="roxo"
+          rodape={ia.rodape}
+        />
+        <Indicador
+          rotulo="Conversão por agente"
+          valor={agente.valor}
+          motivo={agente.motivo}
+          icone="grafico"
+          tom="azul"
+          rodape={agente.rodape}
+        />
+        <Indicador
+          rotulo="Receita do dia"
+          valor={receita.valor}
+          motivo={receita.motivo}
+          icone="dinheiro"
+          tom="verde"
+          rodape={receita.rodape}
+        />
+        <Indicador
+          rotulo="Perdas"
+          valor={perdas}
+          icone="alerta"
+          tom={perdas > 0 ? "vermelho" : "verde"}
+          rodape="leads que foram a PERDIDO no período"
+        />
+      </FilaDeIndicadores>
+
+      <p className="max-w-[90ch] text-[11.5px] leading-snug text-muted">
+        <strong className="text-ink2">Como as duas conversões são separadas:</strong>{" "}
+        {dados.conversoes.comoSeMede}.
+      </p>
+    </Secao>
+  );
+}
+
+/**
+ * AS FILAS DE TRAVAMENTO — a fileira que o desenho não tem, e que fica.
+ *
+ * ── POR QUE ELA NÃO FOI APAGADA QUANDO OS NOVE DO DESENHO ENTRARAM ──────────
+ *
+ * O desenho abre com entrada, conversão e receita. Um supervisor abre a Torre
+ * no dia ruim — e no dia ruim a pergunta é "o que está travado". As duas
+ * fileiras respondem coisas diferentes e nenhuma substitui a outra, então a do
+ * desenho vai para o topo e esta desce, inteira.
+ *
+ * ⚠️ É aqui que a RESSALVA DO PRAZO viaja colada ao número. Ela não pode sair
+ * daqui sem sair junto com o cartão: "prazo estourado: 0" sem ela afirma
+ * "ninguém está atrasado", quando o que existe é "a maioria dos leads nem tem
+ * prazo para perder".
+ */
 export function SecaoTravado({ dados }: { dados: DadosDaTorre }) {
   const a = dados.painel.agora;
   return (
@@ -217,10 +427,181 @@ export function SecaoTravado({ dados }: { dados: DadosDaTorre }) {
           tom={a.followUpVencido > 0 ? "ambar" : "verde"}
         />
         <Indicador rotulo="Sem próxima ação" valor={a.semProximaAcao} icone="alvo" tom="ambar" />
-        <Indicador rotulo="Esperando gente" valor={a.aguardandoHumano} icone="pessoas" tom="azul" />
-        <Indicador rotulo="Com a IA" valor={a.comIA} icone="faisca" tom="roxo" />
-        <Indicador rotulo="Entraram em 24 h" valor={a.entrandoAgora} icone="grafico" tom="azul" />
       </FilaDeIndicadores>
+    </Secao>
+  );
+}
+
+/**
+ * A SÉRIE DO DESENHO — "Volume de Leads ao Longo do Tempo", duas linhas.
+ *
+ * O que o desenho chama de "Leads qualificados (IA)" aqui é **o lead que a
+ * régua de score pontuou naquela hora**. Não é "lead bom": é "a IA olhou". A
+ * diferença vai escrita embaixo do gráfico, porque as duas leituras pedem
+ * providências opostas.
+ */
+export function SecaoSerie({ dados }: { dados: DadosDaTorre }) {
+  const rotulos = dados.serie.pontos.map((p) =>
+    new Date(p.instante).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+  );
+
+  return (
+    <Secao
+      titulo={`Volume ao longo do tempo (${dados.serie.janelaHoras} h)`}
+      descricao="Hora a hora. Hora sem lead é zero medido e desce até o chão — a linha não pula o vazio."
+    >
+      <SerieNoTempo
+        rotulos={rotulos}
+        series={[
+          { rotulo: "Leads recebidos", tom: "azul", valores: dados.serie.pontos.map((p) => p.recebidos) },
+          { rotulo: "Leads qualificados (IA)", tom: "roxo", valores: dados.serie.pontos.map((p) => p.qualificados) },
+        ]}
+        nota={
+          <>
+            <span className="block">Recebidos: {dados.serie.comoSeMede.recebidos}.</span>
+            <span className="block">Qualificados: {dados.serie.comoSeMede.qualificados}.</span>
+            <span className="mt-1 block">
+              As duas linhas <strong>não somam nem se contêm</strong>: um lead pode entrar numa hora e
+              ser pontuado em outra.
+            </span>
+          </>
+        }
+      />
+    </Secao>
+  );
+}
+
+/**
+ * A ROSCA DA FILA — e por que "aguardando há +10 min" NÃO é uma fatia.
+ *
+ * Quem espera há mais de dez minutos já está contado dentro de "aguardando
+ * vendedor". Desenhá-lo como terceira fatia inventaria um total maior que a
+ * fila. Ele sai do anel e vira o alerta vermelho do desenho, que é o papel que
+ * ele de fato tem.
+ */
+export function SecaoSaudeDaFila({ dados }: { dados: DadosDaTorre }) {
+  const f = dados.fila;
+  return (
+    <Secao titulo="Saúde da fila de atendimento" descricao="Retrato do agora: quem está com a IA e quem espera uma pessoa.">
+      <Rosca
+        centro={f.total}
+        sobCentro="Total"
+        fatias={[
+          { rotulo: "Em atendimento (IA)", valor: f.emAtendimento, tom: "verde" },
+          { rotulo: "Aguardando vendedor", valor: f.aguardandoVendedor, tom: "ambar" },
+        ]}
+        motivo={
+          f.total === 0
+            ? "nenhum lead com a IA nem esperando vendedor neste instante — a fila está vazia, e um anel aqui não teria o que dividir"
+            : undefined
+        }
+        alerta={
+          f.esperandoDemais > 0 ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-[12.5px] font-semibold leading-snug text-red-900">
+                {f.esperandoDemais} {f.esperandoDemais === 1 ? "lead aguarda" : "leads aguardam"} há mais de{" "}
+                {f.limiarMin} minutos.
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-red-900/80">
+                conta handoffs abertos (`aceitoEm` vazio) criados antes do limiar — quem já foi aceito sai
+                da conta mesmo que a conversa continue
+              </p>
+            </div>
+          ) : null
+        }
+      />
+    </Secao>
+  );
+}
+
+/**
+ * O RANKING DE VENDEDORES do desenho — com a coluna SLA declarada ausente.
+ *
+ * O desenho tem seis colunas; cinco têm fonte. A sexta fica na tabela, vazia e
+ * explicada: coluna que some é coluna que ninguém percebe que falta.
+ */
+export function SecaoRanking({ dados }: { dados: DadosDaTorre }) {
+  const r = dados.ranking;
+  return (
+    <Secao
+      titulo="Ranking de vendedores"
+      descricao="Leads do período por pessoa que os detém HOJE — um lead repassado conta para quem o tem agora. É a única atribuição que o banco sustenta."
+    >
+      {r.linhas.length === 0 ? (
+        <Caixa>
+          Nenhum lead do período tem atendente humano registrado. Isto não é &quot;time
+          sem resultado&quot;: é ausência de atribuição. As duas pedem coisas opostas.
+        </Caixa>
+      ) : (
+        <>
+          <Tabela colunas={["#", "Nome", "Atendimentos", "Conversão", "Vendas", "SLA"]}>
+            {r.linhas.map((l, i) => {
+              const c = textoDaTaxa(l.conversao);
+              return (
+                <Linha key={l.userId}>
+                  <Celula numero forte>{i === 0 ? "1 👑" : i + 1}</Celula>
+                  <Celula forte>{l.nome}</Celula>
+                  <Celula numero>{l.atendimentos}</Celula>
+                  <Celula numero>
+                    {c.valor ?? <span className="italic text-muted">não medido</span>}
+                  </Celula>
+                  <Celula numero>{l.vendas}</Celula>
+                  <Celula>
+                    <span className="italic text-muted">não medido</span>
+                  </Celula>
+                </Linha>
+              );
+            })}
+          </Tabela>
+          {!r.slaPorPessoa.medido && (
+            <Aviso>
+              <strong>A coluna SLA do desenho fica vazia, e não com um tempo estimado.</strong>{" "}
+              {r.slaPorPessoa.motivo}.
+            </Aviso>
+          )}
+        </>
+      )}
+    </Secao>
+  );
+}
+
+/**
+ * PRINCIPAIS MOTIVOS DE PERDA.
+ *
+ * ⚠️ A linha "sem motivo registrado" vem do serviço e **não é ordenada junto**:
+ * ela é sempre a última e sempre visível. Se metade das perdas não tem motivo,
+ * a leitura correta é "não sabemos por que perdemos metade" — e não um ranking
+ * limpo dos que alguém se deu ao trabalho de preencher.
+ */
+export function SecaoPerdas({ dados }: { dados: DadosDaTorre }) {
+  const perdas = dados.painel.perdas;
+  const total = perdas.reduce((s, p) => s + p.total, 0);
+
+  return (
+    <Secao titulo="Principais motivos de perda" descricao="Leads que foram a PERDIDO no período, pelo motivo cadastrado.">
+      {total === 0 ? (
+        <Caixa>
+          Nenhum lead foi a PERDIDO no período. Isto é uma medição — a contagem
+          veio do banco, e não de um bloco que não carregou.
+        </Caixa>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {perdas.map((p) => (
+            <Barra
+              key={p.rotulo}
+              rotulo={p.rotulo}
+              valor={p.total}
+              fracao={p.total / total}
+              tom={p.rotulo === "sem motivo registrado" ? "cinza" : "vermelho"}
+              nota={
+                p.rotulo === "sem motivo registrado"
+                  ? "perdas sem motivo cadastrado — não é um motivo, é o buraco do relatório"
+                  : p.grupo ?? undefined
+              }
+            />
+          ))}
+        </ul>
+      )}
     </Secao>
   );
 }
@@ -523,8 +904,8 @@ export function TorreClient() {
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <TituloDaPagina
         contexto="Sala de Vendas › Control Tower"
-        titulo="Control Tower"
-        subtitulo="Diagnostique gargalos e oportunidades em toda a operação: Hunter, SDR, Vendas e CRM. Só leitura: daqui não sai mensagem, nem atribuição, nem mudança de estágio."
+        titulo="Sala do Supervisor / Control Tower"
+        subtitulo="Acompanhe em tempo real o desempenho do atendimento e das vendas. Só leitura: daqui não sai mensagem, nem atribuição, nem mudança de estágio."
         periodo={
           estado.fase === "pronto"
             ? `${emDia(estado.dados.periodo.de)} – ${emDia(estado.dados.periodo.ate)}`
@@ -539,11 +920,12 @@ export function TorreClient() {
 
       {estado.fase === "pronto" && (
         <>
-          <SecaoTravado dados={estado.dados} />
+          <SecaoIndicadores dados={estado.dados} />
 
           <Corpo
             lateral={
               <>
+                <SecaoSaudeDaFila dados={estado.dados} />
                 <SecaoAlertas dados={estado.dados} />
                 <CartaoDeIA titulo="O que este painel NÃO viu">
                   <p>
@@ -562,11 +944,19 @@ export function TorreClient() {
               </>
             }
           >
+            <SecaoTravado dados={estado.dados} />
             <SecaoFunil dados={estado.dados} />
+            <SecaoSerie dados={estado.dados} />
             <SecaoOntem dados={estado.dados} />
             <SecaoRaioX dados={estado.dados} />
             <SecaoSupervisora dados={estado.dados} />
           </Corpo>
+
+          {/* O rodapé do desenho: as duas tabelas largas, lado a lado. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <SecaoRanking dados={estado.dados} />
+            <SecaoPerdas dados={estado.dados} />
+          </div>
         </>
       )}
     </div>

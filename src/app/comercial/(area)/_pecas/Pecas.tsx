@@ -211,13 +211,19 @@ export function emReais(cents: number): string {
 /** Os cinco acentos do desenho, mais o cinza de "não medido". */
 export type Tom = "azul" | "verde" | "ambar" | "vermelho" | "roxo" | "cinza";
 
-const TINTA: Record<Tom, { quadro: string; pilula: string; barra: string; texto: string }> = {
-  azul: { quadro: "bg-blue-50 text-blue-600", pilula: "bg-blue-50 text-blue-700", barra: "bg-blue-500", texto: "text-blue-700" },
-  verde: { quadro: "bg-emerald-50 text-emerald-600", pilula: "bg-emerald-50 text-emerald-700", barra: "bg-emerald-500", texto: "text-emerald-700" },
-  ambar: { quadro: "bg-amber-50 text-amber-600", pilula: "bg-amber-50 text-amber-800", barra: "bg-amber-500", texto: "text-amber-800" },
-  vermelho: { quadro: "bg-red-50 text-red-600", pilula: "bg-red-50 text-red-700", barra: "bg-red-500", texto: "text-red-700" },
-  roxo: { quadro: "bg-ia-50 text-ia-600", pilula: "bg-ia-50 text-ia-700", barra: "bg-ia-500", texto: "text-ia-700" },
-  cinza: { quadro: "bg-chip text-muted", pilula: "bg-chip text-ink2", barra: "bg-line2", texto: "text-muted" },
+/**
+ * ⚠️ `traco` existe SEPARADO de `barra` de propósito: o Tailwind lê classe
+ * escrita no fonte, e `"bg-blue-500".replace("bg-","stroke-")` produz uma classe
+ * que o gerador nunca vê e que sai do build sem cor nenhuma. Duas colunas
+ * escritas à mão custam menos que um gráfico invisível em produção.
+ */
+const TINTA: Record<Tom, { quadro: string; pilula: string; barra: string; traco: string; texto: string }> = {
+  azul: { quadro: "bg-blue-50 text-blue-600", pilula: "bg-blue-50 text-blue-700", barra: "bg-blue-500", traco: "stroke-blue-500", texto: "text-blue-700" },
+  verde: { quadro: "bg-emerald-50 text-emerald-600", pilula: "bg-emerald-50 text-emerald-700", barra: "bg-emerald-500", traco: "stroke-emerald-500", texto: "text-emerald-700" },
+  ambar: { quadro: "bg-amber-50 text-amber-600", pilula: "bg-amber-50 text-amber-800", barra: "bg-amber-500", traco: "stroke-amber-500", texto: "text-amber-800" },
+  vermelho: { quadro: "bg-red-50 text-red-600", pilula: "bg-red-50 text-red-700", barra: "bg-red-500", traco: "stroke-red-500", texto: "text-red-700" },
+  roxo: { quadro: "bg-ia-50 text-ia-600", pilula: "bg-ia-50 text-ia-700", barra: "bg-ia-500", traco: "stroke-ia-500", texto: "text-ia-700" },
+  cinza: { quadro: "bg-chip text-muted", pilula: "bg-chip text-ink2", barra: "bg-line2", traco: "stroke-line2", texto: "text-muted" },
 };
 
 /**
@@ -318,8 +324,24 @@ export function Indicador({
  * A fila de indicadores do desenho. No celular são duas colunas — o CEO abre no
  * celular, e um cartão por linha empurraria o corpo da tela para fora da vista.
  */
-export function FilaDeIndicadores({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">{children}</div>;
+export function FilaDeIndicadores({
+  children,
+  colunas = 4,
+}: {
+  children: React.ReactNode;
+  /** Quantos cartões por linha no desktop. A peça 02 pede uma fileira de 5. */
+  colunas?: 4 | 5;
+}) {
+  return (
+    <div
+      className={cx(
+        "grid grid-cols-2 gap-2 sm:grid-cols-2",
+        colunas === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4",
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -537,4 +559,242 @@ export function emDia(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AS DUAS PEÇAS DE GRÁFICO DO DESENHO — rosca e série no tempo
+//
+// Desenhadas à mão em SVG, e não com biblioteca: as duas formas do desenho são
+// um arco e uma polilinha, e uma dependência de gráfico entraria carregando
+// tooltip, legenda, tema e escala próprios — tudo que teria de ser brigado de
+// volta para os tokens da casa.
+//
+// ⚠️ NENHUMA DAS DUAS INVENTA PONTO. Série sem dado não vira linha reta entre
+// dois pontos distantes: o balde vazio é ZERO MEDIDO e desce até o chão. Rosca
+// sem total não desenha círculo cinza — devolve o motivo.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface FatiaDaRosca {
+  rotulo: string;
+  valor: number;
+  tom: Tom;
+}
+
+/**
+ * A ROSCA do desenho: anel, número grande no centro, legenda à direita.
+ *
+ * As fatias precisam se EXCLUIR — a rosca afirma "o todo é a soma destas
+ * partes". Subconjunto (ex.: "quem espera há +10 min", que já está dentro de
+ * "aguardando") entra como `alerta`, fora do anel, porque desenhá-lo como
+ * fatia inventaria um total maior que a fila.
+ */
+export function Rosca({
+  fatias,
+  centro,
+  sobCentro,
+  motivo,
+  alerta,
+}: {
+  fatias: FatiaDaRosca[];
+  /** O número do meio. */
+  centro: number | string;
+  sobCentro?: string;
+  /** Quando o todo não pôde ser medido, isto ocupa o lugar do anel. */
+  motivo?: string;
+  alerta?: React.ReactNode;
+}) {
+  const total = fatias.reduce((s, f) => s + f.valor, 0);
+
+  if (motivo || total <= 0) {
+    return (
+      <div className="rounded-2xl border border-line bg-paper p-4">
+        <NaoMedido
+          motivo={
+            motivo ?? "nenhum item nas fatias — um anel cinza aqui afirmaria um todo que ninguém contou"
+          }
+        />
+      </div>
+    );
+  }
+
+  // Geometria do anel. Raio 40, traço 14 — as proporções do desenho.
+  const R = 40;
+  const C = 2 * Math.PI * R;
+  let percorrido = 0;
+
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+        <div className="relative shrink-0">
+          <svg viewBox="0 0 100 100" className="h-[132px] w-[132px] -rotate-90" role="img"
+            aria-label={`Rosca: ${fatias.map((f) => `${f.rotulo} ${f.valor}`).join(", ")}`}>
+            <circle cx="50" cy="50" r={R} fill="none" strokeWidth={14} className="stroke-canvas" />
+            {fatias.map((f) => {
+              const fatia = (f.valor / total) * C;
+              const deslocamento = -percorrido;
+              percorrido += fatia;
+              return (
+                <circle
+                  key={f.rotulo}
+                  cx="50" cy="50" r={R} fill="none" strokeWidth={14}
+                  strokeDasharray={`${fatia} ${C - fatia}`}
+                  strokeDashoffset={deslocamento}
+                  className={cx("transition-[stroke-dasharray]", TINTA[f.tom].traco)}
+                />
+              );
+            })}
+          </svg>
+          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+            <div>
+              <p className="text-[24px] font-semibold leading-none tabular-nums text-ink">{centro}</p>
+              {sobCentro ? <p className="mt-0.5 text-[10.5px] text-muted">{sobCentro}</p> : null}
+            </div>
+          </div>
+        </div>
+
+        <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {fatias.map((f) => (
+            <li key={f.rotulo} className="flex items-baseline gap-2">
+              <span className={cx("mt-1 h-2 w-2 shrink-0 rounded-full", TINTA[f.tom].barra)} aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink2">{f.rotulo}</span>
+              <span className="shrink-0 text-[13px] font-semibold tabular-nums text-ink">{f.valor}</span>
+              <span className="w-[3.5rem] shrink-0 text-right text-[11.5px] tabular-nums text-muted">
+                {((f.valor / total) * 100).toFixed(1).replace(".", ",")}%
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {alerta ? <div className="mt-3">{alerta}</div> : null}
+    </div>
+  );
+}
+
+export interface SerieDeLinha {
+  rotulo: string;
+  tom: Tom;
+  /** Um valor por ponto do eixo X, na mesma ordem dos rótulos. */
+  valores: number[];
+  /** Linha tracejada, como a "meta projetada" do desenho. */
+  tracejada?: boolean;
+}
+
+/**
+ * A SÉRIE NO TEMPO do desenho: eixo Y com marcas, linha por série, legenda
+ * embaixo.
+ *
+ * O desenho tem tooltip de ponto. Aqui cada ponto é um `<title>` do SVG — o
+ * navegador mostra ao parar o cursor, funciona no leitor de tela, e não exige
+ * estado nem biblioteca. No celular não há cursor; por isso os valores também
+ * saem escritos na régua do eixo, e não só no balão.
+ */
+export function SerieNoTempo({
+  series,
+  rotulos,
+  formatar,
+  nota,
+}: {
+  series: SerieDeLinha[];
+  rotulos: string[];
+  /** Como o valor aparece no balão e no eixo. O padrão é o número cru. */
+  formatar?: (v: number) => string;
+  nota?: React.ReactNode;
+}) {
+  const fmt = formatar ?? ((v: number) => String(v));
+  const todos = series.flatMap((s) => s.valores);
+
+  if (rotulos.length === 0 || todos.length === 0) {
+    return (
+      <div className="rounded-2xl border border-line bg-paper p-4">
+        <NaoMedido motivo="nenhum ponto na janela — uma linha reta aqui desenharia um período que ninguém mediu" />
+      </div>
+    );
+  }
+
+  // O teto sobe até o maior ponto; o piso é sempre ZERO. Cortar o eixo faria
+  // uma variação de 2% parecer um despencar — o truque de gráfico mais comum e
+  // o mais caro numa tela que decide dinheiro.
+  const teto = Math.max(1, ...todos);
+  const L = 560;
+  const A = 160;
+  const passo = rotulos.length > 1 ? L / (rotulos.length - 1) : 0;
+  const y = (v: number) => A - (v / teto) * A;
+
+  const marcas = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(teto * f));
+
+  return (
+    <div className="rounded-2xl border border-line bg-paper p-4">
+      <div className="flex gap-2">
+        <ul className="flex w-[4.5rem] shrink-0 flex-col-reverse justify-between py-[2px] text-right text-[10.5px] tabular-nums text-muted">
+          {marcas.map((m, i) => (
+            <li key={`${m}-${i}`} className="leading-none">{fmt(m)}</li>
+          ))}
+        </ul>
+
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <svg viewBox={`0 0 ${L} ${A + 4}`} className="h-[180px] w-full min-w-[320px]" role="img"
+            aria-label={`Série no tempo: ${series.map((s) => s.rotulo).join(" e ")}`}>
+            {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+              <line key={f} x1={0} x2={L} y1={A * f} y2={A * f} className="stroke-line" strokeWidth={1} />
+            ))}
+            {series.map((s) => {
+              const d = s.valores
+                .map((v, i) => `${i === 0 ? "M" : "L"}${(i * passo).toFixed(1)},${y(v).toFixed(1)}`)
+                .join(" ");
+              return (
+                <g key={s.rotulo}>
+                  <path
+                    d={d}
+                    fill="none"
+                    strokeWidth={2}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    strokeDasharray={s.tracejada ? "6 5" : undefined}
+                    className={TINTA[s.tom].traco}
+                  />
+                  {s.valores.map((v, i) => (
+                    <circle
+                      key={`${s.rotulo}-${i}`}
+                      cx={i * passo}
+                      cy={y(v)}
+                      r={7}
+                      fill="transparent"
+                      className={TINTA[s.tom].traco}
+                      strokeWidth={0}
+                    >
+                      <title>{`${rotulos[i] ?? ""} · ${s.rotulo}: ${fmt(v)}`}</title>
+                    </circle>
+                  ))}
+                </g>
+              );
+            })}
+          </svg>
+
+          <div className="flex justify-between gap-1 text-[10.5px] tabular-nums text-muted">
+            {rotulos.map((r, i) =>
+              // Num eixo de 24 horas, 24 rótulos viram um borrão. Um a cada três,
+              // como no desenho.
+              i % Math.max(1, Math.ceil(rotulos.length / 8)) === 0 ? (
+                <span key={`${r}-${i}`}>{r}</span>
+              ) : null,
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        {series.map((s) => (
+          <li key={s.rotulo} className="flex items-center gap-1.5 text-[11.5px] text-ink2">
+            <span
+              className={cx("h-2 w-2 shrink-0 rounded-full", TINTA[s.tom].barra, s.tracejada && "opacity-60")}
+              aria-hidden="true"
+            />
+            {s.rotulo}
+          </li>
+        ))}
+      </ul>
+
+      {nota ? <div className="mt-2 text-[11.5px] leading-snug text-muted">{nota}</div> : null}
+    </div>
+  );
 }

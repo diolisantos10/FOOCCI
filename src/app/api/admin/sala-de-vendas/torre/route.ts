@@ -38,6 +38,15 @@ import { conversaoDoPeriodo, visaoDoGerente } from "@/services/salaDeVendas/pain
 import { visaoGeralDaSupervisora } from "@/services/salaDeVendas/supervisora/painel";
 import { raioXDasConversas } from "@/services/salaDeVendas/raioX/raioXDasConversas";
 import { mascararTelefone } from "@/services/salaDeVendas/raioX/telefone";
+import {
+  duasConversoes,
+  quentesSemDono,
+  rankingDeVendedores,
+  saudeDaFila,
+  serieDeVolume,
+  slaMedioDeResposta,
+} from "@/services/salaDeVendas/telas/controlTower";
+import { receitaGanha } from "@/services/salaDeVendas/painel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,7 +95,7 @@ export async function GET(req: NextRequest) {
   const data = await comSessao(prisma, auth.sessao, async (tx) => {
     const db = tx as never;
 
-    const [painel, supervisora, hoje, ontem, raioX] = await Promise.all([
+    const [painel, supervisora, hoje, ontem, raioX, serie, fila, quentes, conversoes, ranking, sla, receitaDoDia, receitaDeOntem] = await Promise.all([
       visaoDoGerente(db, { de, ate, agora }),
       visaoGeralDaSupervisora(db, { de, ate }),
       conversaoDoPeriodo(db, { de: inicioDeHoje, ate: agora }),
@@ -101,12 +110,35 @@ export async function GET(req: NextRequest) {
         porPagina: 1,
         formatarTelefone: (v) => mascararTelefone(v),
       }),
+
+      // ── As seis medições da peça 02 que nenhum serviço fazia ────────────
+      // Elas entram na MESMA leitura porque a tela compara janelas: duas
+      // chamadas dariam dois "agora", e a variação estampada seria em parte o
+      // relógio. Ver o cabeçalho deste arquivo.
+      serieDeVolume(db, { agora, janelaHoras: 24 }),
+      saudeDaFila(db, agora),
+      quentesSemDono(db),
+      duasConversoes(db, { de, ate }),
+      rankingDeVendedores(db, { de, ate }),
+      slaMedioDeResposta(db, { de, ate }),
+      // "Receita do dia" do desenho é a janela de 24 h, não o período inteiro —
+      // e a de ontem vem junto para a linha "vs. ontem" não ser calculada com
+      // um segundo retrato tirado em outro instante.
+      receitaGanha(db, { de: inicioDeHoje, ate: agora }),
+      receitaGanha(db, { de: inicioDeOntem, ate: inicioDeHoje }),
     ]);
 
     return {
       periodo: { de, ate, agora },
       painel,
       supervisora,
+      serie,
+      fila,
+      quentes,
+      conversoes,
+      ranking,
+      sla,
+      receitaDoDia: { hoje: receitaDoDia, ontem: receitaDeOntem },
       comparacao: {
         janelaHoras: 24,
         hoje: { desde: inicioDeHoje, ate: agora, funil: hoje },
