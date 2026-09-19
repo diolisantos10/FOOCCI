@@ -5,10 +5,11 @@
  * disputam os mesmos clientes" sem ter medido nada, e foi corrigido. A resposta
  * a isso não é afirmar o contrário: é deixar o número provar.
  *
- * O teste central é `recuperar-perdidos ⊆ recuperar-frios`: um cliente que
- * pediu há 200 dias cai nos DOIS estágios ao mesmo tempo, e isso não é azar de
- * dado — é a definição dos predicados. Enquanto este teste passar acusando dois
- * estágios, a exclusividade do desenho do CEO NÃO está de pé no código.
+ * O teste que era central aqui — `recuperar-perdidos ⊆ recuperar-frios`, um
+ * cliente de 200 dias caindo nos DOIS estágios — media um DEFEITO: o segmento
+ * frio não tinha piso. O piso entrou em 19/09/2026 e os testes abaixo agora
+ * provam a exclusividade, não a sobreposição. A prova completa do piso está em
+ * `src/services/crm/tests/CrmPisoDoFrio.test.ts`.
  */
 
 import { describe, it, expect } from "vitest";
@@ -84,29 +85,25 @@ describe("item 3 do desenho: quem comprou SAI da jornada de conversão", () => {
   });
 });
 
-describe("⚠️ O DEFEITO: todo PERDIDO é também FRIO, por construção", () => {
-  it("quem pediu há 200 dias cai em DOIS estágios do fluxo principal ao mesmo tempo", () => {
+describe("O PISO: perdido não é mais frio ao mesmo tempo", () => {
+  it("quem pediu há 200 dias cai SÓ em perdido", () => {
     const e = estagios(pediuHa(200));
-    expect(e).toContain("recuperar-frios");
+    expect(e).not.toContain("recuperar-frios");
     expect(e).toContain("recuperar-perdidos");
   });
 
-  it("a sobreposição vale para QUALQUER data além do corte de perdido — não é caso de borda", () => {
-    // `lostCutoff` (120d) é mais antigo que `warmCutoff` (60d), então
-    // `eff < lostCutoff` IMPLICA `eff < warmCutoff`. Sempre.
+  it("vale para QUALQUER data além do corte de perdido — não é caso de borda", () => {
     for (const dias of [121, 150, 200, 365, 1000]) {
       const e = estagios(pediuHa(dias));
       expect(e, `cliente de ${dias} dias`).toContain("recuperar-perdidos");
-      expect(e, `cliente de ${dias} dias`).toContain("recuperar-frios");
+      expect(e, `cliente de ${dias} dias`).not.toContain("recuperar-frios");
     }
   });
 
-  it("o cabeçalho de crm-segments promete um PISO para FRIO que o código não aplica", () => {
-    // A documentação diz: "FRIO — ordered warmMaxDays+1 days ago or more (up to
-    // lostMinDays)". Se o piso existisse, um cliente de 200 dias seria SÓ
-    // perdido. Este teste falha no dia em que o piso for implementado — e aí é
-    // ele que deve ser atualizado, porque o defeito terá sido corrigido.
-    expect(estagios(pediuHa(200))).toContain("recuperar-frios");
+  it("a faixa de 60 a 120 dias continua sendo frio", () => {
+    const e = estagios(pediuHa(90));
+    expect(e).toContain("recuperar-frios");
+    expect(e).not.toContain("recuperar-perdidos");
   });
 });
 
@@ -132,15 +129,13 @@ describe("os estágios que DE FATO se excluem continuam se excluindo", () => {
 });
 
 describe("'Indique um amigo' atravessa a jornada de reativação", () => {
-  it("um comprador antigo é, ao mesmo tempo, indicação + frio + perdido", () => {
-    // Três estágios do fluxo principal na mesma pessoa. O desenho do CEO põe
-    // "Indique um amigo" na jornada de RELACIONAMENTO (pós-compra) e "frio"/
-    // "perdido" na de REATIVAÇÃO — que, pelo item 3, deveriam ser excludentes.
+  it("um comprador antigo é, ao mesmo tempo, indicação + perdido", () => {
+    // "Indique um amigo" é da jornada de RELACIONAMENTO (pós-compra) e atravessa
+    // a de REATIVAÇÃO. Frio e perdido, esses sim, já não coexistem mais.
     const e = estagios(pediuHa(200, { totalOrders: 5 }));
-    expect(e).toEqual(
-      expect.arrayContaining(["indique-amigo", "recuperar-frios", "recuperar-perdidos"]),
-    );
-    expect(e.length).toBeGreaterThanOrEqual(3);
+    expect(e).toEqual(expect.arrayContaining(["indique-amigo", "recuperar-perdidos"]));
+    expect(e).not.toContain("recuperar-frios");
+    expect(e.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -167,8 +162,8 @@ describe("a medição no banco devolve a distribuição", () => {
   const base: ClienteParaClassificar[] = [
     cliente({ id: "nunca-pediu" }),                          // 1 estágio
     pediuHa(45, { id: "morno" }),                            // morno + indique = 2
-    pediuHa(200, { id: "perdido" }),                         // frio + perdido + indique = 3
-    pediuHa(200, { id: "perdido-2", totalOrders: 1 }),        // + 2ª compra = 4
+    pediuHa(200, { id: "perdido" }),                         // perdido + indique = 2
+    pediuHa(200, { id: "perdido-2", totalOrders: 1 }),        // + 2ª compra = 3
     cliente({ id: "sem-telefone", phone: null }),            // fora
   ];
 
@@ -182,9 +177,9 @@ describe("a medição no banco devolve a distribuição", () => {
     const r = await medirJornadaDeEstagios(db, "r1", { agora: AGORA });
     expect(r.clientesElegiveis).toBe(4); // o sem telefone ficou de fora
     expect(r.distribuicao.um).toBe(1);
-    expect(r.distribuicao.dois).toBe(1);
+    expect(r.distribuicao.dois).toBe(2);   // morno e perdido: 2 estágios cada
     expect(r.distribuicao.tres).toBe(1);
-    expect(r.distribuicao.quatroOuMais).toBe(1);
+    expect(r.distribuicao.quatroOuMais).toBe(0);
   });
 
   it("nenhum comprador continua elegível em 'Converter 1º pedido' (item 3 de pé)", async () => {
@@ -197,13 +192,13 @@ describe("a medição no banco devolve a distribuição", () => {
     expect(r.somaDasAudiencias).toBeGreaterThan(r.clientesElegiveis);
   });
 
-  it("o par frio+perdido aparece na lista de colisões", async () => {
+  it("o par frio+perdido NÃO aparece mais na lista de colisões", async () => {
     const r = await medirJornadaDeEstagios(db, "r1", { agora: AGORA });
     const par = r.paresQueColidem.find(
       (p) =>
         (p.a === "recuperar-frios" && p.b === "recuperar-perdidos") ||
         (p.a === "recuperar-perdidos" && p.b === "recuperar-frios"),
     );
-    expect(par?.clientes).toBe(2);
+    expect(par).toBeUndefined();
   });
 });

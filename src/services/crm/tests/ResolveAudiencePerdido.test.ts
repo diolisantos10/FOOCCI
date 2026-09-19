@@ -13,7 +13,10 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 const LOST_CUTOFF = new Date("2025-01-01T00:00:00.000Z");
 const HOT_CUTOFF  = new Date("2025-06-01T00:00:00.000Z");
 const WARM_CUTOFF = new Date("2025-04-01T00:00:00.000Z");
-vi.mock("@/lib/crm-segments", () => ({
+// Só os cortes são fingidos; os predicados de segmento (coldWhere/lostWhere) vêm
+// do módulo real, que é a fonte única da janela de cada segmento.
+vi.mock("@/lib/crm-segments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/crm-segments")>()),
   getSegmentConfig: vi.fn(async () => ({ hotMaxDays: 30, warmMaxDays: 60, lostMinDays: 120 })),
   buildCutoffs: vi.fn(() => ({ hotCutoff: HOT_CUTOFF, warmCutoff: WARM_CUTOFF, lostCutoff: LOST_CUTOFF })),
 }));

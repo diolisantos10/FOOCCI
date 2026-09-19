@@ -23,7 +23,7 @@ import { getPublicMenuUrl, getPublicSiteUrl, sanitizeCustomerUrl } from "@/lib/p
 import { isGuestIdentifier } from "@/lib/guest";
 import { ConversationStatus } from "@prisma/client";
 import { markConversationCrmContext, buildConversationMetadataForCrmSend, CONTEXT_TYPE } from "@/services/agents/AgentRoutingService";
-import { getSegmentConfig, buildCutoffs } from "@/lib/crm-segments";
+import { getSegmentConfig, buildCutoffs, coldWhere, lostWhere } from "@/lib/crm-segments";
 import { isBirthdayCampaign } from "@/lib/crm-safety";
 import { ContactSafetyService } from "@/services/crm/ContactSafetyService";
 import { renderCrmMessage } from "./renderCrmMessage";
@@ -207,13 +207,13 @@ export async function resolveAudience(
 
   switch (seg) {
     case "FRIO":
+      // Janela COM PISO: [lostCutoff, warmCutoff). Quem passou de lostMinDays é
+      // PERDIDO e recebe a mensagem de perdido — não a de frio. Mesma fonte usada
+      // pela prévia (CrmAudienceService) e pelo raio-x da jornada.
       return serialize(await prisma.customer.findMany({
         where: {
           ...baseWhere,
-          OR: [
-            { lastOrderAt: { lt: cutoffs.warmCutoff } },
-            { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.warmCutoff } },
-          ],
+          ...coldWhere(cutoffs),
         },
         orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
         take: MAX_AUDIENCE, select: baseSelect,
@@ -239,10 +239,7 @@ export async function resolveAudience(
       return serialize(await prisma.customer.findMany({
         where: {
           ...baseWhere,
-          OR: [
-            { lastOrderAt: { lt: cutoffs.lostCutoff } },
-            { lastOrderAt: null, importedLastOrderAt: { lt: cutoffs.lostCutoff } },
-          ],
+          ...lostWhere(cutoffs),
         },
         orderBy: [{ lastOrderAt: "asc" }, { importedLastOrderAt: "asc" }],
         take: MAX_AUDIENCE, select: baseSelect,
