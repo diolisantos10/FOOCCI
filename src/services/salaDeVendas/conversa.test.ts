@@ -15,6 +15,7 @@ import {
   resumoDoTexto,
   janelaDe24h,
   marcarComoLidas,
+  registrarFalhaDeEnvio,
 } from "./conversa";
 
 const AGORA = new Date("2026-08-25T12:00:00Z");
@@ -201,6 +202,49 @@ describe("uma mensagem que sai", () => {
     const db = bancoQueAceita();
     const r = await registrarSaida(db as never, { leadId: "l1", texto: "   ", autor: "IA" });
     expect(r).toEqual({ ok: false, causa: "semTexto" });
+  });
+});
+
+/**
+ * ⭐⭐ O CARIMBO QUE MENTIA — 19/09/2026, o quarto lead da campanha do Facebook.
+ *
+ * `registrarSaida` escreve `lastContactedAt = agora` no instante em que GRAVA a
+ * linha, antes de enviar — e tem de ser assim. Quando o envio falha, aquele
+ * carimbo passa a afirmar *"a Foocci falou com esta pessoa"* sobre uma conversa
+ * que não aconteceu, e metade da casa lê essa coluna: o portão do lead (48h de
+ * descanso), a fila da recepção, a carteira, o funil. Foi por ela que o quarto
+ * lead nunca recebeu nada.
+ */
+describe("⭐⭐ um envio que FALHOU devolve `lastContactedAt` à verdade", () => {
+  function bancoComFalha(anterior: { ocorreuEm: Date } | null) {
+    return {
+      leadMensagem: {
+        update: vi.fn().mockResolvedValue({ leadId: "l1" }),
+        findFirst: vi.fn().mockResolvedValue(anterior),
+      },
+      siteLead: { update: vi.fn().mockResolvedValue({}) },
+    };
+  }
+
+  it("⭐ era a ÚNICA mensagem: a coluna volta a `null` — ninguém falou com ele", async () => {
+    const db = bancoComFalha(null);
+
+    await registrarFalhaDeEnvio(db as never, { mensagemId: "m1", erro: "META_131042" });
+
+    expect(db.leadMensagem.update.mock.calls[0]![0].data.status).toBe("FALHOU");
+    expect(db.siteLead.update).toHaveBeenCalledTimes(1);
+    expect(db.siteLead.update.mock.calls[0]![0].data.lastContactedAt).toBeNull();
+  });
+
+  it("⛔ e NÃO apaga um contato de verdade: volta para a última saída que vingou", async () => {
+    const vingou = new Date("2026-09-10T09:00:00Z");
+    const db = bancoComFalha({ ocorreuEm: vingou });
+
+    await registrarFalhaDeEnvio(db as never, { mensagemId: "m2", erro: "META_132001" });
+
+    // A consulta ignora FALHOU de propósito: só conta o que sobreviveu.
+    expect(db.leadMensagem.findFirst.mock.calls[0]![0].where.status).toEqual({ not: "FALHOU" });
+    expect(db.siteLead.update.mock.calls[0]![0].data.lastContactedAt).toEqual(vingou);
   });
 });
 

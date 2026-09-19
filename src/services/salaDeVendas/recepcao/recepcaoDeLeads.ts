@@ -85,9 +85,28 @@ export interface LeadNaRecepcao {
  * a rodada inteira no arquivo morto e chegar ao lead de hoje amanhã — que é o
  * defeito, e não o conserto dele.
  *
- * ⚠️ `lastContactedAt: null` no filtro: quem já recebeu qualquer mensagem nossa
- * não é caso de recepção. Reabordagem de quem já foi tocado é outra frente, com
- * outras regras, e não se mistura com esta por acidente.
+ * ⚠️ **QUEM JÁ FOI TOCADO DE VERDADE não é caso de recepção.** Reabordagem de
+ * quem já recebeu é outra frente, com outras regras, e não se mistura com esta
+ * por acidente.
+ *
+ * ── ⭐ MAS "TOCADO" NÃO É "TENTADO" — corrigido em 19/09/2026 ────────────────
+ *
+ * O filtro era `lastContactedAt: null`, e essa coluna é escrita na TENTATIVA,
+ * não na entrega. Resultado medido: dos 4 leads da campanha do Facebook, o mais
+ * novo nunca foi abordado. A casa tentou uma vez, a Meta recusou, a mensagem
+ * ficou FALHOU — e `lastContactedAt` ficou preenchido. A partir dali ele saía
+ * da fila para sempre, por um contato que **não aconteceu**.
+ *
+ * A regra certa é a que a frase do CEO já dizia: *lead cuja única mensagem
+ * nossa falhou continua sendo "ninguém falou com ele" — porque ninguém falou
+ * mesmo.* Então o que barra a entrada na fila não é a coluna de data: é a
+ * existência de **uma mensagem de saída que não seja FALHOU**.
+ *
+ * ⚠️ E `PENDENTE` continua barrando, de propósito. Pendente é uma chamada que a
+ * Meta ACEITOU e cujo `failed` ainda não chegou (ou nunca vai chegar): tratá-la
+ * como "não falamos" faria esta rodada mandar a segunda mensagem para quem
+ * acabou de receber a primeira — exatamente o defeito irmão deste. Só `FALHOU`,
+ * que é veredito fechado, devolve o lead à recepção.
  *
  * ⚠️ E `atendidoPor` aceita `IA` além de `NINGUEM`, desde D-0E4: a IA passou a
  * assumir o lead **na chegada**, então filtrar só por `NINGUEM` esvaziaria esta
@@ -103,9 +122,23 @@ export async function filaDaRecepcao(
     where: {
       fonte: { in: [...FONTES_QUE_NOS_PROCURARAM] },
       atendidoPor: { in: ["NINGUEM", "IA"] },
-      lastContactedAt: null,
       optOutAt: null,
       stage: "NOVO",
+      AND: [
+        // ⛔ A TRAVA: nenhuma mensagem NOSSA que não tenha falhado. Zero
+        // mensagens passa; uma PENDENTE, ENVIADA, ENTREGUE ou LIDA barra.
+        { mensagens: { none: { direcao: "SAIDA", status: { not: "FALHOU" } } } },
+        // E, entre os que nunca foram tocados de verdade, só entram os dois
+        // casos honestos: ninguém tentou, ou tentou-se e falhou. Um lead com
+        // `lastContactedAt` preenchido e nenhuma mensagem no banco é história
+        // que esta rodada não sabe contar — fica de fora.
+        {
+          OR: [
+            { lastContactedAt: null },
+            { mensagens: { some: { direcao: "SAIDA", status: "FALHOU" } } },
+          ],
+        },
+      ],
     },
     orderBy: { createdAt: "desc" },
     take: Math.max(0, Math.min(params.limite, TETO_MAXIMO_DA_RODADA)),

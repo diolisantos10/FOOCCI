@@ -58,7 +58,10 @@ import {
   candidatosDoLeadDeFormulario,
   candidatosDoPrimeiroContato,
 } from "@/services/foocci-sdr/modelosDoPrimeiroContato";
-import { classificarErroDaMeta } from "@/services/foocci-sdr/familiasDeErroDaMeta";
+import {
+  classificarErroDaMeta,
+  type FamiliaDeErroDaMeta,
+} from "@/services/foocci-sdr/familiasDeErroDaMeta";
 import type { ModeloLiberadoParaEnvio } from "@/services/foocci-sdr/modelosLiberados";
 import {
   canalDeVendasPronto,
@@ -103,6 +106,24 @@ export type ResultadoDaAbordagem =
          */
         | "modeloNaoLiberado";
       detalhe: string;
+      /**
+       * ⭐ A FAMÍLIA DO ERRO DA META — só existe quando `motivo` é
+       * `aMetaRecusou`, e existe para uma pergunta só: **quem chama pode
+       * tentar OUTRO MODELO?**
+       *
+       * Antes de 19/09/2026 o chamador de fora (`abordarAgora`) só recebia o
+       * `motivo` e a string de `detalhe`, e decidia por lista de EXCLUSÃO:
+       * "aMetaRecusou não está na lista do que encerra, então tenta o
+       * próximo". Isso transformou uma chamada que a Meta ACEITOU — e que o
+       * `fetch` perdeu no caminho, sem código de erro — em uma segunda
+       * mensagem para a mesma pessoa. Foi o que o lead Jones Sartori recebeu
+       * quatro vezes.
+       *
+       * Com a família por escrito, a régua de `familiasDeErroDaMeta.ts` vale
+       * IGUAL dentro e fora desta função: só `doModelo` desce a fila.
+       * `desconhecido` (e é onde cai a chamada perdida) PARA.
+       */
+      familiaDoErroDaMeta?: FamiliaDeErroDaMeta;
     };
 
 /**
@@ -737,6 +758,13 @@ export async function abordarLead(
     // ── Trava 4: a entrega ─────────────────────────────────────────────────
     const envio = await enviarModeloDeVendas(decisao, lead.whatsapp ?? "", modelo);
 
+    // ⛔⛔ ACEITAÇÃO COM `wamid` **É** SUCESSO — E A FILA ENCERRA AQUI.
+    //
+    // A Meta aceita a chamada, devolve o `wamid` e a mensagem fica PENDENTE; o
+    // `failed`, quando vem, vem DEPOIS, por webhook. Esperar o `delivered`
+    // para chamar de sucesso seria esperar o que esta função não tem como
+    // esperar — e o preço de errar aqui já foi pago: outro modelo sai para
+    // quem acabou de receber o primeiro.
     if (envio.ok) {
       await confirmarEnvio(db, {
         mensagemId: gravada.mensagemId,
@@ -767,6 +795,7 @@ export async function abordarLead(
         abordou: false,
         motivo: "aMetaRecusou",
         detalhe: `PAROU a fila (familia=${classe.familia}, não é o modelo que está errado) — ${diario()}`,
+        familiaDoErroDaMeta: classe.familia,
       };
     }
   }
@@ -779,6 +808,10 @@ export async function abordarLead(
     detalhe: tentativas.length
       ? `acabaram os modelos elegíveis — ${diario()}`
       : "nenhum modelo elegível para este contato; nada foi enviado",
+    // A fila só chega ao fim descendo por erro DO MODELO — qualquer outra
+    // família teria dado `return` lá dentro. Declarar isso permite ao chamador
+    // de fora seguir tentando os modelos DELE sem adivinhar pela string.
+    ...(bateramNaMeta > 0 ? { familiaDoErroDaMeta: "doModelo" as const } : {}),
   };
 }
 

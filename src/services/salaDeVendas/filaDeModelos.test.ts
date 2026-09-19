@@ -244,6 +244,43 @@ afterEach(() => {
 
 const LEAD_FRIO = { restaurante: "Divino Sabor", fonte: "LISTA_PROSPECCAO" };
 
+/**
+ * ⭐⭐ A PROVA QUE FALTAVA — 19/09/2026, lead Jones Sartori.
+ *
+ * A Meta ACEITA a chamada, devolve `wamid` e a mensagem fica PENDENTE; o
+ * `failed`, quando vem, vem depois, por webhook. Aceitação com `wamid` **é**
+ * sucesso, e a fila encerra ali. As três provas do erro já existiam; faltava a
+ * do acerto, que é onde a repetição nasceu.
+ */
+describe("⭐⭐ aceito com `wamid`: UM envio, e a fila encerra", () => {
+  it("a Meta aceita o primeiro modelo → nenhum segundo modelo é tentado", async () => {
+    const { db, gravadas, atualizadas } = banco({ lead: LEAD_FRIO });
+    enviarModelo.mockResolvedValue({ ok: true, providerMessageId: "wamid.HBgNNTU..." });
+
+    const r = await abordarLead(db, { leadId: "L1", autorUserId: "u1", agora: AGORA });
+
+    expect(r.abordou, JSON.stringify(r)).toBe(true);
+    // ⛔ A régua inteira: um envio, uma linha, nenhuma segunda volta da fila.
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
+    expect(tentados()).toHaveLength(1);
+    expect(gravadas).toHaveLength(1);
+    expect(atualizadas.some((a) => a.status === "FALHOU")).toBe(false);
+    expect(atualizadas.some((a) => a.status === "ENVIADA")).toBe(true);
+  });
+
+  it("⛔ PENDENTE não é falha: o `failed` que chegasse depois não reabre a fila", async () => {
+    // A fila não espera webhook nenhum. Se esperasse, esta chamada teria de
+    // devolver `abordou: false` — e o segundo modelo sairia.
+    const { db } = banco({ lead: LEAD_FRIO });
+    enviarModelo.mockResolvedValue({ ok: true, providerMessageId: "wamid.PENDENTE" });
+
+    const r = await abordarLead(db, { leadId: "L1", autorUserId: "u1", agora: AGORA });
+
+    expect(r.abordou).toBe(true);
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("⭐ erro DO MODELO: tenta o próximo", () => {
   it("primeiro cai com 132001 → o segundo é tentado e a mensagem sai", async () => {
     const { db, gravadas, atualizadas } = banco({ lead: LEAD_FRIO });

@@ -123,12 +123,12 @@ beforeEach(() => {
 });
 
 describe("a ordem dos modelos", () => {
-  it("⭐ primeiro modelo recusado pela Meta → o segundo é tentado", async () => {
-    // `_01` é recusado; `_02` passa. A trava de repetição devolve a reserva do
-    // `_01`, então o `_02` não é barrado por "já falei com essa pessoa".
+  it("⭐ erro DO MODELO (132001) no primeiro → o segundo é tentado", async () => {
+    // `_01` é recusado pelo TEXTO; `_02` passa. A trava de repetição devolve a
+    // reserva do `_01`, então o `_02` não é barrado por "já falei com essa pessoa".
     enviarModelo.mockImplementation(async (_d: unknown, _t: unknown, m: { nome: string }) =>
       m.nome === "foocci_contato_inicial_01"
-        ? { ok: false, error: "META_131042 · pagamento" }
+        ? { ok: false, error: "META_132001 · modelo inexistente", errorCode: "132001" }
         : { ok: true, providerMessageId: "wamid.OK" },
     );
 
@@ -146,7 +146,7 @@ describe("a ordem dos modelos", () => {
     ]);
     // O erro CRU da Meta chega ao relatório — é a informação pela qual a porta existe.
     expect(lead.tentativas[0]!.motivo).toBe("aMetaRecusou");
-    expect(lead.tentativas[0]!.detalhe).toContain("META_131042");
+    expect(lead.tentativas[0]!.detalhe).toContain("META_132001");
   });
 
   it("para na primeira que sai — não manda três mensagens ao mesmo lead", async () => {
@@ -154,6 +154,68 @@ describe("a ordem dos modelos", () => {
     const r = await abordarAgora(db, { codigos: ["337AN"], modelos: ORDEM, autorUserId: "u1", agora: AGORA });
 
     expect(r.ok && r.leads[0]!.tentativas).toHaveLength(1);
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ⭐⭐ O DEFEITO DO LEAD JONES SARTORI, 19/09/2026.
+ *
+ * Ele recebeu `_01` e `_02`, duas vezes cada. A fila descia por qualquer
+ * `aMetaRecusou` — inclusive por erro de CONTA e inclusive pela chamada que a
+ * Meta ACEITOU e o `fetch` perdeu no caminho (sem código de erro). Três provas,
+ * uma para cada ramo da régua.
+ */
+describe("⛔⛔ a fila NUNCA manda uma segunda mensagem para quem já recebeu a primeira", () => {
+  it("⭐ aceito com `wamid` = sucesso: UM envio, fila encerrada", async () => {
+    enviarModelo.mockResolvedValue({ ok: true, providerMessageId: "wamid.HBgNNTU..." });
+
+    const { db, gravadas } = banco({ restaurante: "Cantina do Bruno" });
+    const r = await abordarAgora(db, { codigos: ["337AN"], modelos: ORDEM, autorUserId: "u1", agora: AGORA });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const lead = r.leads[0]!;
+    expect(lead.abordou).toBe(true);
+    expect(lead.modeloQueSaiu).toBe("foocci_contato_inicial_01");
+    // ⛔ A prova: um envio, uma linha gravada, uma tentativa. Nunca duas.
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
+    expect(gravadas).toHaveLength(1);
+    expect(lead.tentativas).toHaveLength(1);
+  });
+
+  it("⛔ erro DA CONTA (131042) PARA a fila — nenhum outro modelo é tentado", async () => {
+    enviarModelo.mockResolvedValue({
+      ok: false,
+      error: "META_131042 · elegibilidade/cobrança",
+      errorCode: "131042",
+    });
+
+    const { db } = banco({ restaurante: "Cantina do Bruno" });
+    const r = await abordarAgora(db, { codigos: ["337AN"], modelos: ORDEM, autorUserId: "u1", agora: AGORA });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const lead = r.leads[0]!;
+    expect(lead.abordou).toBe(false);
+    expect(lead.tentativas).toHaveLength(1);
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
+  });
+
+  it("⛔⛔ recusa SEM código (a chamada perdida depois de aceita) também PARA", async () => {
+    // Este é o caso exato do Jones Sartori: a Meta aceitou, a mensagem saiu, e
+    // o nosso lado só soube que "deu erro", sem código. Fail-closed: PARA.
+    enviarModelo.mockResolvedValue({ ok: false, error: "fetch failed" });
+
+    const { db } = banco({ restaurante: "Cantina do Bruno" });
+    const r = await abordarAgora(db, { codigos: ["337AN"], modelos: ORDEM, autorUserId: "u1", agora: AGORA });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const lead = r.leads[0]!;
+    expect(lead.abordou).toBe(false);
+    expect(lead.tentativas).toHaveLength(1);
+    // ⛔ ANTES desta correção: 2 envios, e o lead com duas mensagens.
     expect(enviarModelo).toHaveBeenCalledTimes(1);
   });
 });

@@ -361,13 +361,44 @@ export async function registrarFalhaDeEnvio(
   db: Cliente,
   params: { mensagemId: string; erro: string },
 ): Promise<void> {
-  await db.leadMensagem.update({
+  const falhada = await db.leadMensagem.update({
     where: { id: params.mensagemId },
     data: {
       status: "FALHOU",
       erro: params.erro.slice(0, 1000),
       tentativas: { increment: 1 },
     },
+    select: { leadId: true },
+  });
+
+  // ⛔⛔ E DEVOLVE `lastContactedAt` À VERDADE — 19/09/2026.
+  //
+  // `registrarSaida` carimba `lastContactedAt = agora` no instante em que GRAVA
+  // a linha, antes de a mensagem sair. Tem de ser assim: o pior caso precisa ser
+  // uma linha PENDENTE visível, nunca um envio que o sistema não registrou.
+  //
+  // Só que, quando o envio FALHA, aquele carimbo vira uma afirmação falsa —
+  // *"a Foocci falou com esta pessoa"* — sobre uma conversa que nunca
+  // aconteceu. E metade da casa lê essa coluna: o portão do lead (descanso de
+  // 48h), a fila da recepção, a carteira, o funil. O quarto lead da campanha do
+  // Facebook ficou sem receber nada exatamente por isso: tentaram uma vez, a
+  // Meta recusou, e a coluna passou a expulsá-lo de toda fila para sempre.
+  //
+  // Isto **não afrouxa trava nenhuma**: as travas continuam idênticas, passam a
+  // receber o dado certo. A data volta a ser a da última saída que de fato
+  // sobreviveu (PENDENTE, ENVIADA, ENTREGUE ou LIDA) — e `null` quando não há
+  // nenhuma, que é a única resposta honesta para "ninguém falou com ele".
+  if (!falhada?.leadId) return;
+
+  const ultimaQueVingou = await db.leadMensagem.findFirst({
+    where: { leadId: falhada.leadId, direcao: "SAIDA", status: { not: "FALHOU" } },
+    orderBy: { ocorreuEm: "desc" },
+    select: { ocorreuEm: true },
+  });
+
+  await db.siteLead.update({
+    where: { id: falhada.leadId },
+    data: { lastContactedAt: ultimaQueVingou?.ocorreuEm ?? null },
   });
 }
 
