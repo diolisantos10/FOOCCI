@@ -25,6 +25,8 @@ function bancoFalso(linhas: Linha[], extras?: {
   safety?: unknown;
   /** Rodadas de campanha medidas — o degrau cortado antes de virar linha. */
   rodadas?: Array<{ campaignId: string; elegiveis: number; noLote: number; cortados: number }>;
+  /** A base lida pela escada da jornada (`medirJornadaDeEstagios`). */
+  baseDeClientes?: unknown[];
 }): LeitorDoBanco {
   return {
     campaignExecution: { findMany: async () => linhas },
@@ -36,6 +38,10 @@ function bancoFalso(linhas: Linha[], extras?: {
         if (where.crmContactable === false) return extras?.semTelefone ?? 0;
         return extras?.clientes ?? 0;
       },
+      // A escada da jornada lê a base inteira para dizer em quantos estágios
+      // cada cliente cai. Sem linhas ela devolve zeros — resposta certa para um
+      // restaurante sem base, não omissão: quem quer medir passa `baseDeClientes`.
+      findMany: async () => extras?.baseDeClientes ?? [],
     },
     campaign: { findMany: async () => extras?.campanhas ?? [] },
   } as unknown as LeitorDoBanco;

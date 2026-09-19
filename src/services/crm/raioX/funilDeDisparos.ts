@@ -29,10 +29,31 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { applyEffectiveSafety, parseSafetyConfig } from "@/lib/crm-safety";
 import { montarContaDoDia, type ContaDoDia, type DegrauContado } from "./contaDoDia";
+import {
+  medirJornadaDeEstagios,
+  LACUNAS_DA_JORNADA,
+  type JornadaDeEstagios,
+} from "./jornadaDeEstagios";
 
 /** Cliente Prisma, ou qualquer coisa com a mesma forma (o teste injeta um duplo). */
 export type LeitorDoBanco = Pick<PrismaClient,
   "campaignExecution" | "campaign" | "customer" | "restaurantCRMProfile" | "crmCicloFunil">;
+
+/**
+ * Pessoas DIFERENTES já abordadas na vida toda — o que o teto pré-pago consome.
+ *
+ * Mesma população e mesmos status de `getContactedCustomerIds` em
+ * `src/lib/crm-safety.ts`, que é quem a trava de verdade consulta. Contar por
+ * outro caminho seria inventar uma segunda verdade.
+ */
+async function contatosUnicosJaAbordados(db: LeitorDoBanco, restaurantId: string): Promise<number> {
+  const linhas = await db.campaignExecution.findMany({
+    where:    { restaurantId, status: { in: [...STATUS_DE_ENVIO] as never[] } },
+    select:   { customerId: true },
+    distinct: ["customerId"],
+  });
+  return linhas.length;
+}
 
 /** Os status que significam "a mensagem saiu". Mesma lista das travas. */
 export const STATUS_DE_ENVIO = ["SENT", "DELIVERED", "READ"] as const;
@@ -84,6 +105,28 @@ export interface FunilDoRestaurante {
     optOut: number;
     semTelefoneUtil: number;
   };
+  /**
+   * O TETO PRÉ-PAGO DE CONTATOS — a trava que produz `CONTACT_BUDGET_EXHAUSTED`.
+   *
+   * Ela NÃO tem janela: conta pessoas DIFERENTES abordadas na VIDA TODA e nunca
+   * reseta (ver `contactBudgetTotal` em `src/lib/crm-safety.ts`). Por isso ela
+   * precisa aparecer aqui ao lado dos tetos de dia e de ciclo: confundir "acabou
+   * o saldo comprado, para sempre" com "o cliente já recebeu demais esta semana"
+   * leva a soluções opostas — recarregar o saldo, ou esperar a semana virar.
+   */
+  contatoPrePago: {
+    /** O saldo comprado, como o dono o configurou. 0 = desligado/ilimitado. */
+    total: number;
+    /** Pessoas diferentes já abordadas na vida toda. */
+    usado: number;
+    /** Quanto sobra. `null` quando o teto está desligado (não há saldo a acabar). */
+    restante: number | null;
+    ligado: boolean;
+    /** true quando o saldo está ligado E esgotado — a causa de CONTACT_BUDGET_EXHAUSTED. */
+    esgotado: boolean;
+  };
+  /** A escada da jornada: em quantos estágios do fluxo principal cada cliente cai. */
+  jornada: JornadaDeEstagios | null;
   /** Campanhas ACTIVE/SCHEDULED e o que cada uma produziu na janela. */
   campanhas: Array<{
     campaignId: string;
@@ -267,6 +310,20 @@ export async function raioXDeDisparos(
     // Só as linhas das campanhas MEDIDAS entram na invariante (ver contaDoDia).
     const linhasMedidas = linhas.filter((l) => campanhasMedidas.has(l.campaignId));
 
+    // O teto pré-pago de contatos — a trava SEM JANELA, que nunca reseta.
+    const tetoDeContatos = Math.max(0, Math.floor(cfg.contactBudgetTotal || 0));
+    const contatosUsados = real ? await contatosUnicosJaAbordados(db, rid) : 0;
+    const contatoPrePago = {
+      total:    tetoDeContatos,
+      usado:    contatosUsados,
+      restante: tetoDeContatos > 0 ? Math.max(0, tetoDeContatos - contatosUsados) : null,
+      ligado:   tetoDeContatos > 0,
+      esgotado: tetoDeContatos > 0 && contatosUsados >= tetoDeContatos,
+    };
+
+    // A escada da jornada. Só para restaurante real — sem id não há base a ler.
+    const jornada = real ? await medirJornadaDeEstagios(db, rid) : null;
+
     const ativas = real
       ? await db.campaign.findMany({
           where: { restaurantId: rid, status: { in: ["ACTIVE", "SCHEDULED"] as never[] } },
@@ -306,6 +363,8 @@ export async function raioXDeDisparos(
         horarioQuieto: horarioQuieto(cfg),
       },
       base: { clientes, optOut, semTelefoneUtil: semTelefone },
+      contatoPrePago,
+      jornada,
       campanhas,
       contaDoDia: montarContaDoDia({
         restaurantId: rid,
@@ -321,7 +380,7 @@ export async function raioXDeDisparos(
           : [],
         elegiveisMedidos: cortesDoCiclo.temRodada ? cortesDoCiclo.elegiveis : null,
       }),
-      naoMedido: LACUNAS_ESTRUTURAIS,
+      naoMedido: [...LACUNAS_ESTRUTURAIS, ...LACUNAS_DA_JORNADA],
     });
   }
 
@@ -335,6 +394,6 @@ export async function raioXDeDisparos(
       decisoes: restaurantes.reduce((s, r) => s + r.totalDeDecisoes, 0),
       restaurantes: restaurantes.length,
     },
-    naoMedidoGlobal: LACUNAS_ESTRUTURAIS,
+    naoMedidoGlobal: [...LACUNAS_ESTRUTURAIS, ...LACUNAS_DA_JORNADA],
   };
 }
