@@ -58,6 +58,26 @@ export interface NormalizedInboundMedia {
   kind:     "image" | "audio" | "video" | "document" | "sticker";
 }
 
+/**
+ * ⭐ O ANÚNCIO QUE TROUXE A PESSOA — `referral`, que sempre chegou e era jogado fora.
+ *
+ * Quando a mensagem nasce de um clique num anúncio clique-para-WhatsApp, a Meta
+ * anexa `messages[].referral` com a origem. O tipo `RawMessage` abaixo não
+ * declarava o campo, então ninguém nunca o leu: o lead de mídia paga entrava
+ * como "número desconhecido escreveu" e a campanha sumia no mesmo gesto.
+ *
+ * Aqui só se NORMALIZA. Quem decide o que isso significa para a ficha é
+ * `foocci-sdr/anuncioDeOrigem.ts`.
+ */
+export interface NormalizedInboundReferral {
+  sourceType: string | null;  // "ad" | "post"
+  sourceId:   string | null;  // id do anúncio/publicação
+  sourceUrl:  string | null;
+  headline:   string | null;
+  body:       string | null;
+  ctwaClid:   string | null;  // id do clique — casa a conversa com o gasto
+}
+
 export interface NormalizedInboundMessage {
   providerMessageId: string;   // wamid... — dedupe key
   fromPhone:         string;    // customer wa_id (digits)
@@ -67,6 +87,7 @@ export interface NormalizedInboundMessage {
   text:              string | null;
   profileName:       string | null;
   media:             NormalizedInboundMedia | null; // set for image/audio/video/document/sticker
+  referral:          NormalizedInboundReferral | null; // set when the message came from an ad click
 }
 
 export interface NormalizedStatus {
@@ -110,6 +131,10 @@ type RawMessage = {
   };
   button?: { text?: string; payload?: string };
   reaction?: { message_id?: string; emoji?: string };
+  referral?: {
+    source_type?: string; source_id?: string; source_url?: string;
+    headline?: string; body?: string; ctwa_clid?: string;
+  };
 };
 
 interface RawValue {
@@ -232,6 +257,26 @@ function extractMedia(m: RawMessage): NormalizedInboundMedia | null {
   return null;
 }
 
+/**
+ * Extracts the ad referral from a raw inbound message (null for ordinary messages).
+ *
+ * Devolve `null` quando o objeto veio vazio: um `referral` sem campo nenhum não
+ * é origem, e propagá-lo faria a Sala carimbar "veio de anúncio" sem anúncio.
+ */
+function extractReferral(m: RawMessage): NormalizedInboundReferral | null {
+  const r = m.referral;
+  if (!r) return null;
+  const ref: NormalizedInboundReferral = {
+    sourceType: textoLimpo(r.source_type),
+    sourceId:   textoLimpo(r.source_id),
+    sourceUrl:  textoLimpo(r.source_url),
+    headline:   textoLimpo(r.headline),
+    body:       textoLimpo(r.body),
+    ctwaClid:   textoLimpo(r.ctwa_clid),
+  };
+  return Object.values(ref).some((v) => v !== null) ? ref : null;
+}
+
 /** Normalizes a Meta webhook body into the internal inbound/status shape. */
 export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
   const out: NormalizedMetaWebhook = { phoneNumberIds: [], messages: [], statuses: [] };
@@ -270,6 +315,7 @@ export function normalizeMetaWebhook(payload: unknown): NormalizedMetaWebhook {
           text:              m.text?.body ?? media?.caption ?? structuredText,
           profileName:       profileByWaId.get(m.from) ?? null,
           media,
+          referral:          extractReferral(m),
         });
       }
 

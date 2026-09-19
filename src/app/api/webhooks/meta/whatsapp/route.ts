@@ -361,6 +361,12 @@ async function processMetaWebhook(payload: unknown): Promise<void> {
       const { tipo, tipoCru } = tipoDaMeta(m.type, m.media?.kind);
 
       void receberMensagemDeVendas({
+        // ⭐ O ANÚNCIO QUE TROUXE A PESSOA — 19/09/2026. `referral` chegava em
+        // TODA mensagem nascida de um clique em anúncio clique-para-WhatsApp e
+        // era descartado na normalização (o tipo não declarava o campo). Sem
+        // ele o lead de mídia paga nascia como "escreveu direto no WhatsApp" e
+        // a campanha que pagamos para trazê-lo não existia em lugar nenhum.
+        referral:      m.referral,
         fromPhone:     m.fromPhone,
         text:          m.text ?? null,
         profileName:   m.profileName ?? null,

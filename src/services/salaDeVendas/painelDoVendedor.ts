@@ -35,6 +35,7 @@
  * modelo e sem risco de mexer no lead por engano.
  */
 
+import { ORIGEM_DE_ANUNCIO } from "@/services/foocci-sdr/anuncioDeOrigem";
 import type { PrismaClient } from "@prisma/client";
 
 type Cliente = PrismaClient | Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
@@ -281,7 +282,14 @@ export async function montarPainelDoVendedor(
 
   // ⚠️ `utmSource` vem antes de `origem` porque é o dado de MÁQUINA (veio no
   // link) e `origem` é a página, que qualquer redirecionamento embaralha.
-  const origem = limpo(lead.utmSource) ?? limpo(lead.origem);
+  //
+  // ⭐ A EXCEÇÃO, 19/09/2026 — o anúncio clique-para-WhatsApp. Ali `origem`
+  // TAMBÉM é dado de máquina: veio no `referral` do próprio webhook da Meta,
+  // não de uma página. E ela é a única das duas que diz algo útil: `utmSource`
+  // dizia "facebook", que é o que a tela já mostrava quando ninguém sabia de
+  // qual anúncio a pessoa tinha vindo. Aqui a mais específica ganha.
+  const origemDeAnuncio = limpo(lead.origem)?.startsWith(ORIGEM_DE_ANUNCIO) ? limpo(lead.origem) : null;
+  const origem = origemDeAnuncio ?? limpo(lead.utmSource) ?? limpo(lead.origem);
 
   const painel: PainelDoVendedor = {
     leadId: lead.id,
