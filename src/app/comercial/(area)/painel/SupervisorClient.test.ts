@@ -17,6 +17,31 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { MOTIVO_DO_PRAZO_AUSENTE, PainelDoSupervisor, type Visao } from "./SupervisorClient";
 
+function metaDoMes(p: {
+  meta?: number | null;
+  receita?: number | null;
+} = {}): Visao["metaDoMes"] {
+  const centavos = p.meta === undefined ? 10_000_000 : p.meta;
+  const rec = p.receita === undefined ? 8_000_000 : p.receita;
+
+  const meta: Visao["metaDoMes"]["meta"] =
+    centavos === null
+      ? { definida: false, competencia: "2026-09", motivo: "semMeta" }
+      : { definida: true, competencia: "2026-09", centavos, definidoPorNome: "Diego" };
+
+  const receita: Visao["metaDoMes"]["receita"] =
+    rec === null ? { medido: false, motivo: "semPropostas" } : { medido: true, centavos: rec, propostas: 4 };
+
+  const progresso: Visao["metaDoMes"]["progresso"] =
+    centavos === null
+      ? { medido: false, motivo: "semMeta", detalhe: "nenhuma meta cadastrada para 2026-09" }
+      : rec === null
+        ? { medido: false, motivo: "receitaNaoMedida", detalhe: "a receita do mês não foi medida" }
+        : { medido: true, fracao: rec / centavos, metaCentavos: centavos, receitaCentavos: rec };
+
+  return { competencia: "2026-09", meta, receita, progresso };
+}
+
 function visao(p: { volumeMedido?: boolean; duracaoMedida?: boolean } = {}): Visao {
   const volume: Visao["funil"]["degraus"][number]["volume"] = p.volumeMedido
     ? { medido: true, total: 37 }
@@ -88,6 +113,7 @@ function visao(p: { volumeMedido?: boolean; duracaoMedida?: boolean } = {}): Vis
         previsao: { medido: false, motivo: "previsão é projeção CONTRA uma meta" },
       },
     },
+    metaDoMes: metaDoMes(),
   };
 }
 
@@ -149,5 +175,59 @@ describe("a fila de indicadores sai do funil medido, e não de zero", () => {
       React.createElement(PainelDoSupervisor, { v: visao({ volumeMedido: true }) }),
     );
     expect(trecho(h, "Decisores encontrados")).toContain("sem base anterior para comparar (agora: 3)");
+  });
+});
+
+
+/**
+ * ⭐ A META, NA TELA — e a barra que só acende com alvo.
+ *
+ * O agente que construiu esta tela se recusou a desenhar a barra de progresso
+ * enquanto a meta não existisse no banco, e a razão era a certa: barra sem alvo
+ * é a forma mais convincente de inventar um alvo. Estes casos guardam as duas
+ * pontas da decisão — a barra existe porque o alvo é digitado, e ela some onde
+ * o alvo não foi digitado.
+ */
+describe("⭐ a meta do mês na tela 13", () => {
+  it("mês SEM meta não vira 0% — escreve que não há meta e não desenha barra", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PainelDoSupervisor, { v: { ...visao({ volumeMedido: true }), metaDoMes: metaDoMes({ meta: null }) } }),
+    );
+    const t = trecho(html, "Meta do mês");
+    expect(t).toContain("Sem meta cadastrada");
+    expect(t).not.toContain("0%");
+    expect(t).not.toContain('role="progressbar"');
+  });
+
+  it("com meta cadastrada, mostra a cifra, a porcentagem certa e a barra", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PainelDoSupervisor, {
+        v: { ...visao({ volumeMedido: true }), metaDoMes: metaDoMes({ meta: 10_000_000, receita: 8_000_000 }) },
+      }),
+    );
+    const t = trecho(html, "Meta do mês");
+    expect(t).toContain("100.000,00");
+    expect(t).toContain("80%");
+    expect(t).toContain('role="progressbar"');
+  });
+
+  it("meta cadastrada e receita NÃO medida também não vira 0%", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PainelDoSupervisor, {
+        v: { ...visao({ volumeMedido: true }), metaDoMes: metaDoMes({ receita: null }) },
+      }),
+    );
+    const t = trecho(html, "% da meta atingida");
+    expect(t).toContain("não medido");
+    expect(t).not.toContain('role="progressbar"');
+  });
+
+  it("⛔ a tela não estampa previsão de receita", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PainelDoSupervisor, { v: visao({ volumeMedido: true }) }),
+    ).toLowerCase();
+    expect(html).not.toContain("previsão");
+    expect(html).not.toContain("previsao");
+    expect(html).not.toContain("projeção");
   });
 });

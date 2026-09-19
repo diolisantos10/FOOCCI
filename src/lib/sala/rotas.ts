@@ -111,6 +111,20 @@ export const ROTAS = {
    * lista `PARA_TODOS`.
    */
   supervisora: `${COMERCIAL}/supervisora`,
+  /**
+   * ⭐ A META DE RECEITA — o único lugar onde a cifra do mês é digitada.
+   *
+   * Mora no grupo **Painel**, e não em Configurações, porque não é ajuste de
+   * máquina: é a decisão de negócio contra a qual o Painel mede o mês. Quem
+   * abre o Revenue Supervisor e lê "80% da meta" precisa alcançar em um clique
+   * o número que produziu esses 80% — alvo escondido dentro de Configurações
+   * vira número que ninguém sabe de onde veio, que é o defeito que esta tela
+   * nasceu para impedir.
+   *
+   * Aparece para quem lê o Painel; **gravar** é de `MASTER_CEO` e
+   * `DIRETOR_FOOCCI`, e quem recusa é a rota.
+   */
+  meta: `${COMERCIAL}/meta-de-receita`,
 
   // ─── As telas do desenho do CEO (17/09/2026) ───────────────────────────────
   //
@@ -271,6 +285,7 @@ export const GRUPOS: readonly Grupo[] = [
     abas: [
       { href: ROTAS.painel, rotulo: "Painel", papeis: PAPEIS_DO_PAINEL },
       { href: ROTAS.torre, rotulo: "Torre de controle", papeis: PAPEIS_DO_PAINEL },
+      { href: ROTAS.meta, rotulo: "Meta de receita", papeis: PAPEIS_DO_PAINEL },
     ],
   },
   {

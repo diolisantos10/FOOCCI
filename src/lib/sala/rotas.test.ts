@@ -189,6 +189,12 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
      * horas fora do sistema. Ela entra aqui para que a contagem continue sendo
      * uma DECISÃO escrita, e não um número que cresce sozinho. */
     ROTAS.cadastro,
+    /* 19/09/2026 — a 26ª. A meta de receita do comercial NÃO EXISTIA no
+     * sistema: o desenho do CEO pedia "Meta do mês" e não havia tabela nem
+     * campo nenhum por trás. O CEO decidiu R$ 100.000/mês e esta é a tela em
+     * que ele troca esse número. Entra aqui, como a 25ª, para que a contagem
+     * continue sendo decisão escrita e não um número que cresce sozinho. */
+    ROTAS.meta,
   ];
 
   it("⛔ nenhum dos endereços do menu sumiu", () => {
@@ -227,6 +233,12 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
     const gestao = [
       ROTAS.painel, ROTAS.torre, ROTAS.roteamento,
       ROTAS.agente, ROTAS.supervisora, ROTAS.whatsapp,
+      // ⭐ 19/09/2026 — a meta de receita nasce em gestão, e não "de todos".
+      // Ela é a cifra contra a qual o time inteiro é medido: pô-la na frente de
+      // quem é medido por ela é convidar a discussão sobre o alvo para dentro
+      // da tela de trabalho. Ler é de gestão e auditoria; GRAVAR é só do CEO e
+      // do Diretor, e quem recusa é a rota.
+      ROTAS.meta,
     ];
     const deTodos = ANTES.filter((h) => !gestao.includes(h) && h !== ROTAS.acessos);
 

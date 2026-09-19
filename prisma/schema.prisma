@@ -9029,3 +9029,69 @@ model MetaLeadPendente {
   @@index([resolvidoEm, createdAt])
   @@map("meta_lead_pendentes")
 }
+
+/// ⭐ A META DE RECEITA DO COMERCIAL — **um valor por mês**, nunca um só valor.
+///
+/// ── POR QUE UMA LINHA POR COMPETÊNCIA, E NÃO UM `singleton` ─────────────────
+///
+/// O padrão da casa para configuração é `id @default("singleton")`
+/// (`SupervisoraConfig`, `ProspeccaoConfig`). Aqui ele seria errado: meta é um
+/// número que só significa alguma coisa **dentro de um mês**. Com uma linha só,
+/// mudar a meta de outubro reescreveria o que setembro cobrava — e o "80% da
+/// meta" de setembro mudaria sozinho, depois do mês fechado, sem ninguém ter
+/// mexido em setembro. Percentual que muda para trás não é medição: é história
+/// reescrita.
+///
+/// Por isso a chave é a competência (`AAAA-MM`), e cada mês guarda a própria
+/// decisão, com quem a tomou e quando.
+///
+/// ⛔ Meta é o número que o CEO DIGITA. Não existe, e não pode passar a existir
+/// a partir daqui, nenhuma **previsão** de receita: previsão seria conta nossa
+/// sobre o futuro, e ela sairia desta tabela parecendo medição.
+model MetaDeReceitaMensal {
+  id String @id @default(cuid())
+
+  /// `AAAA-MM` — o mês a que esta meta pertence. Texto, e não data, porque o
+  /// que se guarda é uma competência, não um instante: `2026-09` não tem fuso.
+  competencia String @unique
+
+  /// Em centavos, como todo dinheiro nesta casa (`valorMensalCent`).
+  valorCentavos Int
+
+  /// Quem decidiu, em id e em nome. O id é a prova; o nome é o que a tela
+  /// mostra sem precisar de um join para dizer "quem trocou por último".
+  definidoPorId   String?
+  definidoPorNome String
+
+  criadaEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  historico MetaDeReceitaHistorico[]
+
+  @@map("meta_de_receita_mensal")
+}
+
+/// Toda troca de meta, com valor anterior, valor novo, quem e quando.
+/// Mesmo molde de `SupervisoraModoHistorico`: decisão de dinheiro sem trilha é
+/// decisão que ninguém consegue explicar três meses depois.
+model MetaDeReceitaHistorico {
+  id     String              @id @default(cuid())
+  metaId String
+  meta   MetaDeReceitaMensal @relation(fields: [metaId], references: [id], onDelete: Cascade)
+
+  /// Repetida aqui de propósito: a trilha continua legível mesmo que a linha da
+  /// meta seja apagada um dia.
+  competencia String
+
+  /// Nulo = esta foi a primeira meta desta competência.
+  valorAnteriorCentavos Int?
+  valorNovoCentavos     Int
+
+  alteradoPorId   String?
+  alteradoPorNome String
+  motivo          String?  @db.Text
+  alteradoEm      DateTime @default(now())
+
+  @@index([competencia, alteradoEm])
+  @@map("meta_de_receita_historico")
+}
