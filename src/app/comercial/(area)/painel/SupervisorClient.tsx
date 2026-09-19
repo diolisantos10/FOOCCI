@@ -141,6 +141,28 @@ export interface Visao {
   diagnostico: Diagnostico;
   acoes: Array<{ origem: string; texto: string; porque: string }>;
   cegas: string[];
+  /**
+   * ⭐ "Meta do mês" e "% da meta atingida" — os dois campos do desenho do CEO
+   * que só puderam ser acesos em 19/09/2026, quando a meta ganhou lugar no
+   * banco (`meta_de_receita_mensal`) e o CEO decidiu R$ 100.000/mês.
+   *
+   * ⛔ O terceiro campo do desenho, **"Previsão R$ 560.000"**, continua não
+   * existindo — e não é esquecimento. Meta é número que o CEO digita; previsão
+   * seria conta nossa sobre o futuro, e ela sairia daqui parecendo medição e
+   * viraria decisão de dinheiro. Não há campo para ela nesta interface.
+   */
+  metaDoMes: MetaDoMes;
+}
+
+export interface MetaDoMes {
+  competencia: string;
+  meta:
+    | { definida: true; competencia: string; centavos: number; definidoPorNome: string }
+    | { definida: false; competencia: string; motivo: "semMeta" };
+  receita: { medido: true; centavos: number; propostas: number } | { medido: false; motivo: string };
+  progresso:
+    | { medido: true; fracao: number; metaCentavos: number; receitaCentavos: number }
+    | { medido: false; motivo: "semMeta" | "receitaNaoMedida"; detalhe: string };
 }
 
 type Estado =
@@ -227,7 +249,12 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
   const tudoCego = v.funil.degraus.every((d) => !d.volume.medido);
 
   if (tudoCego) {
+    // A meta sai mesmo com o funil cego: ela não vem do funil, vem do que o CEO
+    // digitou. Esconder o alvo porque as fontes do funil não gravam seria
+    // apagar o único número desta tela que não depende de medição nenhuma.
     return (
+      <div className="flex flex-col gap-6">
+        <CartaoDaMeta m={v.metaDoMes} />
       <Secao titulo="Revenue Supervisor">
         <p className="max-w-[70ch] rounded-2xl border border-line bg-paper p-4 text-[13.5px] leading-relaxed text-ink2">
           <strong>Nenhuma etapa do funil tem fonte ligada.</strong> Isso não é uma
@@ -236,6 +263,7 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
           de propósito, em vez de estampar sete zeros que pareceriam notícia.
         </p>
       </Secao>
+      </div>
     );
   }
 
@@ -267,6 +295,8 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
           );
         })}
       </FilaDeIndicadores>
+
+      <CartaoDaMeta m={v.metaDoMes} />
 
       <Corpo
         lateral={
@@ -430,6 +460,113 @@ export function PainelDoSupervisor({ v }: { v: Visao }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** "R$ 100.000,00" — o dinheiro escrito como gente lê. */
+function emReais(centavos: number): string {
+  return (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function mesPorExtenso(competencia: string): string {
+  const [ano, mes] = competencia.split("-");
+  const nomes = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  ];
+  return `${nomes[Number(mes) - 1] ?? mes} de ${ano}`;
+}
+
+/**
+ * ⭐ O BLOCO DA META — e a barra de progresso que só aparece com alvo.
+ *
+ * ── POR QUE A BARRA ESTAVA PROIBIDA ATÉ HOJE ────────────────────────────────
+ *
+ * Barra sem alvo é a forma mais convincente de inventar um alvo. Enquanto a
+ * meta não existia no banco, qualquer barra aqui teria um denominador
+ * escolhido pelo código — e um percentual saído disso pareceria medição e
+ * viraria decisão de dinheiro. A barra acendeu porque o alvo passou a ser um
+ * número que o CEO digitou, guardado por competência, com quem digitou.
+ *
+ * ── E ELA CONTINUA APAGADA ONDE NÃO HÁ META ─────────────────────────────────
+ *
+ * Mês sem meta escreve **"sem meta cadastrada"** e o caminho para cadastrá-la.
+ * Nunca 0%: zero diria "há uma meta e ela não foi atingida", que é uma notícia
+ * diferente — e falsa.
+ */
+function CartaoDaMeta({ m }: { m: MetaDoMes }) {
+  const mes = mesPorExtenso(m.competencia);
+
+  if (!m.meta.definida) {
+    return (
+      <Secao titulo="Meta do mês">
+        <p className="max-w-[70ch] rounded-2xl border border-line bg-paper p-4 text-[13.5px] leading-relaxed text-ink2">
+          <strong>Sem meta cadastrada para {mes}.</strong> Sem alvo não há
+          porcentagem nem barra: um percentual precisaria de um denominador
+          escolhido por nós, e ele sairia daqui parecendo medição. Cadastre em{" "}
+          <span className="font-medium text-ink">Painel → Meta de receita</span>.
+        </p>
+      </Secao>
+    );
+  }
+
+  const meta = m.meta;
+  const pct = m.progresso.medido ? Math.round(m.progresso.fracao * 100) : null;
+
+  return (
+    <Secao titulo="Meta do mês">
+      <div className="rounded-2xl border border-line bg-paper p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div>
+            <p className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+              Meta de {mes}
+            </p>
+            <p className="text-[22px] font-semibold tabular-nums text-ink">
+              {emReais(meta.centavos)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11.5px] font-semibold uppercase tracking-[.04em] text-muted">
+              % da meta atingida
+            </p>
+            {pct === null ? (
+              <p className="max-w-[40ch] text-[12.5px] italic leading-snug text-muted">
+                não medido — {m.progresso.medido ? "" : m.progresso.detalhe}
+              </p>
+            ) : (
+              <p className="text-[22px] font-semibold tabular-nums text-ink">{pct}%</p>
+            )}
+          </div>
+        </div>
+
+        {m.progresso.medido ? (
+          <>
+            <div
+              className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas"
+              role="progressbar"
+              aria-valuenow={pct ?? 0}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Meta de ${mes} atingida`}
+            >
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${Math.max(0, Math.min(1, m.progresso.fracao)) * 100}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-[12px] text-muted">
+              {emReais(m.progresso.receitaCentavos)} de {emReais(m.progresso.metaCentavos)} —
+              propostas aceitas dentro de {mes}.
+            </p>
+          </>
+        ) : null}
+
+        <p className="mt-2 text-[11.5px] text-muted">
+          Meta definida por <strong>{meta.definidoPorNome}</strong>. Troca em Painel →
+          Meta de receita.
+        </p>
+      </div>
+    </Secao>
+  );
+}
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (

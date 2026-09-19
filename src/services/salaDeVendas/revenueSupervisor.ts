@@ -24,6 +24,14 @@ import {
   type IndiceDeSaude,
 } from "./eficiencia";
 import { diagnosticar, type ResultadoDoDiagnostico } from "./diagnostico";
+import {
+  competenciaDe,
+  janelaDaCompetencia,
+  lerMeta,
+  progressoDaMeta,
+  type MetaDoMes,
+  type ProgressoDaMeta,
+} from "./metaDeReceita";
 
 type Banco = PrismaClient;
 
@@ -33,6 +41,27 @@ export interface AcaoRecomendada {
   texto: string;
   /** A frase numérica que a sustenta. Nunca vazia. */
   porque: string;
+}
+
+/**
+ * ⭐ O BLOCO DA META — "Meta do mês" e "% da meta atingida" do desenho do CEO.
+ *
+ * ── POR QUE ELE TEM JANELA PRÓPRIA, E NÃO A DO FUNIL ────────────────────────
+ *
+ * O período do supervisor é livre (o padrão são os últimos 30 dias). Meta é
+ * mensal. Comparar receita de 30 dias corridos com a meta de setembro daria um
+ * percentual que ninguém consegue explicar — e percentual inexplicável em tela
+ * de receita vira decisão de dinheiro. Este bloco mede SEMPRE o mês corrente,
+ * inteiro, e diz na própria carga qual mês é.
+ *
+ * ⛔ Não há campo de previsão aqui, e não pode haver: ver `metaDeReceita.ts`.
+ */
+export interface MetaDoMesNaVisao {
+  competencia: string;
+  meta: MetaDoMes;
+  /** A receita ganha DENTRO da competência — não a do período do funil. */
+  receita: Receita;
+  progresso: ProgressoDaMeta;
 }
 
 export interface VisaoDoSupervisor {
@@ -46,6 +75,8 @@ export interface VisaoDoSupervisor {
   receita: Receita;
   /** Etapas sem medição nenhuma — cegueira declarada, não saúde. */
   cegas: string[];
+  /** A meta do mês corrente e o quanto dela foi atingido — ou por que não dá. */
+  metaDoMes: MetaDoMesNaVisao;
 }
 
 /** Quanto da fila ativa está em atraso, para a parcela "fila em dia" da saúde. */
@@ -101,6 +132,22 @@ export function montarAcoes(
   return acoes.filter((a) => (vistos.has(a.texto) ? false : (vistos.add(a.texto), true)));
 }
 
+/**
+ * A meta do mês corrente, a receita desse mesmo mês, e a fração — quando as
+ * duas pontas existem. Quando não existem, o motivo, nunca um zero.
+ */
+export async function metaDoMesCorrente(db: Banco, agora: Date): Promise<MetaDoMesNaVisao> {
+  const competencia = competenciaDe(agora);
+  const janela = janelaDaCompetencia(competencia);
+
+  const [meta, receita] = await Promise.all([
+    lerMeta(db, competencia),
+    receitaGanha(db, janela),
+  ]);
+
+  return { competencia, meta, receita, progresso: progressoDaMeta(meta, receita) };
+}
+
 export async function visaoDoSupervisor(
   db: Banco,
   params: Periodo & { agora?: Date; foco?: Parameters<typeof diagnosticar>[1]["foco"] },
@@ -110,12 +157,13 @@ export async function visaoDoSupervisor(
 
   const funil = await funilDeReceita(db, p);
 
-  const [eficiencia, diagnostico, agora, receita, clientes] = await Promise.all([
+  const [eficiencia, diagnostico, agora, receita, clientes, metaDoMes] = await Promise.all([
     eficienciaPorEtapa(db, p, funil),
     diagnosticar(db, { ...p, foco: params.foco, funil }),
     filasDoAgora(db, relogio),
     receitaGanha(db, p),
     ativacao(db, p),
+    metaDoMesCorrente(db, relogio),
   ]);
 
   const saude = indiceDeSaude({
@@ -135,5 +183,6 @@ export async function visaoDoSupervisor(
     agora,
     receita,
     cegas: eficiencia.cegas.map((e) => ROTULO_OPERACIONAL[e]),
+    metaDoMes,
   };
 }
