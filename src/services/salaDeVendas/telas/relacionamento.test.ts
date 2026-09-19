@@ -55,6 +55,10 @@ function conta(over: Record<string, unknown> = {}) {
     recompras: 0,
     upsells: 0,
     receitaTotalCents: 0,
+    // A lista da peça 10 lê o nome da empresa e o do decisor. Sem eles aqui, o
+    // fake divergiria do `select` real e o teste passaria sobre outra coisa.
+    empresa: { nome: "Restaurante de Prova" },
+    oportunidade: { contatoDecisor: { nome: "Quem Decide" } },
     ...over,
   };
 }
@@ -64,6 +68,7 @@ function banco(resp: {
   emSilencio?: number;
   cadencias?: unknown[];
   contas?: ReturnType<typeof conta>[];
+  eventos?: unknown[];
 }) {
   const leadWheres: unknown[] = [];
   return {
@@ -80,6 +85,7 @@ function banco(resp: {
     },
     cadencia: { findMany: vi.fn(async () => resp.cadencias ?? []) },
     cliente: { findMany: vi.fn(async () => resp.contas ?? []) },
+    eventoDaJornada: { findMany: vi.fn(async () => resp.eventos ?? []) },
   };
 }
 
@@ -299,5 +305,132 @@ describe("as cadências vêm do banco, com as condições declaradas", () => {
     const p = await panoramaDoRelacionamento(db as never, { escopo: {}, agora: AGORA });
 
     expect(p.naoMedido.join(" ")).toContain("Nenhuma cadência cadastrada");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A PEÇA 10 — a lista, a ficha e os cinco indicadores
+//
+// O que estes testes seguram é a régua que o desenho mais tenta furar: ele traz
+// NPS 72 e "Tickets (3)" desenhados, e a tentação é preencher com zero.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("⭐ os cinco indicadores da peça 10 não inventam número", () => {
+  it("NPS sem nenhuma resposta sai NULO e com motivo — nunca 0", async () => {
+    const db = banco({ contas: [conta({ nps: null })] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.indicadores.nps).toBeNull();
+    expect(p.indicadores.npsRespostas).toBe(0);
+    expect(p.indicadores.npsMotivo).toMatch(/não perguntamos/);
+  });
+
+  it("NPS é promotores menos detratores, e só sobre quem respondeu", async () => {
+    // Dois promotores (9, 10) e um detrator (3): (2 − 1) / 3 = 33%.
+    const db = banco({
+      contas: [
+        conta({ id: "a", nps: 9 }),
+        conta({ id: "b", nps: 10 }),
+        conta({ id: "c", nps: 3 }),
+        conta({ id: "d", nps: null }),
+      ],
+    });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.indicadores.nps).toBe(33);
+    // A conta sem resposta NÃO entra no denominador: seria contá-la como neutra.
+    expect(p.indicadores.npsRespostas).toBe(3);
+  });
+
+  it("ticket médio sem receita registrada sai NULO — e não R$ 0,00", async () => {
+    const db = banco({ contas: [conta({ receitaTotalCents: 0 })] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.indicadores.ticketMedioCents).toBeNull();
+    expect(p.indicadores.ticketMedioMotivo).toBeTruthy();
+  });
+
+  it("ticket médio divide pelas COMPRAS, não pelas contas", async () => {
+    // Uma conta, R$ 600,00 no total, 2 recompras => 3 compras => R$ 200,00.
+    const db = banco({ contas: [conta({ receitaTotalCents: 60_000, recompras: 2 })] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.indicadores.ticketMedioCents).toBe(20_000);
+  });
+
+  it("a variação `vs. mês anterior` do desenho não é desenhada — é explicada", async () => {
+    const db = banco({ contas: [conta()] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.indicadores.comparacao).toMatch(/sem retrato do mês anterior/);
+  });
+});
+
+describe("⭐ a ficha do cliente e a rosca de saúde", () => {
+  it("conta sem saúde gravada fica FORA da rosca e é contada à parte", async () => {
+    const db = banco({ contas: [conta({ saude: null })] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.saudeNaoMedida).toBe(1);
+    expect(p.faixasDeSaude.reduce((t, f) => t + f.contas, 0)).toBe(0);
+    expect(p.naoMedido.join(" ")).toMatch(/FORA da rosca/);
+  });
+
+  it("a saúde cai na faixa do desenho, e as faixas são as da imagem", async () => {
+    const db = banco({
+      contas: [conta({ id: "a", saude: 92 }), conta({ id: "b", saude: 71 }), conta({ id: "c", saude: 12 })],
+    });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.faixasDeSaude.map((f) => [f.rotulo, f.de, f.ate, f.contas])).toEqual([
+      ["Excelente", 85, 100, 1],
+      ["Boa", 70, 84, 1],
+      ["Atenção", 50, 69, 0],
+      ["Em risco", 0, 49, 1],
+    ]);
+    expect(p.saudeNaoMedida).toBe(0);
+  });
+
+  it("a ficha traz o nome da empresa, o decisor e as compras somadas", async () => {
+    const db = banco({ contas: [conta({ recompras: 3 })] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    const ficha = p.listaDeClientes[0]!;
+    expect(ficha.empresa).toBe("Restaurante de Prova");
+    expect(ficha.pessoa).toBe("Quem Decide");
+    // A primeira venda mais as recompras. Recompra sozinha esconderia a venda.
+    expect(ficha.compras).toBe(4);
+  });
+
+  it("a linha do tempo é a trilha real — sem evento gravado, ela fica VAZIA", async () => {
+    const db = banco({ contas: [conta()], eventos: [] });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    expect(p.listaDeClientes[0]!.linhaDoTempo).toEqual([]);
+  });
+
+  it("a linha do tempo traduz o evento da trilha para português de gente", async () => {
+    const db = banco({
+      contas: [conta()],
+      eventos: [
+        {
+          id: "e1",
+          clienteId: "c1",
+          criadoEm: new Date("2026-09-18T10:00:00Z"),
+          tipo: "CRIACAO",
+          deEstagio: null,
+          paraEstagio: null,
+          motivo: "pagamento confirmado",
+          nota: null,
+          autor: "SISTEMA",
+          autorLabel: null,
+        },
+      ],
+    });
+    const p = await panoramaDoRelacionamento(db as never, { escopo: {} });
+
+    const evento = p.listaDeClientes[0]!.linhaDoTempo[0]!;
+    expect(evento.titulo).toMatch(/a venda virou cliente/);
+    expect(evento.detalhe).toBe("pagamento confirmado");
   });
 });
