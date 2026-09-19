@@ -110,6 +110,63 @@ export interface OpcoesDaImportacao {
   exigirDataDeChegada?: boolean;
   /** Injeção para teste. Só entra na nota de auditoria. */
   agora?: Date;
+
+  /* ── O QUE FOI ABERTO EM 19/09/2026, E POR QUÊ ──────────────────────────────
+   *
+   * Elisa Oliveira entrou na planilha da campanha em 18/09 às 17h54 e passou 20
+   * horas fora do Foocci. Ao tentar resolver à mão, medimos o buraco: **não
+   * existia lugar nenhum nesta casa para cadastrar um lead à mão** — toda
+   * entrada dependia de planilha, webhook ou rota com segredo.
+   *
+   * A saída óbvia seria uma tela que escreve em `SiteLead`. Seria a quarta
+   * verdade sobre a origem do lead, e o cabeçalho deste arquivo já explica o
+   * preço disso. Então a porta continua sendo **uma só**, e o que ela ganhou
+   * foram os parâmetros que o cadastro à mão precisa e o formulário da Meta
+   * não tem. Nada aqui dispara mensagem: cadastrar é cadastrar.
+   *
+   * ⚠️ Todos têm padrão igual ao comportamento anterior. Quem chamava esta
+   * função antes de 19/09/2026 continua obtendo exatamente o mesmo resultado. */
+
+  /**
+   * A porta por onde este lead nasce. Padrão: `CAMPANHA_PAGA`.
+   *
+   * ⚠️ É a diferença entre "lead de campanha" e "base fria", e ela decide qual
+   * mensagem a pessoa recebe depois — erro que já custou dinheiro nesta casa.
+   * Ver `salaDeVendas/frioOuLead.ts`.
+   */
+  fonte?: SiteLeadSource;
+  /** O que o formulário da Meta não coleta e o cadastro à mão coleta. */
+  complemento?: {
+    restaurante?: string | null;
+    cidade?: string | null;
+    /** A pergunta do desenho do CRM 360: "como nos conheceu?". */
+    comoNosConheceu?: string | null;
+  };
+  /**
+   * Como a origem se chama na ficha e na trilha. Padrão: `"Meta Lead Ads"`.
+   *
+   * Escrever "Meta Lead Ads" num lead digitado por um vendedor seria inventar
+   * uma atribuição — e atribuição errada não se conserta depois, porque ninguém
+   * sabe qual das duas estava certa.
+   */
+  rotuloDaOrigem?: string;
+  /** Quem assina a nota de auditoria. Padrão: `ATOR_DA_INTEGRACAO`. */
+  ator?: string;
+  /**
+   * A versão da política sob a qual o consentimento foi dado. Padrão:
+   * `"META_LEAD_FORM"`. O cadastro à mão grava a SUA, porque dizer que a pessoa
+   * preencheu um formulário da Meta quando um vendedor a digitou é prova falsa.
+   */
+  versaoDoConsentimento?: string;
+  /**
+   * A prova da promoção, quando o telefone já estava na base fria. Padrão: a
+   * frase do formulário da campanha.
+   *
+   * `promoverFrioParaLead` exige um motivo de propósito — ele é o que a ficha
+   * mostra para explicar por que aquela pessoa deixou de ser lista fria. Uma
+   * frase genérica ali apagaria a única prova que existe do interesse.
+   */
+  motivoDaPromocao?: string;
 }
 
 export type ResultadoDaImportacao =
@@ -157,9 +214,9 @@ export function marcadorExterno(metaLeadId: string): string {
   return `meta-lead:${metaLeadId}`;
 }
 
-function origemDaMeta(payload: MetaLeadPayload): string {
+function origemDaMeta(payload: MetaLeadPayload, rotulo: string): string {
   const formulario = limpo(payload.formName) ?? limpo(payload.formId);
-  return formulario ? `Meta Lead Ads — ${formulario}` : "Meta Lead Ads";
+  return formulario ? `${rotulo} — ${formulario}` : rotulo;
 }
 
 /**
@@ -168,7 +225,11 @@ function origemDaMeta(payload: MetaLeadPayload): string {
  * outro — o `clickId` pertence a quem trouxe a pessoa primeiro e não se
  * sobrescreve.
  */
-function notaDeAuditoria(payload: MetaLeadPayload, telefoneBruto: string): string {
+function notaDeAuditoria(
+  payload: MetaLeadPayload,
+  telefoneBruto: string,
+  opcoes: OpcoesDaImportacao,
+): string {
   const pares = [
     ["meta_lead_id", payload.metaLeadId],
     ["created_time", limpo(payload.createdTime)],
@@ -184,16 +245,23 @@ function notaDeAuditoria(payload: MetaLeadPayload, telefoneBruto: string): strin
     ["lead_status", limpo(payload.leadStatus)],
     ["telefone_original", telefoneBruto],
     ["is_organic", payload.isOrganic === undefined ? null : String(payload.isOrganic)],
+    /* Não existe coluna para "como nos conheceu?" no `SiteLead`, e inventar uma
+     * migração no meio de uma urgência seria trocar um buraco por um risco. A
+     * resposta fica na trilha — que é onde o vendedor a lê na ficha — e também
+     * no campo `origem`, montado por quem chama. Escrito, não prometido. */
+    ["como_nos_conheceu", limpo(opcoes.complemento?.comoNosConheceu)],
+    ["restaurante", limpo(opcoes.complemento?.restaurante)],
+    ["cidade", limpo(opcoes.complemento?.cidade)],
   ] as const;
 
-  return `Meta Lead Ads | ${pares
+  return `${opcoes.rotuloDaOrigem ?? "Meta Lead Ads"} | ${pares
     .filter(([, valor]) => valor !== null && valor !== "")
     .map(([chave, valor]) => `${chave}=${valor}`)
     .join(" | ")}`;
 }
 
 /** Já importamos este `metaLeadId` alguma vez? Duas buscas, e a ordem importa. */
-async function jaImportado(metaLeadId: string) {
+async function jaImportado(metaLeadId: string, ator: string) {
   const porClickId = await prisma.siteLead.findFirst({
     where: { clickId: marcadorExterno(metaLeadId) },
     select: { id: true, codigo: true, stage: true, fonte: true },
@@ -202,7 +270,7 @@ async function jaImportado(metaLeadId: string) {
 
   const interacao = await prisma.siteLeadInteraction.findFirst({
     where: {
-      actor: ATOR_DA_INTEGRACAO,
+      actor: ator,
       tipo: "NOTA_INTERNA",
       nota: { contains: `meta_lead_id=${metaLeadId}` },
     },
@@ -225,6 +293,13 @@ export async function importarMetaLead(
   const payload = entrada;
   const marcador = marcadorExterno(payload.metaLeadId);
 
+  /* Os quatro parâmetros da porta. Cada padrão é o comportamento que esta
+   * função já tinha — abrir a porta para o cadastro à mão não podia mudar uma
+   * vírgula do que o webhook da Meta faz. */
+  const fonteDoNascimento = opcoes.fonte ?? FONTE_DO_LEAD_DE_CAMPANHA;
+  const rotulo = opcoes.rotuloDaOrigem ?? "Meta Lead Ads";
+  const ator = opcoes.ator ?? ATOR_DA_INTEGRACAO;
+
   const chegouEmReal = chegadaDaMeta(payload.createdTime);
   if (!chegouEmReal && opcoes.exigirDataDeChegada !== false) {
     return {
@@ -236,7 +311,7 @@ export async function importarMetaLead(
   const chegouEm = chegouEmReal ?? agora;
   const dataAproximada = chegouEmReal === null;
 
-  const anterior = await jaImportado(payload.metaLeadId);
+  const anterior = await jaImportado(payload.metaLeadId, ator);
   if (anterior) {
     return {
       status: "jaExistia",
@@ -254,11 +329,11 @@ export async function importarMetaLead(
   const mapeado = createSiteLeadSchema.safeParse({
     nome: payload.fullName,
     whatsapp: telefone,
-    restaurante: "",
-    cidade: "",
+    restaurante: limpo(opcoes.complemento?.restaurante) ?? "",
+    cidade: limpo(opcoes.complemento?.cidade) ?? "",
     tipo: "",
     desafio: "",
-    origem: origemDaMeta(payload),
+    origem: origemDaMeta(payload, rotulo),
     utmSource: plataforma,
     utmMedium: payload.isOrganic ? "organic" : "paid_social",
     utmCampaign: limpo(payload.campaignName) ?? limpo(payload.campaignId) ?? "",
@@ -282,7 +357,7 @@ export async function importarMetaLead(
     where: { id: capturado.id },
     select: { email: true, fonte: true },
   });
-  const fonteAnterior = atual?.fonte ?? FONTE_DO_LEAD_DE_CAMPANHA;
+  const fonteAnterior = atual?.fonte ?? fonteDoNascimento;
 
   /* ── O CONTATO FRIO QUE ACABOU DE LEVANTAR A MÃO ────────────────────────────
    * A promoção vem ANTES de mexer na fonte, e a ordem é o ponto inteiro:
@@ -293,7 +368,9 @@ export async function importarMetaLead(
   if (capturado.duplicado && veioDeListaFria({ fonte: fonteAnterior })) {
     const promocao = await promoverFrioParaLead(prisma, {
       leadId: capturado.id,
-      motivo: `Preencheu o formulário "${limpo(payload.formName) ?? "Meta Lead Ads"}" da campanha paga no Facebook (${payload.metaLeadId})`,
+      motivo:
+        opcoes.motivoDaPromocao ??
+        `Preencheu o formulário "${limpo(payload.formName) ?? "Meta Lead Ads"}" da campanha paga no Facebook (${payload.metaLeadId})`,
       autoria: AUTORIA_SISTEMA,
       agora,
     });
@@ -304,7 +381,7 @@ export async function importarMetaLead(
    * Quem já entrou por uma porta da frente (formulário, WhatsApp direto)
    * mantém o primeiro toque — reescrever apagaria a atribuição verdadeira. */
   const trocarFonte = !capturado.duplicado || !fonteEhVistaPelaRecepcao(fonteAnterior);
-  const fonteFinal = trocarFonte ? FONTE_DO_LEAD_DE_CAMPANHA : fonteAnterior;
+  const fonteFinal = trocarFonte ? fonteDoNascimento : fonteAnterior;
 
   await prisma.$transaction([
     prisma.siteLead.update({
@@ -313,7 +390,7 @@ export async function importarMetaLead(
         fonte: fonteFinal,
         email: atual?.email ?? limpo(payload.email),
         consentAt: chegouEm,
-        consentPolicyVersion: "META_LEAD_FORM",
+        consentPolicyVersion: opcoes.versaoDoConsentimento ?? "META_LEAD_FORM",
         lastInteractionAt: agora,
         ...(opcoes.prioritario ? { prioritario: true } : {}),
         /* ⚠️ A DATA DE CHEGADA, e só para ficha NOVA.
@@ -327,8 +404,8 @@ export async function importarMetaLead(
       data: {
         leadId: capturado.id,
         tipo: "NOTA_INTERNA",
-        actor: ATOR_DA_INTEGRACAO,
-        nota: notaDeAuditoria(payload, payload.phone),
+        actor: ator,
+        nota: notaDeAuditoria(payload, payload.phone, opcoes),
         interna: true,
         createdAt: agora,
       },

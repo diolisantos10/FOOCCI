@@ -89,6 +89,20 @@ export const ROTAS = {
   baseFria: `${COMERCIAL}/base-fria`,
   acessos: `${COMERCIAL}/acessos`,
   /**
+   * ⭐ CADASTRAR UM LEAD À MÃO — a porta que não existia.
+   *
+   * Em 19/09/2026 um lead da campanha paga (Elisa Oliveira) ficou 20 horas
+   * fora do sistema porque a integração falhou e **não havia lugar nenhum no
+   * Foocci para digitá-lo**: toda entrada dependia de planilha, webhook ou
+   * rota com segredo. Falha de integração virava lead perdido, sem plano B.
+   *
+   * Mora em Leads, e não em Prospecção, porque quem se cadastra aqui é
+   * pessoa que já falou com a gente — misturar com a lista fria repetiria
+   * exatamente o erro de tratamento que `frioOuLead.ts` existe para impedir.
+   * A origem é escolhida na tela, e é ela que decide os dois casos.
+   */
+  cadastro: `${COMERCIAL}/cadastrar-lead`,
+  /**
    * A Supervisora — a camada de revisão que acompanha todo agente (IA e
    * humano) que fala com lead. Fica ao lado do Painel e do Agente porque
    * responde à mesma pergunta de gestão ("como o time está atendendo"), não
@@ -300,6 +314,10 @@ export const GRUPOS: readonly Grupo[] = [
       { href: ROTAS.carteira, rotulo: "Carteira" },
       { href: ROTAS.funil, rotulo: "Funil" },
       { href: ROTAS.qualificacao, rotulo: "Qualificação" },
+      // A porta de entrada à mão fica ao lado da Carteira porque é ali que o
+      // vendedor vai conferir se o lead entrou. Aberta à Sala inteira: quem
+      // atende é quem descobre o lead que a integração deixou cair.
+      { href: ROTAS.cadastro, rotulo: "Cadastrar lead" },
     ],
     prefixos: [`${COMERCIAL}/lead`],
   },
