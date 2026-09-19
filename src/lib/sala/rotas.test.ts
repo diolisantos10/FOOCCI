@@ -206,8 +206,21 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
     // Este caso escreve essa expectativa à mão, papel a papel, em vez de
     // derivá-la do próprio código — derivar provaria só que o código é igual a
     // si mesmo.
+    // ⭐ `ROTAS.atendimento` SAIU desta lista em 19/09/2026, e a saída é
+    // deliberada — não é o teste cedendo ao código.
+    //
+    // A Central de Atendimento era um painel de gestão (carga por atendente,
+    // fila do SDR), e por isso o vendedor não a alcançava: desempenho comparado
+    // de colegas não é informação de fila. Ela virou a MESA DE TRABALHO do
+    // desenho 03 do CEO — caixas de conversa, lista e a conversa aberta com
+    // campo de digitar. Mesa de trabalho sem quem trabalha é tela sem público.
+    //
+    // ⚠️ A porta abriu; o DADO não. `escopoDaConsulta` continua prendendo o
+    // `AGENTE_HUMANO` aos leads dele mais os livres, no `where` da consulta —
+    // e há teste disso em `caixasDeConversa.test.ts`. A visão de cima do time
+    // segue em `/comercial/torre` e `/comercial/painel`, ambas de gestão.
     const gestao = [
-      ROTAS.painel, ROTAS.torre, ROTAS.atendimento, ROTAS.roteamento,
+      ROTAS.painel, ROTAS.torre, ROTAS.roteamento,
       ROTAS.agente, ROTAS.supervisora, ROTAS.whatsapp,
     ];
     const deTodos = ANTES.filter((h) => !gestao.includes(h) && h !== ROTAS.acessos);
