@@ -137,9 +137,9 @@ export function SecaoFilaDoSdr({ dados }: { dados: DadosDoSdr }) {
                     "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
                     t.tom === "azul" && "bg-blue-50 text-blue-600",
                     t.tom === "ambar" && "bg-amber-50 text-amber-600",
-                    t.tom === "roxo" && "bg-violet-50 text-violet-600",
+                    t.tom === "roxo" && "bg-ia-50 text-ia-600",
                     t.tom === "verde" && "bg-emerald-50 text-emerald-600",
-                    t.tom === "cinza" && "bg-slate-100 text-slate-500",
+                    t.tom === "cinza" && "bg-chip text-muted",
                   )}
                 >
                   <Icone nome={t.icone} className="h-4 w-4" />

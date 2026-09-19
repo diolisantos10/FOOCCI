@@ -216,8 +216,8 @@ const TINTA: Record<Tom, { quadro: string; pilula: string; barra: string; texto:
   verde: { quadro: "bg-emerald-50 text-emerald-600", pilula: "bg-emerald-50 text-emerald-700", barra: "bg-emerald-500", texto: "text-emerald-700" },
   ambar: { quadro: "bg-amber-50 text-amber-600", pilula: "bg-amber-50 text-amber-800", barra: "bg-amber-500", texto: "text-amber-800" },
   vermelho: { quadro: "bg-red-50 text-red-600", pilula: "bg-red-50 text-red-700", barra: "bg-red-500", texto: "text-red-700" },
-  roxo: { quadro: "bg-violet-50 text-violet-600", pilula: "bg-violet-50 text-violet-700", barra: "bg-violet-500", texto: "text-violet-700" },
-  cinza: { quadro: "bg-slate-100 text-slate-500", pilula: "bg-slate-100 text-slate-600", barra: "bg-slate-300", texto: "text-muted" },
+  roxo: { quadro: "bg-ia-50 text-ia-600", pilula: "bg-ia-50 text-ia-700", barra: "bg-ia-500", texto: "text-ia-700" },
+  cinza: { quadro: "bg-chip text-muted", pilula: "bg-chip text-ink2", barra: "bg-line2", texto: "text-muted" },
 };
 
 /**
@@ -292,7 +292,7 @@ export function Indicador({
   const semMedida = valor === null;
   const t = TINTA[semMedida ? "cinza" : tom];
   return (
-    <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(15,23,42,.04)]">
+    <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(11,11,11,.03)]">
       <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-xl", t.quadro)}>
         <Icone nome={icone} className="h-[18px] w-[18px]" />
       </span>

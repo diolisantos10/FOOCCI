@@ -96,6 +96,25 @@ export default function PrecosDaSalaPage() {
             Tabela de preços publicada
           </h2>
 
+          {/* ── O VAZIO, ESCRITO ────────────────────────────────────────────
+              A tabela é derivada da fonte única de preço. Se ela vier vazia, é
+              defeito de configuração — e a tela precisa DIZER isso. Sumir com a
+              seção faria o vendedor concluir "não temos preço publicado" e
+              inventar um número na frente do lead. */}
+          {planos.length === 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-[13.5px] font-semibold text-amber-900">
+                Nenhum plano publicado.
+              </p>
+              <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-amber-900/85">
+                Isto não quer dizer que a Foocci não tem preço — quer dizer que a
+                fonte de preço não devolveu nenhum plano. Não informe valor de
+                memória: avise a gestão da área comercial antes de responder ao
+                lead.
+              </p>
+            </div>
+          ) : null}
+
           <div className="space-y-3">
             {planos.map((plano) => (
               <article
@@ -249,12 +268,22 @@ export default function PrecosDaSalaPage() {
           >
             O que você NÃO pode responder — e não é falha sua
           </h2>
-          <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
-            Sobrou <strong className="text-ink2">uma</strong>. Não existe resposta
-            certa guardada em algum lugar que você não achou. Responder “vou
-            confirmar e te trago hoje” é a saída profissional; improvisar uma data
-            é o que vira problema na implantação.
-          </p>
+          {abertos.length === 0 ? (
+            /* O vazio BOM desta tela — e ele também precisa ser escrito. Uma
+               lista que some sem explicação é lida como "a tela quebrou". */
+            <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
+              Hoje não sobrou nenhuma: tudo que o lead costuma perguntar sobre
+              preço já está respondido acima.
+            </p>
+          ) : (
+            <p className="mt-1 max-w-[68ch] text-[13.5px] leading-relaxed text-muted">
+              Sobra{abertos.length === 1 ? "" : "m"}{" "}
+              <strong className="text-ink2">{abertos.length}</strong>. Não existe
+              resposta certa guardada em algum lugar que você não achou. Responder
+              “vou confirmar e te trago hoje” é a saída profissional; improvisar
+              uma data é o que vira problema na implantação.
+            </p>
+          )}
 
           <ul className="mt-3 space-y-2">
             {abertos.map((a) => (

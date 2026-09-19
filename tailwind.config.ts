@@ -31,6 +31,30 @@ const config: Config = {
         line2:  "#E5E5E5", // Cinza claro (stronger border)
         muted:  "#8A8A86", // secondary text
         ink2:   "#5C5C58", // body text
+        chip:   "#F4F4F2", // superfície neutra de chip / hover (era hex literal solto)
+
+        // A moldura da área comercial (desenho do CEO, 18/09/2026): a barra
+        // superior escura. Vira token porque é UMA superfície da casa, e hex
+        // solto em dois arquivos é o começo de dois azuis diferentes.
+        nav: {
+          DEFAULT: "#0F172A", // azul-marinho quase preto do cabeçalho
+          soft:    "#1E293B", // hover/campo de busca dentro da barra escura
+          line:    "#334155", // hairline sobre o escuro
+          text:    "#CBD5E1", // texto secundário sobre o escuro
+        },
+
+        // O acento de IA do desenho (roxo). NÃO é cor de ação — ação continua
+        // sendo `brand`. Existe como token para o roxo não voltar a entrar cru
+        // (`violet-*`) tela a tela, que é exatamente o drift que o DESIGN.md
+        // proíbe.
+        ia: {
+          50:  "#F5F3FF",
+          200: "#DDD6FE",
+          500: "#8B5CF6",
+          600: "#7C3AED",
+          700: "#6D28D9",
+          800: "#5B21B6",
+        },
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],

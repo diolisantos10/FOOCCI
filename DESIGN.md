@@ -182,4 +182,16 @@ Nenhuma tela pode "quebrar" ou ficar em branco quando faltam dados. Se a tela mo
 8. **Kit de UI subadotado** — `components/ui` importado por só 4 arquivos; telas grandes reimplementam tudo inline (raiz de 1–6). → migrar telas pro kit aos poucos.
 9. **Pesos de fonte não embarcados** — `font-medium/bold/extrabold` (~1.660 usos) viram faux‑bold; só 400/600 existem. → carregar +pesos ou padronizar 400/600.
 10. **Largura de conteúdo do painel não padronizada** (`max-w-7xl…2xl`). → definir default.
+
+### Novos tokens (19/09/2026) — a moldura da área comercial
+
+`chip` (`#F4F4F2`, a superfície neutra que era hex literal solto — drift #4),
+`nav` / `nav-soft` / `nav-line` / `nav-text` (a barra superior escura da área
+comercial, desenhada pelo CEO) e a escala `ia-*` (o roxo de IA do desenho).
+
+⚠️ **`ia-*` NÃO é cor de ação** — ação continua sendo `brand-500`/`600`. Ele
+existe para o roxo parar de entrar cru (`violet-*`) tela a tela, que é o drift #1
+voltando por outra porta. Em `src/app/comercial/**` não há mais nenhum
+`slate/violet/purple/indigo/gray` cru, e um teste de contrato
+(`_moldura/moldura.contrato.test.ts`) impede a volta.
 </content>

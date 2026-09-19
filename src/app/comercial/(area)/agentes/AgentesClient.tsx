@@ -125,7 +125,7 @@ type Estado =
   | { fase: "erro"; detalhe: string | null };
 
 const COR_MODO: Record<string, string> = {
-  IA: "border-violet-200 bg-violet-50 text-violet-700",
+  IA: "border-ia-200 bg-ia-50 text-ia-700",
   HUMANO: "border-sky-200 bg-sky-50 text-sky-700",
   HIBRIDO: "border-teal-200 bg-teal-50 text-teal-700",
 };
@@ -154,15 +154,15 @@ const SELO: Record<CodigoDeEstado, { texto: string; tom: string }> = {
   },
   DESLIGADO: {
     texto: "COM RUNTIME · desligado",
-    tom: "border-slate-300 bg-slate-100 text-slate-700",
+    tom: "border-line2 bg-chip text-ink2",
   },
   NAO_MEDIDO: {
     texto: "COM RUNTIME · não medido",
-    tom: "border-slate-300 bg-slate-100 text-slate-700",
+    tom: "border-line2 bg-chip text-ink2",
   },
   POSTURA_DE_OUTRO_RUNTIME: {
     texto: "POSTURA DE OUTRO RUNTIME",
-    tom: "border-violet-300 bg-violet-50 text-violet-800",
+    tom: "border-ia-200 bg-ia-50 text-ia-800",
   },
   SEM_RUNTIME: {
     texto: "FICHA SEM RUNTIME",
@@ -321,7 +321,7 @@ export function AgentesClient() {
           <GrupoDaMatriz
             titulo="Postura de outro runtime"
             nota="Não é um segundo cérebro: o runtime apontado executa esta ficha sob a mesma voz."
-            tom="border-violet-200 bg-violet-50/40"
+            tom="border-ia-200 bg-ia-50/40"
             linhas={posturas}
           />
           <GrupoDaMatriz
@@ -418,7 +418,7 @@ function GrupoDaMatriz({
                   {l.executorReal ? (
                     <code className="break-all text-[11.5px] text-ink2">{l.executorReal}</code>
                   ) : l.executadaPor ? (
-                    <span className="text-[12px] text-violet-800">
+                    <span className="text-[12px] text-ia-800">
                       executada pela ficha {l.executadaPor}
                     </span>
                   ) : (
