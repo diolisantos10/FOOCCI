@@ -16,7 +16,7 @@ name: Prospecção — rodada das 9h
 
 on:
   schedule:
-    - cron: "0 12 * * 1-5"
+    - cron: "0 12 * * 1-6"
   workflow_dispatch:
     inputs:
       teto:

@@ -16,7 +16,12 @@
 # disparo responde `ligada: false` e não toca em ninguém. Ligar é decisão do
 # dono, e ela se toma na variável — não neste arquivo.
 #
-# Dias úteis, 11:00–23:40 UTC = 8h–20h40 de São Paulo.
+# Segunda a sexta, 11:00–23:40 UTC = 8h–20h40 de São Paulo.
+# Sábado, 12:00–17:40 UTC = 9h–14h40 de São Paulo — a janela que o CEO decidiu
+# em 18/09/2026 ("ao sábado das nove às quatorze horas"). Ela estava no código
+# (`janelaComercial.ts`) e NENHUM agendador a alcançava: decisão implementada
+# pela metade é decisão não implementada. O portão de horário continua sendo o
+# código, não este arquivo — aqui só se diz quando bater na porta.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Comercial — recepção do lead que chega sozinho
@@ -24,6 +29,7 @@ name: Comercial — recepção do lead que chega sozinho
 on:
   schedule:
     - cron: "*/20 11-23 * * 1-5"
+    - cron: "*/20 12-17 * * 6"
   workflow_dispatch:
     inputs:
       teto:
