@@ -95,7 +95,7 @@ const COR_TEMPERATURA: Record<string, string> = {
   QUENTE: "bg-orange-50 text-orange-700 border-orange-200",
   MORNO: "bg-amber-50 text-amber-700 border-amber-200",
   FRIO: "bg-sky-50 text-sky-700 border-sky-200",
-  DESQUALIFICADO: "bg-gray-100 text-gray-600 border-gray-200",
+  DESQUALIFICADO: "bg-chip text-ink2 border-line2",
   NUTRICAO: "bg-cyan-50 text-cyan-700 border-cyan-200",
 };
 

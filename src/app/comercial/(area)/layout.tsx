@@ -30,19 +30,33 @@
  */
 
 import { redirect } from "next/navigation";
+import type { InternalRole } from "@prisma/client";
 import { lerSessaoInterna } from "@/lib/internal-auth";
 import { precisaTrocarSenha, ROTA_DA_TROCA } from "@/lib/troca-de-senha";
 import { ENTRADA, menuDoComercial } from "@/lib/sala/rotas";
-import { SairDoComercial } from "./SairDoComercial";
-import { MenuDaSala } from "./_pecas/MenuDaSala";
+import { MolduraDaSala } from "./_moldura/MolduraDaSala";
 
 export const metadata = {
   title: { default: "Comercial Foocci", template: "%s · Comercial Foocci" },
 };
 
+/**
+ * O cargo como gente diz, e não como o banco grava.
+ *
+ * `GERENTE_DEPARTAMENTO` embaixo do próprio nome, na barra, é o sistema falando
+ * a língua do sistema para quem só quer saber com que crachá está logado.
+ */
+const CARGO: Readonly<Record<InternalRole, string>> = {
+  MASTER_CEO: "CEO",
+  DIRETOR_FOOCCI: "Diretor Foocci",
+  GERENTE_DEPARTAMENTO: "Gerente de departamento",
+  AGENTE_HUMANO: "Vendedor / SDR",
+  AUDITOR_QA: "Auditoria / QA",
+  AGENTE_IA: "Agente de IA",
+};
+
 export default async function ComercialLayout({ children }: { children: React.ReactNode }) {
   const sessao = lerSessaoInterna();
-
   // ── ⚠️ UMA PORTA SÓ, E ELA TEM NOME ──────────────────────────────────────
   //
   // Antes eram duas: a sessão da pessoa **ou** a senha da casa. A senha da casa
@@ -85,31 +99,8 @@ export default async function ComercialLayout({ children }: { children: React.Re
   }));
 
   return (
-    <div className="flex h-screen flex-col bg-canvas">
-      <header className="shrink-0 border-b border-line bg-paper">
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
-          <div className="flex min-w-0 items-baseline gap-2.5">
-            <span className="text-[15px] font-semibold tracking-[-.02em] text-ink">
-              Comercial
-            </span>
-            <span className="truncate text-[12.5px] text-muted">Foocci</span>
-          </div>
-
-          <div className="flex min-w-0 items-center gap-3">
-            {/* O nome de quem está logado fica visível o tempo todo. Numa sala
-                onde assumir conversa é ato registrado, "quem sou eu agora" não
-                pode depender de memória — nem de abrir outra tela para conferir. */}
-            <span className="hidden truncate text-[12.5px] text-ink2 sm:block">
-              {sessao.nome}
-            </span>
-            <SairDoComercial />
-          </div>
-        </div>
-
-        <MenuDaSala menu={menu} />
-      </header>
-
-      <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <MolduraDaSala menu={menu} nome={sessao.nome} cargo={CARGO[sessao.role] ?? sessao.role}>
+      {children}
+    </MolduraDaSala>
   );
 }

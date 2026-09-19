@@ -188,7 +188,7 @@ export function SecaoEstados({ dados }: { dados: DadosDoCrm }) {
             <p className="mt-0.5 text-[11.5px] text-muted">
               {e.cadencia ? (
                 <>
-                  cadência: <code className="rounded bg-slate-100 px-1 text-ink2">{e.cadencia}</code>
+                  cadência: <code className="rounded bg-chip px-1 text-ink2">{e.cadencia}</code>
                 </>
               ) : (
                 <span className="italic">nenhuma cadência automática atende este estado</span>
