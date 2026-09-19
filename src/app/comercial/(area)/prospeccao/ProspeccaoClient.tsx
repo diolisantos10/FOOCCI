@@ -25,14 +25,14 @@
  * 3. O resumo da Base fria — quantos contatos existem, quantos PENDENTES
  *    (ainda não passaram pelas travas de opt-out/histórico/canal — ver
  *    P0.3), e a ficha de cada um (colunas principais + detalhe expansível).
- * 4. A situação da fila automática — a capacidade REAL da próxima rodada
- *    (não uma prévia truncada), a última rodada, e "Rodar agora", que exige
- *    confirmação e fica desabilitado sem saldo, sem canal ou com a
- *    prospecção desligada.
- * 5. A conferência — auditoria somente leitura sob demanda (botão "Conferir
- *    agora"), que funciona mesmo com a prospecção pausada e o envio
- *    desligado. Nunca materializa lead nem consome item; ver
- *    `conferirElegibilidadeReal` em `selecao.ts`.
+ 4. O disparo manual — só o botão "Rodar agora", com confirmação. O painel
+ *    "Fila automática" (capacidade da próxima rodada, prévia dos 50, última
+ *    rodada) SAIU por ordem do CEO em 19/09/2026; os tetos que ele mostrava
+ *    continuam valendo no código, porque eles não eram painel, eram trava.
+ * 5. A gaveta dos barrados — por que cada contato foi recusado, motivo a
+ *    motivo, e as duas ações de limpeza (arquivar os definitivos, apagar quem
+ *    não tem WhatsApp nem e-mail). Substituiu a "Conferência da Base fria",
+ *    que mostrava sete números e nenhum motivo. Ver `gavetaDosBarrados.ts`.
  *
  * ── ⚠️ NADA AQUI ENVIA MENSAGEM SOZINHO ─────────────────────────────────────
  *
@@ -130,44 +130,29 @@ interface ResultadoDaRodada {
   falha: { itemId: string | null; motivo: string; detalhe: string } | null;
 }
 
-/** Um item avaliado na conferência — mesma forma de `CandidatoAAbordagem` em `selecao.ts`. */
-interface CandidatoDaAmostra {
-  itemId: string;
-  nome: string | null;
-  whatsapp: string;
-  decisao: { sendable: boolean; reason: string | null; detail: string };
+/**
+ * ⭐ A GAVETA DOS BARRADOS — espelha `RaioXDaGaveta` (`gavetaDosBarrados.ts`),
+ * servida por `?recorte=gaveta` (`route.ts`). Não reimplementa regra nenhuma:
+ * quem classifica o motivo é o mesmo portão que a rodada usa.
+ */
+interface MotivoNaGaveta {
+  motivo: string;
+  rotulo: string;
+  quantidade: number;
+  /** `true` quando o bloqueio se resolve sozinho com o tempo (horário, descanso, canal). */
+  passaSozinho: boolean;
+  terminal: boolean;
 }
 
-/**
- * ⭐ A CONFERÊNCIA — auditoria somente leitura, ver `conferirElegibilidadeReal`
- * (`selecao.ts`) e `?recorte=conferencia` (`route.ts`).
- *
- * Espelha `ResultadoDaConferencia` campo a campo — não reimplementa nada, só
- * mostra o que o backend calculou pelas MESMAS regras da rodada.
- *
- * ⛔ 11/09/2026: `elegiveis`/`capacidadeReal` viraram `elegiveisSeAtivar`/
- * `capacidadeAoAtivar` (a hipótese "se a operação estivesse ligada") mais
- * `capacidadeOperacionalAgora` (o fato — zero enquanto canal, envio ou
- * prospecção estiverem desligados). Ver o comentário grande em `selecao.ts`.
- */
-interface Conferencia {
+interface Gaveta {
   pendentes: number;
-  elegiveisSeAtivar: number;
+  avaliados: number;
+  liberados: number;
   barrados: number;
-  itensAvaliados: number;
   varreuTudo: boolean;
-  alvoDeElegiveis: number;
-  canalConfigurado: boolean;
-  envioAutorizado: boolean;
-  prospeccaoLigada: boolean;
-  usadosHoje: number;
-  tetoDoDia: number;
-  saldoDiario: number;
-  usadosNaJanela: number;
-  saldoDaJanela: number;
-  capacidadeAoAtivar: number;
-  capacidadeOperacionalAgora: number;
-  previaAmostral: CandidatoDaAmostra[];
+  porMotivo: MotivoNaGaveta[];
+  semWhatsappNemEmail: number;
+  protegidosPorOptOut: number;
 }
 
 /** Linhas de detalhe que só aparecem quando a pessoa expande o contato. */
@@ -239,46 +224,43 @@ function FichaDoContato({ c }: { c: ContatoDaBase }) {
 }
 
 /**
- * ⭐ A CONFERÊNCIA — seção 5, auditoria somente leitura da Base fria.
+ * ⭐ A GAVETA DOS BARRADOS — por que cada contato foi recusado, e quanto lixo dá para apagar.
  *
- * ── POR QUE É UM BOTÃO, E NÃO CARREGA SOZINHA ────────────────────────────────
+ * ── POR QUE ELA SUBSTITUIU A "CONFERÊNCIA DA BASE FRIA" ─────────────────────
  *
- * `?recorte=conferencia` pode varrer milhares de itens PENDENTE até confirmar
- * 2.000 elegíveis — é exatamente o que a auditoria pediu, mas rodar essa
- * varredura toda vez que ALGUÉM abre a tela de prospecção seria pesado para um
- * número que a operação não olha o tempo todo. O botão deixa a conferência
- * explícita: quem clica sabe que pediu uma varredura de verdade.
+ * A conferência respondia "quantos elegíveis eu tenho" com sete números e uma
+ * amostra de 50 linhas — e no dia em que a amostra veio "0 prontos · 50
+ * barrados" ela não dizia POR QUÊ, que era a única pergunta que importava.
+ * Ordem do CEO, 19/09/2026: *"esses cinquenta precisam ir para alguma gaveta
+ * para ser detectado. Por que foi barrado?"*
  *
- * ── E POR QUE ELA FUNCIONA COM TUDO DESLIGADO ────────────────────────────────
+ * Esta seção responde isso: uma linha por motivo, com a contagem ao lado.
  *
- * Ao contrário da seção "Fila automática" (que usa `montarFilaDeProspeccao` e
- * fica vazia com a prospecção desligada), esta seção lê
- * `conferirElegibilidadeReal`, que avalia os pendentes pelas mesmas regras DO
- * CONTATO independente do canal e do interruptor — por isso ela é a resposta
- * certa para "quantos contatos elegíveis eu tenho, antes de ligar?".
+ * ── ⛔ E AS DUAS AÇÕES QUE ESCREVEM ─────────────────────────────────────────
  *
- * ⚠️ Por isso a tela mostra DOIS números de capacidade, e não um: "se a
- * operação for ativada" (a hipótese, sempre calculável) e "agora" (o fato —
- * fica em zero sozinho enquanto o canal, o envio ou a prospecção estiverem
- * desligados). Confundir os dois foi exatamente o defeito da correção de
- * 11/09/2026: mostrar zero elegíveis com `FOOCCI_SDR_SEND_ENABLED` desligado,
- * quando a pergunta certa era sobre os CONTATOS, não sobre a chave.
+ * "Arquivar" só mexe nos motivos terminais — opt-out, sem telefone, telefone
+ * improvável, teto de tentativas. Horário e canal desligado NUNCA arquivam:
+ * fariam a base sumir às 8h da manhã. "Apagar" pede confirmação com o número
+ * na frente, e quem pediu silêncio nunca entra na conta. As duas regras moram
+ * em `gavetaDosBarrados.ts` — aqui é só o botão.
  */
-function ConferenciaDaBase() {
+function GavetaDosBarrados() {
   const [estado, setEstado] = useState<
     | { fase: "ociosa" }
     | { fase: "carregando" }
-    | { fase: "pronta"; dados: Conferencia }
+    | { fase: "pronta"; dados: Gaveta }
     | { fase: "erro"; detalhe: string }
   >({ fase: "ociosa" });
+  const [recado, setRecado] = useState<string | null>(null);
 
-  const conferir = useCallback(async () => {
+  const abrirGaveta = useCallback(async () => {
     setEstado({ fase: "carregando" });
+    setRecado(null);
     try {
-      const res = await fetch(`${ROTA}?recorte=conferencia`, { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as { data?: Conferencia; error?: string } | null;
+      const res = await fetch(`${ROTA}?recorte=gaveta`, { cache: "no-store" });
+      const json = (await res.json().catch(() => null)) as { data?: Gaveta; error?: string } | null;
       if (!res.ok || !json?.data) {
-        setEstado({ fase: "erro", detalhe: json?.error ?? `A conferência falhou (${res.status}).` });
+        setEstado({ fase: "erro", detalhe: json?.error ?? `Não consegui abrir a gaveta (${res.status}).` });
         return;
       }
       setEstado({ fase: "pronta", dados: json.data });
@@ -287,25 +269,80 @@ function ConferenciaDaBase() {
     }
   }, []);
 
+  const acao = useCallback(
+    async (corpo: Record<string, unknown>) => {
+      const res = await fetch(ROTA, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo),
+      });
+      const json = (await res.json().catch(() => null)) as { data?: any; error?: string } | null;
+      if (!res.ok) {
+        setRecado(json?.error ?? `A ação foi recusada (${res.status}).`);
+        return null;
+      }
+      return json?.data ?? null;
+    },
+    [],
+  );
+
+  const arquivar = useCallback(async () => {
+    const d = await acao({ acao: "arquivarBarrados" });
+    if (d) {
+      setRecado(`${d.arquivados} contato(s) foram para a gaveta, com o motivo registrado.`);
+      abrirGaveta();
+    }
+  }, [acao, abrirGaveta]);
+
+  /**
+   * ⛔ DOIS PASSOS, SEMPRE. O primeiro CONTA (o servidor não apaga sem
+   * `confirmar`), o segundo apaga — e o número que aparece na confirmação veio
+   * do servidor, não de uma estimativa da tela.
+   */
+  const apagar = useCallback(async () => {
+    setRecado(null);
+    const previa = await acao({ acao: "descartarInuteis" });
+    if (!previa) return;
+    if (previa.apagaveis === 0) {
+      setRecado(
+        `Nada a apagar: ${previa.candidatos} sem WhatsApp nem e-mail, e ${previa.protegidosPorOptOut} deles são protegidos por terem pedido silêncio.`,
+      );
+      return;
+    }
+    const ok = window.confirm(
+      `Vou apagar ${previa.apagaveis} contato(s) sem WhatsApp válido e sem e-mail, de uma base de ${previa.antes}. ` +
+        `${previa.protegidosPorOptOut} que pediram para não receber mais NÃO serão apagados. Isto não tem volta. Confirmar?`,
+    );
+    if (!ok) return;
+    const feito = await acao({ acao: "descartarInuteis", confirmar: true });
+    if (feito) {
+      setRecado(`Apagados ${feito.apagados}. A base foi de ${feito.antes} para ${feito.depois} contatos.`);
+      abrirGaveta();
+    }
+  }, [acao, abrirGaveta]);
+
   return (
     <section className="rounded-xl border border-line bg-paper p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Conferência da Base fria</h2>
+          <h2 className="text-[15px] font-semibold text-ink">Gaveta dos barrados</h2>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            Audita quantos contatos são elegíveis pelas regras do contato — funciona com o
-            canal desligado, o envio desautorizado ou a prospecção pausada.{" "}
-            <strong className="text-ink">Só lê: não cria lead, não consome item, não envia nada.</strong>
+            Quem a fila recusou, e <strong className="text-ink">por quê</strong>, motivo a motivo.{" "}
+            Abrir a gaveta <strong className="text-ink">só lê</strong>: não apaga, não envia, não consome contato.
           </p>
         </div>
         <button
           disabled={estado.fase === "carregando"}
-          onClick={conferir}
+          onClick={abrirGaveta}
           className="rounded-lg border border-line px-3 py-1.5 text-[13px] font-semibold text-ink transition-colors hover:bg-canvas disabled:opacity-50"
         >
-          {estado.fase === "carregando" ? "Conferindo…" : "Conferir agora"}
+          {estado.fase === "carregando" ? "Abrindo…" : "Abrir a gaveta"}
         </button>
       </div>
+
+      {recado && (
+        <p className="mt-3 rounded-lg border border-line px-3 py-2 text-[12.5px] text-ink">{recado}</p>
+      )}
 
       {estado.fase === "erro" && (
         <p className="mt-3 rounded-lg border border-line px-3 py-2 text-[12.5px] text-ink">
@@ -315,92 +352,59 @@ function ConferenciaDaBase() {
 
       {estado.fase === "pronta" && (
         <div className="mt-3 space-y-3 border-t border-line pt-3">
-          {/* ── ESTADO OPERACIONAL — os fatos de agora, não a hipótese ──── */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-            <span className={estado.dados.canalConfigurado ? "text-ink2" : "text-ink font-semibold"}>
-              Canal configurado: {estado.dados.canalConfigurado ? "sim" : "não"}
-            </span>
-            <span className={estado.dados.envioAutorizado ? "text-ink2" : "text-ink font-semibold"}>
-              Envio autorizado: {estado.dados.envioAutorizado ? "ligado" : "desligado"}
-            </span>
-            <span className={estado.dados.prospeccaoLigada ? "text-ink2" : "text-ink font-semibold"}>
-              Prospecção: {estado.dados.prospeccaoLigada ? "ligada" : "pausada"}
-            </span>
-          </div>
+          <p className="text-[12.5px] text-muted">
+            <span className="font-semibold text-ink">{estado.dados.avaliados}</span> contatos
+            examinados de <span className="font-semibold text-ink">{estado.dados.pendentes}</span>{" "}
+            pendentes ·{" "}
+            <span className="font-semibold text-ink">{estado.dados.liberados}</span> passariam ·{" "}
+            <span className="font-semibold text-ink">{estado.dados.barrados}</span> barrados
+            {estado.dados.varreuTudo ? "" : " (varredura parcial)"}
+          </p>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-            <div>
-              <p className="text-[11px] uppercase text-muted">Pendentes</p>
-              <p className="text-[15px] font-semibold text-ink tabular-nums">{estado.dados.pendentes}</p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase text-muted">Elegíveis se ativar</p>
-              <p className="text-[15px] font-semibold text-ink tabular-nums">
-                {estado.dados.varreuTudo ? "" : "≥ "}
-                {estado.dados.elegiveisSeAtivar}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase text-muted">Barrados (regras do contato)</p>
-              <p className="text-[15px] font-semibold text-ink tabular-nums">{estado.dados.barrados}</p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase text-muted">Capacidade ao ativar</p>
-              <p className="text-[15px] font-semibold text-ink tabular-nums">{estado.dados.capacidadeAoAtivar}</p>
-            </div>
-          </div>
+          <ul className="space-y-1">
+            {estado.dados.porMotivo.map((m) => (
+              <li key={m.motivo} className="flex items-center justify-between gap-3 text-[12.5px]">
+                <span className="truncate text-ink">
+                  {m.rotulo}
+                  {m.passaSozinho && (
+                    <span className="text-muted"> · passa sozinho com o tempo</span>
+                  )}
+                </span>
+                <span className="font-semibold tabular-nums text-ink">{m.quantidade}</span>
+              </li>
+            ))}
+            {estado.dados.porMotivo.length === 0 && (
+              <li className="text-[12.5px] text-muted">Nenhum barrado entre os examinados.</li>
+            )}
+          </ul>
 
-          {/* ⭐ O número que importa para "vai sair mensagem agora?" — zero
-              sozinho enquanto canal, envio ou prospecção estiverem desligados. */}
-          <div className="rounded-lg border border-line bg-canvas px-3 py-2">
-            <p className="text-[11px] uppercase text-muted">Capacidade operacional AGORA</p>
-            <p className="text-[18px] font-semibold text-ink tabular-nums">
-              {estado.dados.capacidadeOperacionalAgora}
+          <div className="rounded-lg border border-line bg-canvas px-3 py-2 text-[12.5px]">
+            <p className="text-ink">
+              <span className="font-semibold">{estado.dados.semWhatsappNemEmail}</span> sem WhatsApp
+              válido e sem e-mail — não há como falar com essas pessoas.
             </p>
-            {estado.dados.capacidadeOperacionalAgora === 0 && estado.dados.capacidadeAoAtivar > 0 && (
-              <p className="mt-0.5 text-[12px] text-muted">
-                Zero porque o canal, o envio ou a prospecção estão desligados — não porque faltam
-                contatos elegíveis.
+            {estado.dados.protegidosPorOptOut > 0 && (
+              <p className="mt-0.5 text-muted">
+                Destes, {estado.dados.protegidosPorOptOut} pediram para não receber mais e{" "}
+                <strong className="text-ink">nunca são apagados</strong>: apagar o registro faria a
+                gente abordá-los de novo na próxima lista.
               </p>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12.5px] text-muted sm:grid-cols-3">
-            <p>
-              Saldo diário: <span className="font-semibold text-ink">{estado.dados.saldoDiario}</span>{" "}
-              ({estado.dados.usadosHoje}/{estado.dados.tetoDoDia} hoje)
-            </p>
-            <p>
-              Saldo da janela Meta: <span className="font-semibold text-ink">{estado.dados.saldoDaJanela}</span>{" "}
-              ({estado.dados.usadosNaJanela} nas últimas 24h)
-            </p>
-            <p>
-              {estado.dados.itensAvaliados} itens avaliados —{" "}
-              {estado.dados.varreuTudo
-                ? "varredura completa"
-                : `parou ao confirmar a meta de ${estado.dados.alvoDeElegiveis}`}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[12px] font-semibold text-ink">
-              Amostra dos primeiros {estado.dados.previaAmostral.length} itens avaliados
-            </p>
-            <p className="text-[11.5px] text-muted">
-              Isto é uma AMOSTRA da varredura — não a lista completa de elegíveis nem de barrados.
-            </p>
-            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto">
-              {estado.dados.previaAmostral.map((c) => (
-                <li key={c.itemId} className="flex items-center justify-between gap-2 text-[12px]">
-                  <span className="truncate text-ink">
-                    {c.nome ?? "Sem nome"} · {c.whatsapp}
-                  </span>
-                  <span className={c.decisao.sendable ? "text-ink2" : "text-muted"}>
-                    {c.decisao.sendable ? "elegível" : c.decisao.detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={arquivar}
+              className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+            >
+              Arquivar os barrados definitivos
+            </button>
+            <button
+              onClick={apagar}
+              className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink transition-colors hover:bg-canvas"
+            >
+              Apagar quem não tem WhatsApp nem e-mail…
+            </button>
           </div>
         </div>
       )}
@@ -706,34 +710,28 @@ export function ProspeccaoClient() {
         </ul>
       </section>
 
-      {/* ── 4. SITUAÇÃO DA FILA AUTOMÁTICA ───────────────────────────────── */}
+      {/* ── 4. O DISPARO MANUAL — o que sobrou da "Fila automática" ──────── */}
+      {/*
+          ⛔ O PAINEL SAIU; O MECANISMO FICOU. Ordem do CEO, 19/09/2026: *"eu
+          não vejo necessidade nenhuma dessas telas… tudo que está na base fria
+          está disponível para os nossos agentes abordarem."* Saíram da tela a
+          capacidade da próxima rodada, a prévia dos 50 e a última rodada.
+
+          ⚠️ O QUE **NÃO** SAIU, E POR QUÊ: o teto por rodada, o limite diário e
+          a janela de 24h da Meta continuam valendo em `selecao.ts` e no freio
+          de ritmo — eles protegem o número de WhatsApp de ser banido, e não
+          eram painel, eram trava.
+
+          ⚠️ E O BOTÃO FICOU DE PROPÓSITO: "Rodar agora" é o ÚNICO jeito de
+          disparar uma rodada fora do agendador das 9h. Tirá-lo junto com o
+          painel deixaria a casa sem interruptor até a manhã seguinte. */}
       <section className="rounded-xl border border-line bg-paper p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-[15px] font-semibold text-ink">Fila automática</h2>
-            {/* ⭐ P0.3 — capacidade REAL da rodada, calculada pelos saldos —
-                não a contagem da prévia de 50, que subestimaria numa fila
-                maior. */}
-            <p className="mt-1 text-[12.5px] text-ink2">
-              Capacidade da próxima rodada:{" "}
-              <span className="font-semibold text-ink">{capacidadeDaRodada}</span> contatos
-            </p>
-            {fila.motivoDaFilaVazia ? (
-              <p className="mt-1 text-[12.5px] text-muted">{fila.motivoDaFilaVazia}</p>
-            ) : (
-              <p className="mt-1 text-[12.5px] text-muted">
-                Prévia dos 50 primeiros da fila:{" "}
-                <span className="font-semibold text-ink">{fila.liberados.length}</span> prontos ·{" "}
-                <span className="font-semibold text-ink">{fila.barrados.length}</span> barrados
-                {/* Não é o total da fila — só o que a consulta olhou. */}
-              </p>
-            )}
-            <p className="mt-1 text-[12px] text-muted">
-              {interruptor.ultimaRodadaAutomaticaEm
-                ? `Última rodada: ${new Date(interruptor.ultimaRodadaAutomaticaEm).toLocaleString("pt-BR")}${
-                    interruptor.ultimaRodadaAutomaticaPor ? ` · ${interruptor.ultimaRodadaAutomaticaPor}` : ""
-                  }`
-                : "Nenhuma rodada automática rodou ainda."}
+            <h2 className="text-[15px] font-semibold text-ink">Disparar uma rodada agora</h2>
+            <p className="mt-1 text-[12.5px] text-muted">
+              Fora da rodada automática das 9h. Os tetos de segurança (limite diário e a
+              janela de 24h da Meta) continuam valendo — eles protegem o número de ser banido.
             </p>
             {!ligada && (
               <p className="mt-1 text-[12px] text-muted">Desligado: a prospecção precisa estar ligada.</p>
@@ -764,8 +762,8 @@ export function ProspeccaoClient() {
         )}
       </section>
 
-      {/* ── 5. CONFERÊNCIA — auditoria somente leitura, sob demanda ─────── */}
-      <ConferenciaDaBase />
+      {/* ── 5. A GAVETA DOS BARRADOS — no lugar da conferência ───────────── */}
+      <GavetaDosBarrados />
 
       <EnriquecerModal
         aberto={modalEnriquecerAberto}

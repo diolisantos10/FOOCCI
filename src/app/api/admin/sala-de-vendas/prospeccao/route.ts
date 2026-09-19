@@ -69,6 +69,11 @@ import {
   ALVO_DE_ELEGIVEIS_NA_CONFERENCIA,
 } from "@/services/salaDeVendas/prospeccao/selecao";
 import {
+  raioXDaGaveta,
+  arquivarBarradosTerminais,
+  descartarSemWhatsappNemEmail,
+} from "@/services/salaDeVendas/prospeccao/gavetaDosBarrados";
+import {
   canalDeVendasPronto,
   isFoocciSalesChannelConfigured,
   isFoocciSdrSendEnabled,
@@ -128,7 +133,9 @@ type Acao =
   | "cancelarImportacao"
   | "abordar"
   | "rodada"
-  | "interruptor";
+  | "interruptor"
+  | "arquivarBarrados"
+  | "descartarInuteis";
 
 interface Corpo {
   acao?: Acao;
@@ -154,6 +161,8 @@ interface Corpo {
   // interruptor
   ligado?: boolean;
   pausar?: boolean;
+  /** ⛔ Descarte definitivo: sem isto a ação CONTA e não apaga nada. */
+  confirmar?: boolean;
   motivo?: string;
   horasEntreAbordagens?: number;
 }
@@ -181,6 +190,10 @@ const ACOES_QUE_AUTORIZAM = new Set<Acao>([
   "cancelarImportacao",
   "rodada",
   "interruptor",
+  // Arquivar e apagar contato é do mesmo tamanho que autorizar a lista — e
+  // apagar é o único dos dois que não tem volta.
+  "arquivarBarrados",
+  "descartarInuteis",
 ]);
 
 export async function GET(req: NextRequest) {
@@ -194,6 +207,7 @@ export async function GET(req: NextRequest) {
   if (recorte === "importacao") return listarContatosDaImportacao(params);
   if (recorte === "base") return listarBaseFria(params);
   if (recorte === "conferencia") return conferirParaAuditoria(params);
+  if (recorte === "gaveta") return raioXParaGaveta();
 
   const [fila, config, totalNaBase, pendentesNaBase] = await Promise.all([
     // Teto de leitura: sem ele, um teto diário alto faria cada abertura da tela
@@ -543,6 +557,18 @@ async function conferirParaAuditoria(params: URLSearchParams) {
   return NextResponse.json({ ok: true, data: conferencia });
 }
 
+/**
+ * A GAVETA DOS BARRADOS — quantos de cada motivo, só leitura.
+ *
+ * Responde a pergunta que a tela nunca respondia: o painel dizia "50 barrados"
+ * e não dizia POR QUÊ, o que obrigava a abrir o código para saber se a base
+ * estava ruim ou se era uma chave desligada. Ver `gavetaDosBarrados.ts`.
+ */
+async function raioXParaGaveta() {
+  const raioX = await raioXDaGaveta(prisma);
+  return NextResponse.json({ ok: true, data: raioX });
+}
+
 export async function POST(req: NextRequest) {
   const portao = await guardarSalaDeVendas(req, "mexer_na_prospeccao");
   if (!portao.ok) return portao.resposta;
@@ -858,6 +884,29 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, data: config });
+  }
+
+  // ── ARQUIVAR OS BARRADOS TERMINAIS — a gaveta, com o motivo gravado ──────
+  //
+  // Só os motivos que nunca passam sozinhos (opt-out, sem telefone, telefone
+  // improvável, teto de tentativas). Horário, descanso e canal desligado NÃO
+  // arquivam ninguém: arquivá-los às 8h da manhã esvaziaria a base antes da
+  // rodada das 9h. A regra mora em `gavetaDosBarrados.ts`, não aqui.
+  if (c.acao === "arquivarBarrados") {
+    const r = await arquivarBarradosTerminais(prisma);
+    return NextResponse.json({ ok: true, data: r });
+  }
+
+  // ── ⛔ O DESCARTE DEFINITIVO — nunca automático, nunca silencioso ─────────
+  //
+  // Sem `confirmar: true` esta ação CONTA e vai embora. É de propósito: o CEO
+  // manda rodar, a operação diz quantos vai apagar, e só então apaga. E quem
+  // pediu silêncio nunca é apagado — a trava é do serviço, e tem teste.
+  if (c.acao === "descartarInuteis") {
+    const r = await descartarSemWhatsappNemEmail(prisma, {
+      ...(c.confirmar === true ? { confirmar: true } : {}),
+    });
+    return NextResponse.json({ ok: true, data: r });
   }
 
   return NextResponse.json({ ok: false, error: "Ação desconhecida." }, { status: 400 });
