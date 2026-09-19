@@ -29,6 +29,7 @@ import type { Prisma, PrismaClient, ModoDeDistribuicao } from "@prisma/client";
 import {
   lerCandidatos,
   podeReceber,
+  escolherResponsavel,
   leadsComSlaEstourado,
   descreverInaptidao,
   type CandidatoADistribuicao,
@@ -36,6 +37,24 @@ import {
 } from "../distribuicao";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * ⭐ AS DUAS FUNÇÕES PURAS DA DECISÃO, REPASSADAS POR AQUI.
+ *
+ * A tela simula no navegador, e tem que simular com a FUNÇÃO REAL — uma cópia
+ * "de tela" mostraria o que deveria acontecer, e a divergência só apareceria
+ * num lead perdido.
+ *
+ * Elas saem por este módulo, e não direto de `../distribuicao`, por duas
+ * razões que apontam para o mesmo lugar: o contrato da frente comercial manda
+ * a tela consumir **o panorama do serviço** e nada mais, e o nome do módulo de
+ * distribuição é também o nome da ROTA de escrita que a tela tem proibido
+ * alcançar. Um caminho só de entrada deixa o contrato legível.
+ *
+ * ⚠️ São puras e não tocam o banco: não distribuem, não gravam, não movem lead.
+ */
+export { escolherResponsavel, podeReceber } from "../distribuicao";
+export type { CandidatoADistribuicao, Aptidao, Escolha } from "../distribuicao";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // O CATÁLOGO DE REGRAS — o que existe, e o que só está desenhado
@@ -167,6 +186,103 @@ export interface AtendenteNoMotor {
   /** O motivo da recusa, quando não está apto. */
   motivo: MotivoDaInaptidao | null;
   ultimoRecebimentoEm: string | null;
+  /** Fim da pausa, quando há. O simulador da tela precisa dele para reconstruir
+   *  o candidato EXATO que `podeReceber` avaliaria — sem este campo, a pausa
+   *  desapareceria na simulação e ela mentiria para o lado otimista. */
+  pausadoAte: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O PREVIEW — quem pegaria o próximo lead, e por qual regra
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A DECISÃO DO MOTOR PARA UM LEAD, nomeando a regra que pegou.
+ *
+ * ⚠️ Esta decisão é calculada com a MESMA função que a distribuição real chama
+ * (`escolherResponsavel`), sem cópia e sem versão "de tela". Um simulador que
+ * reimplementasse a regra mostraria o que deveria acontecer, não o que
+ * acontece — e a divergência só apareceria no lead perdido.
+ */
+export type DecisaoDoMotor =
+  | { roteia: true; paraUserId: string; paraNome: string; regra: string; porque: string }
+  | { roteia: false; regra: string; porque: string };
+
+export interface LeadNoPreview {
+  leadId: string;
+  codigo: string | null;
+  nome: string;
+  esperandoDesde: string;
+  /** `null` = a fonte não existe para este lead. NUNCA um valor plausível. */
+  produto: string | null;
+  regiao: string | null;
+  valorCents: number | null;
+  interesse: string | null;
+  prioritario: boolean;
+  atendidoPor: string;
+  decisao: DecisaoDoMotor;
+}
+
+export interface LogDeDecisao {
+  leadId: string;
+  leadNome: string;
+  quando: string;
+  nota: string;
+}
+
+/**
+ * ⭐ A CASCATA — o que aconteceria se a fila de agora fosse distribuída.
+ *
+ * Pura, e de propósito: é o que permite testar a decisão sem banco.
+ *
+ * Roda lead a lead e, a cada escolha, **soma 1 na carga do escolhido e carimba
+ * o recebimento nele**. Sem isso o preview mostraria a mesma pessoa recebendo
+ * os seis leads da fila, porque uma chamada isolada de `escolherResponsavel`
+ * não sabe da anterior — e o gerente leria uma concentração que não existiria.
+ */
+export function simularCascata(
+  modo: ModoDeDistribuicao,
+  candidatos: CandidatoADistribuicao[],
+  quantidade: number,
+  agora: Date,
+): DecisaoDoMotor[] {
+  const estado = candidatos.map((c) => ({ ...c }));
+  const nomePor = new Map(estado.map((c) => [c.userId, c.nome]));
+  const saida: DecisaoDoMotor[] = [];
+
+  for (let i = 0; i < quantidade; i += 1) {
+    const escolha = escolherResponsavel(modo, estado, agora);
+
+    if (!escolha.escolhido) {
+      saida.push(
+        escolha.motivo === "modoManual"
+          ? {
+              roteia: false,
+              regra: "Manual (fila aberta)",
+              porque:
+                "a distribuição está em MANUAL — ninguém é atribuído sozinho; a fila fica aberta para quem puxar",
+            }
+          : { roteia: false, regra: "Disponibilidade e capacidade", porque: descreverInaptidao(escolha.detalhe) },
+      );
+      continue;
+    }
+
+    saida.push({
+      roteia: true,
+      paraUserId: escolha.userId,
+      paraNome: nomePor.get(escolha.userId) ?? escolha.userId,
+      regra: modo === "DISPONIBILIDADE" ? "Menor carga" : modo === "ESPECIALIDADE" ? "Especialidade" : "Round-robin",
+      porque: escolha.porque,
+    });
+
+    const alvo = estado.find((c) => c.userId === escolha.userId);
+    if (alvo) {
+      alvo.carga += 1;
+      alvo.ultimoRecebimentoEm = agora;
+    }
+  }
+
+  return saida;
 }
 
 export interface QuadroDoSla {
@@ -189,6 +305,14 @@ export interface PanoramaDoRoteamento {
   /** Leads esperando dono agora. */
   semResponsavel: number;
   sla: QuadroDoSla;
+  /** Os leads REAIS que estão na fila agora, com a decisão que o motor tomaria. */
+  preview: LeadNoPreview[];
+  /** Por que o preview está vazio, quando está. */
+  previewVazio: string | null;
+  /** As decisões que o motor JÁ tomou, lidas do histórico. Nada é inventado. */
+  logs: LogDeDecisao[];
+  /** Por que não há log, quando não há. */
+  logsVazio: string | null;
   regrasQueExistem: readonly RegraQueExiste[];
   previstasNaoConstruidas: readonly RegraPrevista[];
   naoMedido: string[];
@@ -210,7 +334,7 @@ export async function panoramaDoRoteamento(
 ): Promise<PanoramaDoRoteamento> {
   const agora = params.agora ?? new Date();
 
-  const [config, candidatos, semResponsavel, comPrazo] = await Promise.all([
+  const [config, candidatos, semResponsavel, comPrazo, filaCrua, logsCrus] = await Promise.all([
     db.sdrIaConfig.findUnique({ where: { slug: "ta" }, select: { distribuicao: true } }),
     lerCandidatos(db),
     db.siteLead.count({
@@ -220,6 +344,35 @@ export async function panoramaDoRoteamento(
       },
     }),
     db.siteLead.count({ where: { slaVenceEm: { not: null } } }),
+    // A FILA DE VERDADE. Os cartões do preview saem daqui e de lugar nenhum
+    // mais: lead de exemplo escrito à mão viraria, no primeiro print, o número
+    // que a operação passa a repetir.
+    db.siteLead.findMany({
+      where: {
+        atendidoPor: { in: ["NINGUEM", "AGUARDANDO_HUMANO"] },
+        stage: { notIn: ["GANHO", "PERDIDO", "NUTRICAO"] },
+      },
+      orderBy: [{ prioritario: "desc" }, { createdAt: "asc" }],
+      take: 6,
+      select: {
+        id: true, codigo: true, nome: true, cidade: true, createdAt: true,
+        prioritario: true, temperatura: true, score: true, atendidoPor: true,
+        oportunidades: {
+          orderBy: { criadoEm: "desc" },
+          take: 1,
+          select: { valorPotencialCents: true, produtoDeInteresse: true },
+        },
+      },
+    }),
+    // O log de decisão do desenho. Fonte: a linha que a PRÓPRIA distribuição
+    // grava ao atribuir (`distribuicao.ts · distribuir`). Se ela nunca rodou,
+    // a aba fica vazia dizendo isso — nunca com decisão de mentira.
+    db.siteLeadInteraction.findMany({
+      where: { actor: "distribuicao" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { leadId: true, createdAt: true, nota: true, lead: { select: { nome: true } } },
+    }),
   ]);
 
   const modo = config?.distribuicao ?? MODO_PADRAO;
@@ -240,6 +393,7 @@ export async function panoramaDoRoteamento(
       apto: a.apto,
       motivo: a.motivo ?? null,
       ultimoRecebimentoEm: c.ultimoRecebimentoEm ? c.ultimoRecebimentoEm.toISOString() : null,
+      pausadoAte: c.pausadoAte ? c.pausadoAte.toISOString() : null,
     };
   });
 
@@ -266,6 +420,41 @@ export async function panoramaDoRoteamento(
           "Nenhum lead tem prazo de primeira resposta gravado. A consulta de SLA está de pé e correta; o que falta é alguém preencher `slaVenceEm` na entrada do lead — hoje nenhum código da casa escreve nessa coluna.",
       };
 
+  // ── O PREVIEW ──────────────────────────────────────────────────────────────
+  const decisoes = simularCascata(modo, candidatos, filaCrua.length, agora);
+
+  const preview: LeadNoPreview[] = filaCrua.map((l, i) => {
+    const op = l.oportunidades[0];
+    return {
+      leadId: l.id,
+      codigo: l.codigo,
+      nome: l.nome,
+      esperandoDesde: l.createdAt.toISOString(),
+      produto: op?.produtoDeInteresse ?? null,
+      regiao: l.cidade,
+      valorCents: op?.valorPotencialCents ?? null,
+      interesse: l.temperatura ? `${l.temperatura}${l.score === null ? "" : ` · score ${l.score}`}` : null,
+      prioritario: l.prioritario,
+      atendidoPor: l.atendidoPor,
+      decisao: decisoes[i]!,
+    };
+  });
+
+  const previewVazio = preview.length
+    ? null
+    : "Nenhum lead está esperando dono agora. O preview mostra a fila REAL — sem fila, não há o que prever, e lead de exemplo inventado aqui viraria número repetido em reunião.";
+
+  const logs: LogDeDecisao[] = logsCrus.map((l) => ({
+    leadId: l.leadId,
+    leadNome: l.lead.nome,
+    quando: l.createdAt.toISOString(),
+    nota: l.nota ?? "sem nota gravada",
+  }));
+
+  const logsVazio = logs.length
+    ? null
+    : "A distribuição automática nunca atribuiu um lead nesta base — não há uma decisão gravada para mostrar. O log só enche quando o motor sai do modo manual e roda.";
+
   const naoMedido: string[] = [];
   if (sla.naoMedido) naoMedido.push(sla.naoMedido);
   if (!candidatos.length) {
@@ -287,6 +476,10 @@ export async function panoramaDoRoteamento(
     porQueNinguemEstaApto,
     semResponsavel,
     sla,
+    preview,
+    previewVazio,
+    logs,
+    logsVazio,
     regrasQueExistem: REGRAS_QUE_EXISTEM,
     previstasNaoConstruidas: PREVISTAS_NAO_CONSTRUIDAS,
     naoMedido,
