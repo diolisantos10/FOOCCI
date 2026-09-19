@@ -13,6 +13,8 @@ import {
   aplicarStatus,
   avancaStatus,
   resumoDoTexto,
+  descricaoParaIA,
+  tipoDaMeta,
   janelaDe24h,
   marcarComoLidas,
   registrarFalhaDeEnvio,
@@ -310,14 +312,95 @@ describe("o que a lista de conversas mostra", () => {
       .toBe("📎 cardapio.pdf");
   });
 
-  it("conteúdo que o sistema não sabe representar aparece assim mesmo", () => {
-    // Nunca some. Mensagem que desaparece é conversa que mente.
-    expect(resumoDoTexto({ tipo: "NAO_SUPORTADO" })).toBe("📦 Conteúdo não suportado");
+  it("conteúdo que a tela não sabe mostrar diz O QUE É e POR QUE não aparece", () => {
+    // Nunca some, e nunca vira "não suportado" seco: esse rótulo não informava
+    // ninguém — nem o vendedor, nem quem ia consertar. O tipo cru está guardado
+    // desde a recepção exatamente para esta frase.
+    expect(resumoDoTexto({ tipo: "NAO_SUPORTADO", tipoCru: "location" }))
+      .toBe("📍 Localização enviada pelo cliente — o mapa ainda não abre aqui");
+    expect(resumoDoTexto({ tipo: "NAO_SUPORTADO", tipoCru: "contacts" }))
+      .toBe("👤 Contato compartilhado — a ficha ainda não abre aqui");
+  });
+
+  it("tipo cru que ninguém previu é NOMEADO, não escondido", () => {
+    // O `default` antigo apagava a única pista que tínhamos do que chegou.
+    expect(resumoDoTexto({ tipo: "NAO_SUPORTADO", tipoCru: "order" }))
+      .toContain("order");
   });
 
   it("a legenda serve de texto quando não há texto", () => {
     expect(resumoDoTexto({ tipo: "IMAGEM", legenda: "esse é meu cardápio" }))
       .toBe("esse é meu cardápio");
+  });
+});
+
+/**
+ * ⛔ O DEFEITO DE 19/09/2026, e por que ele vem ANTES da tela nestes testes.
+ *
+ * O CEO viu três caixas vazias na tela. A tela era o sintoma barato: o caro era
+ * que o Atendente **não estava sendo chamado** para mensagem de mídia, porque a
+ * condição do turno olhava só o campo `text` — e mídia da Meta traz as palavras
+ * do cliente em `caption`, nunca em `text`. Silêncio total para o cliente.
+ *
+ * `descricaoParaIA` é o contrato desse conserto: nunca devolve vazio quando
+ * chegou mídia, e nunca finge que o modelo enxergou a imagem.
+ */
+describe("o que a IA lê quando o cliente manda mídia", () => {
+  it("imagem SEM legenda não é mensagem vazia — e é isso que fazia a IA nem rodar", () => {
+    const t = descricaoParaIA({ tipo: "IMAGEM" });
+    expect(t.trim()).not.toBe("");
+    expect(t).toContain("imagem");
+  });
+
+  it("a legenda do cliente chega à IA como palavra dele, junto com o fato da imagem", () => {
+    const t = descricaoParaIA({ tipo: "IMAGEM", legenda: "esse é meu cardápio" });
+    expect(t).toContain("esse é meu cardápio");
+    expect(t).toContain("imagem");
+  });
+
+  it("NÃO finge que o modelo enxergou a foto", () => {
+    // Um resumo do tipo "o cliente enviou uma imagem de um cardápio" faria o
+    // modelo responder sobre um conteúdo que ninguém leu.
+    expect(descricaoParaIA({ tipo: "IMAGEM" })).toContain("não consegue ver");
+  });
+
+  it("documento chega com o nome do arquivo", () => {
+    expect(descricaoParaIA({ tipo: "DOCUMENTO", midiaNome: "cardapio.pdf" }))
+      .toContain("cardapio.pdf");
+  });
+
+  it("áudio declara que não foi transcrito, em vez de sumir", () => {
+    expect(descricaoParaIA({ tipo: "AUDIO" })).toContain("áudio");
+  });
+
+  it("texto de verdade passa intacto — nada de moldura em volta", () => {
+    expect(descricaoParaIA({ tipo: "TEXTO", texto: "Quanto custa?" })).toBe("Quanto custa?");
+  });
+
+  it("texto vence a legenda e não vira mídia", () => {
+    expect(descricaoParaIA({ tipo: "TEXTO", texto: "oi", legenda: "x" })).toBe("oi");
+  });
+});
+
+describe("o tipo da Meta virando o tipo da casa", () => {
+  it("figurinha É imagem — sabemos baixar e sabemos mostrar", () => {
+    // Era `NAO_SUPORTADO`, e a tela dizia "conteúdo não suportado" sobre um
+    // webp que a própria casa já sabia exibir.
+    const r = tipoDaMeta("sticker", "sticker");
+    expect(r.tipo).toBe("IMAGEM");
+    // O tipo cru NÃO se perde: figurinha e foto não são a mesma coisa para
+    // quem lê a conversa depois.
+    expect(r.tipoCru).toBe("sticker");
+  });
+
+  it("o que ninguém previu continua guardando o tipo cru", () => {
+    expect(tipoDaMeta("location")).toEqual({ tipo: "NAO_SUPORTADO", tipoCru: "location" });
+  });
+
+  it("imagem, áudio e documento seguem inalterados", () => {
+    expect(tipoDaMeta("image", "image").tipo).toBe("IMAGEM");
+    expect(tipoDaMeta("audio", "audio").tipo).toBe("AUDIO");
+    expect(tipoDaMeta("document", "document").tipo).toBe("DOCUMENTO");
   });
 });
 

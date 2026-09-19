@@ -32,6 +32,7 @@
  */
 
 import type { PrismaClient, Prisma } from "@prisma/client";
+import { descricaoParaIA } from "@/services/salaDeVendas/conversa";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -110,13 +111,18 @@ export async function juntarEntradasDoTurno(
     // gravação. Ordenar por `createdAt` embaralharia uma reentrega da Meta.
     orderBy: { ocorreuEm: "asc" },
     take: limite,
-    select: { id: true, texto: true, legenda: true, ocorreuEm: true },
+    // `tipo`/`tipoCru`/`midiaNome` entram porque uma entrada de mídia não é
+    // uma entrada vazia: `descricaoParaIA` a transforma em algo que o modelo lê.
+    select: { id: true, tipo: true, tipoCru: true, texto: true, legenda: true, midiaNome: true, ocorreuEm: true },
   });
 
   if (entradas.length === 0) return null;
 
+  // ⚠️ Era `(m.texto ?? m.legenda ?? "")`, e isso APAGAVA a mídia do turno: a
+  // foto sem legenda virava string vazia e caía no filtro abaixo. Três fotos
+  // seguidas viravam "nenhuma entrada" e o turno inteiro era descartado.
   const pedacos = entradas
-    .map((m) => (m.texto ?? m.legenda ?? "").trim())
+    .map((m) => descricaoParaIA(m).trim())
     .filter((t) => t !== "");
 
   if (pedacos.length === 0) return null;

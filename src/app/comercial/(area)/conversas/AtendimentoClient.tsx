@@ -73,6 +73,9 @@ import type { EventoDaFicha } from "@/services/salaDeVendas/linhaDoTempo";
 import { rotuloCurto, ETAPAS_NA_SALA } from "@/services/salaDeVendas/rotulosDaSala";
 import type { NomeDaFila, LeadNaFila } from "@/services/salaDeVendas/filas";
 import type { MensagemNaTela } from "@/services/salaDeVendas/conversa";
+// Módulo PURO de propósito (sem Prisma): é o que permite a tela usar o mesmo
+// rótulo do servidor sem arrastar o cliente do banco para o bundle.
+import { rotuloDoNaoSuportado, rotuloDeMidiaQueNaoAbriu } from "@/services/salaDeVendas/rotuloDeMidia";
 import { useCopiloto } from "./_copiloto";
 import { PainelDoCopiloto } from "./PainelDoCopiloto";
 
@@ -841,9 +844,13 @@ function Bolha({ m }: { m: MensagemNaTela }) {
             : "rounded-bl-sm border border-line bg-paper text-ink",
         )}
       >
+        {/* ⭐ A MÍDIA VEM ANTES DO TEXTO, porque é ela o que o cliente mandou:
+            a legenda é comentário sobre a foto, não a mensagem. */}
+        <AnexoDoCliente m={m} />
+
         {m.texto || m.legenda ? (
           <p className="whitespace-pre-wrap break-words">{m.texto ?? m.legenda}</p>
-        ) : (
+        ) : m.temMidia ? null : (
           <p className="italic text-muted">{descricaoDaMidia(m)}</p>
         )}
 
@@ -867,13 +874,92 @@ function Bolha({ m }: { m: MensagemNaTela }) {
   );
 }
 
+/**
+ * O ARQUIVO QUE O CLIENTE MANDOU, na bolha.
+ *
+ * ── O defeito que isto conserta (visto pelo CEO em 19/09/2026) ───────────────
+ * O lead mandou três mensagens e a tela mostrou três caixas vazias: "📦
+ * Conteúdo não suportado" e duas "🖼️ Imagem". O cliente falou com a gente e
+ * ninguém via o que ele disse — nem o humano que assume a conversa.
+ *
+ * 🔒 O `src` é a rota autenticada da Sala, pedindo pelo ID DA MENSAGEM. Não é
+ * a url da Meta, e não leva token: a url da Meta é temporária e autenticada, e
+ * colocá-la aqui vazaria a credencial para a rede do navegador. Quem confere se
+ * esta conversa é sua é o servidor, a cada pedido.
+ *
+ * ⚠️ `onError` existe porque a Meta EXPIRA a mídia (a janela é de dias, não de
+ * sempre). Uma imagem quebrada com o ícone padrão do navegador faria o vendedor
+ * achar que o sistema perdeu a mensagem; o rótulo diz que o arquivo existe e
+ * que o download falhou, que é outra coisa e é verdade.
+ */
+function AnexoDoCliente({ m }: { m: MensagemNaTela }) {
+  const [falhou, setFalhou] = useState(false);
+
+  if (!m.temMidia) return null;
+
+  const src = `/api/admin/sala-de-vendas/conversa/midia/${m.id}`;
+
+  if (falhou) {
+    return <p className="italic text-muted">{rotuloDeMidiaQueNaoAbriu(m.tipo, m.midiaNome)}</p>;
+  }
+
+  if (m.tipo === "IMAGEM") {
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={m.legenda ?? "Imagem enviada pelo cliente"}
+          onError={() => setFalhou(true)}
+          className="mb-1 max-h-72 w-full rounded-lg object-contain"
+        />
+      </a>
+    );
+  }
+
+  if (m.tipo === "AUDIO") {
+    return (
+      <audio controls src={src} onError={() => setFalhou(true)} className="mb-1 w-full max-w-[16rem]">
+        {rotuloDeMidiaQueNaoAbriu(m.tipo, m.midiaNome)}
+      </audio>
+    );
+  }
+
+  if (m.tipo === "VIDEO") {
+    return (
+      <video controls src={src} onError={() => setFalhou(true)} className="mb-1 max-h-72 w-full rounded-lg" />
+    );
+  }
+
+  // Documento e qualquer outro arquivo: nome + link. Não se tenta renderizar um
+  // PDF na bolha — o navegador já sabe fazer isso melhor numa aba.
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      className="mb-1 flex items-center gap-1.5 rounded-lg border border-line bg-chip px-2 py-1.5 text-[12.5px] underline"
+    >
+      📎 {m.midiaNome ?? "Arquivo enviado pelo cliente"}
+    </a>
+  );
+}
+
+/**
+ * O rótulo de quando NÃO HÁ arquivo para mostrar.
+ *
+ * "📦 Conteúdo não suportado" não informava ninguém. Agora o rótulo diz o que
+ * é e por que não aparece — e vem do mesmo módulo que o servidor usa na lista,
+ * para as duas telas nunca contarem histórias diferentes.
+ */
 function descricaoDaMidia(m: MensagemNaTela): string {
   switch (m.tipo) {
-    case "AUDIO": return "🎤 Áudio";
-    case "IMAGEM": return "🖼️ Imagem";
-    case "VIDEO": return "🎬 Vídeo";
-    case "DOCUMENTO": return m.midiaNome ? `📎 ${m.midiaNome}` : "📎 Documento";
-    default: return "📦 Conteúdo não suportado";
+    case "AUDIO": return "🎤 Áudio — o arquivo não foi guardado por nós";
+    case "IMAGEM": return "🖼️ Imagem — o arquivo não foi guardado por nós";
+    case "VIDEO": return "🎬 Vídeo — o arquivo não foi guardado por nós";
+    case "DOCUMENTO": return m.midiaNome ? `📎 ${m.midiaNome}` : "📎 Documento — o arquivo não foi guardado por nós";
+    case "NAO_SUPORTADO": return rotuloDoNaoSuportado(m.tipoCru);
+    default: return rotuloDoNaoSuportado(m.tipoCru);
   }
 }
 

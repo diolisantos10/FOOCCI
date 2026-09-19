@@ -33,6 +33,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { devolverReserva } from "./travaDeRepeticao";
 import { limparEntidades } from "./ta/agrupamento";
+import { rotuloDoNaoSuportado } from "./rotuloDeMidia";
+export { rotuloDoNaoSuportado } from "./rotuloDeMidia";
 import type {
   DirecaoDaMensagem,
   TipoDaMensagem,
@@ -201,11 +203,13 @@ async function atualizarEspelhoDaEntrada(db: Cliente, m: MensagemQueChegou): Pro
  * na lista de conversas parece defeito, e faz o vendedor abrir a conversa só
  * para descobrir o que chegou.
  */
+
 export function resumoDoTexto(m: {
   tipo: TipoDaMensagem;
   texto?: string | null;
   legenda?: string | null;
   midiaNome?: string | null;
+  tipoCru?: string | null;
 }): string {
   const escrito = (m.texto ?? m.legenda ?? "").trim();
   if (escrito) return escrito.slice(0, 280);
@@ -216,9 +220,53 @@ export function resumoDoTexto(m: {
     case "VIDEO": return "🎬 Vídeo";
     case "DOCUMENTO": return m.midiaNome ? `📎 ${m.midiaNome}` : "📎 Documento";
     case "TEMPLATE": return "📋 Modelo enviado";
-    case "NAO_SUPORTADO": return "📦 Conteúdo não suportado";
+    case "NAO_SUPORTADO": return rotuloDoNaoSuportado(m.tipoCru);
     default: return "";
   }
+}
+
+/**
+ * ⭐ O QUE A IA LÊ QUANDO O CLIENTE MANDA MÍDIA.
+ *
+ * Até 19/09/2026 a resposta era: **nada**. `chamarOTA` desistia do turno quando
+ * `msg.text` era nulo, e mídia da Meta traz o texto em `caption` — nunca em
+ * `text`. O cliente mandava foto do cardápio com "olha aí" na legenda e o
+ * Atendente não era chamado. Não era a IA respondendo mal: era a IA não sendo
+ * chamada. Silêncio total, que o cliente lê como descaso.
+ *
+ * O modelo não enxerga a imagem, e esta função **não finge que enxerga**. Ela
+ * diz o fato — "o cliente enviou uma imagem" — e entrega a legenda como o que
+ * ela é: palavras do cliente. É a diferença entre responder sobre uma foto que
+ * não se viu e ignorar a pessoa.
+ */
+export function descricaoParaIA(m: {
+  tipo: TipoDaMensagem;
+  texto?: string | null;
+  legenda?: string | null;
+  midiaNome?: string | null;
+  tipoCru?: string | null;
+}): string {
+  const texto = (m.texto ?? "").trim();
+  if (texto) return texto;
+
+  const legenda = (m.legenda ?? "").trim();
+  const fato = (() => {
+    switch (m.tipo) {
+      case "AUDIO": return "[o cliente enviou um áudio, que ainda não foi transcrito]";
+      case "IMAGEM": return "[o cliente enviou uma imagem, que você não consegue ver]";
+      case "VIDEO": return "[o cliente enviou um vídeo, que você não consegue ver]";
+      case "DOCUMENTO":
+        return m.midiaNome
+          ? `[o cliente enviou o arquivo "${m.midiaNome}", que você não consegue abrir]`
+          : "[o cliente enviou um arquivo, que você não consegue abrir]";
+      case "NAO_SUPORTADO":
+        return `[o cliente enviou ${rotuloDoNaoSuportado(m.tipoCru).replace(/^\S+\s/, "")}]`;
+      default: return "";
+    }
+  })();
+
+  if (!fato) return legenda;
+  return legenda ? `${fato} com a legenda: "${legenda}"` : fato;
 }
 
 // ── O que sai ────────────────────────────────────────────────────────────────
@@ -536,11 +584,22 @@ export interface MensagemNaTela {
   id: string;
   direcao: DirecaoDaMensagem;
   tipo: TipoDaMensagem;
+  /** O tipo cru da Meta quando `tipo = NAO_SUPORTADO` — é ele que faz o rótulo dizer o quê. */
+  tipoCru: string | null;
   status: StatusDaMensagem;
   texto: string | null;
   legenda: string | null;
   midiaNome: string | null;
   midiaMimeType: string | null;
+  /**
+   * Existe arquivo para baixar nesta mensagem?
+   *
+   * 🔒 É um SIM/NÃO de propósito. O `midiaId` da Meta não sobe para a tela: a
+   * tela pede os bytes pelo id da MENSAGEM, e a rota confere se quem pede é
+   * dono da conversa. Mandar o media id para o navegador transformaria a
+   * conferência num detalhe opcional do cliente.
+   */
+  temMidia: boolean;
   duracaoSeg: number | null;
   autor: AutorDaMensagem | null;
   autorNome: string | null;
@@ -565,8 +624,8 @@ export async function lerConversa(
     orderBy: { ocorreuEm: "desc" },
     take: limite,
     select: {
-      id: true, direcao: true, tipo: true, status: true, texto: true,
-      legenda: true, midiaNome: true, midiaMimeType: true, duracaoSeg: true,
+      id: true, direcao: true, tipo: true, tipoCru: true, status: true, texto: true,
+      legenda: true, midiaId: true, midiaNome: true, midiaMimeType: true, duracaoSeg: true,
       autor: true, erro: true, ocorreuEm: true,
       autorUser: { select: { nome: true } },
     },
@@ -578,10 +637,12 @@ export async function lerConversa(
     id: l.id,
     direcao: l.direcao,
     tipo: l.tipo,
+    tipoCru: l.tipoCru,
     status: l.status,
     texto: l.texto,
     legenda: l.legenda,
     midiaNome: l.midiaNome,
+    temMidia: Boolean(l.midiaId),
     midiaMimeType: l.midiaMimeType,
     duracaoSeg: l.duracaoSeg,
     autor: l.autor,
@@ -618,6 +679,12 @@ export function tipoDaMeta(
 
   switch (k || t) {
     case "image": return { tipo: "IMAGEM", tipoCru: null };
+    // Figurinha É uma imagem (webp) e a Meta entrega com media id como qualquer
+    // outra. Classificá-la como NAO_SUPORTADO fazia a tela dizer "conteúdo não
+    // suportado" sobre um arquivo que sabemos baixar e sabemos exibir.
+    // `tipoCru` fica guardado porque figurinha e foto não são a mesma coisa
+    // para quem lê a conversa depois.
+    case "sticker": return { tipo: "IMAGEM", tipoCru: "sticker" };
     case "audio": return { tipo: "AUDIO", tipoCru: null };
     case "video": return { tipo: "VIDEO", tipoCru: null };
     case "document": return { tipo: "DOCUMENTO", tipoCru: null };
