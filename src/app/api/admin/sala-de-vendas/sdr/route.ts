@@ -37,6 +37,7 @@ import {
 } from "@/services/salaDeVendas/raioX/raioXDasConversas";
 import { mascararTelefone } from "@/services/salaDeVendas/raioX/telefone";
 import { ROTULO_DO_TIPO, TIPOS_DE_GATEKEEPER, ehPorteiroHumano } from "@/services/foocci-sdr/gatekeeper/rotulos";
+import { lerConversasDoSdr } from "@/services/salaDeVendas/telas/conversasDoSdr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
   const data = await comSessao(prisma, auth.sessao, async (tx) => {
     const db = tx as never;
 
-    const [fila, raioX] = await Promise.all([
+    const [fila, raioX, conversas] = await Promise.all([
       contarFilaDoSdr(db, agora),
       raioXDasConversas(db, {
         agora,
@@ -100,6 +101,8 @@ export async function GET(req: NextRequest) {
         porPagina,
         formatarTelefone: (v) => mascararTelefone(v),
       }),
+      // A coluna 2 do desenho: as conversas que o SDR de fato trabalha.
+      lerConversasDoSdr(db, { limite: 40 }),
     ]);
 
     return {
@@ -115,6 +118,14 @@ export async function GET(req: NextRequest) {
         rotulo: ROTULO_DO_TIPO[tipo],
         humano: ehPorteiroHumano(tipo),
       })),
+      /**
+       * A lista de conversas da coluna 2. Só a LISTA sai daqui — o fio de cada
+       * conversa e o copiloto continuam saindo das rotas que já os servem
+       * (`/conversa` e `/copiloto`), que são as donas da regra de quem pode ler
+       * qual lead. Reimplementá-las aqui criaria uma segunda porta para o mesmo
+       * dado, com uma segunda chance de errar a permissão.
+       */
+      conversas,
       gatekeepers: raioX.gatekeepers,
       decisores: raioX.decisores,
       abordagem: raioX.abordagem,

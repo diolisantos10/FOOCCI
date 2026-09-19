@@ -7,14 +7,22 @@
  *
  * "Quantas conversas bateram num porteiro, de que tipo era, quantos decisores
  * nós capturamos, de quem já sabemos o nome e ainda não o telefone, e como está
- * a fila do SDR por estado."
+ * a fila do SDR por estado — e, com uma conversa aberta, o que fazer nela."
  *
- * ── O QUE NÃO ESTÁ AQUI, E É DE PROPÓSITO ───────────────────────────────────
+ * ── ⚠️ CORREÇÃO DE 19/09/2026: AS QUATRO COLUNAS ENTRARAM ───────────────────
  *
- * O desenho original tem a caixa de conversa, o copiloto e os botões de enviar.
- * Nada disso entra: esta frente é SÓ LEITURA, e não abre caminho novo de envio
- * de WhatsApp. Uma tela que mostra um botão "Enviar" que não envia é pior que a
- * tela sem o botão — ela ensina a operação a contar com algo que não existe.
+ * O cabeçalho anterior dizia que a conversa e o copiloto "não entram: esta
+ * frente é SÓ LEITURA". As duas metades dessa frase não se sustentavam juntas:
+ * **mostrar uma conversa É leitura.** O que a frase protegia de verdade era o
+ * ENVIO, e esse continua fora — ver `MesaDoSdr.tsx`.
+ *
+ * Então a tela passou a ter as quatro colunas do desenho: a fila, a lista de
+ * conversas, a conversa e o copiloto. As três novas são servidas pelas rotas
+ * que já eram donas delas, sem uma linha de regra reimplementada.
+ *
+ * O que continua fora, e agora pelo motivo certo: a caixa de envio (existe, e
+ * mora em `/comercial/conversas`, com as travas ao redor) e os quatro botões do
+ * desenho (não existem como ato em rota nenhuma).
  *
  * ── E O PONTO MAIS IMPORTANTE ───────────────────────────────────────────────
  *
@@ -53,6 +61,8 @@ import {
   type NomeDeIcone,
   type Tom,
 } from "../_pecas/Pecas";
+import type { ConversaDoSdr } from "@/services/salaDeVendas/telas/conversasDoSdr";
+import { AConversa, CopilotoDaConversa, ListaDeConversas } from "./MesaDoSdr";
 
 /**
  * O ícone e a cor de cada balde da fila, na ordem do desenho 12. A fila vem do
@@ -91,6 +101,8 @@ export interface PistaDeDecisor {
 export interface DadosDoSdr {
   periodo: { de: string; ate: string; agora: string };
   fila: Array<{ estado: string; rotulo: string; total: number }>;
+  /** A coluna 2 do desenho: as conversas que o SDR de fato trabalha. */
+  conversas: { itens: ConversaDoSdr[]; total: number };
   tiposDeGatekeeper: Array<{ tipo: string; rotulo: string; humano: boolean }>;
   gatekeepers: Medida<{
     classificados: number;
@@ -327,6 +339,8 @@ export function SecaoPistasSemTelefone({ dados }: { dados: DadosDoSdr }) {
 
 export function SdrClient() {
   const [estado, setEstado] = useState<Fase<DadosDoSdr>>({ fase: "carregando" });
+  /** Qual conversa está aberta nas colunas 3 e 4. `null` = nenhuma ainda. */
+  const [leadAberto, setLeadAberto] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -376,8 +390,44 @@ export function SdrClient() {
         <>
           <SecaoNumerosDoSdr dados={estado.dados} />
 
+          {/* ── AS QUATRO COLUNAS DO DESENHO ────────────────────────────────
+              No celular e no tablet elas viram uma pilha, na ordem da leitura:
+              a fila, a lista, a conversa e o copiloto. Quatro colunas de 90px
+              num aparelho de 375px não seriam o desenho — seriam quatro
+              colunas ilegíveis com a forma do desenho. */}
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] xl:h-[calc(100vh-19rem)] xl:min-h-[34rem]">
+            <div className="min-h-0 overflow-y-auto">
+              <SecaoFilaDoSdr dados={estado.dados} />
+            </div>
+
+            <div className="min-h-0">
+              <ListaDeConversas
+                itens={estado.dados.conversas.itens}
+                total={estado.dados.conversas.total}
+                selecionado={leadAberto}
+                aoSelecionar={setLeadAberto}
+              />
+            </div>
+
+            <div className="min-h-0">
+              <AConversa
+                leadId={leadAberto}
+                titulo={
+                  estado.dados.conversas.itens.find((c) => c.leadId === leadAberto)?.titulo ??
+                  null
+                }
+              />
+            </div>
+
+            <div className="min-h-0 overflow-y-auto">
+              <CopilotoDaConversa leadId={leadAberto} />
+            </div>
+          </div>
+
+          {/* O agregado do período continua embaixo: ele responde à pergunta de
+              gestão ("como está a caça ao decisor"), que é outra da pergunta
+              operacional das quatro colunas ("o que faço nesta conversa"). */}
           <Corpo lateral={<CopilotoDoSdr dados={estado.dados} />}>
-            <SecaoFilaDoSdr dados={estado.dados} />
             <SecaoTiposDeGatekeeper dados={estado.dados} />
             <SecaoPistasSemTelefone dados={estado.dados} />
           </Corpo>
