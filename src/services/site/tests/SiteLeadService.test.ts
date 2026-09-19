@@ -9,6 +9,7 @@ const db = vi.hoisted(() => ({
   siteLead: {
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     findFirst: vi.fn(),
   },
   siteLeadInteraction: {
@@ -34,6 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.siteLead.create.mockResolvedValue({ id: "lead1" });
   db.siteLead.update.mockResolvedValue({});
+  db.siteLead.updateMany.mockResolvedValue({ count: 1 });
   db.siteLead.findFirst.mockResolvedValue(null);
   db.siteLeadInteraction.create.mockResolvedValue({});
   db.$transaction.mockImplementation(async (ops: unknown[]) => ops);
@@ -402,5 +404,64 @@ describe("SiteLeadService.capture — a mesma pessoa não vira dois contatos", (
     expect(db.siteLead.findFirst).not.toHaveBeenCalled();
     expect(db.siteLead.create).toHaveBeenCalledOnce();
     expect(db.siteLead.create.mock.calls[0]![0].data.whatsappDigits).toBeNull();
+  });
+});
+
+/**
+ * ⭐ O RELÓGIO DE QUEM JÁ ESTAVA NA BASE E LEVANTOU A MÃO (buraco B-02).
+ *
+ * `slaVenceEm` nascia só no ramo que CRIA ficha. Quem já existia — o contato da
+ * lista fria que preenche o formulário do anúncio, o lead mais caro da casa —
+ * era atualizado sem relógio nenhum. `leadsComSlaEstourado` filtra por
+ * `slaVenceEm: { not: null }`: sem relógio, ele nunca aparece como atrasado, e
+ * a tela mostra "SLA estourado: 0" — que se lê como "ninguém atrasado" quando a
+ * verdade é "quase ninguém tem relógio". Régua verde sobre o defeito.
+ */
+describe("SiteLeadService.capture — o relógio de quem já estava na base", () => {
+  const EXISTENTE = {
+    id: "lead-existente", nome: "Ana", codigo: "A7K2M", restaurante: "Cantina da Ana",
+    cidade: null, tipo: null, desafio: null,
+    utmSource: null, utmMedium: null, utmCampaign: null,
+    utmContent: null, utmTerm: null, clickId: null, landingPath: null, referrer: null,
+  };
+
+  beforeEach(() => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("LEADS_NOTIFY_EMAIL", "");
+    db.siteLead.findFirst.mockResolvedValue(EXISTENTE);
+  });
+
+  it("ficha que já existia também ganha prazo de primeira resposta", async () => {
+    const antes = Date.now();
+    await SiteLeadService.capture(LEAD);
+
+    const marcacao = db.siteLead.updateMany.mock.calls.find(
+      (c) => c[0]?.data?.slaVenceEm instanceof Date,
+    );
+    expect(marcacao, "o lead promovido tem de ganhar relógio como quem nasce").toBeTruthy();
+    expect(marcacao![0].where.id).toBe("lead-existente");
+
+    // Trinta minutos a partir da chegada — o mesmo prazo de quem nasce agora.
+    const venceEm = (marcacao![0].data.slaVenceEm as Date).getTime();
+    expect(venceEm).toBeGreaterThanOrEqual(antes + 30 * 60_000);
+    expect(venceEm).toBeLessThanOrEqual(Date.now() + 30 * 60_000);
+  });
+
+  it("a escrita é CONDICIONAL a `slaVenceEm: null` — relógio antigo é preservado", async () => {
+    // Empurrar o prazo para a frente a cada reenvio é a maneira mais silenciosa
+    // possível de um lead atrasado nunca aparecer como atrasado.
+    await SiteLeadService.capture(LEAD);
+
+    const marcacao = db.siteLead.updateMany.mock.calls.find(
+      (c) => c[0]?.data?.slaVenceEm instanceof Date,
+    );
+    expect(marcacao![0].where.slaVenceEm).toBeNull();
+  });
+
+  it("falha ao ligar o relógio NÃO derruba a captura", async () => {
+    db.siteLead.updateMany.mockRejectedValue(new Error("banco tossiu"));
+    const r = await SiteLeadService.capture(LEAD);
+    expect(r.id).toBe("lead-existente");
+    expect(r.duplicado).toBe(true);
   });
 });
