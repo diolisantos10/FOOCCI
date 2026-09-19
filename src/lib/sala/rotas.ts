@@ -137,6 +137,18 @@ export const ROTAS = {
   atendimento: `${COMERCIAL}/atendimento`,
   /** A Central SDR / Gatekeeper — os 9 tipos de porteiro e a caça ao decisor. */
   sdr: `${COMERCIAL}/sdr`,
+  /**
+   * O Hunter IA / Inteligência Comercial — a peça 14 do desenho.
+   *
+   * ⚠️ Não é /prospeccao. Prospecção é a LISTA FRIA que já entrou na casa: os
+   * lotes de planilha, a fila do dia e o interruptor de abordagem. O Hunter é a
+   * camada de ANTES: o restaurante como empresa — categoria, unidades, canais,
+   * ICP e decisor — descoberto e enriquecido antes de virar contato de alguém.
+   * Uma tela lê `SiteLead`, a outra lê `Empresa`; juntá-las faria a base fria
+   * parecer descoberta, que é exatamente a confusão que `frioOuLead.ts` existe
+   * para impedir.
+   */
+  hunter: `${COMERCIAL}/hunter`,
   /** A CRM IA — o plano do dia, os 14 estados de follow-up e o pós-venda. */
   crm: `${COMERCIAL}/crm`,
   /** Qualificação e Lead Score — FRIO → MORNO → QUENTE → PRIORIDADE MÁXIMA. */
@@ -279,7 +291,13 @@ export const GRUPOS: readonly Grupo[] = [
     rotulo: "Prospecção",
     href: ROTAS.prospeccao,
     abas: [
+      // ⚠️ Prospecção continua sendo a PRIMEIRA aba, ainda que o Hunter seja o
+      // começo do percurso. O `href` do item de menu é o da primeira aba
+      // alcançável (ver `menuDoComercial`) — pôr o Hunter na frente mudaria o
+      // destino do clique em "Prospecção" e tiraria do caminho a tela que o
+      // time abre todo dia, por causa de uma tela que hoje está quase vazia.
       { href: ROTAS.prospeccao, rotulo: "Prospecção" },
+      { href: ROTAS.hunter, rotulo: "Hunter IA" },
       { href: ROTAS.baseFria, rotulo: "Base fria" },
       { href: ROTAS.importacoes, rotulo: "Importações" },
     ],

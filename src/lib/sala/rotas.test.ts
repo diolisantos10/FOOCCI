@@ -189,6 +189,11 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
      * horas fora do sistema. Ela entra aqui para que a contagem continue sendo
      * uma DECISÃO escrita, e não um número que cresce sozinho. */
     ROTAS.cadastro,
+    /* 19/09/2026 — a 26ª. O Hunter IA (peça 14 do desenho do CEO), que lê
+     * `Empresa` e não `SiteLead`: a camada de descoberta que vem ANTES da
+     * lista fria. Entra aqui pelo mesmo motivo que a 25ª: tela nova no menu é
+     * decisão escrita, nunca um número que cresce sozinho. */
+    ROTAS.hunter,
   ];
 
   it("⛔ nenhum dos endereços do menu sumiu", () => {
