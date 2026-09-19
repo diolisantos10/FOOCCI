@@ -105,19 +105,58 @@ function comoTentativa(modelo: string, r: ResultadoDaAbordagem): TentativaDeMode
 }
 
 /**
- * ⛔ OS MOTIVOS QUE ENCERRAM O LEAD NA HORA — não adianta tentar o próximo
- * modelo.
+ * ⛔⛔ A REGRA DA FILA, VIRADA DO AVESSO EM 19/09/2026 — E É O CONSERTO.
  *
- * `portaoRecusou` fala do DESTINATÁRIO (pediu silêncio, sem telefone, canal
- * desligado, fora da janela): trocar o texto não muda nada disso, e insistir
- * seria bater dez vezes na mesma porta fechada só para escrever dez linhas
- * iguais no relatório. `ritmo` e `naoConseguiuGravar` são estado NOSSO, idem.
+ * ── O DEFEITO, MEDIDO NO LEAD JONES SARTORI ─────────────────────────────────
  *
- * Os outros — `aMetaRecusou`, `travaDeRepeticao`, `semDadoParaOModelo`,
- * `modeloNaoLiberado`, `supervisoraRecusou` — falam do MODELO, e o próximo
- * modelo tem outro nome e outro texto. Esses seguem a fila.
+ * Ele recebeu `foocci_contato_inicial_01` **e** `_02`, duas vezes cada (18:39 e
+ * 20:24). Quatro mensagens onde deviam existir duas.
+ *
+ * A causa era esta constante, e o fato de ela ser uma lista de **EXCLUSÃO**:
+ * *"se o motivo não está aqui, tenta o próximo modelo"*. `aMetaRecusou` não
+ * estava. E `aMetaRecusou` é o que `abordarLead` devolve **também quando a
+ * chamada se perdeu depois de a Meta a ter aceitado** — o `fetch` estoura, não
+ * há código de erro, a mensagem sai assim mesmo e a fila, sem saber, manda a
+ * segunda. A distinção que faltava:
+ *
+ *   · a Meta **aceita** e devolve `wamid` → é SUCESSO, a fila ENCERRA. (O
+ *     `failed` só chegaria depois, por webhook; ele não é assunto desta fila.)
+ *   · a Meta **recusa a chamada com erro DO MODELO** → o texto está errado, a
+ *     conta está boa: desce a fila.
+ *   · qualquer outra coisa — erro de conta, de destinatário, de limite, de
+ *     credencial, **ou desconhecido** → PARA.
+ *
+ * ── AGORA É UMA LISTA DE INCLUSÃO, e por isso ela é uma trava ───────────────
+ *
+ * Só três motivos deixam a fila descer, e os três têm a mesma prova por trás:
+ * **nenhuma mensagem saiu**.
+ *
+ *   · `semDadoParaOModelo` / `modeloNaoLiberado` — nem chegou a bater na Meta.
+ *   · `aMetaRecusou` **com `familiaDoErroDaMeta === "doModelo"`** — a Meta
+ *     recusou olhando o TEXTO, que é exatamente o que o próximo modelo muda.
+ *
+ * O que SAIU da lista, e por quê:
+ *
+ *   · `aMetaRecusou` de qualquer outra família (inclusive `desconhecido`) —
+ *     fail-closed, a mesma régua de `familiasDeErroDaMeta.ts`. Era esta a porta
+ *     por onde a repetição entrava.
+ *   · `travaDeRepeticao` — ela fala do NÚMERO ("já saiu isto", "saiu algo há
+ *     pouco"), nunca do texto. Descer a fila aqui é mandar outra mensagem
+ *     dentro do intervalo que a trava acabou de proibir: a repetição voltando
+ *     com outra roupa. `abordar.ts` já parava por isso lá dentro; faltava
+ *     parar aqui.
+ *   · `supervisoraRecusou` — ela julgou o MOMENTO desta abordagem, não o
+ *     texto. Trocar de modelo seria contornar o veredito dela em silêncio.
+ *
+ * Motivo novo que apareça amanhã nasce PARANDO. O lado errado da dúvida aqui
+ * é mandar mensagem a mais para quem já recebeu uma.
  */
-const MOTIVOS_QUE_ENCERRAM_O_LEAD = new Set(["leadNaoExiste", "portaoRecusou", "ritmo", "naoConseguiuGravar"]);
+function podeDescerAFila(r: ResultadoDaAbordagem): boolean {
+  if (r.abordou) return false;
+  if (r.motivo === "semDadoParaOModelo" || r.motivo === "modeloNaoLiberado") return true;
+  if (r.motivo === "aMetaRecusou") return r.familiaDoErroDaMeta === "doModelo";
+  return false;
+}
 
 export async function abordarAgora(
   db: Cliente,
@@ -181,10 +220,12 @@ export async function abordarAgora(
       tentativas.push(comoTentativa(modelo, r));
 
       if (r.abordou) {
+        // ⛔ ACEITO PELA META = FILA ENCERRADA. Nenhum segundo modelo sai para
+        // quem já recebeu o primeiro, aconteça o que acontecer no webhook.
         modeloQueSaiu = modelo;
         break;
       }
-      if (MOTIVOS_QUE_ENCERRAM_O_LEAD.has(r.motivo)) break;
+      if (!podeDescerAFila(r)) break;
     }
 
     leads.push({

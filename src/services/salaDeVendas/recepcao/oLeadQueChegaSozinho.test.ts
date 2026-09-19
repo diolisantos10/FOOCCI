@@ -74,8 +74,18 @@ const FANTASTICO = {
   slaVenceEm: null as Date | null,
 };
 
-function banco(over: { lead?: Partial<typeof FANTASTICO>; agentes?: { id: string; nome: string; email: string }[] } = {}) {
+/** As mensagens de SAÍDA que este lead já tem no banco, para o filtro da fila. */
+type MensagemDeSaida = { direcao: "SAIDA" | "ENTRADA"; status: "PENDENTE" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHOU" };
+
+function banco(
+  over: {
+    lead?: Partial<typeof FANTASTICO>;
+    agentes?: { id: string; nome: string; email: string }[];
+    mensagens?: MensagemDeSaida[];
+  } = {},
+) {
   const lead: Record<string, unknown> = { ...FANTASTICO, ...(over.lead ?? {}) };
+  const mensagensNoBanco: MensagemDeSaida[] = over.mensagens ?? [];
   const gravadas: Array<Record<string, unknown>> = [];
   const escritasNoLead: Array<Record<string, unknown>> = [];
   const agentes = over.agentes ?? [{ id: "u-maria", nome: "Agente Maria", email: "agente1@agentes.foocci.com.br" }];
@@ -96,9 +106,19 @@ function banco(over: { lead?: Partial<typeof FANTASTICO>; agentes?: { id: string
           || (typeof w.atendidoPor === "object"
             ? (w.atendidoPor as { in: string[] }).in.includes(lead.atendidoPor as string)
             : w.atendidoPor === lead.atendidoPor);
-        const contatoOk = !("lastContactedAt" in w) || lead.lastContactedAt === null;
         const optOk = !("optOutAt" in w) || lead.optOutAt === null;
         const stageOk = !("stage" in w) || w.stage === lead.stage;
+
+        // ⭐ O filtro novo da fila, avaliado de verdade e não presumido: se este
+        // duplo aceitasse qualquer `AND`, o teste da mensagem que FALHOU
+        // passaria verde sobre nada. Ver o cabeçalho de `filaDaRecepcao`.
+        const saidas = mensagensNoBanco.filter((m) => m.direcao === "SAIDA");
+        const nenhumaQueNaoFalhou = saidas.every((m) => m.status === "FALHOU");
+        const algumaFalhou = saidas.some((m) => m.status === "FALHOU");
+        const contatoOk =
+          !Array.isArray(w.AND) ||
+          (nenhumaQueNaoFalhou && (lead.lastContactedAt === null || algumaFalhou));
+
         return donoOk && contatoOk && optOk && stageOk ? [filtrar(args)] : [];
       },
       findUnique: async (args: { select?: Record<string, boolean> }) => filtrar(args),
@@ -272,6 +292,70 @@ describe("⛔ fail-closed: nenhum 'não sei' pode virar 'manda mensagem'", () =>
   it("⛔ quem já recebeu mensagem nossa nem entra na fila — isto não é reabordagem", async () => {
     const { db } = banco({ lead: { lastContactedAt: new Date("2026-09-17T10:00:00Z") } });
     expect(await filaDaRecepcao(db, { agora: AGORA, limite: 10 })).toHaveLength(0);
+  });
+
+  it("⛔ mensagem ENTREGUE não volta para a recepção — isto seria a segunda mensagem", async () => {
+    const { db, gravadas } = banco({
+      lead: { lastContactedAt: new Date("2026-09-17T10:00:00Z") },
+      mensagens: [{ direcao: "SAIDA", status: "ENTREGUE" }],
+    });
+
+    expect(await filaDaRecepcao(db, { agora: AGORA, limite: 10 })).toHaveLength(0);
+
+    const r = await rodadaDaRecepcao(db, { agora: AGORA, teto: 10 });
+    expect(r.recebidos).toBe(0);
+    expect(gravadas).toHaveLength(0);
+    expect(enviarModelo).not.toHaveBeenCalled();
+  });
+
+  it("⛔ mensagem PENDENTE também barra — aceita pela Meta é contato, mesmo sem webhook", async () => {
+    const { db } = banco({
+      lead: { lastContactedAt: new Date("2026-09-17T10:00:00Z") },
+      mensagens: [{ direcao: "SAIDA", status: "PENDENTE" }],
+    });
+    expect(await filaDaRecepcao(db, { agora: AGORA, limite: 10 })).toHaveLength(0);
+  });
+});
+
+/**
+ * ⭐ O QUARTO LEAD DO FACEBOOK — o defeito que o CEO mediu em 19/09/2026.
+ *
+ * Quatro leads entraram pela campanha; o mais novo nunca recebeu nada. A casa
+ * tentou uma vez, a Meta recusou, a mensagem ficou FALHOU — e `lastContactedAt`
+ * ficou preenchido pela TENTATIVA. Dali em diante ele saía da fila para sempre,
+ * por um contato que não aconteceu.
+ */
+describe("⭐ o lead cuja única mensagem FALHOU volta para a recepção", () => {
+  it("⛔ ANTES o `lastContactedAt` sozinho o expulsava; AGORA ele está na fila", async () => {
+    const { db } = banco({
+      lead: { lastContactedAt: new Date("2026-09-18T11:00:00Z") },
+      mensagens: [{ direcao: "SAIDA", status: "FALHOU" }],
+    });
+
+    const fila = await filaDaRecepcao(db, { agora: AGORA, limite: 10 });
+
+    expect(fila).toHaveLength(1);
+    expect(fila[0]!.id).toBe("L-FANTASTICO");
+  });
+
+  it("⭐ e a rodada fala com ele de verdade: uma mensagem gravada, um envio", async () => {
+    // ⚠️ `lastContactedAt` nulo aqui, e é o estado REAL depois do conserto de
+    // `registrarFalhaDeEnvio`: o envio que falhou devolve a coluna à verdade.
+    // A prova de que a ficha antiga (com a data ainda carimbada) também volta à
+    // fila está no teste acima, que mede a consulta.
+    const { db, lead, gravadas } = banco({
+      lead: { lastContactedAt: null },
+      mensagens: [{ direcao: "SAIDA", status: "FALHOU" }],
+    });
+
+    const r = await rodadaDaRecepcao(db, { agora: AGORA, teto: 10 });
+
+    expect(r.recebidos).toBe(1);
+    expect(r.extrato[0]!.ok).toBe(true);
+    expect(lead.atendidoPor).toBe("IA");
+    // Uma, e só uma: a falhada não é reenviada, é a nova que sai.
+    expect(gravadas).toHaveLength(1);
+    expect(enviarModelo).toHaveBeenCalledTimes(1);
   });
 
   it("⛔ canal da Meta desligado: a mensagem é gravada e NÃO sai", async () => {
