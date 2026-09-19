@@ -139,6 +139,23 @@ export const ROTAS = {
   sdr: `${COMERCIAL}/sdr`,
   /** A CRM IA — o plano do dia, os 14 estados de follow-up e o pós-venda. */
   crm: `${COMERCIAL}/crm`,
+  /**
+   * A CRM IA na peça 11 do CEO: o TRABALHO DO DIA.
+   *
+   * ⚠️ Vive ao lado de `crm`, não no lugar dela. `crm` é a RÉGUA — os catorze
+   * estados, o que aciona cada cadência, a jornada do pós-venda — e é provada
+   * por teste que lê o fonte da tela. `crmIa` é a MESA: quem precisa de ação
+   * agora, por qual canal, valendo quanto. Fundir as duas teria custado a régua.
+   */
+  crmIa: `${COMERCIAL}/crm-ia`,
+  /**
+   * O Follow-up automático, peça 09 — as jornadas que a casa roda sozinha.
+   *
+   * ⛔ Tela de LEITURA: desenha em blocos as cadências que existem. Não cria,
+   * não salva e não ativa — não há onde gravar uma jornada nova, e um
+   * construtor que não grava é a tela mentindo.
+   */
+  followUpAutomatico: `${COMERCIAL}/follow-up-automatico`,
   /** Qualificação e Lead Score — FRIO → MORNO → QUENTE → PRIORIDADE MÁXIMA. */
   qualificacao: `${COMERCIAL}/qualificacao`,
   /**
@@ -342,7 +359,8 @@ export const GRUPOS: readonly Grupo[] = [
     rotulo: "CRM",
     href: ROTAS.crm,
     abas: [
-      { href: ROTAS.crm, rotulo: "CRM IA" },
+      { href: ROTAS.crmIa, rotulo: "CRM IA · Plano do dia" },
+      { href: ROTAS.crm, rotulo: "Régua e estados do CRM" },
       { href: ROTAS.relacionamento, rotulo: "Follow-up e pós-venda" },
     ],
   },
@@ -354,6 +372,7 @@ export const GRUPOS: readonly Grupo[] = [
     rotulo: "Automações",
     href: ROTAS.roteamento,
     abas: [
+      { href: ROTAS.followUpAutomatico, rotulo: "Follow-up automático" },
       { href: ROTAS.roteamento, rotulo: "Roteamento", papeis: PAPEIS_DO_PAINEL },
       { href: ROTAS.agente, rotulo: "O agente", papeis: PAPEIS_DO_PAINEL },
       { href: ROTAS.ensaio, rotulo: "Ensaio do TA" },

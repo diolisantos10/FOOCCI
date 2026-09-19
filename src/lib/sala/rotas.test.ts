@@ -189,6 +189,23 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
      * horas fora do sistema. Ela entra aqui para que a contagem continue sendo
      * uma DECISÃO escrita, e não um número que cresce sozinho. */
     ROTAS.cadastro,
+    /* 19/09/2026 — a 26ª e a 27ª, pelas peças 11 e 09 do desenho do CEO.
+     *
+     * `crmIa` NÃO substitui `crm`: `crm` é a RÉGUA (os catorze estados, o que
+     * aciona cada cadência, a jornada do pós-venda) e é provada por um teste
+     * que lê o fonte daquela tela; `crmIa` é a MESA DO DIA (quem precisa de
+     * ação agora, por qual canal, valendo quanto). Fundir as duas para não
+     * mexer nesta contagem teria custado a régua, que é o que já estava provado.
+     *
+     * `followUpAutomatico` é a peça 09 no menu Automações — tela de LEITURA que
+     * desenha em blocos as cadências que existem. Nenhuma das duas cria, salva,
+     * ativa ou envia: as duas são GET, e o contrato de envio continua fechado.
+     *
+     * Elas entram escritas aqui, uma a uma, porque a contagem deste teste é uma
+     * DECISÃO registrada — não um número que cresce sozinho quando alguém
+     * acrescenta uma aba. */
+    ROTAS.crmIa,
+    ROTAS.followUpAutomatico,
   ];
 
   it("⛔ nenhum dos endereços do menu sumiu", () => {
