@@ -52,6 +52,21 @@ const DECLARADOS_SEM_VIGIA: Record<string, string> = {
   "agent-training-cron.yml": "esteira de treino; rastro por lote, sem carimbo de execução do cron",
   "brain-ingest-experiences.yml": "ingestão do cofre de experiências; sem carimbo de execução",
   "brain-shadow-replay.yml": "reprocessamento de sombra; grava amostras, não execução",
+  // ⚠️ LEITURA PURA, e por isso é o único caso desta lista em que o medidor não
+  // é dívida, é impossibilidade: as duas rotas têm teste de contrato que REPROVA
+  // se elas escreverem no banco. Um carimbo de execução seria escrita — o vigia
+  // quebraria justamente a garantia que torna estas portas seguras.
+  // O vigia possível é o de fora, e ele existe: cada job REPROVA em 401/503/erro
+  // (porta fechada ou segredo errado) e o GitHub avisa.
+  "comercial-leituras-da-manha.yml": "leituras da manhã (raio-x e estado da corrente); só leem — por contrato não escrevem no banco, logo não há carimbo de execução possível; vigiadas pela reprovação dos próprios jobs",
+  // ⚠️ MESMO CASO DA `prospeccao-rodada.yml`, e pelo mesmo motivo: rodada de
+  // vinte em vinte minutos cuja fila normalmente está vazia. Pior ainda aqui —
+  // enquanto `FOOCCI_RECEPCAO_LIGADA` não estiver no ambiente, TODA rodada
+  // responde `ligada: false` e não encosta em ninguém, de propósito. Um medidor
+  // de frescor sobre `LeadMensagem` acusaria "morreu" o dia inteiro enquanto o
+  // dono simplesmente ainda não ligou a recepção.
+  // Vira VIGIADO no dia em que a rodada carimbar a própria execução.
+  "comercial-recepcao.yml": "recepção do lead que chega sozinho; sem carimbo de execução, fila vazia não deixa rastro e a rodada responde `ligada: false` enquanto FOOCCI_RECEPCAO_LIGADA não existir — vigiada pela reprovação do próprio job",
   "crm-cron.yml": "disparo de campanha; o rastro é por campanha, não por execução do cron",
   "crm-shadow-training.yml": "treino em sombra; grava amostras, não execução",
   "help-faq-mine.yml": "mineração de FAQ; sem carimbo de execução",
