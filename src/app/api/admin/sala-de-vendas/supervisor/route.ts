@@ -20,6 +20,7 @@ import { autorizarInterno } from "@/lib/internal-auth";
 import { comSessao } from "@/services/salaDeVendas/identidadeNoBanco";
 import { visaoDoSupervisor } from "@/services/salaDeVendas/revenueSupervisor";
 import { ETAPAS_DA_RECEITA, type EtapaDaReceita } from "@/services/salaDeVendas/funilDeReceita";
+import { extrasDaReceita } from "@/services/salaDeVendas/telas/inteligenciaDeReceita";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,9 +65,18 @@ export async function GET(req: NextRequest) {
   }
   const foco = (focoCru as EtapaDaReceita | null) ?? undefined;
 
-  const data = await comSessao(prisma, auth.sessao, (tx) =>
-    visaoDoSupervisor(tx as never, { de, ate, agora, foco }),
-  );
+  // Os quatro blocos da peça 13 que o supervisor não media (reuniões,
+  // reativações, clientes em risco e a receita ao longo do mês) entram na mesma
+  // sessão e no mesmo período — dois recortes diferentes na mesma tela fariam o
+  // cartão discordar do gráfico logo abaixo dele.
+  const data = await comSessao(prisma, auth.sessao, async (tx) => {
+    const db = tx as never;
+    const [visao, extras] = await Promise.all([
+      visaoDoSupervisor(db, { de, ate, agora, foco }),
+      extrasDaReceita(db, { de, ate }),
+    ]);
+    return { ...visao, extras };
+  });
 
   return NextResponse.json({ ok: true, data });
 }

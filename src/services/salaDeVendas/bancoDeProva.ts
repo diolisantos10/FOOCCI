@@ -78,6 +78,13 @@ export interface Tabelas {
   reabordagemExecucao: Linha[];
 }
 
+/** Data ou número viram a mesma grandeza comparável. Qualquer outra coisa, não. */
+function grandeza(v: unknown): number | null {
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  return null;
+}
+
 function combinaCampo(valor: unknown, condicao: unknown): boolean {
   if (condicao === null) return valor === null || valor === undefined;
 
@@ -86,12 +93,29 @@ function combinaCampo(valor: unknown, condicao: unknown): boolean {
     for (const chave of Object.keys(c)) {
       const alvo = c[chave];
       switch (chave) {
+        // ⚠️ `gte`/`lt` valem para DATA **e para NÚMERO**.
+        //
+        // Antes só entendiam data, e um `{ riscoDeChurn: { gte: 50 } }` não
+        // estourava: caía fora do `instanceof Date` e devolvia `false` para toda
+        // linha — ou seja, **contagem zero em silêncio**, que é exatamente o que
+        // o cabeçalho deste arquivo promete nunca fazer. Tipo incomparável
+        // continua ESTOURANDO.
         case "gte":
-          if (!(valor instanceof Date) || valor.getTime() < (alvo as Date).getTime()) return false;
+        case "lt": {
+          const m = grandeza(alvo);
+          if (m === null) {
+            throw new Error(
+              `bancoDeProva: '${chave}' só compara data ou número — a condição veio como ${typeof alvo}`,
+            );
+          }
+          const n = grandeza(valor);
+          // Campo vazio NÃO satisfaz uma comparação — é o que o Postgres faz com
+          // NULL, e é o que o serviço espera: um lead sem `scoreAt` não entra em
+          // balde de hora nenhuma. Estourar aqui reprovaria a consulta certa.
+          if (n === null) return false;
+          if (chave === "gte" ? n < m : n >= m) return false;
           break;
-        case "lt":
-          if (!(valor instanceof Date) || valor.getTime() >= (alvo as Date).getTime()) return false;
-          break;
+        }
         case "in":
           if (!(alvo as unknown[]).includes(valor as never)) return false;
           break;
@@ -157,6 +181,27 @@ function combina(linha: Linha, where: Linha | undefined): boolean {
       }
       const alvo = (condicao as Record<string, unknown>).some as Linha;
       if (!lista.some((item) => combina(item as Linha, alvo))) return false;
+      continue;
+    }
+
+    // ── Filtro de RELAÇÃO VAZIA (`{ none: {...} }`) ──
+    //
+    // O par de `some`, e ele é indispensável para separar trilhas: "lead que
+    // nunca teve handoff" é uma consulta diferente de "lead cujo handoff não
+    // bate", e sem `none` a primeira teria de ser dublada — régua verde sobre
+    // o componente errado. Lista ausente ESTOURA, pelo mesmo motivo de `some`.
+    if (
+      typeof condicao === "object" &&
+      condicao !== null &&
+      !(condicao instanceof Date) &&
+      "none" in (condicao as Record<string, unknown>)
+    ) {
+      const lista = linha[campo];
+      if (!Array.isArray(lista)) {
+        throw new Error(`bancoDeProva: '${campo}.none' pediu uma relação que esta linha não carrega`);
+      }
+      const alvo = (condicao as Record<string, unknown>).none as Linha;
+      if (lista.some((item) => combina(item as Linha, alvo))) return false;
       continue;
     }
 
@@ -392,6 +437,9 @@ export function bancoDeProva(dados: Partial<Tabelas> = {}) {
       // e `undefined` viraria "não medido" num teste que deveria falhar.
       qualificacao: t.leadQualificacao.find((q) => q.leadId === l.id) ?? null,
       atendente: t.internalUser.find((u) => u.id === l.atendenteUserId) ?? null,
+      // A passagem para gente, para as duas trilhas da Control Tower
+      // (`handoffs: { none: {} }` × `{ some: {} }`) serem RESOLVIDAS.
+      handoffs: t.leadHandoff.filter((h) => h.leadId === l.id),
     })),
     leadProposta: comoTabela(t.leadProposta),
     leadMensagem: comoTabela(t.leadMensagem, (m) => ({

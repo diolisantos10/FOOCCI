@@ -26,7 +26,7 @@ function visao(p: { volumeMedido?: boolean; duracaoMedida?: boolean } = {}): Vis
     funil: {
       degraus: [
         {
-          etapa: "EMPRESAS",
+          etapa: "EMPRESAS_ENCONTRADAS",
           rotulo: "Empresas encontradas",
           comoSeMede: "empresas cadastradas no período",
           ehRetrato: false,
@@ -35,7 +35,7 @@ function visao(p: { volumeMedido?: boolean; duracaoMedida?: boolean } = {}): Vis
           tendencia: { medido: false, motivo: "semComparacao" },
         },
         {
-          etapa: "DECISORES",
+          etapa: "DECISORES_ENCONTRADOS",
           rotulo: "Decisores encontrados",
           comoSeMede: "contatos marcados como decisor",
           ehRetrato: false,
@@ -68,6 +68,26 @@ function visao(p: { volumeMedido?: boolean; duracaoMedida?: boolean } = {}): Vis
     diagnostico: { medido: false, motivo: "semQueda", detalhe: "nenhuma etapa caiu o bastante" },
     acoes: [],
     cegas: ["Primeira resposta"],
+    // ── A receita e os quatro extras da peça 13 ──────────────────────────
+    // Todos saem NÃO MEDIDOS nesta visão de propósito: é o estado em que a
+    // tela tem mais chance de mentir, e é o que estes testes vigiam.
+    receita: { medido: false, motivo: "semPropostas" },
+    extras: {
+      // ⚠️ Os vizinhos levam número MEDIDO (12, 3) de propósito. A janela de
+      // 1200 caracteres de `trecho` atravessa o cartão seguinte, e um vizinho
+      // valendo zero faria o `not.toMatch(/>0</)` acusar o cartão errado — a
+      // régua verde sobre o componente errado, ao contrário. O zero que este
+      // teste proíbe é o do cartão SEM FONTE, e esse continua vigiado.
+      reunioes: { marcadas: 12, realizadas: 8, naoCompareceram: 3, semDesfecho: 1 },
+      reativacao: { reativados: { medido: false, motivo: "não há trilha da transição" }, aReativar: 4 },
+      risco: { emRisco: 3, limiar: 50, semAvaliacao: 2, total: 9 },
+      receitaNoTempo: {
+        pontos: [],
+        aceitasSemValor: 0,
+        meta: { medido: false, motivo: "não existe cadastro de meta de receita neste sistema" },
+        previsao: { medido: false, motivo: "previsão é projeção CONTRA uma meta" },
+      },
+    },
   };
 }
 
