@@ -72,6 +72,40 @@ const DENY: InboundGuardsResult = {
   cartRecoveryHandoff: false,
 };
 
+/**
+ * True quando a mensagem tem resposta determinística — saudação, pedido de
+ * cardápio, o atalho "0"/voltar, ou a escolha de um número do menu.
+ *
+ * Reclamação e pedido explícito de atendente NUNCA contam: essas continuam indo
+ * para gente, venham de onde vierem.
+ *
+ * Import dinâmico de propósito: as guardas rodam no caminho quente do webhook e
+ * não devem carregar o recepcionista inteiro quando a mensagem é mídia.
+ */
+async function ehInteracaoDeMenu(
+  messageText: string | null,
+  isTextMessage: boolean,
+): Promise<boolean> {
+  if (!isTextMessage) return false;
+  const texto = (messageText ?? "").trim();
+  if (!texto) return false;
+  try {
+    const { detectIntent, BACK_TO_MENU_RE } = await import("@/services/ai/WhatsAppReceptionistService");
+    const intent = detectIntent(texto);
+    if (intent === "COMPLAINT" || intent === "HUMAN_REQUEST") return false;
+    return (
+      intent === "GREETING" ||
+      intent === "MENU_REQUEST" ||
+      BACK_TO_MENU_RE.test(texto) ||
+      /^\d{1,2}$/.test(texto)
+    );
+  } catch (err) {
+    // Guardrail 1: sem conseguir medir, não se inventa liberação.
+    console.error("[InboundGuards] não foi possível classificar a mensagem:", err);
+    return false;
+  }
+}
+
 export const InboundGuardsService = {
   /**
    * Roda as guardas e devolve se algum agente pode responder.
@@ -130,10 +164,33 @@ export const InboundGuardsService = {
         );
       }
 
+      // 3.5 · A mensagem tem resposta fixa? (saudação, "cardápio", "0", número)
+      //
+      //      Medido com o MESMO detector que o recepcionista usa para montar o
+      //      menu — régua verde tem que estar sobre o componente que responde ao
+      //      cliente, não sobre uma cópia dele.
+      const inboundIsMenuInteraction = await ehInteracaoDeMenu(
+        input.messageText,
+        input.isTextMessage,
+      );
+
       // 4 · Política central de IA — inclui a trava permanente de Staff/Fornecedor
       //     (P0-A). Esta é a que o webhook da Meta não tinha: sem ela, a IA
       //     responde numa conversa marcada como não-cliente.
-      const decision = shouldAiRespond(conv);
+      const decision = shouldAiRespond(conv, { inboundIsMenuInteraction });
+
+      // Rastro: silêncio é defeito. Quem ler o log sabe QUAL regra pegou, em qual
+      // conversa, e se a mensagem era ou não de menu — foi exatamente essa linha
+      // que faltou no caso da Nathalia (campanha do Sushi Cazza, 20/09/2026).
+      if (decision.reason === "CRM_CONTEXT") {
+        console.warn("[InboundGuards]", JSON.stringify({
+          gate:           "crm-origin",
+          reason:         "conversa de campanha e mensagem não é de menu → humano atende",
+          conversationId: input.conversationId,
+          restaurantId:   input.restaurantId,
+          inboundIsMenuInteraction,
+        }));
+      }
 
       const aiMayRespond = decision.allowed && !cartRecoveryHandoff && !optedOutThisTurn;
 

@@ -2370,6 +2370,8 @@ const HANDOFF_LABELS: Record<string, string> = {
   MENU_OPTION:        "Cliente pediu falar com humano",
   WAITER_ESCALATION:  "Garçom solicitou atendimento humano",
   CUSTOMER_REQUEST:   "Cliente solicitou atendimento humano",
+  HUMAN_TAKEOVER:     "Operador assumiu o atendimento",
+  CART_RECOVERY:      "Resgate de carrinho — aguardando atendimento",
   COMPLAINT:          "Reclamação — aguardando atendimento",
   UNKNOWN:            "Solicitação de atendimento humano",
 };
