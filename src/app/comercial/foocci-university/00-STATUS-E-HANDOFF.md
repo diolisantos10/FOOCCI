@@ -2,65 +2,100 @@
 
 **Data-base:** 20/09/2026
 
-## O que foi recebido
+## Status atual
 
-Handoff do trabalho anterior contendo:
+**CONTEÚDO V1 DA FOOCCI UNIVERSITY: ENTREGUE.**
 
+A implementação visual/técnica da sala permanece fora deste trabalho e pertence à IA arquiteta.
+
+## Origem
+
+O trabalho começou a partir de um handoff contendo:
 - dossiê de passagem;
 - pedido original do CEO;
 - prompt de continuação;
-- briefings de investigação;
-- 101 arquivos-fonte copiados do projeto.
+- briefings;
+- 101 arquivos-fonte.
 
-O trabalho anterior fez reconhecimento amplo de produto, site, preço, contrato, SDR e sala de vendas, mas **não concluiu a validação por domínio no código** e **não escreveu aulas**.
+O handoff anterior tinha reconhecimento amplo, mas não treinamento escrito.
 
-## Estado real na entrada
+## O que foi feito nesta continuidade
 
 | Bloco | Estado |
 |---|---|
-| Reconhecimento inicial | FEITO |
-| Inventário preliminar de funcionalidades | FEITO, parte ainda INFERIDA |
-| Validação de produto por domínio no código | NÃO CONCLUÍDA |
-| Pesquisa de mercado/alternativas | NÃO CONCLUÍDA |
-| Perfis de cliente | NÃO INICIADO |
-| Mapa de dores | NÃO INICIADO |
-| RAIO-X Comercial final | NÃO INICIADO |
-| Método de venda | NÃO INICIADO |
-| Demo oficial | NÃO INICIADO |
-| Objeções | NÃO INICIADO |
-| Economia da venda | NÃO INICIADO |
-| Academia/módulos | NÃO INICIADO |
-| Role play | NÃO INICIADO |
-| Certificação | NÃO INICIADO |
+| Estrutura documental | CONCLUÍDO |
+| Mapa mestre de produto para treinamento | CONCLUÍDO V1 |
+| Mercado / ICP / dores | CONCLUÍDO |
+| Método de venda | CONCLUÍDO |
+| Discovery e qualificação | CONCLUÍDO |
+| Prospecção | CONCLUÍDO |
+| Pitch / demo / storytelling | CONCLUÍDO |
+| Objeções | CONCLUÍDO |
+| Negociação e fechamento | CONCLUÍDO |
+| CRM / pipeline / forecast | CONCLUÍDO |
+| Rotina / métricas | CONCLUÍDO |
+| Retenção / expansão | CONCLUÍDO |
+| Psicologia / comunicação | CONCLUÍDO |
+| Role plays | CONCLUÍDO |
+| Avaliação / certificação | CONCLUÍDO |
+| Agentes de IA comerciais | CONCLUÍDO |
+| Liderança / coaching | CONCLUÍDO |
+| RevOps | CONCLUÍDO |
+| Vendas complexas / account planning | CONCLUÍDO |
+| Ética / compliance / precisão | CONCLUÍDO |
+| Templates | CONCLUÍDO |
+| Banco de questões | CONCLUÍDO |
+| Economia / ROI / value selling | CONCLUÍDO |
+| Concorrência / posicionamento | CONCLUÍDO |
+| Sales writing / inbound / social selling | CONCLUÍDO |
+| Contratação / onboarding / ramp | CONCLUÍDO |
+| Território / compensação / capacidade | CONCLUÍDO |
+| Glossário | CONCLUÍDO |
+| Currículo mestre | CONCLUÍDO |
+| Handoff para arquiteta | CONCLUÍDO |
 
-## Fatos já suficientemente estabelecidos para orientar a investigação
+## Observação importante sobre produto
 
-- Foocci é um sistema operacional/comercial para restaurantes com painel do lojista e experiência white-label para cliente final.
-- O produto cobre, em diferentes graus de maturidade, cardápio, pedido, atendimento, CRM, operação, analytics e automação/IA.
-- A Comercial Foocci existe em `src/app/comercial/`.
-- O diferencial declarado no projeto é a integração entre canais de venda, operação, CRM e inteligência, não a superioridade isolada de cada módulo.
-- A regra de produto é conservadora: recurso em piloto não pode ser vendido como pronto.
-- O treinamento será usado por humanos e por agentes de IA.
+O material de produto foi consolidado a partir de fontes do repositório, incluindo um resumo executivo que registra ter sido validado no código em 30/07/2026, além de modelo de negócio, preços e documentos mais recentes.
 
-## Alertas que já entram como guardrail
+Isso **não significa que todo domínio do código atual foi novamente auditado arquivo por arquivo em 20/09/2026**.
 
-1. Pedido completo por texto no WhatsApp foi descrito no handoff como piloto e precisa de validação atual antes de qualquer promessa.
-2. Integrações dependentes de terceiros devem ser tratadas como condicionais.
-3. Impressão física precisa de cuidado de discurso enquanto não houver evidência operacional suficiente.
-4. CRM e agentes possuem regras de governança e segurança; treinamento não pode ensinar comportamento que viole essas travas.
-5. Preço e planos devem ser lidos da fonte vigente no código/site, nunca copiados de memória ou documento histórico.
-6. O termo legado “FUT” não deve aparecer em material comercial final; usar **Foocci**.
+Por esse motivo:
+- informação dinâmica deve consultar fonte atual;
+- piloto continua piloto até promoção explícita;
+- integração continua condicionada quando depende de terceiro;
+- alteração material de produto exige atualização do módulo e eventual recertificação.
 
-## Próxima etapa obrigatória
+Esse mecanismo de versionamento faz parte do desenho pedagógico e evita transformar documentação em promessa obsoleta.
 
-Fechar o **Mapa Mestre de Produto** por domínio, validando cada capacidade comercialmente relevante no código e classificando:
+## Guardrails permanentes
 
-- CONFIRMADO;
-- INFERIDO;
-- NÃO VALIDADO;
-- PRONTO;
-- PILOTO;
-- DEPENDE DE TERCEIRO/CONFIGURAÇÃO;
-- NÃO DISPONÍVEL.
+1. Pedido completo por texto no WhatsApp não deve ser vendido como geral sem validação atual.
+2. Integrações dependentes de terceiros são condicionais.
+3. Preço vem da fonte vigente.
+4. ROI é cenário, não garantia.
+5. Agente não inventa dado nem ação.
+6. Opt-out, privacidade e regras de canal são obrigatórios.
+7. Termo legado FUT não deve aparecer em conteúdo final; usar **Foocci**.
 
-Só depois disso começa a transformação pedagógica em módulos.
+## Próximo dono
+
+**IA arquiteta.**
+
+Entrada recomendada:
+1. `README.md`;
+2. `28-CURRICULO-MESTRE.md`;
+3. `29-HANDOFF-PARA-ARQUITETA.md`;
+4. módulos específicos conforme a experiência que estiver construindo.
+
+## O que não está pendente deste trabalho
+
+Não cabe a esta frente:
+- desenhar telas;
+- definir navegação;
+- programar componentes;
+- escolher arquitetura técnica;
+- implementar banco de progresso;
+- construir a sala.
+
+Esses pontos pertencem à arquitetura/engenharia.
