@@ -112,6 +112,13 @@ export const ROTAS = {
    */
   supervisora: `${COMERCIAL}/supervisora`,
   /**
+   * A Academia em forma de departamento de treinamento: produto, venda
+   * consultiva e segurança para humanos e agentes de IA, com progresso e
+   * avaliação nominal. O conteúdo não é duplicado — projeta as mesmas fontes
+   * aprovadas usadas pelo TA e pela Supervisora.
+   */
+  treinamento: `${COMERCIAL}/treinamento`,
+  /**
    * ⭐ A META DE RECEITA — o único lugar onde a cifra do mês é digitada.
    *
    * Mora no grupo **Painel**, e não em Configurações, porque não é ajuste de
@@ -163,15 +170,14 @@ export const ROTAS = {
    * para impedir.
    */
   hunter: `${COMERCIAL}/hunter`,
-  /** A CRM IA — o plano do dia, os 14 estados de follow-up e o pós-venda. */
+  /** Endereço antigo da régua. Redireciona para a aba correspondente no CRM IA. */
   crm: `${COMERCIAL}/crm`,
   /**
    * A CRM IA na peça 11 do CEO: o TRABALHO DO DIA.
    *
-   * ⚠️ Vive ao lado de `crm`, não no lugar dela. `crm` é a RÉGUA — os catorze
-   * estados, o que aciona cada cadência, a jornada do pós-venda — e é provada
-   * por teste que lê o fonte da tela. `crmIa` é a MESA: quem precisa de ação
-   * agora, por qual canal, valendo quanto. Fundir as duas teria custado a régua.
+   * O CRM único tem duas abas no mesmo endereço: MESA (quem precisa de ação
+   * agora) e RÉGUA (os catorze estados, cadências e pós-venda). O endereço
+   * `crm` continua redirecionando para a segunda, para não quebrar favoritos.
    */
   crmIa: `${COMERCIAL}/crm-ia`,
   /**
@@ -390,10 +396,9 @@ export const GRUPOS: readonly Grupo[] = [
   {
     // O plano do dia e o relógio do silêncio — antes e depois do GANHO.
     rotulo: "CRM",
-    href: ROTAS.crm,
+    href: ROTAS.crmIa,
     abas: [
-      { href: ROTAS.crmIa, rotulo: "CRM IA · Plano do dia" },
-      { href: ROTAS.crm, rotulo: "Régua e estados do CRM" },
+      { href: ROTAS.crmIa, rotulo: "CRM IA" },
       { href: ROTAS.relacionamento, rotulo: "Follow-up e pós-venda" },
     ],
   },
@@ -431,6 +436,7 @@ export const GRUPOS: readonly Grupo[] = [
     abas: [
       { href: ROTAS.whatsapp, rotulo: "WhatsApp", papeis: PAPEIS_DO_WHATSAPP },
       { href: ROTAS.agentes, rotulo: "Agentes" },
+      { href: ROTAS.treinamento, rotulo: "Centro de treinamento" },
       { href: ROTAS.acessos, rotulo: "Criar acesso", papeis: PAPEIS_DOS_ACESSOS },
     ],
   },

@@ -82,6 +82,7 @@ export const TABELAS_VARREDURA: readonly string[] = [
   "crm_base_exclusions",
   "crm_contact_ledger",
   "crm_custom_actions",
+  "crm_ciclo_funil",
   "customer_channel_identities",
   "customer_coupons",
   "customer_data_signals",

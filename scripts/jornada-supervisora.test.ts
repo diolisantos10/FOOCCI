@@ -245,10 +245,14 @@ describe("Jornada — modo GUARD", () => {
     expect(nomesDaSupervisora).not.toContain("prometeuPrazo");
   });
 
-  it("7. desconto não autorizado → bloqueado via handoff.ts (PEDIU_DESCONTO), sem a Supervisora interferir", async () => {
-    const { gatilhosQueDispararam } = await import("@/services/salaDeVendas/handoff");
-    const disparados = gatilhosQueDispararam({ pediuDesconto: true });
-    expect(disparados).toContain("PEDIU_DESCONTO");
+  it("7. desconto não transfere sozinho: a IA continua, e a régua antiga segue disponível explicitamente", async () => {
+    const { gatilhosQueDispararam, REGRA_DE_ONZE_GATILHOS } = await import("@/services/salaDeVendas/handoff");
+    // D-0E4: todos são atendidos pela IA; só pedido explícito de uma PESSOA
+    // transfere por padrão. Pedir desconto não é pedir uma pessoa.
+    expect(gatilhosQueDispararam({ pediuDesconto: true })).not.toContain("PEDIU_DESCONTO");
+    // O mecanismo não foi demolido: a regra histórica ainda o prova quando
+    // passada explicitamente, para uma futura decisão de religamento.
+    expect(gatilhosQueDispararam({ pediuDesconto: true }, REGRA_DE_ONZE_GATILHOS)).toContain("PEDIU_DESCONTO");
   });
 
   it("5 / 15a. cliente irritado + falha técnica da Supervisora → RETIDA, nunca liberada às cegas", async () => {
@@ -269,7 +273,10 @@ describe("Jornada — modo GUARD", () => {
     proximoJuizo({ veredito: "CRITICO", motivos: ["INSISTENCIA_APOS_RECUSA", "PRESSAO_COMERCIAL"], detalhe: "o lead pediu para parar", precisaDeGente: true, sugestaoPermanente: null });
     const lead = await novoLead();
     await prisma.leadQualificacao.upsert({ where: { leadId: lead.id }, create: { leadId: lead.id, irritacao: 3, pediuHumano: false }, update: { irritacao: 3 } });
-    const gravada = await registrarSaida(prisma, { leadId: lead.id, texto: "Vamos fechar agora? É a última chance dessa condição.", autor: "IA", papelDoAgente: "closer", agora: AGORA });
+    // A frase precisa passar pela régua determinística para esta jornada medir
+    // a camada PROFUNDA. “Última chance” seria corretamente retida antes do
+    // modelo por urgência inventada, tornando o mock profundo inalcançável.
+    const gravada = await registrarSaida(prisma, { leadId: lead.id, texto: "Entendo que isso incomodou. O que falta para você decidir?", autor: "IA", papelDoAgente: "closer", agora: AGORA });
     if (!gravada.ok) throw new Error("não gravou");
     const r = await entregarMensagem(prisma, gravada.mensagemId, "maquina");
     expect(r).toMatchObject({ entregue: false, motivo: "retidaPelaSupervisora" });

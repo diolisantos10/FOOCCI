@@ -339,12 +339,13 @@ export function SecaoPistasSemTelefone({ dados }: { dados: DadosDoSdr }) {
 
 export function SdrClient() {
   const [estado, setEstado] = useState<Fase<DadosDoSdr>>({ fase: "carregando" });
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   /** Qual conversa está aberta nas colunas 3 e 4. `null` = nenhuma ainda. */
   const [leadAberto, setLeadAberto] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
-    (async () => {
+    const buscar = async () => {
       try {
         const r = await fetch("/api/admin/sala-de-vendas/sdr", { cache: "no-store" });
         if (!vivo) return;
@@ -359,12 +360,16 @@ export function SdrClient() {
           return;
         }
         setEstado({ fase: "pronto", dados: j.data });
+        setAtualizadoEm(new Date());
       } catch (e) {
         if (vivo) setEstado({ fase: "erro", detalhe: e instanceof Error ? e.message : null });
       }
-    })();
+    };
+    void buscar();
+    const intervalo = window.setInterval(() => void buscar(), 30_000);
     return () => {
       vivo = false;
+      window.clearInterval(intervalo);
     };
   }, []);
 
@@ -379,7 +384,9 @@ export function SdrClient() {
             ? `${emDia(estado.dados.periodo.de)} – ${emDia(estado.dados.periodo.ate)}`
             : undefined
         }
-        atualidade={estado.fase === "pronto" ? "Tempo real" : undefined}
+        atualidade={estado.fase === "pronto" && atualizadoEm
+          ? `Atualização automática · ${atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+          : undefined}
       />
 
       {estado.fase === "carregando" && <Carregando texto="Lendo a fila do SDR e o raio-X das conversas…" />}

@@ -75,6 +75,7 @@ export function QualificacaoClient() {
   const [filtros, setFiltros] = useState<EstadoDosFiltros>(FILTROS_VAZIOS);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [recusas, setRecusas] = useState<Record<string, string>>({});
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
 
   const recarregar = useCallback(() => setTentativa((t) => t + 1), []);
 
@@ -91,13 +92,18 @@ export function QualificacaoClient() {
 
   useEffect(() => {
     let vivo = true;
-    void buscarPainel<TelaDaQualificacao>(
+    const buscar = () => void buscarPainel<TelaDaQualificacao>(
       `/api/admin/sala-de-vendas/qualificacao?${consulta}`,
     ).then((e) => {
-      if (vivo) setEstado(e);
+      if (!vivo) return;
+      setEstado(e);
+      if (e.fase === "pronto") setAtualizadoEm(new Date());
     });
+    buscar();
+    const intervalo = window.setInterval(buscar, 30_000);
     return () => {
       vivo = false;
+      window.clearInterval(intervalo);
     };
   }, [tentativa, consulta]);
 
@@ -169,7 +175,7 @@ export function QualificacaoClient() {
           contexto="Leads › Qualificação e Lead Score"
           titulo="Qualificação e Lead Score"
           subtitulo="Analise, priorize e direcione os melhores leads para o time de vendas."
-          atualidade="Tempo real"
+          atualidade={atualizadoEm ? `Atualização automática · ${atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : undefined}
         />
 
         <p className="mt-2 max-w-[80ch] text-[12.5px] leading-relaxed text-muted">

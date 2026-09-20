@@ -192,8 +192,9 @@ describe("as duas conversões: a trilha é o HISTÓRICO, não quem segura o lead
   });
 });
 
-describe("ranking de vendedores: a coluna SLA sai declarada ausente, nunca estimada", () => {
-  it("ordena por vendas e nomeia quem saiu do cadastro", async () => {
+describe("ranking de vendedores: SLA sai das respostas humanas, nunca de estimativa", () => {
+  it("ordena por vendas, nomeia quem saiu e mede entrada→resposta por autor", async () => {
+    const t0 = new Date("2026-09-15T10:00:00Z");
     const r = await rankingDeVendedores(
       db({
         siteLead: [
@@ -207,6 +208,12 @@ describe("ranking de vendedores: a coluna SLA sai declarada ausente, nunca estim
           { id: "u1", nome: "Ana" },
           { id: "u2", nome: "Bruno" },
         ],
+        leadMensagem: [
+          { id: "m1", leadId: "1", direcao: "ENTRADA", createdAt: t0, autorUserId: null },
+          { id: "m2", leadId: "1", direcao: "SAIDA", createdAt: new Date(t0.getTime() + 8 * MIN), autorUserId: "u1" },
+          { id: "m3", leadId: "2", direcao: "ENTRADA", createdAt: t0, autorUserId: null },
+          { id: "m4", leadId: "2", direcao: "SAIDA", createdAt: new Date(t0.getTime() + 22 * MIN), autorUserId: "u1" },
+        ],
       }),
       P,
     );
@@ -215,11 +222,21 @@ describe("ranking de vendedores: a coluna SLA sai declarada ausente, nunca estim
     expect(r.linhas[0]!.atendimentos).toBe(2);
     expect(r.linhas[0]!.vendas).toBe(1);
 
-    // ⛔ A coluna do desenho que não tem fonte. Se alguém a preencher, isto cai.
-    expect(r.slaPorPessoa.medido).toBe(false);
-    expect(r.slaPorPessoa.medido === false && r.slaPorPessoa.motivo).toContain(
-      "não grava o instante em que cada pessoa respondeu",
+    expect(r.slaPorPessoa).toEqual({ medido: true, valor: { prazoMinutos: 30, pessoasComAmostra: 1 } });
+    expect(r.linhas[0]!.sla).toEqual({ medido: true, valor: { minutos: 15, base: 2, dentroDoPrazo: 2 } });
+    expect(r.linhas.find((l) => l.userId === "u2")!.sla.medido).toBe(false);
+  });
+
+  it("sem par entrada→saída humana continua não medido, nunca zero", async () => {
+    const r = await rankingDeVendedores(
+      db({
+        siteLead: [lead("1", { createdAt: new Date("2026-09-15T10:00:00Z"), atendenteUserId: "u1" })],
+        internalUser: [{ id: "u1", nome: "Ana" }],
+      }),
+      P,
     );
+    expect(r.slaPorPessoa.medido).toBe(false);
+    expect(r.linhas[0]!.sla.medido).toBe(false);
   });
 });
 

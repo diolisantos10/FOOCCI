@@ -1,14 +1,11 @@
-/** Comercial → CRM IA. Tela nova; nada existente foi movido. */
+/** Endereço antigo: a régua agora é uma aba do CRM único. */
 
-import { CrmClient } from "./CrmClient";
+import { redirect } from "next/navigation";
+import { ROTAS } from "@/lib/sala/rotas";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "CRM IA · Sala de Vendas" };
 
 export default function CrmPage() {
-  return (
-    <div className="min-h-full bg-canvas">
-      <CrmClient />
-    </div>
-  );
+  redirect(`${ROTAS.crmIa}?aba=regua`);
 }

@@ -32,6 +32,7 @@ function mockGraph(): MetaGraph {
   return {
     exchangeCode: vi.fn(async () => ({ accessToken: "USER_TOKEN_SECRET" })),
     listPages: vi.fn(async () => [pageWithIg, pageNoIg]),
+    subscribePage: vi.fn(async () => true),
   };
 }
 

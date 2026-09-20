@@ -49,7 +49,9 @@ const AGORA = new Date("2026-09-09T17:00:00Z");
 
 const EMAIL_DO_TESTE = "jornada-retentativa@teste.foocci";
 const PHONE_NUMBER_ID_DO_TESTE = "000000000009999";
-const NOME_DO_MODELO_DO_TESTE = "foocci_abordagem_inicial";
+// A seleção de primeiro contato é fechada nos três nomes aprovados pela Meta.
+// Usar um nome legado aqui faria a jornada testar o setup, não a retentativa.
+const NOME_DO_MODELO_DO_TESTE = "foocci_contato_inicial_03";
 const CORPO_DO_MODELO_DO_TESTE = "Olá, {{1}}! Esta é uma abordagem sintética da jornada.";
 const ambiente = { ...process.env };
 
@@ -157,7 +159,7 @@ beforeEach(() => {
     providerMessageId: `wamid.JORNADA.RETENTATIVA.${++contadorDeWamid}`,
   }));
   canalPronto.mockReturnValue(true);
-  process.env.FOOCCI_SDR_MODELO_ABORDAGEM = "foocci_abordagem_inicial";
+  process.env.FOOCCI_SDR_MODELO_ABORDAGEM = NOME_DO_MODELO_DO_TESTE;
   process.env.FOOCCI_SDR_MODELO_IDIOMA = "pt_BR";
   process.env.FOOCCI_SDR_MODELO_VARIAVEIS = "1";
   process.env.FOOCCI_SALES_PHONE_NUMBER_ID = PHONE_NUMBER_ID_DO_TESTE;

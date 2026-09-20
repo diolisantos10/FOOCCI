@@ -80,10 +80,12 @@ describe("⛔ a trava: o texto frio e o texto morno não se cruzam", () => {
     }
   });
 
-  it("⛔ fail-closed: sem modelo de formulário liberado, NÃO cai para o frio", async () => {
+  it("⛔ sem modelo de formulário, só aceita a reserva neutra — nunca os textos frios que presumem estranho", async () => {
     const soFrios = { $queryRaw: async () => LIBERADOS.slice(0, 3) } as never;
     const e = await escolherModeloDoLeadDeFormulario(soFrios, { jaSabeORestaurante: true });
-    expect(e.ok).toBe(false);
+    expect(e.ok).toBe(true);
+    expect(e.ok && e.modelo.nome).toBe("foocci_contato_inicial_03");
+    expect(e.ok && e.motivo).toBe("reservaNeutra");
   });
 });
 

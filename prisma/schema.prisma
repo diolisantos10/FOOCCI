@@ -5907,6 +5907,8 @@ model InternalUser {
   disponibilidade              SdrDisponibilidade?
   versoesQuePublicou           SdrIaConfigVersao[]       @relation("VersaoPublicadaPor")
   versoesDaAcademiaQuePublicou AcademiaComercialVersao[] @relation("AcademiaVersaoPublicadaPor")
+  progressoNoTreinamento       TreinamentoComercialProgresso[]
+  avaliacoesDeTreinamento      TreinamentoComercialAvaliacao[]
   avaliacoesRecebidas          LeadAvaliacaoQA[]         @relation("QAAvaliado")
   avaliacoesQueFez             LeadAvaliacaoQA[]         @relation("QAAvaliador")
 
@@ -7568,6 +7570,63 @@ model AcademiaComercialItem {
   @@unique([versaoId, chaveOriginal])
   @@index([versaoId, categoria, etapa])
   @@map("academia_comercial_itens")
+}
+
+/// Os três eixos que formam alguém capaz de vender o Foocci. Produto sem
+/// método vira demonstração de funcionalidades; método sem produto vira
+/// promessa; segurança sem os dois só impede erro, mas não produz venda.
+enum EixoDoTreinamentoComercial {
+  PRODUTO
+  VENDA_CONSULTIVA
+  SEGURANCA_E_MARCA
+}
+
+/// A mesma régua recebe evidência de gente e de agente de IA. A origem fica
+/// explícita para nunca comparar uma prova de múltipla escolha com desempenho
+/// real como se fossem a mesma medição.
+enum OrigemDaAvaliacaoComercial {
+  PROVA_HUMANA
+  CENARIOS_DE_IA
+  DESEMPENHO_REAL
+}
+
+/// Uma unidade concluída no Centro de Treinamento. `unidadeId` é a chave
+/// estável da fonte aprovada (item da verdade, capítulo do manual ou frente da
+/// Academia), não uma cópia do conteúdo. Quando a verdade muda, a tela lê a
+/// fonte nova e o histórico continua apontando para a mesma unidade.
+model TreinamentoComercialProgresso {
+  id             String                      @id @default(cuid())
+  internalUserId String
+  eixo           EixoDoTreinamentoComercial
+  unidadeId      String
+  concluidoEm    DateTime                    @default(now())
+  atualizadoEm   DateTime                    @updatedAt
+
+  internalUser InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+
+  @@unique([internalUserId, unidadeId])
+  @@index([internalUserId, eixo])
+  @@map("treinamento_comercial_progressos")
+}
+
+/// Uma medição de domínio — humana ou de IA — sempre com denominador e
+/// evidência. A nota fica materializada para o painel, mas a contagem preserva
+/// como ela nasceu e impede um "85%" sem prova atrás.
+model TreinamentoComercialAvaliacao {
+  id             String                      @id @default(cuid())
+  internalUserId String
+  eixo           EixoDoTreinamentoComercial
+  origem         OrigemDaAvaliacaoComercial
+  nota           Int
+  acertos        Int
+  total          Int
+  evidencia      Json?
+  criadaEm       DateTime                    @default(now())
+
+  internalUser InternalUser @relation(fields: [internalUserId], references: [id], onDelete: Cascade)
+
+  @@index([internalUserId, eixo, criadaEm])
+  @@map("treinamento_comercial_avaliacoes")
 }
 
 /// Uma sequência de toques programada (cadência).
