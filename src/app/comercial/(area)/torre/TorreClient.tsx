@@ -150,8 +150,9 @@ export interface DadosDaTorre {
       atendimentos: number;
       vendas: number;
       conversao: Taxa;
+      sla: Medida<{ minutos: number; base: number; dentroDoPrazo: number }>;
     }>;
-    slaPorPessoa: Medida<never>;
+    slaPorPessoa: Medida<{ prazoMinutos: number; pessoasComAmostra: number }>;
   };
   sla: Medida<{ minutos: number; base: number; semResposta: number }>;
   receitaDoDia: { hoje: Receita; ontem: Receita };
@@ -516,10 +517,8 @@ export function SecaoSaudeDaFila({ dados }: { dados: DadosDaTorre }) {
 }
 
 /**
- * O RANKING DE VENDEDORES do desenho — com a coluna SLA declarada ausente.
- *
- * O desenho tem seis colunas; cinco têm fonte. A sexta fica na tabela, vazia e
- * explicada: coluna que some é coluna que ninguém percebe que falta.
+ * O RANKING DE VENDEDORES com SLA por autoria real: entrada do lead seguida da
+ * primeira saída humana, atribuída por `autorUserId`.
  */
 export function SecaoRanking({ dados }: { dados: DadosDaTorre }) {
   const r = dados.ranking;
@@ -548,18 +547,23 @@ export function SecaoRanking({ dados }: { dados: DadosDaTorre }) {
                   </Celula>
                   <Celula numero>{l.vendas}</Celula>
                   <Celula>
-                    <span className="italic text-muted">não medido</span>
+                    {l.sla.medido ? (
+                      <span className="tabular-nums text-ink2">
+                        {l.sla.valor.minutos} min · {Math.round((l.sla.valor.dentroDoPrazo / l.sla.valor.base) * 100)}% no prazo
+                        <span className="block text-[10.5px] text-muted">{l.sla.valor.base} resposta(s)</span>
+                      </span>
+                    ) : <span className="italic text-muted">não medido</span>}
                   </Celula>
                 </Linha>
               );
             })}
           </Tabela>
-          {!r.slaPorPessoa.medido && (
+          {!r.slaPorPessoa.medido ? (
             <Aviso>
-              <strong>A coluna SLA do desenho fica vazia, e não com um tempo estimado.</strong>{" "}
+              <strong>Não há amostra humana para o SLA deste período.</strong>{" "}
               {r.slaPorPessoa.motivo}.
             </Aviso>
-          )}
+          ) : <p className="text-[11.5px] text-muted">Prazo vigente: {r.slaPorPessoa.valor.prazoMinutos} min · {r.slaPorPessoa.valor.pessoasComAmostra} pessoa(s) com amostra.</p>}
         </>
       )}
     </Secao>

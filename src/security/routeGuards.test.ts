@@ -108,6 +108,34 @@ const ADMIN_GUARD = /\b(guardAdmin|checkAdminRequest|autorizarInterno|guardarSal
 // admin route that merely "forgets" the guard still fails the build.
 const ADMIN_GUARD_EXEMPT = new Map<string, string>([
   [
+    "admin/comercial/abordar-agora/route.ts",
+    "comando operacional com segredo exclusivo ABORDAR_AGORA_SECRET, comparação em tempo constante e fail-closed; não aceita a sessão administrativa genérica porque dispara mensagem real.",
+  ],
+  [
+    "admin/comercial/limpar-conversas/route.ts",
+    "comando destrutivo com segredo exclusivo LIMPEZA_CONVERSAS_SECRET, comparação em tempo constante, ensaio por padrão e execução somente com apagar=1.",
+  ],
+  [
+    "admin/comercial/reabordagem/disparar/route.ts",
+    "campanha com segredo exclusivo REABORDAGEM_SECRET; o mesmo porteiro próprio protege disparo, parada e retomada, além dos freios persistidos no banco.",
+  ],
+  [
+    "admin/comercial/reabordagem/parar/route.ts",
+    "interruptor de pânico da reabordagem, protegido pelo mesmo REABORDAGEM_SECRET exclusivo e fail-closed da rota de disparo.",
+  ],
+  [
+    "admin/comercial/religar-frio/route.ts",
+    "comando de manutenção com segredo exclusivo RELIGAMENTO_FRIO_SECRET, comparação em tempo constante e ensaio por padrão; só escreve com gravar=1.",
+  ],
+  [
+    "admin/meta-leads/backfill/route.ts",
+    "resgate de leads com FOOCCI_META_LEADS_BACKFILL_KEY exclusiva e fail-closed; a rota precisa funcionar sem sessão de navegador e não reutiliza ADMIN_SECRET.",
+  ],
+  [
+    "admin/whatsapp/catalogo-de-modelos/route.ts",
+    "automação de catálogo com FOOCCI_WHATSAPP_TEMPLATES_KEY exclusiva e fail-closed; usa conferirChaveDoCatalogo e não aceita credencial genérica.",
+  ],
+  [
     "admin/pessoas/route.ts",
     "a área de RH: cria, lista e CORTA acesso de gente. Faz autorização própria e " +
       "MAIS ESTREITA que a guarda comum: exige `ADMIN_SECRET` ou sessão de " +

@@ -116,6 +116,7 @@ function strip(c: PageCandidate): PublicPageCandidate {
 export interface MetaGraph {
   exchangeCode(input: { code: string; redirectUri: string; creds: MetaAppCreds }): Promise<{ accessToken: string }>;
   listPages(userAccessToken: string): Promise<PageCandidate[]>;
+  subscribePage(pageId: string, pageAccessToken: string): Promise<boolean>;
 }
 
 /**
@@ -194,6 +195,7 @@ export const realMetaGraph: MetaGraph = {
       hasInstagram: !!p.instagram_business_account?.id,
     }));
   },
+  subscribePage: subscribePageToMessenger,
 };
 
 // ── Auth URL ─────────────────────────────────────────────────────────────────
@@ -365,7 +367,7 @@ export async function selectPage(
   // Subscribe the Page to Messenger webhook fields so inbound DMs reach our webhook.
   // Best-effort: a failure must NOT block the connection (it can be re-run / set in the
   // Meta App Dashboard). Instagram-linked Pages benefit from this too.
-  try { await subscribePageToMessenger(page.pageId, page.pageAccessToken); } catch { /* non-fatal */ }
+  try { await graph.subscribePage(page.pageId, page.pageAccessToken); } catch { /* non-fatal */ }
 
   // Consume the state and wipe the stored user token.
   await prisma.metaOAuthState.update({

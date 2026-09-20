@@ -16,11 +16,16 @@
  * os clientes dele vive em `src/services/crm/**` e não aparece nesta tela.
  */
 
-import { CrmIaClient } from "./CrmIaClient";
+import { Suspense } from "react";
+import { CrmUnificadoClient } from "./CrmUnificadoClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "CRM IA · Plano do dia · Sala de Vendas" };
 
 export default function CrmIaPage() {
-  return <CrmIaClient />;
+  return (
+    <Suspense fallback={<div className="p-6 text-[13px] text-muted">Abrindo o CRM IA…</div>}>
+      <CrmUnificadoClient />
+    </Suspense>
+  );
 }

@@ -182,7 +182,7 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
     ROTAS.agentes, ROTAS.precos, ROTAS.ensaio, ROTAS.painel, ROTAS.agente,
     ROTAS.whatsapp, ROTAS.supervisora, ROTAS.prospeccao, ROTAS.baseFria,
     ROTAS.importacoes, ROTAS.torre, ROTAS.atendimento, ROTAS.sdr,
-    ROTAS.qualificacao, ROTAS.roteamento, ROTAS.oferta, ROTAS.crm,
+    ROTAS.qualificacao, ROTAS.roteamento, ROTAS.oferta,
     ROTAS.relacionamento, ROTAS.acessos,
     /* 19/09/2026 — a 25ª. NÃO é uma tela "aproveitando a faxina": é a porta de
      * entrada manual que não existia, e cuja ausência deixou um lead pago 20
@@ -217,6 +217,10 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
      * acrescenta uma aba. */
     ROTAS.crmIa,
     ROTAS.followUpAutomatico,
+    /* 20/09/2026 — Centro de Treinamento. `ROTAS.crm` não entra mais nesta
+     * lista: virou endereço antigo que redireciona para a aba Régua do CRM IA.
+     * Preservar favorito não obriga a manter duas portas divergentes no menu. */
+    ROTAS.treinamento,
   ];
 
   it("⛔ nenhum dos endereços do menu sumiu", () => {

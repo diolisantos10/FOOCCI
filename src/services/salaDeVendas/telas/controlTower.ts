@@ -21,6 +21,7 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { taxa, type Taxa } from "../painel";
+import { MINUTOS_PARA_A_PRIMEIRA_RESPOSTA } from "../recepcao/prazoDaPrimeiraResposta";
 
 type Banco = PrismaClient | Prisma.TransactionClient;
 
@@ -258,21 +259,16 @@ export interface LinhaDoRanking {
   atendimentos: number;
   vendas: number;
   conversao: Taxa;
+  sla: Medida<{ minutos: number; base: number; dentroDoPrazo: number }>;
 }
 
 export interface RankingDeVendedores {
   linhas: LinhaDoRanking[];
-  /**
-   * ⚠️ A coluna SLA do desenho **não existe** — e o motivo vai escrito na tela,
-   * não só aqui. Ver `MOTIVO_DO_SLA_POR_PESSOA`.
-   */
-  slaPorPessoa: Medida<never>;
+  slaPorPessoa: Medida<{ prazoMinutos: number; pessoasComAmostra: number }>;
 }
 
 export const MOTIVO_DO_SLA_POR_PESSOA =
-  "a casa grava o PRAZO do lead (`slaVenceEm`, desde 18/09/2026) e se ele estourou, mas não grava " +
-  "o instante em que cada pessoa respondeu — sem esse carimbo não existe média por vendedor, e " +
-  "qualquer número nesta coluna seria estimativa vestida de medição";
+  "nenhuma saída humana do período tem uma entrada do lead imediatamente anterior; sem pares entrada→resposta, a coluna não tem amostra";
 
 /**
  * O ranking do desenho, com as colunas que têm fonte e sem a que não tem.
@@ -288,7 +284,7 @@ export async function rankingDeVendedores(
 ): Promise<RankingDeVendedores> {
   const janela = { createdAt: { gte: params.de, lt: params.ate } };
 
-  const [porPessoa, ganhosPorPessoa, pessoas] = await Promise.all([
+  const [porPessoa, ganhosPorPessoa, pessoas, mensagens] = await Promise.all([
     db.siteLead.groupBy({
       by: ["atendenteUserId"],
       where: { ...janela, atendenteUserId: { not: null } },
@@ -300,7 +296,33 @@ export async function rankingDeVendedores(
       _count: { _all: true },
     }),
     db.internalUser.findMany({ select: { id: true, nome: true } }),
+    db.leadMensagem.findMany({
+      where: { createdAt: { gte: params.de, lt: params.ate } },
+      select: { leadId: true, direcao: true, createdAt: true, autorUserId: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
+
+  const prazoMinutos = MINUTOS_PARA_A_PRIMEIRA_RESPOSTA;
+  const entradaPendente = new Map<string, Date>();
+  const amostras = new Map<string, number[]>();
+  for (const mensagem of mensagens) {
+    if (mensagem.direcao === "ENTRADA") {
+      if (!entradaPendente.has(mensagem.leadId)) entradaPendente.set(mensagem.leadId, mensagem.createdAt);
+      continue;
+    }
+    const entrada = entradaPendente.get(mensagem.leadId);
+    if (!entrada) continue;
+    // A primeira saída encerra o relógio daquele turno. Se foi da IA, o turno
+    // não vira amostra de gente; atribuir a resposta humana posterior seria
+    // cobrar da pessoa por um SLA que a casa já cumpriu.
+    entradaPendente.delete(mensagem.leadId);
+    if (!mensagem.autorUserId) continue;
+    const minutos = Math.max(0, (mensagem.createdAt.getTime() - entrada.getTime()) / MINUTO);
+    const lista = amostras.get(mensagem.autorUserId) ?? [];
+    lista.push(minutos);
+    amostras.set(mensagem.autorUserId, lista);
+  }
 
   const nomes = new Map(pessoas.map((p) => [p.id, p.nome]));
   const ganhos = new Map(ganhosPorPessoa.map((g) => [g.atendenteUserId as string, g._count._all]));
@@ -318,11 +340,24 @@ export async function rankingDeVendedores(
         atendimentos,
         vendas,
         conversao: taxa(vendas, atendimentos),
+        sla: (() => {
+          const tempos = amostras.get(userId) ?? [];
+          if (tempos.length === 0) return { medido: false as const, motivo: "sem resposta humana pareada no período" };
+          const minutos = Math.round(tempos.reduce((s, n) => s + n, 0) / tempos.length);
+          const dentroDoPrazo = tempos.filter((n) => n <= prazoMinutos).length;
+          return { medido: true as const, valor: { minutos, base: tempos.length, dentroDoPrazo } };
+        })(),
       };
     })
     .sort((a, b) => b.vendas - a.vendas || b.atendimentos - a.atendimentos);
 
-  return { linhas, slaPorPessoa: { medido: false, motivo: MOTIVO_DO_SLA_POR_PESSOA } };
+  const pessoasComAmostra = linhas.filter((l) => l.sla.medido).length;
+  return {
+    linhas,
+    slaPorPessoa: pessoasComAmostra > 0
+      ? { medido: true, valor: { prazoMinutos, pessoasComAmostra } }
+      : { medido: false, motivo: MOTIVO_DO_SLA_POR_PESSOA },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

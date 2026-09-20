@@ -129,7 +129,30 @@ function banco(lead: Record<string, unknown> = {}) {
     },
     siteLeadInteraction: { create: vi.fn().mockResolvedValue({}) },
     leadHandoff: { create: vi.fn().mockResolvedValue({ id: "h1" }) },
-    internalUser: { findMany: vi.fn().mockResolvedValue([]) },
+    internalUser: {
+      findMany: vi.fn(async (args: { where?: { role?: unknown } }) => {
+        // Esta jornada prova o conector e o handoff concluído. Desde D-0E4, uma
+        // fila vazia mantém o lead com a IA — comportamento coberto nominalmente
+        // em `pedidoDeGenteSemFila.test.ts`. Aqui existe uma pessoa disponível,
+        // porque sem ela o teste deixaria de alcançar justamente a metade
+        // humana que pretende provar.
+        const papel = args?.where?.role;
+        if (!papel || typeof papel !== "object" || !("in" in papel)) return [];
+        return [
+          {
+            id: "humano-1",
+            nome: "Vendedora disponível",
+            disponibilidade: {
+              estado: "DISPONIVEL",
+              capacidade: 10,
+              especialidades: [],
+              regioes: [],
+              pausadoAte: null,
+            },
+          },
+        ];
+      }),
+    },
   };
 }
 

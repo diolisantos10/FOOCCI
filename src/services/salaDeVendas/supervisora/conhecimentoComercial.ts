@@ -296,3 +296,22 @@ export function principiosDoPlaybook(): readonly string[] {
 export function frentesDaDoutrina(): readonly string[] {
   return FRENTES.map((f) => f.titulo);
 }
+
+/**
+ * A mesma doutrina em formato de aula. O Centro de Treinamento consome esta
+ * projeção em vez de manter uma apostila paralela: quando a Supervisora muda
+ * de regra, gente e agente passam a estudar a mesma versão no mesmo commit.
+ */
+export function doutrinaParaTreinamento(): ReadonlyArray<{
+  id: string;
+  titulo: string;
+  faz: readonly string[];
+  nuncaFaz: readonly string[];
+}> {
+  return FRENTES.map((frente) => ({
+    id: `doutrina-frente-${frente.numero}`,
+    titulo: frente.titulo,
+    faz: frente.faz,
+    nuncaFaz: frente.nuncaFaz,
+  }));
+}
