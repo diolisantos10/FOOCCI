@@ -119,6 +119,36 @@ export const ACESSOS_DECLARADOS: readonly AcessoDeclarado[] = [
       "ler:funil",
     ],
   },
+  {
+    nome: "Sol",
+    email: "sol@agentes.foocci.com.br",
+    // Ordem do CEO em 20/09/2026: *"não quero fazer nada, eu quero só dar
+    // acesso a ela"*, depois de a Sol pedir acesso total para finalizar a Sala
+    // Comercial. A largura do PAPEL é escolha dele; a do ALCANCE está abaixo.
+    papel: "DIRETOR_FOOCCI",
+    crachaConnect: "dioli.control-room.arquitetura.sol",
+    porque:
+      "Arquiteta responsável por finalizar a Sala Comercial da Foocci, por ordem do CEO em " +
+      "20/09/2026. Audita o construído contra o projeto e executa os ajustes.",
+    // ⚠️ O ALCANCE É O QUE EXISTE HOJE, NÃO O QUE FOI PEDIDO.
+    //
+    // O pedido foi "acesso total, inclusive escrita em produção". Esta porta
+    // **não tem** isso para dar: o catálogo de alcances desta casa tem cinco
+    // leituras e nenhuma escrita. Declarar `escrever:*` aqui seria escrever um
+    // nome de permissão que nenhum código reconhece — e uma permissão que não
+    // existe não vira acesso, vira a ilusão de acesso, que é pior: quem confia
+    // nela descobre a falta no meio do trabalho.
+    //
+    // Então vai o máximo real, dito pelo nome. Alargar é pedido novo, com o
+    // alcance implementado antes de ser concedido.
+    alcance: [
+      "ler:quem-sou",
+      "ler:leads",
+      "ler:lead-detalhe",
+      "ler:fila-de-contato",
+      "ler:funil",
+    ],
+  },
 ];
 
 export interface ResultadoDaAplicacao {
