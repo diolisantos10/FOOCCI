@@ -8,6 +8,10 @@ export type HandoffReason =
   | "CUSTOMER_REQUEST"
   | "COMPLAINT"
   | "CART_RECOVERY"
+  // Operador clicou "Assumir atendimento". NÃO é decisão da IA — carimbar isso
+  // como AI_ESCALATION fazia a Central mostrar "IA solicitou atendimento humano"
+  // em conversa onde a IA sequer falou (caso Nathalia, 20/09/2026).
+  | "HUMAN_TAKEOVER"
   | "UNKNOWN";
 
 /**

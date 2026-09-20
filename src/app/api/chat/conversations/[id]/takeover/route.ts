@@ -32,7 +32,7 @@ export async function POST(
     if (!conv || conv.restaurantId !== ctx.restaurantId) return notFound();
 
     // Record handoff event (idempotent; creates SYSTEM message for inactivity tracking)
-    await markConversationNeedsHuman(id, "AI_ESCALATION");
+    await markConversationNeedsHuman(id, "HUMAN_TAKEOVER");
 
     // Takeover sets a more specific status and assigns the operator
     const updated = await prisma.conversation.update({

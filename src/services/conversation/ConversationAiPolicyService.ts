@@ -30,6 +30,7 @@ export type AiPolicyReason =
   | "INTERNAL_LOCK"    // permanent lock — internal/admin
   | "MANUAL_LOCK"      // permanent lock — other non-customer (partner/other)
   | "CRM_CONTEXT"      // CRM campaign/automation origin — human handles reply
+  | "CRM_MENU"          // CRM origin, mas a mensagem é saudação/menu → a IA abre o menu
   | "RESOLVED"         // conversation closed
   | "UNKNOWN";         // status not in an AI-eligible state
 
@@ -66,12 +67,28 @@ function lockReasonFor(type: ConversationType): AiPolicyReason {
  * Precedence (highest first):
  *  1. Permanent lock (aiLocked OR non-customer classification) → never reply.
  *  2. Resolved → never auto-reply.
- *  3. CRM campaign/automation context → human handles the reply.
+ *  3. CRM campaign/automation context → human handles the reply, EXCETO quando a
+ *     mensagem é uma interação de menu (saudação, "cardápio", "0", número solto).
  *  4. Temporary human takeover (aiEnabled=false) → don't reply.
  *  5. Status not AI-eligible → don't reply.
  *  6. Otherwise → allowed.
  */
-export function shouldAiRespond(conv: AiPolicyConversation): AiPolicyDecision {
+/**
+ * Sinais do TURNO — o que a conversa sozinha não sabe.
+ *
+ * `inboundIsMenuInteraction` é medido por quem recebeu a mensagem (as guardas de
+ * entrada), com o MESMO detector de intenção que o recepcionista usa para montar
+ * o menu. Pura de propósito: a decisão continua testável sem banco.
+ */
+export interface AiPolicyTurn {
+  /** A mensagem é saudação, pedido de menu, "0"/voltar ou número de opção. */
+  inboundIsMenuInteraction?: boolean;
+}
+
+export function shouldAiRespond(
+  conv: AiPolicyConversation,
+  turn?: AiPolicyTurn,
+): AiPolicyDecision {
   // 1. Permanent lock — strongest. A non-customer classification implies a lock
   //    even if a stale aiEnabled=true slipped through, and aiLocked alone also
   //    counts (e.g. OTHER_NON_CUSTOMER kept as CUSTOMER type but locked).
@@ -85,8 +102,23 @@ export function shouldAiRespond(conv: AiPolicyConversation): AiPolicyDecision {
     return { allowed: false, reason: "RESOLVED", locked: false };
   }
 
-  // 3. CRM-origin conversations go to a human first.
-  if (conv.contextType === "CRM_CAMPAIGN" || conv.contextType === "CRM_AUTOMATION") {
+  // 3. Conversa nascida de campanha: o humano atende PRIMEIRO — menos quando a
+  //     mensagem tem resposta óbvia e fixa.
+  //
+  //     ── O caso da Nathalia (Sushi Cazza, 20/09/2026) ────────────────────────
+  //     Campanha às 13:31; às 18:18 a cliente respondeu "oi", às 18:19 "?", e o
+  //     menu nunca apareceu — esta linha devolvia CRM_CONTEXT, nenhum agente era
+  //     acionado e a conversa acabou na mão de um operador com o carimbo "IA
+  //     solicitou atendimento humano". A IA não escolheu chamar gente: ela NUNCA
+  //     FOI CHAMADA. Regra fixa disfarçada de decisão de IA.
+  //
+  //     O que a regra protegia continua protegido: pergunta aberta, reclamação e
+  //     pedido de atendente vindos de campanha seguem indo para gente. O que muda
+  //     é só a saudação — cuja resposta é o menu numerado, determinístico, sem
+  //     LLM e sem promessa nenhuma de retorno humano.
+  const crmOrigin =
+    conv.contextType === "CRM_CAMPAIGN" || conv.contextType === "CRM_AUTOMATION";
+  if (crmOrigin && !turn?.inboundIsMenuInteraction) {
     return { allowed: false, reason: "CRM_CONTEXT", locked: false };
   }
 
@@ -104,7 +136,7 @@ export function shouldAiRespond(conv: AiPolicyConversation): AiPolicyDecision {
     return { allowed: false, reason: "UNKNOWN", locked: false };
   }
 
-  return { allowed: true, reason: "AI_ACTIVE", locked: false };
+  return { allowed: true, reason: crmOrigin ? "CRM_MENU" : "AI_ACTIVE", locked: false };
 }
 
 // ─── DB mutations ─────────────────────────────────────────────────────────────

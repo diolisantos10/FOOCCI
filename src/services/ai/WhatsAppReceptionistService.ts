@@ -123,8 +123,18 @@ const PAYMENT_RE =
 const ORDER_STATUS_RE =
   /cadê (meu|o) pedido|cadê meu|status (do|de) (meu |o )?pedido|acompanhar (meu )?pedido|onde está meu|quanto tempo (falta|demora)|previsão de entrega|previsao de entrega/i;
 
+/**
+ * Mensagem sem conteúdo: só pontuação, emoji ou símbolo ("?", "!!", "👍").
+ *
+ * A cliente Nathalia mandou "?" depois de "oi" e isso caía em UNKNOWN — a porta
+ * do "não entendi", e no lado de quem veio de campanha, a porta do humano. "?"
+ * não é pergunta aberta: é alguém pedindo atenção. Resposta certa é o menu.
+ */
+const SEM_CONTEUDO_RE = /^[\p{P}\p{S}\s]+$/u;
+
 export function detectIntent(text: string): Intent {
   const t = text.toLowerCase().trim();
+  if (t && SEM_CONTEUDO_RE.test(t)) return "GREETING";
   // Complaint and human request take priority — never silently ignore them.
   if (COMPLAINT_RE.test(t))    return "COMPLAINT";
   if (HUMAN_RE.test(t))        return "HUMAN_REQUEST";
