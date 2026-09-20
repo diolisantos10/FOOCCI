@@ -73,8 +73,8 @@ Informações dinâmicas — preço, status de feature, integração, política 
 ### Treinamento e avaliação
 - `13-ROLEPLAYS-E-CASOS.md`
 - `14-AVALIACAO-E-CERTIFICACAO.md`
-- `21-BANCO-DE-QUESTOES.md`
 - `20-TEMPLATES-OPERACIONAIS.md`
+- `21-BANCO-DE-QUESTOES.md`
 
 ### IA, governança e precisão
 - `15-AGENTES-IA-COMERCIAIS.md`
@@ -89,6 +89,8 @@ Informações dinâmicas — preço, status de feature, integração, política 
 - `27-GLOSSARIO-COMERCIAL.md`
 - `28-CURRICULO-MESTRE.md`
 - `29-HANDOFF-PARA-ARQUITETA.md`
+- `30-PROMPT-DE-EXECUCAO-PARA-ARQUITETA.md`
+- `31-CRITERIOS-DE-ACEITE-DA-SALA.md`
 
 ## Fontes-base de produto
 
@@ -107,10 +109,16 @@ Informações dinâmicas — preço, status de feature, integração, política 
 
 O handoff recebido em 20/09/2026 trouxe dossiê, pedido original, prompt de continuação, briefings e 101 arquivos-fonte.
 
-## Para a IA arquiteta
+## Para a IA arquiteta — entrada oficial
 
-Use `28-CURRICULO-MESTRE.md` para entender as escolas, competências e trilhas.
-Use `29-HANDOFF-PARA-ARQUITETA.md` para entender os limites da passagem.
+Comece por:
+
+1. `30-PROMPT-DE-EXECUCAO-PARA-ARQUITETA.md`
+2. `28-CURRICULO-MESTRE.md`
+3. `29-HANDOFF-PARA-ARQUITETA.md`
+4. `31-CRITERIOS-DE-ACEITE-DA-SALA.md`
+
+Depois percorra os módulos conforme as trilhas que estiver arquitetando.
 
 A arquiteta define a experiência da sala. Ela **não** deve criar fato de produto, preço, política ou promessa.
 
