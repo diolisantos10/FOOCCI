@@ -53,7 +53,9 @@ const prisma = new PrismaClient();
 const AGORA = new Date("2026-09-14T17:00:00Z");
 
 const PHONE_NUMBER_ID_DO_TESTE = "000000000009998";
-const NOME_DO_MODELO_DO_TESTE = "foocci_abordagem_inicial";
+// A seleção de primeiro contato é fechada nos três nomes aprovados pela Meta.
+// Usar um nome legado aqui faria a jornada parar antes de alcançar a Supervisora.
+const NOME_DO_MODELO_DO_TESTE = "foocci_contato_inicial_03";
 const CORPO_DO_MODELO_DO_TESTE = "Olá, {{1}}! Esta é uma abordagem sintética da jornada da Supervisora.";
 const EMAIL_DO_TESTE = "jornada-supervisora-abordagem@teste.foocci";
 const ambiente = { ...process.env };
