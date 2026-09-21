@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { guardarPainelDaSupervisora, exigirPodeDecidir } from "../_guardaDoPainel";
+import { guardarPainelDaSupervisora, exigirPodeDecidir, PODE_DECIDIR } from "../_guardaDoPainel";
 import { publicarVersaoDaAcademia } from "@/services/salaDeVendas/supervisora/academiaInterruptor";
 
 export const runtime = "nodejs";
@@ -45,6 +45,12 @@ export async function GET(req: NextRequest) {
     ok: true,
     data: {
       versaoAtivaId: config?.versaoAtivaId ?? null,
+      // ⭐ Quem lê nem sempre é quem decide: o auditor enxerga o painel e NÃO
+      // publica (`exigirPodeDecidir`, abaixo). A tela precisa saber disso para
+      // não desenhar um botão que responde 403 no clique — mesmo padrão de
+      // `podeMudarModo` em `../route.ts`. ⚠️ Isto NÃO é a autorização: quem
+      // recusa continua sendo o POST, no servidor.
+      podePublicar: PODE_DECIDIR.has(portao.sessao.role),
       versoes: versoes.map((v) => ({
         id: v.id,
         numero: v.numero,

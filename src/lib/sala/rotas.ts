@@ -119,6 +119,26 @@ export const ROTAS = {
    */
   treinamento: `${COMERCIAL}/treinamento`,
   /**
+   * ⭐ A FOOCCI UNIVERSITY — a maçaneta da Academia Comercial.
+   *
+   * A Academia entrou em produção em 21/09/2026 e ficou DESLIGADA: o
+   * conhecimento dela entra como rascunho e só vira ativo quando uma pessoa
+   * publica a versão (`supervisora/academiaInterruptor.ts`). A trava está
+   * certa; o que não existia era tela nenhuma onde a mão humana apertasse.
+   * Porta sem maçaneta é porta trancada.
+   *
+   * ⚠️ Não é o Centro de Treinamento. `treinamento` é onde GENTE estuda —
+   * trilhas, progresso, avaliação nominal. `university` é onde se vê e se liga
+   * o conhecimento que os AGENTES usam para falar com cliente. Publicar uma
+   * versão muda o que a IA fala; concluir uma trilha não. Juntar as duas na
+   * mesma tela faria um botão de estudo vizinho de um botão que muda a
+   * conversa com cliente real.
+   *
+   * Régua do Painel: publicar é decisão de gestão sobre o comportamento do
+   * agente — a MESMA guarda da Supervisora, que é a rota por trás desta tela.
+   */
+  university: `${COMERCIAL}/university`,
+  /**
    * ⭐ A META DE RECEITA — o único lugar onde a cifra do mês é digitada.
    *
    * Mora no grupo **Painel**, e não em Configurações, porque não é ajuste de
@@ -437,6 +457,10 @@ export const GRUPOS: readonly Grupo[] = [
       { href: ROTAS.whatsapp, rotulo: "WhatsApp", papeis: PAPEIS_DO_WHATSAPP },
       { href: ROTAS.agentes, rotulo: "Agentes" },
       { href: ROTAS.treinamento, rotulo: "Centro de treinamento" },
+      // ⭐ A Foocci University fica ao lado do Centro de Treinamento porque as
+      // duas falam de conhecimento — e é FECHADA pela régua do Painel porque
+      // só ela tem um botão que muda o que a IA fala com cliente de verdade.
+      { href: ROTAS.university, rotulo: "Foocci University", papeis: PAPEIS_DO_PAINEL },
       { href: ROTAS.acessos, rotulo: "Criar acesso", papeis: PAPEIS_DOS_ACESSOS },
     ],
   },

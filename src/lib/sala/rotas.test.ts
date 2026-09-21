@@ -221,6 +221,13 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
      * lista: virou endereço antigo que redireciona para a aba Régua do CRM IA.
      * Preservar favorito não obriga a manter duas portas divergentes no menu. */
     ROTAS.treinamento,
+    /* 21/09/2026 — a Foocci University. A Academia Comercial entrou em
+     * produção DESLIGADA: o conhecimento entra como rascunho e só vira ativo
+     * quando uma pessoa publica a versão, e não havia tela nenhuma onde
+     * apertar. Esta é a maçaneta. Entra escrita aqui, como todas as outras,
+     * porque tela nova no menu é decisão registrada — nunca um número que
+     * cresce sozinho. */
+    ROTAS.university,
   ];
 
   it("⛔ nenhum dos endereços do menu sumiu", () => {
@@ -265,6 +272,13 @@ describe("⭐ agrupar o menu não perdeu endereço nem abriu porta", () => {
       // da tela de trabalho. Ler é de gestão e auditoria; GRAVAR é só do CEO e
       // do Diretor, e quem recusa é a rota.
       ROTAS.meta,
+      /* ⭐ 21/09/2026 — a Foocci University nasce em gestão. Ela não é material
+       * de estudo: é o interruptor do conhecimento que os agentes usam para
+       * falar com cliente real. Quem é medido pela conversa não é quem decide
+       * o que a IA passa a dizer — mesma razão pela qual a Supervisora é
+       * fechada. Ler é gestão e auditoria; PUBLICAR é só quem decide política,
+       * e quem recusa é a rota (`exigirPodeDecidir`). */
+      ROTAS.university,
     ];
     const deTodos = ANTES.filter((h) => !gestao.includes(h) && h !== ROTAS.acessos);
 
