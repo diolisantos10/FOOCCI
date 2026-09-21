@@ -82,7 +82,7 @@ function instrucao(ctx: ContextoDaRevisao, motivoDoAcionamento: string, turnos: 
     "verificado em outra camada, determinística.",
     "",
     `TOM DA MARCA: ${ctx.tomDaMarca}`,
-    ctx.conhecimentoDaAcademia.length
+    ctx.conhecimentoDaAcademia?.length
       ? `\nCONHECIMENTO DA ACADEMIA COMERCIAL (venda consultiva, para esta etapa):\n${ctx.conhecimentoDaAcademia.map((c) => `- ${c}`).join("\n")}`
       : "",
     ctx.resumoIncremental ? `\n${ctx.resumoIncremental}` : "",
