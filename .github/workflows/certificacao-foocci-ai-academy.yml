@@ -70,8 +70,8 @@ jobs:
           npx prisma generate
           npx prisma validate
 
-      - name: Aplicar migrações em PostgreSQL isolado
-        run: npx prisma migrate deploy
+      - name: Materializar schema em PostgreSQL isolado
+        run: npx prisma db push --skip-generate
 
       - name: Exigir provedor real
         run: |
