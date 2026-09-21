@@ -254,6 +254,8 @@ const PROMETEU_HUMANO = new RegExp(
     // "já encaminhei pro time", "já acionei alguém" — o fingimento de que já foi.
     "j[áa]\\s+(?:passei|encaminhei)\\s+(?:isso\\s+)?(?:pro|pra|para\\s+o|para)\\s+time\\b",
     `j[áa]\\s+(?:acionei|chamei|avisei)\\s+${GENTE}`,
+    // "marca uma demonstração com alguém do time" também cria uma fila humana inexistente.
+    `(?:marcar|agendar)\\s+(?:uma\\s+)?(?:demo|demonstra[çc][ãa]o|conversa)\\s+com\\s+${GENTE}`,
   ].join("|"),
   "i",
 );
