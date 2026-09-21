@@ -50,7 +50,15 @@ import { blocoDoOficio, type PosturaDoAgente } from "./oficio";
  * qual o TA aparece nesse roteamento — trocar o motor dele passa a ser
  * configuração, e não edição de código.
  */
-const AGENTE = "sdr-ta-foocci";
+/** SDR e Closer são funções distintas e podem usar provedores/modelos distintos.
+ * Compartilham memória, verdade e guardrails; não compartilham identidade de
+ * roteamento. Assim uma troca de modelo do Closer não altera o SDR. */
+export const AGENTE_SDR = "sdr-foocci";
+export const AGENTE_CLOSER = "closer-foocci";
+
+export function agenteDaPostura(postura: PosturaDoAgente = "qualificar"): string {
+  return postura === "fechar" ? AGENTE_CLOSER : AGENTE_SDR;
+}
 
 /**
  * Quantas vezes se tenta de novo quando o verificador reprova.
@@ -112,9 +120,9 @@ export interface PedidoAoCerebro {
  * variável de ambiente na mão daria a resposta certa hoje e a errada no dia em
  * que o roteamento mudasse de provedor.
  */
-export async function cerebroDisponivel(): Promise<boolean> {
+export async function cerebroDisponivel(postura: PosturaDoAgente = "qualificar"): Promise<boolean> {
   try {
-    const engine = await selectEngineRouted(AGENTE);
+    const engine = await selectEngineRouted(agenteDaPostura(postura));
     return engine.provider !== "MOCK";
   } catch {
     return false;
@@ -203,8 +211,9 @@ function instrucao(
     "- Afirmar integração com iFood, Rappi ou qualquer marketplace.",
     "- Dizer que contratou, ativou ou fechou alguma coisa pelo cliente.",
     "",
-    "SE NÃO SOUBER: diga que não sabe e ofereça chamar alguém do time. Isso é",
-    "uma resposta boa. Inventar é o único erro que não tem conserto.",
+    "SE NÃO SOUBER: diga que não sabe, registre a dúvida e continue ajudando no",
+    "que estiver confirmado. Não prometa ligação ou contato de outra pessoa.",
+    "Admitir o limite é correto. Inventar é o único erro que não tem conserto.",
   ].join("\n");
 }
 
@@ -221,7 +230,7 @@ export async function pensar(
 ): Promise<FalaDoTA> {
   const ficha = pedido.ficha ?? VERSAO_1;
 
-  const engine = await selectEngineRouted(AGENTE).catch(() => null);
+  const engine = await selectEngineRouted(agenteDaPostura(pedido.postura)).catch(() => null);
   if (!engine || engine.provider === "MOCK") {
     return { ...chao(pedido), porque: "sem IA-piloto configurada — respondeu pelo caminho determinístico" };
   }

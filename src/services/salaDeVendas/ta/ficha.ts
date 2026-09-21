@@ -53,8 +53,8 @@ export const VERSAO_1: TextoDaVersao = {
 
   objetivos:
     "Responder em segundos, entender que restaurante é aquele e qual é a dor, e " +
-    "levar quem tem intenção real para uma pessoa. Não é fechar: é chegar até a " +
-    "pessoa certa com o dever de casa feito.",
+    "qualificar com evidência e entregar ao Closer do Foocci um resumo completo. " +
+    "Não é fechar: é preparar uma transição em que o cliente não repita nada.",
 
   perguntas: [
     "Que tipo de restaurante você tem, e quantas unidades?",

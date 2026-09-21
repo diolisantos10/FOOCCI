@@ -9154,3 +9154,78 @@ model MetaDeReceitaHistorico {
   @@index([competencia, alteradoEm])
   @@map("meta_de_receita_historico")
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FOOCCI AI ACADEMY — certificação operacional de SDR, Closer e Supervisora
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum FuncaoDaAcademiaIa {
+  SUPERVISORA
+  SDR
+  CLOSER
+}
+
+enum EstadoDaCertificacaoIa {
+  SEM_EXECUTOR
+  EM_PREPARACAO
+  EM_AVALIACAO
+  APROVADO
+  REPROVADO
+  BLOQUEADO
+  EXPIRADO
+}
+
+model AcademiaIaConfig {
+  id                   String   @id @default("singleton")
+  exigirCertificacao   Boolean  @default(false)
+  conteudoVersao       String   @default("foocci-ai-academy-v1")
+  atualizadoPor        String?
+  atualizadoEm         DateTime @updatedAt
+
+  @@map("academia_ia_config")
+}
+
+model AcademiaIaCertificacao {
+  id               String                    @id @default(cuid())
+  funcao           FuncaoDaAcademiaIa
+  executorId       String
+  executorVersao   String
+  conteudoVersao   String
+  estado           EstadoDaCertificacaoIa    @default(EM_PREPARACAO)
+  nota             Int?
+  falhasCriticas   String[]                  @default([])
+  evidencias       Json?
+  provider         String?
+  modelo           String?
+  certificadaEm    DateTime?
+  validaAte        DateTime?
+  criadaEm         DateTime                  @default(now())
+  atualizadaEm     DateTime                  @updatedAt
+  tentativas       AcademiaIaTentativa[]
+
+  @@unique([funcao, executorId, executorVersao, conteudoVersao])
+  @@index([funcao, estado, atualizadaEm])
+  @@map("academia_ia_certificacoes")
+}
+
+model AcademiaIaTentativa {
+  id               String                    @id @default(cuid())
+  certificacaoId   String?
+  certificacao     AcademiaIaCertificacao?   @relation(fields: [certificacaoId], references: [id], onDelete: SetNull)
+  funcao           FuncaoDaAcademiaIa
+  casoId           String
+  casoVersao       String
+  passou           Boolean
+  nota             Int
+  falhasCriticas   String[]                  @default([])
+  evidencia        Json
+  provider         String?
+  modelo           String?
+  latenciaMs       Int?
+  executadaEm      DateTime                  @default(now())
+
+  @@index([funcao, executadaEm])
+  @@index([certificacaoId])
+  @@map("academia_ia_tentativas")
+}
