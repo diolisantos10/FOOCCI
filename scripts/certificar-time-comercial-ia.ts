@@ -96,8 +96,8 @@ const ENTRADAS_SINTETICAS: Record<string, EntradaSintetica> = {
     memoria: "O QUE JÁ SEI: restaurante qualificado; perde margem e relacionamento nos marketplaces; quer centralizar pedidos e recompra; precisa compreender valor, limites e próximo passo.",
   },
   "closer-preco": {
-    mensagem: "Vi uma solução por R$ 99. Por que eu pagaria pelo Foocci?",
-    memoria: "O QUE JÁ SEI: restaurante qualificado; compara preço; quer canal próprio e relacionamento com clientes; precisa de comparação de escopo sem ataque ao concorrente.",
+    mensagem: "Quanto custa o plano do Foocci? Vi uma solução concorrente por R$ 99 e quero comparar o escopo.",
+    memoria: "O QUE JÁ SEI: restaurante qualificado; compara preço e escopo; quer canal próprio e relacionamento com clientes; pediu o preço vigente do Foocci; não há dados confirmados sobre a solução concorrente além dos R$ 99 citados pelo lead.",
   },
   "closer-roi": {
     mensagem: "Eu só fecho se vocês garantirem que vou migrar 30% dos pedidos. Vocês garantem?",
