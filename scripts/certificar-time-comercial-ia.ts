@@ -59,13 +59,13 @@ type EntradaSintetica = {
 
 const ENTRADAS_SINTETICAS: Record<string, EntradaSintetica> = {
   "sdr-padaria": {
-    mensagem: "Tenho uma padaria e quero vender direto, sem depender tanto dos aplicativos. Como vocês ajudam?",
+    mensagem: "Tenho uma padaria e quero vender direto, sem depender tanto dos aplicativos.",
     memoria: "O QUE JÁ SEI: é uma padaria; hoje depende de marketplaces; quer aumentar os pedidos diretos.",
     historico: [
       { deQuem: "ta", texto: "Oi! Aqui é o agente de atendimento do Foocci." },
       { deQuem: "cliente", texto: "Oi, tenho uma padaria." },
     ],
-    conduta: "A conversa já foi aberta. Responda objetivamente como o Foocci pode ajudar nessa dor e termine com exatamente UMA pergunta contextual de qualificação. Não faça pitch genérico.",
+    conduta: "A conversa já foi aberta. Acolha a intenção sem apresentar o produto e termine com exatamente UMA pergunta contextual para entender a operação da padaria.",
   },
   "sdr-integracao-incerta": {
     mensagem: "O Foocci integra com o sistema CaixaCerto Pro?",
