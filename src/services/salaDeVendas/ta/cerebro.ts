@@ -181,7 +181,7 @@ function instrucao(
     // Vazio quando não se sabe nada — e vazio de propósito: um cabeçalho "O QUE
     // JÁ SEI:" seguido de nada ensina o modelo a preencher o buraco.
     ...(memoria ? [memoria, ""] : []),
-    ...(conduta ? ["COMO CONDUZIR ESTA CONVERSA AGORA:", conduta, ""] : []),
+    ...(conduta ? ["COMO CONDUZIR ESTA CONVERSA AGORA:", conduta, "Esta conduta tem precedência sobre orientações genéricas. Em resumo ou handoff, cite os fatos já registrados na memória e não invente nenhum.", ""] : []),
     // ── A ORDEM DA RESPOSTA, e ela nasceu de um defeito medido ──
     //
     // Em 09/09/2026 o lead perguntou "então o serviço vende pelo WhatsApp?" e
@@ -253,7 +253,8 @@ export async function pensar(
     );
     if (texto === null) break; // rede ou modelo fora do ar — cai no chão
 
-    const veredito = verificarResposta(texto);
+    const contextoDoCliente = [pedido.mensagem, ...(pedido.historico ?? []).filter((t) => t.deQuem === "cliente").map((t) => t.texto)].join("\n");
+    const veredito = verificarResposta(texto, contextoDoCliente);
     if (veredito.aprovada) {
       return {
         texto,

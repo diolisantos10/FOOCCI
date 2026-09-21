@@ -254,6 +254,8 @@ const PROMETEU_HUMANO = new RegExp(
     // "já encaminhei pro time", "já acionei alguém" — o fingimento de que já foi.
     "j[áa]\\s+(?:passei|encaminhei)\\s+(?:isso\\s+)?(?:pro|pra|para\\s+o|para)\\s+time\\b",
     `j[áa]\\s+(?:acionei|chamei|avisei)\\s+${GENTE}`,
+    // "marca uma demonstração com alguém do time" também cria uma fila humana inexistente.
+    `(?:marcar|agendar)\\s+(?:uma\\s+)?(?:demo|demonstra[çc][ãa]o|conversa)\\s+com\\s+${GENTE}`,
   ].join("|"),
   "i",
 );
@@ -324,7 +326,7 @@ export function valoresPermitidos(): Set<number> {
  * cada reprovação é testável caso a caso, e nenhum caminho de envio pode
  * "esquecer" de verificar sem que isso apareça no tipo.
  */
-export function verificarResposta(texto: string): Veredito {
+export function verificarResposta(texto: string, contextoDoCliente = ""): Veredito {
   const motivos: MotivoDaReprovacao[] = [];
   const detalhes: string[] = [];
 
@@ -333,8 +335,10 @@ export function verificarResposta(texto: string): Veredito {
     return { aprovada: false, motivos: ["vazio"], detalhe: "o modelo devolveu texto vazio" };
   }
 
-  // 1. Preço fora da tabela.
+  // 1. Preço fora da tabela. Um valor citado pelo próprio cliente pode ser
+  // repetido para comparar escopo; isso não o transforma em preço do Foocci.
   const permitidos = valoresPermitidos();
+  for (const valorDoCliente of valoresEmReais(contextoDoCliente)) permitidos.add(valorDoCliente);
   const forasDeTabela = valoresEmReais(limpo).filter((v) => !permitidos.has(v));
   if (forasDeTabela.length) {
     motivos.push("precoForaDaTabela");

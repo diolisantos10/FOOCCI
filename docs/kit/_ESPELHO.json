@@ -3,7 +3,7 @@
   "kitBranch": "main",
   "kitCommit": "20abdeff6daecf9a2624df198c75ac784db1b9eb",
   "kitCommitData": "2026-08-30T14:31:46+00:00",
-  "verificadoEm": "2026-09-07T11:00:38.630Z",
+  "verificadoEm": "2026-09-21T11:35:45.639Z",
   "geradoPor": ".github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts",
   "arquivos": [
     {
