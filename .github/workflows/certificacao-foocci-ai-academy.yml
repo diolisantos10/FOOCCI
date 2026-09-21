@@ -1,0 +1,84 @@
+name: Homologação Foocci AI Academy — SDR, Closer e Supervisora
+
+on:
+  pull_request:
+    paths:
+      - "scripts/certificar-time-comercial-ia.ts"
+      - "src/services/salaDeVendas/university/**"
+      - "src/services/salaDeVendas/supervisora/**"
+      - "src/services/salaDeVendas/ta/**"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260920233000_foocci_ai_academy/**"
+      - ".github/workflows/certificacao-foocci-ai-academy.yml"
+  push:
+    branches:
+      - claude/remove-legacy-runner-q8iXa
+    paths:
+      - "scripts/certificar-time-comercial-ia.ts"
+      - "src/services/salaDeVendas/university/**"
+      - "src/services/salaDeVendas/supervisora/**"
+      - "src/services/salaDeVendas/ta/**"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260920233000_foocci_ai_academy/**"
+      - ".github/workflows/certificacao-foocci-ai-academy.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: foocci-ai-academy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certificar:
+    name: Certificação real do trio comercial
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: foocci
+          POSTGRES_PASSWORD: foocci_test
+          POSTGRES_DB: foocci_academy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U foocci -d foocci_academy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://foocci:foocci_test@localhost:5432/foocci_academy?schema=public
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_SHA: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Gerar Prisma Client e validar schema
+        run: |
+          npx prisma generate
+          npx prisma validate
+
+      - name: Aplicar migrações em PostgreSQL isolado
+        run: npx prisma migrate deploy
+
+      - name: Exigir provedor real
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Nenhuma chave de provedor real está configurada."
+            exit 1
+          fi
+
+      - name: Certificar SDR, Closer e Supervisora
+        run: npx tsx scripts/certificar-time-comercial-ia.ts
