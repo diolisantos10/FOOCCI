@@ -170,12 +170,34 @@ describe("o turno do TA", () => {
   });
 
   it("a sondagem anda na ordem publicada e não repete", () => {
+    // Duas mensagens que a base de verdade NÃO responde: é exatamente o caso em
+    // que sondar é o que há para fazer, e a sondagem anda.
     const primeira = responder({ mensagem: "tenho uma pizzaria", jaPerguntou: [] });
-    const segunda = responder({ mensagem: "duas unidades", jaPerguntou: [0] });
+    const segunda = responder({ mensagem: "fica aqui na zona sul", jaPerguntou: [0] });
 
     expect(primeira.perguntouIndice).toBe(0);
     expect(segunda.perguntouIndice).toBe(1);
     expect(segunda.texto).toContain(VERSAO_1.perguntas[1]);
+  });
+
+  it("⛔ quem perguntou e foi respondido NÃO leva pergunta grudada no fim", () => {
+    // O defeito que o CEO mediu em 21/09/2026: ele perguntou o preço, recebeu o
+    // preço — e uma pergunta da lista, sobre outro assunto, colada no fim.
+    // Responder já é conduzir; a pergunta só entra quando faz a venda andar.
+    const r = responder({ mensagem: "quanto custa?", jaPerguntou: [0] });
+
+    expect(r.apoiadoEm.length).toBeGreaterThan(0);
+    expect(r.perguntouIndice).toBeNull();
+    for (const pergunta of VERSAO_1.perguntas) {
+      expect(r.texto, "grudou uma pergunta da lista no fim da resposta").not.toContain(pergunta);
+    }
+  });
+
+  it("no primeiro contato ele sonda, mesmo tendo respondido", () => {
+    // A exceção, e ela é a única: não se sabe NADA dele ainda, então perguntar é
+    // o próprio trabalho — e a pergunta tem nexo porque a conversa mal começou.
+    const r = responder({ mensagem: "quanto custa?", jaPerguntou: [] });
+    expect(r.perguntouIndice).toBe(0);
   });
 
   it("acabadas as perguntas, ele não inventa uma sexta", () => {
