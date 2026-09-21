@@ -53,6 +53,22 @@ export function selectEngine(
   const prefs = opts.preferences ?? AGENT_ENGINE_PREFERENCES;
   const available = configuredProviders(env);
 
+  // Override isolado para a bateria de certificação: permite provar o runtime
+  // com um provedor real já configurado no CI sem alterar o roteamento de produção.
+  const forcedForAcademy = env.FOOCCI_AI_ACADEMY_FORCE_PROVIDER as AIEngineProvider | undefined;
+  if (
+    forcedForAcademy &&
+    forcedForAcademy !== "MOCK" &&
+    available.includes(forcedForAcademy)
+  ) {
+    return {
+      provider: forcedForAcademy,
+      model: DEFAULT_MODEL[forcedForAcademy],
+      reason: `provedor real forçado exclusivamente pela certificação da Academy — ${agentId}`,
+      fallbackProvider: "MOCK",
+    };
+  }
+
   const preferred = prefs[agentId] ?? DEFAULT_PROVIDER;
   if (available.includes(preferred)) {
     return {
