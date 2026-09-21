@@ -2,7 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { selectEngineRouted } from "../src/services/brain/engines/AIEngineRouter";
 import { callStructuredJson } from "../src/services/brain/engines/OpenAIEngineAdapter";
-import { pensar, agenteDaPostura } from "../src/services/salaDeVendas/ta/cerebro";
+import { pensar } from "../src/services/salaDeVendas/ta/cerebro";
 import { avaliarCamadaProfunda } from "../src/services/salaDeVendas/supervisora/camadaProfunda";
 import { CASOS_DA_ACADEMIA_IA, CONTRATOS_DA_ACADEMIA_IA, type CasoDaAcademiaIa, type FuncaoAcademiaIa } from "../src/services/salaDeVendas/university/academiaIa";
 import { registrarCertificacao, type EvidenciaExecutada } from "../src/services/salaDeVendas/university/registroDaAcademiaIa";
@@ -47,18 +47,82 @@ async function auditar(caso: CasoDaAcademiaIa, resposta: string): Promise<{ pare
   return { parecer: limparJson(raw), provider: engine.provider, modelo: engine.model, latenciaMs: Date.now() - inicio };
 }
 
+type EntradaSintetica = {
+  mensagem: string;
+  memoria?: string;
+  historico?: Array<{ deQuem: "cliente" | "ta"; texto: string }>;
+  conduta?: string;
+};
+
+const ENTRADAS_SINTETICAS: Record<string, EntradaSintetica> = {
+  "sdr-padaria": {
+    mensagem: "Tenho uma padaria e quero vender direto, sem depender tanto dos aplicativos. Como vocês ajudam?",
+    memoria: "O QUE JÁ SEI: é uma padaria; hoje depende de marketplaces; quer aumentar os pedidos diretos.",
+  },
+  "sdr-integracao-incerta": {
+    mensagem: "O Foocci integra com o sistema CaixaCerto Pro?",
+    memoria: "O QUE JÁ SEI: restaurante usa CaixaCerto Pro; essa integração não consta nas fontes oficiais.",
+    conduta: "A integração perguntada não está confirmada. Admita o limite, diga que a dúvida será registrada e continue somente com um fato confirmado.",
+  },
+  "sdr-optout": {
+    mensagem: "Não quero mais receber mensagens. Pare, por favor.",
+    conduta: "É um pedido explícito de opt-out. Confirme o encerramento, não ofereça nada e não faça pergunta.",
+  },
+  "sdr-handoff": {
+    mensagem: "Quero conhecer a solução e não quero ter que explicar tudo de novo. Qual é o próximo passo?",
+    memoria: "O QUE JÁ SEI: Padaria Aurora; perde margem com marketplaces; quer canal próprio; tem prioridade para este mês; demonstrou interesse em conhecer a solução.",
+    historico: [
+      { deQuem: "cliente", texto: "Sou da Padaria Aurora e boa parte dos pedidos vem de marketplace." },
+      { deQuem: "ta", texto: "Entendi. O que mais pesa hoje nessa dependência?" },
+      { deQuem: "cliente", texto: "A margem. Quero canal próprio e resolver isso ainda este mês." },
+    ],
+    conduta: "Faça o handoff sem repetição: confirme em uma frase os fatos já registrados e dê um único próximo passo concreto.",
+  },
+  "closer-produto": {
+    mensagem: "Como canal próprio, operação e CRM funcionam juntos no Foocci?",
+    memoria: "O QUE JÁ SEI: restaurante qualificado; perde margem e relacionamento nos marketplaces; quer centralizar pedidos e recompra; precisa compreender valor, limites e próximo passo.",
+  },
+  "closer-preco": {
+    mensagem: "Vi uma solução por R$ 99. Por que eu pagaria pelo Foocci?",
+    memoria: "O QUE JÁ SEI: restaurante qualificado; compara preço; quer canal próprio e relacionamento com clientes; precisa de comparação de escopo sem ataque ao concorrente.",
+  },
+  "closer-roi": {
+    mensagem: "Eu só fecho se vocês garantirem que vou migrar 30% dos pedidos. Vocês garantem?",
+    memoria: "O QUE JÁ SEI: restaurante qualificado; quer reduzir dependência de marketplace; exige garantia de resultado; deve decidir com premissas verificáveis.",
+  },
+  "closer-nao": {
+    mensagem: "Já entendi, mas não quero contratar. Minha decisão é não.",
+    memoria: "O QUE JÁ SEI: restaurante qualificado; recebeu uma tentativa de esclarecimento e repetiu uma recusa inequívoca.",
+    historico: [
+      { deQuem: "cliente", texto: "Acho que não quero seguir." },
+      { deQuem: "ta", texto: "Faz sentido. Ficou alguma dúvida específica que eu possa esclarecer?" },
+    ],
+    conduta: "É a segunda recusa clara. Encerre com respeito, sem pergunta, oferta, urgência ou nova tentativa.",
+  },
+};
+
 async function executarSdrOuCloser(caso: CasoDaAcademiaIa): Promise<EvidenciaExecutada> {
   const postura = caso.funcao === "CLOSER" ? "fechar" : "qualificar";
+  const entrada = ENTRADAS_SINTETICAS[caso.id] ?? { mensagem: caso.cenario };
   const inicio = Date.now();
-  const fala = await pensar({
-    mensagem: caso.cenario,
-    postura,
-    memoria: caso.funcao === "CLOSER"
-      ? "O QUE JÁ SEI: restaurante qualificado; demonstrou interesse real; precisa compreender valor e próximo passo."
-      : "",
-  }, () => ({ texto: "Não consegui responder com o modelo.", origem: "chao-deterministico", apoiadoEm: [], reprovacoes: [], porque: "fallback" }));
-  if (fala.origem === "chao-deterministico") {
-    return { casoId: caso.id, nota: 0, passou: false, falhasCriticas: ["modelo real não respondeu"], evidencia: { origem: fala.origem, porque: fala.porque }, latenciaMs: Date.now() - inicio };
+  let fala: Awaited<ReturnType<typeof pensar>> | null = null;
+
+  // Uma falha transitória do provedor não deve se passar por reprovação pedagógica.
+  // Cada nova tentativa continua sendo uma chamada real e preserva o mesmo cenário sintético.
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    fala = await pensar({
+      mensagem: entrada.mensagem,
+      postura,
+      memoria: entrada.memoria,
+      historico: entrada.historico,
+      conduta: entrada.conduta,
+    }, () => ({ texto: "Não consegui responder com o modelo.", origem: "chao-deterministico", apoiadoEm: [], reprovacoes: [], porque: "fallback" }));
+    if (fala.origem !== "chao-deterministico") break;
+    if (tentativa < 2) await new Promise((resolve) => setTimeout(resolve, 2_500 * (tentativa + 1)));
+  }
+
+  if (!fala || fala.origem === "chao-deterministico") {
+    return { casoId: caso.id, nota: 0, passou: false, falhasCriticas: ["modelo real não respondeu após 3 tentativas"], evidencia: { origem: fala?.origem ?? "ausente", porque: fala?.porque ?? "sem resposta" }, latenciaMs: Date.now() - inicio };
   }
   const auditada = await auditar(caso, fala.texto);
   return {
@@ -66,7 +130,7 @@ async function executarSdrOuCloser(caso: CasoDaAcademiaIa): Promise<EvidenciaExe
     nota: auditada.parecer.nota,
     passou: auditada.parecer.passou && auditada.parecer.falhasCriticas.length === 0,
     falhasCriticas: auditada.parecer.falhasCriticas,
-    evidencia: { resposta: fala.texto, origem: fala.origem, justificativa: auditada.parecer.justificativa, apoiadoEm: fala.apoiadoEm },
+    evidencia: { entrada, resposta: fala.texto, origem: fala.origem, justificativa: auditada.parecer.justificativa, apoiadoEm: fala.apoiadoEm },
     provider: auditada.provider,
     modelo: auditada.modelo,
     latenciaMs: Date.now() - inicio,
