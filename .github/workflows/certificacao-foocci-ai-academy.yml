@@ -53,6 +53,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GITHUB_SHA: ${{ github.sha }}
+      FOOCCI_AI_ACADEMY_FORCE_PROVIDER: CLAUDE
 
     steps:
       - uses: actions/checkout@v4
