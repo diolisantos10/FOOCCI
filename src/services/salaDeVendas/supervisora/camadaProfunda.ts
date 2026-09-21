@@ -120,8 +120,7 @@ function instrucao(ctx: ContextoDaRevisao, motivoDoAcionamento: string, turnos: 
           "Consentimento é de CANAL, não de pessoa. Abordagem comercial por canal sem base legal",
           "própria é CRITICO e vai para uma pessoa, por mais educada que a mensagem seja.",
           "Reconhecer a falta de consentimento e NÃO abordar é a conduta certa, e é VERDE.",
-        ].join("
-")
+        ].join("\n")
       : "",
     ctx.conhecimentoDaAcademia?.length
       ? `\nCONHECIMENTO DA ACADEMIA COMERCIAL (venda consultiva, para esta etapa):\n${ctx.conhecimentoDaAcademia.map((c) => `- ${c}`).join("\n")}`
