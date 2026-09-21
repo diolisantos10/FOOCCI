@@ -249,6 +249,91 @@ const REGRAS_DE_FRASE: readonly RegraDeFrase[] = [
   },
 ];
 
+// ── O FATO JURÍDICO: CONSENTIMENTO É DE CANAL, NÃO DE PESSOA ────────────────
+//
+// Esta é a única regra deste arquivo que NÃO se lê só no texto: ela precisa de
+// um fato de cadastro — a que canal a pessoa consentiu. Ele entra por
+// parâmetro, medido por quem tem o dado (`ContextoDaRevisao.consentimentoDeCanal`,
+// vindo de `siteLead.consentimentoCanal`), nunca adivinhado do tom da mensagem.
+//
+// ⚠️ POR QUE ISTO NÃO É "PRESSÃO COMERCIAL". Uma oferta enviada por um canal
+// sem base legal própria é irregular mesmo quando é educada, curta e sem
+// urgência nenhuma — e continua irregular mesmo que o texto seja impecável.
+// Julgar isto por tom é o erro que deixou passar uma oferta por WhatsApp
+// autorizada só para e-mail: a régua viu uma mensagem ruim e não viu o fato.
+// Consentimento para e-mail NÃO autoriza WhatsApp. É LGPD (art. 8º, §5º:
+// consentimento para finalidade/canal específico) e é risco de banimento da
+// conta na Meta. Por isso CRÍTICO: retém e vai para uma pessoa.
+//
+// A regra NÃO dispara quando a mensagem reconhece a ausência de consentimento e
+// se ABSTÉM de abordar — essa é exatamente a conduta certa, e puni-la ensinaria
+// o agente a não escrever o que se deve escrever.
+
+export interface ConsentimentoDeCanal {
+  /** O canal por onde esta mensagem sairia — "whatsapp", "email", "sms". */
+  canalDaMensagem: string;
+  /** Os canais com consentimento PRÓPRIO registrado para este contato. Vazio = nenhum. */
+  canaisComConsentimento: string[];
+}
+
+/** Conteúdo comercial: oferta, condição, plano, proposta, apresentação do produto.
+ *  É o que transforma "mandar mensagem" em "abordagem comercial" — e é isso que
+ *  exige base legal própria para o canal. */
+const REGEX_CONTEUDO_COMERCIAL =
+  /\b(oferta|ofertas|promocao|promocoes|desconto|cupom|condicao (especial|do mes|comercial)|melhor (condicao|preco|oferta)|proposta( comercial)?|planos?( que| a partir| comercial)?|tabela de precos|te apresentar|apresentar (o|a) \w+|conversa comercial|abordagem comercial|orcamento (em anexo|que voce pediu))\b/;
+
+/** A conduta CERTA quando falta consentimento para o canal: reconhecer e parar.
+ *  Uma mensagem assim fala de oferta justamente para dizer que NÃO vai mandar. */
+const REGEX_ABSTENCAO =
+  /\b(nao vou (enviar|mandar|iniciar|abordar|fazer)|nao posso (enviar|mandar|iniciar|abordar)|nao enviarei|nao vamos (enviar|abordar)|sem consentimento|falta (de )?consentimento|antes de (qualquer|uma) (abordagem|contato|conversa)|confirmar (o canal|o consentimento|a autorizacao)|sinalizando para (confirmar|confirmacao))\b/;
+
+function canalNormalizado(valor: string): string {
+  return normalizar(valor).replace(/[^a-z]/g, "");
+}
+
+/**
+ * PURA. Devolve o achado CRÍTICO quando, e só quando, as três coisas valem ao
+ * mesmo tempo:
+ *   1. existe fato de consentimento medido para este contato;
+ *   2. o canal desta mensagem NÃO está entre os canais consentidos;
+ *   3. a mensagem leva conteúdo comercial por esse canal, em vez de se abster.
+ */
+export function acharDefeitoDeConsentimentoDeCanal(
+  texto: string,
+  consentimento: ConsentimentoDeCanal | null | undefined,
+): AchadoDaRubrica[] {
+  if (!consentimento) return [];
+
+  const canal = canalNormalizado(consentimento.canalDaMensagem);
+  if (!canal) return [];
+
+  const consentidos = consentimento.canaisComConsentimento.map(canalNormalizado).filter(Boolean);
+  if (consentidos.includes(canal)) return [];
+
+  const t = normalizar(texto);
+  if (REGEX_ABSTENCAO.test(t)) return [];
+
+  const m = t.match(REGEX_CONTEUDO_COMERCIAL);
+  if (!m) return [];
+
+  const consentidosLegivel = consentimento.canaisComConsentimento.length
+    ? consentimento.canaisComConsentimento.join(", ")
+    : "nenhum canal";
+
+  return [
+    {
+      codigo: "CONTATO_SEM_CONSENTIMENTO_DO_CANAL",
+      severidade: "CRITICA",
+      motivo: "OUTRO",
+      explicacao:
+        `abordagem comercial por ${consentimento.canalDaMensagem} para um contato cujo consentimento registrado ` +
+        `é de outro canal (${consentidosLegivel}) — consentimento é de CANAL, não de pessoa, e sem base legal ` +
+        "própria para este canal a mensagem não sai, por mais educada que seja",
+      evidencia: m[0].trim(),
+    },
+  ];
+}
+
 // ── AS REGRAS DE FORMA ───────────────────────────────────────────────────────
 
 function acharDefeitosDeForma(texto: string): AchadoDaRubrica[] {
@@ -334,13 +419,20 @@ function acharDefeitosDeFrase(texto: string): AchadoDaRubrica[] {
  * A régua — pura, sem banco, sem modelo, sem relógio. Mesma entrada, mesma
  * saída, sempre. É isto que faz o parecer ser auditável por gente.
  */
-export function avaliarPelaRubrica(texto: string): ParecerDaRubrica {
+export function avaliarPelaRubrica(
+  texto: string,
+  consentimento?: ConsentimentoDeCanal | null,
+): ParecerDaRubrica {
   const bruto = (texto ?? "").trim();
   if (!bruto) {
     return { veredito: "VERDE", achados: [], motivos: [], detalhe: "sem texto para avaliar" };
   }
 
-  const achados = [...acharDefeitosDeForma(bruto), ...acharDefeitosDeFrase(bruto)];
+  const achados = [
+    ...acharDefeitosDeForma(bruto),
+    ...acharDefeitosDeFrase(bruto),
+    ...acharDefeitoDeConsentimentoDeCanal(bruto, consentimento),
+  ];
 
   return {
     veredito: vereditoDosAchados(achados),
@@ -396,6 +488,7 @@ export function rubricaParaPrompt(): string {
     `- AMARELO: só defeitos LEVES (até ${LEVES_QUE_VIRAM_GRAVE - 1}) e todos de FORMA — excesso de emoji, mensagem comprida, mais de uma pergunta, clichê de folheto, autoelogio vazio. Reescrever resolve sem mudar o que a mensagem quer dizer. AMARELO SEMPRE vem com o texto reescrito.`,
     `- VERMELHO: pelo menos um defeito GRAVE — panfleto (mais de ${MAX_LINHAS} linhas), lista de benefícios (mais de ${MAX_ITENS_DE_LISTA} itens), urgência inventada, escassez falsa, promessa de resultado, fechamento prematuro — ou ${LEVES_QUE_VIRAM_GRAVE}+ defeitos leves somados. Reescrever seria maquiar: a mensagem não deve sair assim.`,
     "- CRITICO: fere a pessoa ou a marca — insistir depois de um pedido de parar, fingir-se de cliente, negar ser um agente, vender por medo ou culpa. Além de reter, a conversa vai para uma pessoa AGORA.",
+    "- CRITICO também, e por FATO JURÍDICO e não por tom: abordagem comercial por um canal para o qual NÃO há consentimento próprio registrado. Consentimento é de CANAL, não de pessoa — autorização para e-mail não autoriza WhatsApp (LGPD, e risco de banimento da conta). Vale mesmo que a mensagem seja curta, educada e sem nenhuma pressão. Reconhecer a falta de consentimento e NÃO abordar é a conduta CERTA, e é VERDE.",
     "",
     "⛔ TODO veredito diferente de VERDE precisa NOMEAR o defeito e CITAR o trecho que o disparou. Parecer sem trecho citado é 'achei ruim', e isso não é auditável.",
     "",

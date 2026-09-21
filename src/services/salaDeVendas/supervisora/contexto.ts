@@ -16,9 +16,10 @@
  * não guarda bem.
  */
 
-import type { PrismaClient, Prisma } from "@prisma/client";
+import type { PrismaClient, Prisma, SiteLeadSource } from "@prisma/client";
 import { lerMemoria, blocoDeMemoria, blocoDeConduta } from "../ta/memoria";
 import { recuperarConhecimentoRelevante, etapaComercialDoStage, sinaisDaMemoria } from "./academia";
+import type { ConsentimentoDeCanal } from "./rubrica";
 
 type Cliente = PrismaClient | Prisma.TransactionClient;
 
@@ -49,6 +50,16 @@ export interface ContextoDaRevisao {
    * o mesmo título "REGRAS COMERCIAIS DESTA CASA".
    */
   conhecimentoDaAcademia: string[];
+  /**
+   * O FATO JURÍDICO do canal: por onde esta mensagem sairia e a que canais o
+   * contato consentiu (`siteLead.consentimentoCanal`). Não é opinião nem tom —
+   * é cadastro, e é o que permite a régua (`rubrica.ts`) barrar uma abordagem
+   * comercial por um canal sem base legal própria, por mais educada que ela
+   * seja. `null` = não medido; a régua então não dispara essa regra (ausência
+   * de informação não é informação — quem não sabe não acusa, e também não
+   * absolve: o modelo continua olhando).
+   */
+  consentimentoDeCanal?: ConsentimentoDeCanal | null;
 }
 
 /** As últimas N mensagens da conversa, mais antiga primeiro — só para a camada
@@ -74,6 +85,35 @@ export async function ultimosTurnos(
     .filter((t) => t.texto.trim().length > 0);
 }
 
+/**
+ * O FATO DO CANAL, medido — nunca presumido.
+ *
+ * ⚠️ HOJE `SiteLead` NÃO TEM COLUNA DE "CANAL DO CONSENTIMENTO". Tem
+ * `consentAt` (QUANDO consentiu) e `fonte` (por onde chegou), e só. Quem tem a
+ * coluna é `Contato` (`consentimentoCanal`), do CRM — outro cadastro.
+ *
+ * Por isso aqui só existe UM caso em que se pode afirmar o canal sem inventar
+ * nada: `WHATSAPP_DIRETO`, em que a pessoa escreveu ela mesma no WhatsApp — o
+ * consentimento é o próprio ato, e é deste canal. Em todo o resto, a resposta
+ * honesta é `null` = NÃO MEDIDO, e a régua não dispara a regra de canal (
+ * ausência de informação não é informação: quem não sabe não acusa — e também
+ * não absolve, o modelo continua olhando).
+ *
+ * ⛔ O que NÃO se faz aqui: deduzir "veio de formulário do site, logo não
+ * autorizou WhatsApp". Formulário do site pede WhatsApp e é por ele que a casa
+ * responde; tratar isso como violação barraria a operação inteira por dedução,
+ * não por fato. Enquanto a coluna não existir, este é o limite honesto.
+ */
+export function consentimentoDeCanalDoLead(
+  lead: { fonte?: SiteLeadSource | null; consentAt?: Date | null } | null,
+): ConsentimentoDeCanal | null {
+  if (!lead || !lead.consentAt) return null;
+  if (lead.fonte === "WHATSAPP_DIRETO") {
+    return { canalDaMensagem: "whatsapp", canaisComConsentimento: ["whatsapp"] };
+  }
+  return null;
+}
+
 export async function montarContextoDaRevisao(
   db: Cliente,
   params: { leadId: string; mensagemAvaliadaId?: string | null },
@@ -81,7 +121,15 @@ export async function montarContextoDaRevisao(
   const [lead, ultimaEntrada, memoria, config, alertas] = await Promise.all([
     db.siteLead.findUnique({
       where: { id: params.leadId },
-      select: { nome: true, restaurante: true, tipo: true, stage: true, temperatura: true },
+      select: {
+        nome: true,
+        restaurante: true,
+        tipo: true,
+        stage: true,
+        temperatura: true,
+        fonte: true,
+        consentAt: true,
+      },
     }),
     db.leadMensagem.findFirst({
       where: { leadId: params.leadId, direcao: "ENTRADA" },
@@ -148,5 +196,9 @@ export async function montarContextoDaRevisao(
     irritacaoDoLead: memoria.irritacao,
     pediuParar: memoria.pediuPararSondagem,
     conhecimentoDaAcademia,
+    // A Sala de Vendas fala por WhatsApp — é o canal desta mensagem. O canal
+    // consentido vem do cadastro; sem registro, a lista é vazia (nenhum canal
+    // consentido), e NÃO se presume consentimento por o lead existir.
+    consentimentoDeCanal: consentimentoDeCanalDoLead(lead),
   };
 }

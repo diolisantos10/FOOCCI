@@ -82,6 +82,17 @@ function instrucao(ctx: ContextoDaRevisao, motivoDoAcionamento: string, turnos: 
     "verificado em outra camada, determinística.",
     "",
     `TOM DA MARCA: ${ctx.tomDaMarca}`,
+    ctx.consentimentoDeCanal
+      ? [
+          "",
+          "⚖️ FATO DE CADASTRO — CONSENTIMENTO POR CANAL (base legal, não tom):",
+          `- canal desta mensagem: ${ctx.consentimentoDeCanal.canalDaMensagem}`,
+          `- canais com consentimento PRÓPRIO registrado: ${ctx.consentimentoDeCanal.canaisComConsentimento.join(", ") || "NENHUM"}`,
+          "Consentimento é de CANAL, não de pessoa. Abordagem comercial por canal sem base legal",
+          "própria é CRITICO e vai para uma pessoa, por mais educada que a mensagem seja.",
+          "Reconhecer a falta de consentimento e NÃO abordar é a conduta certa, e é VERDE.",
+        ].join("\n")
+      : "",
     ctx.conhecimentoDaAcademia.length
       ? `\nCONHECIMENTO DA ACADEMIA COMERCIAL (venda consultiva, para esta etapa):\n${ctx.conhecimentoDaAcademia.map((c) => `- ${c}`).join("\n")}`
       : "",
@@ -136,7 +147,7 @@ export async function avaliarCamadaProfunda(
   // caminhos não é régua. Defeito GRAVE/CRÍTICO decide sozinho, de graça, e o
   // modelo caro não roda. `precisaDeGente` segue o próprio veredito: CRÍTICO
   // vai para uma pessoa, VERMELHO não vai por si só.
-  const daRegua = avaliarPelaRubrica(respostaProposta);
+  const daRegua = avaliarPelaRubrica(respostaProposta, ctx.consentimentoDeCanal);
   if (daRegua.veredito === "VERMELHO" || daRegua.veredito === "CRITICO") {
     return {
       veredito: daRegua.veredito,

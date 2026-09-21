@@ -125,6 +125,17 @@ function instrucao(ctx: ContextoDaRevisao): string {
       ? `CONHECIMENTO DA ACADEMIA COMERCIAL (venda consultiva, para esta etapa):\n${ctx.conhecimentoDaAcademia.map((c) => `- ${c}`).join("\n")}`
       : "",
     "",
+    ctx.consentimentoDeCanal
+      ? [
+          "⚖️ FATO DE CADASTRO — CONSENTIMENTO POR CANAL (não é tom, é base legal):",
+          `- canal por onde esta mensagem sairia: ${ctx.consentimentoDeCanal.canalDaMensagem}`,
+          `- canais com consentimento PRÓPRIO registrado: ${ctx.consentimentoDeCanal.canaisComConsentimento.join(", ") || "NENHUM"}`,
+          "Consentimento é de CANAL, não de pessoa: autorização para e-mail não autoriza WhatsApp.",
+          "Abordagem comercial por canal sem consentimento próprio é CRITICO mesmo que a mensagem",
+          "seja curta, educada e sem pressão nenhuma. Reconhecer a falta e NÃO abordar é VERDE.",
+        ].join("\n")
+      : "",
+    "",
     `ETAPA DO FUNIL: ${ctx.etapaDoFunil}`,
     `PERFIL DO LEAD: ${ctx.perfilDoLead}`,
     ctx.resumoIncremental ? `\n${ctx.resumoIncremental}` : "",
@@ -181,7 +192,7 @@ export async function avaliarCamadaRapida(
   // forma. Então se devolve na hora, com o motivo NOMEADO e o trecho citado,
   // e a chamada de modelo simplesmente não acontece. Isso é, ao mesmo tempo,
   // a parte auditável do veredito e a maior economia do desenho.
-  const parecerDaRubrica = avaliarPelaRubrica(respostaProposta);
+  const parecerDaRubrica = avaliarPelaRubrica(respostaProposta, ctx.consentimentoDeCanal);
   if (parecerDaRubrica.veredito === "VERMELHO" || parecerDaRubrica.veredito === "CRITICO") {
     return daRubrica(parecerDaRubrica, "régua determinística da rubrica");
   }

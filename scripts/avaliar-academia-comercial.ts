@@ -173,6 +173,39 @@ function inferirSinais(ultimaMensagemDoCliente: string): { irritacaoDoLead: numb
   return { irritacaoDoLead, pediuParar };
 }
 
+// ── O FATO DE CONSENTIMENTO POR CANAL, NO CENÁRIO SINTÉTICO ────────────────
+//
+// Em produção este fato vem do CADASTRO (ver `consentimentoDeCanalDoLead`, em
+// `supervisora/contexto.ts`). Aqui não há cadastro — o equivalente é a linha de
+// SITUAÇÃO do cenário (`ultimaMensagemDoCliente` entre parênteses), que descreve
+// o que se sabe do contato, exatamente como uma ficha descreveria.
+//
+// ⛔ O que esta função NUNCA lê: `veredictoEsperado`, `motivoEsperado`,
+// `fundamento` e `descricao`. Ler qualquer um deles seria a régua decorando o
+// gabarito, e não julgando. Ela lê só a situação — tanto que dois cenários com
+// a MESMA situação (cen-105 e cen-106, cen-023 e cen-024) recebem o mesmo fato
+// e terminam em vereditos diferentes, porque o que os separa é a MENSAGEM.
+function inferirConsentimentoDeCanal(ultimaMensagemDoCliente: string) {
+  const t = ultimaMensagemDoCliente
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const falaDeConsentimento = /(autoriz|consent|preencheu um formulario)/.test(t);
+  if (!falaDeConsentimento) return null;
+
+  const canaisComConsentimento: string[] = [];
+  if (/(por |de )?e-?mail/.test(t)) canaisComConsentimento.push("email");
+  // WhatsApp só entra se a situação disser que ele FOI autorizado — "nunca
+  // autorizou WhatsApp" é o contrário disso.
+  if (/autoriz\w* (o )?contato por whatsapp|autorizou whatsapp/.test(t) && !/nunca autorizou whatsapp/.test(t)) {
+    canaisComConsentimento.push("whatsapp");
+  }
+  if (!canaisComConsentimento.length) return null;
+
+  return { canalDaMensagem: "whatsapp", canaisComConsentimento };
+}
+
 function montarContextoSintetico(cenario: Cenario, conhecimentoDaAcademia: string[]): ContextoDaRevisao {
   const { irritacaoDoLead, pediuParar } = inferirSinais(cenario.ultimaMensagemDoCliente);
   const semUltimaMensagemReal =
@@ -189,6 +222,7 @@ function montarContextoSintetico(cenario: Cenario, conhecimentoDaAcademia: strin
     irritacaoDoLead,
     pediuParar,
     conhecimentoDaAcademia,
+    consentimentoDeCanal: inferirConsentimentoDeCanal(cenario.ultimaMensagemDoCliente),
   };
 }
 
