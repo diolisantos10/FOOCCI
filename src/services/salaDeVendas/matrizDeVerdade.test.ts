@@ -197,7 +197,7 @@ describe("a régua reprova a mentira (sondas de adulteração)", () => {
     // do TA. É o erro mais fácil de cometer nesta matriz.
     const falsa = adulterar("1.6", {
       executorReal: "src/services/salaDeVendas/ta/atender.ts",
-      agentId: "sdr-ta-foocci",
+      agentId: "sdr-foocci",
     });
     expect(humanaComRuntime(falsa)).toContain("1.6");
     expect(humanaComRuntime(falsa)).not.toEqual([]);

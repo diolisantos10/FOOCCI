@@ -77,6 +77,7 @@ import { foraDaAlcadaNaMensagem } from "../precos";
 import { comAvisoDeHorario } from "../janelaComercial";
 import { extrairSinais, juntarSinais } from "./sondagem";
 import { posturaDoLead } from "./oficio";
+import { verificarPortaoDaAcademia } from "../university/registroDaAcademiaIa";
 import {
   blocoDoObjetivoDaProspeccao,
   objetivoDaProspeccao,
@@ -180,6 +181,8 @@ export type MotivoDeCalar =
   | "handoffRecusado"
   /** Ele compôs e o banco não aceitou. A fala existiu e se perdeu. */
   | "naoConseguiuGravar"
+  /** O portão da Academy está ativo e esta função/versão não foi aprovada. */
+  | "naoCertificado"
   /** Alguma coisa quebrou no caminho. O turno morre calado, o webhook não. */
   | "quebrou";
 
@@ -537,6 +540,16 @@ async function executarTurno(
   // e "closer" só poderia ser deduzido do estágio do lead — que muda DEPOIS da
   // mensagem, e portanto atribui a fala ao papel errado.
   const postura = posturaDoLead(lead.temperatura);
+
+  // A migration nasce com o portão desligado. Depois da certificação real, a
+  // gestão o ativa e nenhuma versão diferente da aprovada consegue falar.
+  const funcaoDaAcademia = postura === "fechar" ? "CLOSER" : "SDR";
+  const executorId = postura === "fechar" ? "closer-foocci" : "sdr-foocci";
+  const executorVersao = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "local-sem-sha";
+  const portao = await verificarPortaoDaAcademia(db, funcaoDaAcademia, executorId, executorVersao);
+  if (!portao.liberado) {
+    return calar("naoCertificado", `${funcaoDaAcademia} bloqueado pela Academy: ${portao.motivo}`);
+  }
 
   // A mudança de objetivo entra POR CIMA da postura, e não no lugar dela: um
   // lead morno falando com a recepcionista precisa das duas respostas.

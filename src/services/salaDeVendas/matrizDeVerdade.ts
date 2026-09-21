@@ -298,9 +298,10 @@ const AFIRMACOES: Readonly<Record<string, AfirmacaoDeRuntime>> = {
     executorReal: "src/services/salaDeVendas/ta/atender.ts",
     executadaPor: null,
     // MEDIDO: atender.ts → falar.ts → cerebro.ts → callStructuredJson, com o
-    // motor escolhido por selectEngineRouted("sdr-ta-foocci").
+    // motor escolhido por selectEngineRouted("sdr-foocci"). A postura Closer
+    // usa "closer-foocci" e pode receber outro modelo sem alterar o SDR.
     temChamadaDeModelo: true,
-    agentId: "sdr-ta-foocci",
+    agentId: "sdr-foocci",
     promptOuPolitica:
       "src/services/salaDeVendas/ta/ficha.ts (VERSAO_1, publicada como SdrIaConfigVersao) " +
       "+ ta/oficio.ts",
@@ -460,7 +461,7 @@ export interface LeituraDoRuntime {
   canalEnvia: boolean | null;
   /** `iaRespondeSozinha()`: `FOOCCI_SDR_IA_RESPONDE_SOZINHA`. */
   iaRespondeSozinha: boolean | null;
-  /** O motor que o roteador do Brain escolhe para `sdr-ta-foocci`, hoje. */
+  /** O motor que o roteador do Brain escolhe para `sdr-foocci`, hoje. */
   modeloDoTA: string | null;
 }
 
@@ -511,7 +512,7 @@ export async function lerRuntimeDaMatriz(db: Cliente): Promise<LeituraDoRuntime>
     const { selectEngineRouted } = await import("@/services/brain/engines/AIEngineRouter");
     // O MESMO agentId e o MESMO taskProfile padrão que `ta/cerebro.ts` usa. Medir
     // com outros parâmetros devolveria um modelo que ninguém chama.
-    const engine = await selectEngineRouted("sdr-ta-foocci");
+    const engine = await selectEngineRouted("sdr-foocci");
     leitura.modeloDoTA = `${engine.provider}/${engine.model}`;
   } catch {
     /* não medido */
@@ -555,7 +556,7 @@ function estadoDe(
   const ligado =
     a.killSwitchOnde === null
       ? null
-      : a.agentId === "sdr-ta-foocci"
+      : a.agentId === "sdr-foocci"
         ? // Ligar exige versão publicada, e sem ela o TA fica calado mesmo com a
           // coluna em `true`. Reportar só a coluna diria "ligado" sobre um agente
           // que não abre a boca.

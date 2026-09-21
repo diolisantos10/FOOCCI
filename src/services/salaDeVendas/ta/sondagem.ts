@@ -46,7 +46,7 @@ import { selectEngineRouted } from "@/services/brain/engines/AIEngineRouter";
 import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
 import type { SinaisDoLead } from "../score";
 
-const AGENTE = "sdr-ta-foocci";
+const AGENTE = "sdr-foocci";
 
 /** Um turno da conversa, do jeito que o TA já guarda. */
 export interface TurnoDaConversa {
