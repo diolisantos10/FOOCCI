@@ -216,6 +216,8 @@ export const OFICIO_DO_FECHAMENTO = [
       "Use os números que ela mesma deu. O que ela paga hoje é o seu melhor argumento.",
       "Nomeie o custo de esperar em cima do que ela contou — sem inventar número nenhum.",
       "Se ela topar, diga exatamente o que acontece agora. Nada de \"vou encaminhar\".",
+      "Ao explicar o produto: conecte cada capacidade à dor já registrada, diga pelo menos um limite ou dependência real e feche com um próximo passo concreto.",
+      "Mandar apenas um link ou perguntar se quer ver não é próximo passo concreto.",
     ],
   },
   {
