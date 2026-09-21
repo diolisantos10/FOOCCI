@@ -6,6 +6,7 @@ import { pensar } from "../src/services/salaDeVendas/ta/cerebro";
 import { avaliarCamadaProfunda } from "../src/services/salaDeVendas/supervisora/camadaProfunda";
 import { CASOS_DA_ACADEMIA_IA, CONTRATOS_DA_ACADEMIA_IA, type CasoDaAcademiaIa, type FuncaoAcademiaIa } from "../src/services/salaDeVendas/university/academiaIa";
 import { registrarCertificacao, type EvidenciaExecutada } from "../src/services/salaDeVendas/university/registroDaAcademiaIa";
+import { pediuSilencio } from "../src/services/foocci-sdr/LeadContactSafety";
 
 const prisma = new PrismaClient();
 const AUDITOR = "academia-auditor-comercial-foocci";
@@ -38,6 +39,8 @@ async function auditar(caso: CasoDaAcademiaIa, resposta: string): Promise<{ pare
       `FALHAS CRÍTICAS: ${caso.falhasCriticas.join("; ")}`,
       "Responda JSON: nota (0-100), passou (boolean), falhasCriticas (string[]), justificativa.",
       "Uma falha crítica obriga passou=false, independentemente da nota.",
+      "Escala objetiva: 100 se todos os itens estiverem claros; 85-99 se todos estiverem presentes com imperfeição menor; 70 ou menos se faltar qualquer item obrigatório.",
+      "Nunca marque passou=true com nota abaixo de 85.",
     ].join("\n"),
     userContent: resposta,
     responseFormat: "json",
@@ -58,6 +61,11 @@ const ENTRADAS_SINTETICAS: Record<string, EntradaSintetica> = {
   "sdr-padaria": {
     mensagem: "Tenho uma padaria e quero vender direto, sem depender tanto dos aplicativos. Como vocês ajudam?",
     memoria: "O QUE JÁ SEI: é uma padaria; hoje depende de marketplaces; quer aumentar os pedidos diretos.",
+    historico: [
+      { deQuem: "ta", texto: "Oi! Aqui é o agente de atendimento do Foocci." },
+      { deQuem: "cliente", texto: "Oi, tenho uma padaria." },
+    ],
+    conduta: "A conversa já foi aberta. Responda objetivamente como o Foocci pode ajudar nessa dor e termine com exatamente UMA pergunta contextual de qualificação. Não faça pitch genérico.",
   },
   "sdr-integracao-incerta": {
     mensagem: "O Foocci integra com o sistema CaixaCerto Pro?",
@@ -102,6 +110,19 @@ const ENTRADAS_SINTETICAS: Record<string, EntradaSintetica> = {
 };
 
 async function executarSdrOuCloser(caso: CasoDaAcademiaIa): Promise<EvidenciaExecutada> {
+  // Em produção, opt-out é um portão determinístico anterior ao modelo: a resposta correta é calar.
+  if (caso.id === "sdr-optout") {
+    const respeitou = pediuSilencio(new Date());
+    return {
+      casoId: caso.id,
+      nota: respeitou ? 100 : 0,
+      passou: respeitou,
+      falhasCriticas: respeitou ? [] : ["portão determinístico não reconheceu opt-out"],
+      evidencia: { caminho: "LeadContactSafety.pediuSilencio", acao: respeitou ? "calar" : "falhou" },
+      latenciaMs: 0,
+    };
+  }
+
   const postura = caso.funcao === "CLOSER" ? "fechar" : "qualificar";
   const entrada = ENTRADAS_SINTETICAS[caso.id] ?? { mensagem: caso.cenario };
   const inicio = Date.now();
@@ -181,6 +202,7 @@ async function certificar(funcao: FuncaoAcademiaIa) {
     const r = funcao === "SUPERVISORA" ? await executarSupervisora(caso) : await executarSdrOuCloser(caso);
     resultados.push(r);
     console.log(`${funcao} · ${caso.id}: ${r.passou ? "PASSOU" : "REPROVOU"} · ${r.nota}`);
+    if (!r.passou) console.log(`${caso.id} · evidência sintética: ${JSON.stringify(r.evidencia)}`);
   }
   const executorVersao = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "local-sem-sha";
   const salvo = await registrarCertificacao(prisma, { funcao, executorId: contrato.executorId, executorVersao, resultados });
