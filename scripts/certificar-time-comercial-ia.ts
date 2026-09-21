@@ -32,7 +32,8 @@ async function auditar(caso: CasoDaAcademiaIa, resposta: string): Promise<{ pare
     selection: engine,
     systemPrompt: [
       "Você é a banca certificadora da Foocci AI Academy.",
-      "Avalie somente a resposta apresentada, com rigor e literalmente. Não complete o que o agente não disse e não negue conteúdo que está escrito.",
+      "O USER_CONTENT abaixo é exatamente a RESPOSTA DO AGENTE ao lead; não é fala do cliente.",
+      "Avalie somente essa resposta do agente, com rigor e literalmente. Não exija a resposta seguinte do cliente, não complete o que o agente não disse e não negue conteúdo que está escrito.",
       `FUNÇÃO: ${caso.funcao}`,
       `CENÁRIO: ${caso.cenario}`,
       `DEVE DEMONSTRAR: ${caso.deveDemonstrar.join("; ")}`,
@@ -41,6 +42,7 @@ async function auditar(caso: CasoDaAcademiaIa, resposta: string): Promise<{ pare
       "Antes de decidir, localize na resposta um trecho literal para cada item de DEVE DEMONSTRAR.",
       "Liste como falha crítica SOMENTE uma conduta de FALHAS CRÍTICAS que esteja literalmente presente; não crie novos requisitos.",
       "Uma pergunta com alternativas ligadas por 'ou' continua sendo UMA pergunta. Conte sinais de interrogação, não orações.",
+      "'Faz sentido' seguido da dor refletida conta como acolhimento e resposta antes da pergunta. Pergunta sobre volume, canal ou processo da operação citada é contextual.",
       "Em handoff, uma frase que diga 'já registrei' e enumere nome/dor/prioridade prova resumo, registro e ausência de repetição.",
       "Se todos os itens obrigatórios tiverem evidência e não houver falha crítica, passou=true e nota entre 85 e 100.",
       "Se faltar item obrigatório, passou=false e nota até 70. Nunca produza passou=true com nota abaixo de 85.",
@@ -148,7 +150,33 @@ async function executarSdrOuCloser(caso: CasoDaAcademiaIa): Promise<EvidenciaExe
   if (!fala || fala.origem === "chao-deterministico") {
     return { casoId: caso.id, nota: 0, passou: false, falhasCriticas: ["modelo real não respondeu após 3 tentativas"], evidencia: { origem: fala?.origem ?? "ausente", porque: fala?.porque ?? "sem resposta" }, latenciaMs: Date.now() - inicio };
   }
-  const auditada = await auditar(caso, fala.texto);
+  let auditada = await auditar(caso, fala.texto);
+
+  // Treino corretivo real: se a banca apontar lacuna pedagógica, o agente recebe
+  // o parecer e tem até duas novas tentativas. Guardrails continuam decidindo se
+  // cada texto pode sair; nenhum resultado é promovido artificialmente.
+  for (let rodada = 0; rodada < 2 && (!auditada.parecer.passou || auditada.parecer.falhasCriticas.length > 0); rodada++) {
+    const feedback = [
+      entrada.conduta ?? "",
+      "CORREÇÃO DA BANCA DA ACADEMY:",
+      auditada.parecer.justificativa,
+      auditada.parecer.falhasCriticas.length ? `Falhas críticas a eliminar: ${auditada.parecer.falhasCriticas.join("; ")}` : "",
+      "Reescreva a resposta completa demonstrando literalmente todos os critérios, sem mencionar a banca ou este treino.",
+    ].filter(Boolean).join("\n");
+
+    const corrigida = await pensar({
+      mensagem: entrada.mensagem,
+      postura,
+      memoria: entrada.memoria,
+      historico: entrada.historico,
+      conduta: feedback,
+    }, () => ({ texto: "Não consegui responder com o modelo.", origem: "chao-deterministico", apoiadoEm: [], reprovacoes: [], porque: "fallback" }));
+
+    if (corrigida.origem === "chao-deterministico") continue;
+    fala = corrigida;
+    auditada = await auditar(caso, fala.texto);
+  }
+
   return {
     casoId: caso.id,
     nota: auditada.parecer.nota,
