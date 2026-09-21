@@ -82,9 +82,12 @@ describe("do 'oi' ao pedido de gente, cinco turnos", () => {
     expect(um!.origem).toBe("modelo");
     expect(um!.perguntouIndice).toBe(0);
 
-    // 2. Preço: aprovado porque é o da tabela. Segunda pergunta feita.
+    // 2. Preço: aprovado porque é o da tabela. E a sondagem NÃO anda — ele
+    // perguntou o preço e recebeu o preço. Até 21/09/2026 vinha junto a segunda
+    // pergunta da lista, sobre outro assunto, e foi isso que o CEO chamou de
+    // "pergunta sem nexo" ao dar 3 de 10 no atendimento.
     expect(dois!.origem).toBe("modelo");
-    expect(dois!.perguntouIndice).toBe(1);
+    expect(dois!.perguntouIndice).toBeNull();
     expect(dois!.texto).toContain(PRECO);
 
     // 3. ⭐ Ele NEGA a integração — resposta honesta, e o verificador deixa
@@ -103,9 +106,11 @@ describe("do 'oi' ao pedido de gente, cinco turnos", () => {
     expect(cinco!.handoff).toEqual({ deve: true, motivo: "PEDIU_HUMANO" });
     expect(cinco!.texto).not.toBe(FALAS_DO_MODELO[4]);
 
-    // E a sondagem terminou com DUAS perguntas feitas em cinco turnos — não
-    // cinco. É o número que uma conversa de verdade produz.
-    expect(jaPerguntou).toEqual([0, 1]);
+    // E a sondagem terminou com UMA pergunta feita em cinco turnos — não cinco,
+    // e nem as duas de antes de 21/09/2026. Ele abriu perguntando, e depois
+    // disso só respondeu: preço, integração e comissão não pediam pergunta
+    // nenhuma de volta. É o número que uma conversa de verdade produz.
+    expect(jaPerguntou).toEqual([0]);
   });
 
   it("o histórico cresce e chega ao modelo a cada turno", async () => {

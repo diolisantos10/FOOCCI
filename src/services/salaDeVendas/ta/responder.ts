@@ -263,9 +263,32 @@ export function responder(turno: Turno, ficha: TextoDaVersao = VERSAO_1): Respos
   // aqui, no código, e não no ofício: instrução de redação é aviso, e insistir
   // depois de um pedido explícito é o caminho curto para o bloqueio e a denúncia
   // que derrubam o número por onde a casa também atende quem já é cliente.
-  const pergunta = turno.pediuPararSondagem
-    ? null
-    : proximaPergunta(turno.jaPerguntou ?? [], ficha);
+  //
+  // ⛔ E SALVO QUANDO A PERGUNTA NÃO SERVE PARA NADA — 21/09/2026.
+  //
+  // Até hoje esta linha era incondicional: qualquer que fosse o turno, a
+  // próxima pergunta da lista era grudada no fim. O CEO testou como cliente e
+  // deu 3 de 10: *"criou um padrão de sempre no final da fala fazer uma
+  // pergunta para o cliente. Pergunta sem nexo."* Ele estava descrevendo este
+  // `if`. A pergunta vinha da LISTA, na ordem da lista — não do que ele acabou
+  // de escrever. Por construção ela não tinha como ter nexo.
+  //
+  // A regra nova: a pergunta só entra quando ela faz a conversa ANDAR.
+  //
+  //   · **primeiro contato** — não se sabe nada, perguntar é o próprio trabalho;
+  //   · **ele não perguntou nada e a base não respondeu nada** — a mensagem
+  //     ficaria vazia sem a pergunta, e sondar é o que há para fazer.
+  //
+  // E ela NÃO entra quando acabamos de responder o que ele perguntou. Quem
+  // pergunta o preço quer o preço — e recebia o preço mais uma pergunta sobre
+  // outro assunto, o que faz a conversa parecer formulário. Mensagem que não
+  // precisa de pergunta termina sem pergunta.
+  const respondeuOQuePerguntaram = usados.length > 0;
+  const cabePergunta =
+    !turno.pediuPararSondagem && (primeiroContato || !respondeuOQuePerguntaram);
+  const pergunta = cabePergunta
+    ? proximaPergunta(turno.jaPerguntou ?? [], ficha)
+    : null;
   if (pergunta) partes.push(pergunta.texto);
 
   return {
@@ -275,9 +298,11 @@ export function responder(turno: Turno, ficha: TextoDaVersao = VERSAO_1): Respos
     handoff: { deve: false, motivo: null },
     porque: turno.pediuPararSondagem
       ? "ele pediu para parar de responder perguntas — respondeu e não perguntou nada"
-      : usados.length > 0
-        ? `respondeu com ${usados.length} item(ns) da base e seguiu a sondagem`
-        : "nada a responder ainda — seguiu a sondagem",
+      : pergunta
+        ? usados.length > 0
+          ? `respondeu com ${usados.length} item(ns) da base e abriu a sondagem`
+          : "nada a responder ainda — seguiu a sondagem"
+        : `respondeu com ${usados.length} item(ns) da base e parou aí — a pergunta da lista não tinha nexo com o que ele escreveu`,
   };
 }
 
