@@ -86,6 +86,20 @@ export const MODEL_PRICES: readonly ModelPrice[] = [
     usedAt: "src/services/brain/knowledge/KnowledgeEmbeddingService.ts:22",
   },
   {
+    // ⭐ O motor Tier 1 do agente de WhatsApp que anota pedido (ordem do CEO,
+    // 24/09/2026). Preço de tabela da Anthropic em 23/09/2026: $5 / $25 por 1M.
+    // Sem esta linha, o custo do cargo Tier 1 sairia da contabilidade em silêncio
+    // — trocar de motor sem trocar a tabela de preço é apagar a conta, não zerá-la.
+    model: "claude-opus-5",
+    provider: "ANTHROPIC",
+    billingUnit: "TOKENS",
+    inputUsdPer1k: 0.005,
+    outputUsdPer1k: 0.025,
+    source: ANTHROPIC_SOURCE,
+    asOf: REGISTERED_ON,
+    usedAt: "src/services/brain/engines/AIEngineRouter.ts (AGENT_MODEL_PREFERENCES.whatsapp)",
+  },
+  {
     model: "claude-haiku-4-5-20251001",
     provider: "ANTHROPIC",
     billingUnit: "TOKENS",

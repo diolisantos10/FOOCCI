@@ -30,6 +30,8 @@ export type MotivoDeFalhaDaIA =
   | "cortado_por_limite"
   /** A resposta veio vazia (sem conteúdo, sem erro). */
   | "sem_conteudo"
+  /** O modelo RECUSOU responder (classificador de segurança do provedor). */
+  | "recusado"
   /** Nenhum dos acima — fica declarado como desconhecido, nunca como sucesso. */
   | "desconhecido";
 
@@ -97,6 +99,7 @@ export function explicarMotivo(motivo: MotivoDeFalhaDaIA): string {
     case "json_invalido":      return "a IA respondeu, mas não em JSON válido";
     case "cortado_por_limite": return "a resposta da IA foi cortada pelo teto de tokens";
     case "sem_conteudo":       return "a IA devolveu resposta vazia";
+    case "recusado":           return "a IA recusou responder (política do provedor)";
     case "desconhecido":       return "falha de IA não classificada";
   }
 }

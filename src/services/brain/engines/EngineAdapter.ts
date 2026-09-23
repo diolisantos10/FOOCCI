@@ -17,6 +17,12 @@ export interface StructuredCallInput {
   /** "json" (default) força objeto JSON; "text" devolve texto livre. */
   responseFormat?: "json" | "text";
   /**
+   * Profundidade de raciocínio dos modelos que a expõem (família Claude 5+).
+   * ⭐ É o botão de LATÊNCIA: rota conversacional ao vivo pede "low"; trabalho
+   * de correção/auditoria pede "high". Providers que não têm o conceito ignoram.
+   */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  /**
    * Entrada visual opcional (data URL base64, ex.: leitura de nota de compra).
    * Suportada hoje pelo piloto OPENAI; os demais lançam erro claro — o caller
    * decide o fallback, como em qualquer falha de engine.

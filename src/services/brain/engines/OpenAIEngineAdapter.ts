@@ -1,26 +1,24 @@
 /**
- * OpenAIEngineAdapter — o piloto OPENAI + o DISPATCHER de pilotos do Brain.
+ * OpenAIEngineAdapter — o piloto OPENAI. SÓ o piloto OPENAI.
  *
- * callStructuredJson é o ÚNICO ponto por onde qualquer consumidor do Brain fala
- * com uma IA: ele roteia pela seleção (OPENAI / CLAUDE / GEMINI) para o adapter
- * do provider. Trocar o piloto de um agente é config governada no router —
- * nenhum consumidor muda. (Mantido neste arquivo pelo import histórico; o
- * OpenAI segue sendo o piloto default de produção.)
+ * O DISPATCHER saiu daqui em 24/09/2026 e mora em `EngineDispatcher.ts`, com
+ * nome neutro. Motivo: a porta de entrada da IA não pode se chamar pelo nome de
+ * um laboratório. Enquanto se chamou, cada consumidor escrevia
+ * `import { callStructuredJson } from ".../OpenAIEngineAdapter"` — e quem lia o
+ * código concluía, errado, que a escolha do AIEngineRouter não valia nada.
+ *
+ * O reexport abaixo existe só para os consumidores antigos não quebrarem de uma
+ * vez. Código NOVO importa de `EngineDispatcher`.
  */
 
 import { openai } from "@/lib/openai";
 import type OpenAI from "openai";
-import type { AIEngineSelection } from "./AIEngineTypes";
 import type { StructuredCallInput } from "./EngineAdapter";
 import { FalhaDeMotor } from "./FalhaDeMotor";
 
 export { openai as openaiEngine };
 
-export interface StructuredJsonCallInput extends StructuredCallInput {
-  selection: AIEngineSelection;
-}
-
-async function callOpenAI(input: StructuredCallInput): Promise<string> {
+export async function callOpenAI(input: StructuredCallInput): Promise<string> {
   // Sem chave o SDK vai com "not-configured" e o provedor devolve 401 depois de
   // uma ida à rede. Barrar aqui troca um 401 genérico por um motivo nomeado —
   // e é o motivo que o diário do SDR precisa registrar.
@@ -65,29 +63,8 @@ async function callOpenAI(input: StructuredCallInput): Promise<string> {
   return raw;
 }
 
-/**
- * Uma chamada estruturada através do piloto roteado. Lança em erro — quem chama
- * decide o fallback (o BrainReasoner cai no determinístico que nunca inventa).
- */
-export async function callStructuredJson(input: StructuredJsonCallInput): Promise<string> {
-  switch (input.selection.provider) {
-    case "OPENAI":
-      return callOpenAI(input);
-    case "CLAUDE": {
-      if (input.imageDataUrl) {
-        throw new Error("Entrada de imagem ainda não suportada no piloto CLAUDE — roteie para OPENAI.");
-      }
-      const { callAnthropic } = await import("./AnthropicEngineAdapter");
-      return callAnthropic(input);
-    }
-    case "GEMINI": {
-      if (input.imageDataUrl) {
-        throw new Error("Entrada de imagem ainda não suportada no piloto GEMINI — roteie para OPENAI.");
-      }
-      const { callGemini } = await import("./GeminiEngineAdapter");
-      return callGemini(input);
-    }
-    default:
-      throw new Error(`Engine ${input.selection.provider} não implementado — use o fallback determinístico.`);
-  }
-}
+// ── Compatibilidade: a porta antiga ───────────────────────────────────────────
+// `callStructuredJson` e seu tipo agora vivem em EngineDispatcher (porta neutra).
+// Reexportados aqui para não quebrar os consumidores que ainda apontam para cá.
+export { callStructuredJson } from "./EngineDispatcher";
+export type { StructuredJsonCallInput } from "./EngineDispatcher";

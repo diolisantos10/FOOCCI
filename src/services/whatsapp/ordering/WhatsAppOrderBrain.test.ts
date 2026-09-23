@@ -1,10 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { WaMenuItem } from "./types";
 
+/**
+ * ⚠️ ESTE MOCK MUDOU EM 24/09/2026, E O MOTIVO IMPORTA.
+ *
+ * Antes ele fingia a OpenAI (`@/lib/openai`). O cargo virou Tier 1 e o roteador
+ * passou a mandar o agente de WhatsApp para o piloto CLAUDE. Se o mock tivesse
+ * ficado onde estava, a suíte continuaria VERDE — medindo um caminho que a
+ * produção não percorre mais. Régua verde sobre o componente errado é pior que
+ * régua nenhuma: mata a dúvida e deixa o defeito. Agora o mock está no SDK do
+ * laboratório que o roteador escolhe de verdade.
+ */
 const ai = vi.hoisted(() => ({ create: vi.fn() }));
-vi.mock("@/lib/openai", () => ({ openai: { chat: { completions: { create: ai.create } } } }));
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class {
+    messages = { create: ai.create };
+  },
+}));
 
 import { reasonOrderTurn } from "./WhatsAppOrderBrain";
+import { __resetAnthropicClient } from "@/services/brain/engines/AnthropicEngineAdapter";
 
 function item(id: string, name: string, price: number): WaMenuItem {
   return {
@@ -20,18 +35,27 @@ const menu: WaMenuItem[] = [
   item("coca1", "Coca-Cola Lata", 7.0),
 ];
 
-function mockReply(obj: Record<string, unknown>) {
-  ai.create.mockResolvedValue({ choices: [{ message: { content: JSON.stringify(obj) } }] });
+function respostaCrua(texto: string) {
+  ai.create.mockResolvedValue({
+    stop_reason: "end_turn",
+    content: [{ type: "text", text: texto }],
+  });
 }
 
-const OLD_KEY = process.env.OPENAI_API_KEY;
+function mockReply(obj: Record<string, unknown>) {
+  respostaCrua(JSON.stringify(obj));
+}
+
+const OLD_KEY = process.env.ANTHROPIC_API_KEY;
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.OPENAI_API_KEY = "sk-test";
+  __resetAnthropicClient();
+  process.env.ANTHROPIC_API_KEY = "sk-ant-test";
 });
 afterEach(() => {
-  if (OLD_KEY === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = OLD_KEY;
+  __resetAnthropicClient();
+  if (OLD_KEY === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = OLD_KEY;
 });
 
 describe("WhatsAppOrderBrain.reasonOrderTurn", () => {
@@ -96,7 +120,10 @@ describe("WhatsAppOrderBrain.reasonOrderTurn", () => {
   });
 
   it("falls back safely (no pilot) so the caller can defer to the legacy machine", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
     const d = await reasonOrderTurn({ message: "quero um yakisoba", menu, comanda: [] });
     expect(d.reasoningMode).toBe("FALLBACK");
     expect(d.items).toHaveLength(0);
@@ -104,7 +131,7 @@ describe("WhatsAppOrderBrain.reasonOrderTurn", () => {
   });
 
   it("falls back when the model returns malformed JSON (never throws)", async () => {
-    ai.create.mockResolvedValue({ choices: [{ message: { content: "not json {" } }] });
+    respostaCrua("not json {");
     const d = await reasonOrderTurn({ message: "um yakisoba", menu, comanda: [] });
     expect(d.reasoningMode).toBe("FALLBACK");
   });

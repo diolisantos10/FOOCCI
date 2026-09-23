@@ -108,7 +108,8 @@ describe("proveniência é obrigatória em toda linha", () => {
       "gpt-4o-mini",              // AIEngineRouter.ts:16
       "gpt-4o",                   // AgentTrainingEvaluatorService.ts:15
       "text-embedding-3-small",   // KnowledgeEmbeddingService.ts:22
-      "claude-haiku-4-5-20251001",// AIEngineRouter.ts:17
+      "claude-haiku-4-5-20251001",// AIEngineRouter.ts (DEFAULT_MODEL.CLAUDE)
+      "claude-opus-5",            // AIEngineRouter.ts (AGENT_MODEL_PREFERENCES.whatsapp — Tier 1)
       "gemini-2.5-flash",         // AIEngineRouter.ts:18
       "whisper-1",                // TranscriptionAdapter.ts:135
       "gpt-image-1",              // imageEnhancement/providers/openai.ts:17

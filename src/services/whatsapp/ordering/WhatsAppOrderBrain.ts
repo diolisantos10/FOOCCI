@@ -13,13 +13,18 @@
  *  - Wants to BROWSE the menu / see options → redirect to "aperte 1".
  *  - Complaint / order status / "talk to the store" → handoff.
  *
- * Read-only on the Brain side. OPENAI only today (via the router). Safe FALLBACK
- * (reasoningMode:"FALLBACK") when no pilot is configured or the call/parse fails —
- * the caller then defers to the legacy regex machine (today's behavior, no worse).
+ * Read-only on the Brain side. O PILOTO É DECIDIDO PELO ROTEADOR — este arquivo
+ * não conhece laboratório nem nome de modelo, e entra pela porta neutra
+ * (EngineDispatcher). Ordem do CEO de 24/09/2026: o cargo é Tier 1, logo classe
+ * A; qual modelo classe A está em AIEngineRouter.AGENT_MODEL_PREFERENCES.
+ *
+ * Safe FALLBACK (reasoningMode:"FALLBACK") when no pilot is configured or the
+ * call/parse fails — the caller then defers to the legacy regex machine (today's
+ * behavior, no worse).
  */
 
 import { selectEngine } from "@/services/brain/engines/AIEngineRouter";
-import { callStructuredJson } from "@/services/brain/engines/OpenAIEngineAdapter";
+import { callStructuredJson } from "@/services/brain/engines/EngineDispatcher";
 import type { WaMenuItem, WaOrderItem } from "./types";
 
 export type WaOrderBrainIntent =
@@ -145,7 +150,22 @@ export async function reasonOrderTurn(input: ReasonOrderTurnInput): Promise<WaOr
       `\nMENSAGEM DO CLIENTE: "${input.message}"`,
     ].join("\n");
 
-    const raw = await callStructuredJson({ selection: engine, systemPrompt: SYSTEM_PROMPT, userContent, temperature: 0.2 });
+    const raw = await callStructuredJson({
+      selection: engine,
+      systemPrompt: SYSTEM_PROMPT,
+      userContent,
+      temperature: 0.2,
+      // ⚠️ ATENDIMENTO AO VIVO: o cliente está com o WhatsApp aberto. Nos motores
+      // que expõem profundidade de raciocínio, esta rota roda no degrau mais
+      // baixo de propósito — anotar pedido de cardápio fechado não pede
+      // deliberação longa, e modelo lento arruína a conversa. Os motores que não
+      // têm o conceito ignoram o campo.
+      effort: "low",
+      // Teto explícito: uma comanda + resposta curta cabem folgadas. Sem teto, a
+      // família Claude 5 usa o padrão do adapter e uma resposta longa demais vira
+      // "cortado_por_limite" — falha nomeada, não silêncio.
+      maxTokens: 1200,
+    });
     const parsed = JSON.parse(raw) as RawDecision;
 
     const intent = (parsed.intent && VALID_INTENTS.has(parsed.intent) ? parsed.intent : "UNKNOWN") as WaOrderBrainIntent;
