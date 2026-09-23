@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { type ReadyMadeCoupon } from "@/services/crm/readyMadeCampaigns";
+import { motivoDePausaDeliberada, catalogoComoEstadosDesligados } from "@/services/crm/painelDeCampanhas";
 
 type Editable = Array<"message" | "schedule" | "dailyLimit" | "coupon" | "triggerDays">;
 
@@ -40,6 +41,18 @@ export interface ReadyMadeState {
   metaTemplate: { name: string; status: string; rejectedReason: string | null } | null;
 }
 
+/**
+ * O catálogo renderizado a partir do módulo puro, sem passar pelo banco.
+ *
+ * Existe porque a lista inteira dependia de UMA chamada de API: se ela falhasse,
+ * a seção ficava com o título e NENHUM card — e o dono do restaurante concluía
+ * que a campanha não existe. Catálogo é dado estático; ele não pode desaparecer
+ * por causa de uma consulta. Sem estado do banco, tudo aparece DESLIGADO — que é
+ * o estado seguro: ⛔ nada aqui liga campanha nenhuma.
+ */
+const catalogoLocalComoEstados = (): ReadyMadeState[] =>
+  catalogoComoEstadosDesligados() as ReadyMadeState[];
+
 export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
   /** Open the full "Gerenciar" modal for a recurring campaign (unified interface). */
   onManage?: (campaignId: string) => void;
@@ -50,10 +63,21 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
 
+  // Verdadeiro quando a lista veio do catálogo local porque a API não respondeu.
+  const [semEstadoDoBanco, setSemEstadoDoBanco] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const rmRes = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
-      if (rmRes?.data?.campaigns) setItems(rmRes.data.campaigns as ReadyMadeState[]);
+      const vindas = rmRes?.data?.campaigns as ReadyMadeState[] | undefined;
+      if (vindas && vindas.length) {
+        setItems(vindas);
+        setSemEstadoDoBanco(false);
+      } else {
+        // Nenhuma campanha do catálogo pode ficar invisível por falha de consulta.
+        setItems(catalogoLocalComoEstados());
+        setSemEstadoDoBanco(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -113,8 +137,16 @@ export function ReadyMadeCampaignsSection({ onManage, reloadSignal }: {
     <div>
       <h3 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">Campanhas prontas</h3>
       <p className="mb-4 text-sm text-muted">
+        Todas as {items.length} campanhas do catálogo aparecem aqui — inclusive as que você ainda não ativou.
         Já vêm configuradas para qualquer restaurante. É só ligar — e ajustar antes ou depois, se quiser.
       </p>
+
+      {semEstadoDoBanco && (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+          ⚠️ Não foi possível ler agora o que está ligado neste restaurante. O catálogo completo continua à
+          vista, mas os estados abaixo podem estar desatualizados — recarregue a página em instantes.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {items.map((c) => (
@@ -142,6 +174,9 @@ function ReadyMadeCard({
   onToggle: () => void;
   onConfigure: () => void;
 }) {
+  // Nunca instanciada para este restaurante → "disponível, não ativada".
+  const naoAtivada   = !c.active && !c.campaignId;
+  const motivoDaPausa = motivoDePausaDeliberada(c.id);
   return (
     <div className={`flex flex-col rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md ${c.active ? "border-emerald-200 bg-emerald-50/40" : "border-line bg-paper"}`}>
       <div className="flex items-start justify-between gap-3">
@@ -172,9 +207,18 @@ function ReadyMadeCard({
         </p>
       )}
 
+      {/* Trava deliberada — a tela diz POR QUE esta campanha nasce pausada.
+          ⛔ Mostrar não é ligar: o aviso aparece justamente enquanto ela está parada. */}
+      {!c.active && motivoDaPausa && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
+          <span className="text-sm">🔒</span>
+          <span><span className="font-semibold">Pausada de propósito.</span> {motivoDaPausa}</span>
+        </p>
+      )}
+
       <div className="mt-3 flex items-center gap-3">
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-          {c.active ? "Ligada" : "Desligada"}
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${c.active ? "bg-emerald-100 text-emerald-700" : naoAtivada ? "bg-sky-50 text-sky-700" : "bg-gray-100 text-gray-500"}`}>
+          {c.active ? "Ligada" : naoAtivada ? "Disponível — não ativada" : "Pausada"}
         </span>
         <button onClick={onConfigure} className="text-sm font-semibold text-brand-600 hover:text-brand-700">
           Configurar

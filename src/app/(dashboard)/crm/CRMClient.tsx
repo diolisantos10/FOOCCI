@@ -15,6 +15,7 @@ import {
 import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/crmMessagePool";
 import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { TIER_COUPON_CAMPAIGN_IDS } from "@/services/crm/readyMadeCampaigns";
+import { montarPainelDeCampanhas, disponiveisNaoAtivadas } from "@/services/crm/painelDeCampanhas";
 
 // Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
@@ -3981,6 +3982,90 @@ function crmPeriodRange(key: CrmPeriodKey, customFrom?: string, customTo?: strin
   }
 }
 
+/**
+ * CampanhasDisponiveisSection — as campanhas que EXISTEM no catálogo e ainda não
+ * foram ativadas neste restaurante.
+ *
+ * Medido em 24/09/2026: o painel mostrava 11 campanhas de um catálogo de 16, e
+ * "Cliente frio" / "Cliente morno" não apareciam em lugar nenhum — porque o
+ * painel só listava campanha já instanciada no banco. Quem nunca foi ligada não
+ * tinha linha, e sem linha não tinha tela.
+ *
+ * ⛔ Este bloco NÃO é "campanhas ativas": tem contagem própria e não soma à de
+ * cima. ⛔ Nada aqui dispara: "Configurar e ligar" só abre o painel de gestão,
+ * onde o dono confere mensagem, cupom e agenda antes de ligar.
+ */
+function CampanhasDisponiveisSection({
+  estados, onConfigurar,
+}: {
+  estados: ReadyMadeState[];
+  /** Abre o painel de gestão desta campanha. ⛔ Não liga nada sozinho. */
+  onConfigurar: (catalogoId: string, campaignId: string | null) => void;
+}) {
+  const painel = montarPainelDeCampanhas(estados);
+  // Carrinho abandonado já tem linha própria e permanente no painel de cima
+  // (ligado ou desligado), então nunca fica invisível — listá-lo aqui seria
+  // mostrar a mesma campanha duas vezes na mesma tela.
+  const naoAtivadas = disponiveisNaoAtivadas(painel).filter((l) => l.id !== "carrinho-abandonado");
+  if (naoAtivadas.length === 0) return null;
+
+  return (
+    <div data-testid="campanhas-disponiveis-section">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-sky-700">Disponíveis — não ativadas</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            Campanhas prontas que este restaurante ainda não ligou. Não estão rodando e não entram na contagem acima.
+          </p>
+        </div>
+        <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700">{naoAtivadas.length}</span>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
+        <table className="w-full text-left text-xs">
+          <thead className="border-b border-line bg-[#FAFAF8]">
+            <tr className="text-[10px] uppercase tracking-wide text-muted">
+              <th className="py-2.5 pl-4 pr-2 font-semibold">Estado</th>
+              <th className="py-2.5 px-2 font-semibold">Nome</th>
+              <th className="py-2.5 px-2 font-semibold">O que faz</th>
+              <th className="py-2.5 pl-2 pr-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {naoAtivadas.map((l) => (
+              <tr key={l.id} className="hover:bg-[#FAFAF8] transition-colors" data-testid={`campanha-disponivel-${l.id}`}>
+                <td className="py-3 pl-4 pr-2 align-top">
+                  <span className="inline-block rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-700 whitespace-nowrap">
+                    {l.rotulo}
+                  </span>
+                </td>
+                <td className="py-3 px-2 align-top">
+                  <p className="font-semibold text-ink whitespace-nowrap">{l.emoji} {l.nome}</p>
+                  {l.motivoDaPausa && (
+                    <p className="mt-1 max-w-[340px] rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] leading-snug text-amber-800">
+                      🔒 <span className="font-semibold">Pausada de propósito.</span> {l.motivoDaPausa}
+                    </p>
+                  )}
+                </td>
+                <td className="py-3 px-2 align-top"><span className="text-ink2 text-[11px]">{l.tagline}</span></td>
+                <td className="py-3 pl-2 pr-4 align-top text-right">
+                  {/* ⛔ Só abre o painel de gestão — quem liga é o dono, lá dentro. */}
+                  <button
+                    onClick={() => onConfigurar(l.id, l.campaignId)}
+                    className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                  >
+                    Configurar e ligar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
   const [showCreateModal,   setShowCreateModal]    = useState(false);
@@ -4025,6 +4110,34 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
   // Bumped whenever a campaign changes, to refresh the ready-made cards + Ativas panel.
   const [readyMadeReload, setReadyMadeReload] = useState(0);
+  // Catálogo inteiro com o estado de cada campanha — alimenta o bloco
+  // "Disponíveis, não ativadas" logo abaixo das ativas. Nenhuma campanha do
+  // catálogo pode ficar invisível para o dono do restaurante.
+  const [readyMadeAll, setReadyMadeAll] = useState<ReadyMadeState[]>([]);
+
+  /**
+   * Abre o painel de gestão de uma campanha do catálogo ainda não ativada.
+   *
+   * Quando ela nunca foi instanciada, primeiro cria o registro — que nasce
+   * PAUSADO (ReadyMadeCampaignService.update) — e só então abre a gestão.
+   * ⛔ Nada é enviado e nada é ligado aqui: o dono confere mensagem, cupom e
+   * agenda no painel e liga por lá, se quiser.
+   */
+  async function abrirCampanhaDisponivel(catalogoId: string, campaignId: string | null) {
+    let id = campaignId;
+    if (!id) {
+      await fetch(`/api/crm/ready-made/${catalogoId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", overrides: {} }),
+      }).catch(() => {});
+      const fresh = await fetch("/api/crm/ready-made").then((r) => r.json()).catch(() => null);
+      const rows = (fresh?.data?.campaigns as ReadyMadeState[] | undefined) ?? [];
+      if (rows.length) setReadyMadeAll(rows);
+      id = rows.find((x) => x.id === catalogoId)?.campaignId ?? null;
+    }
+    if (id) openManage(id, "overview");
+    setReadyMadeReload((n) => n + 1);
+  }
 
   function refreshCampaigns() {
     fetch("/api/crm/campaigns")
@@ -4084,6 +4197,7 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((json) => {
         const rm = (json?.data?.campaigns as ReadyMadeState[] | undefined) ?? [];
+        setReadyMadeAll(rm);
         const cart = rm.find((c) => c.id === "carrinho-abandonado") ?? null;
         setCartRecoveryItem(cart);
         setCartRecoveryOn(!!cart?.active);
@@ -4458,6 +4572,14 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
           onCartRecoveryToggle={() => { void handleCartRecoveryToggle(); }}
         />
       )}
+
+      {/* ── Disponíveis, não ativadas ────────────────────────────────────────
+          O painel de cima conta só o que está rodando. Este conta o que EXISTE e
+          ainda não foi ligado. ⛔ Estados diferentes, números que não se somam. */}
+      <CampanhasDisponiveisSection
+        estados={readyMadeAll}
+        onConfigurar={(catalogoId, campaignId) => { void abrirCampanhaDisponivel(catalogoId, campaignId); }}
+      />
 
       {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
       <ReadyMadeCampaignsSection
