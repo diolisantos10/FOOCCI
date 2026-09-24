@@ -87,6 +87,36 @@ export const MEDIDORES: MedidorVigiado[] = [
       return run?.finishedAt ?? null;
     },
   },
+  {
+    id: "prospeccao-descoberta",
+    nome: "Varredura de descoberta (a fila que se enche sozinha)",
+    workflow: ".github/workflows/prospeccao-descoberta.yml",
+    /*
+      ⭐ POR QUE ESTE CRON É VIGIADO DE VERDADE, e não declarado sem vigia.
+      A varredura RESERVA o dia no banco antes de varrer
+      (`prospeccao_config.ultimaDescobertaAutomaticaEm`), e a reserva é feita
+      tanto pelo agendador interno quanto pelo cron. Ou seja: existe carimbo de
+      execução legível de fora — que é exatamente o que falta aos outros crons
+      desta lista. Onde há rastro, medir é obrigação, não escolha.
+
+      ⚠️ E o que este medidor guarda é o defeito de 24/09/2026: a rodada das 9h
+      rodando todo dia útil e concluindo `abordados: 0, parouPor: 'filaAcabou'`.
+      Descoberta parada é fila vazia amanhã — e fila vazia não dá erro nenhum.
+
+      76h porque a varredura roda em DIA ÚTIL: de sexta 7h a segunda 7h são 72h
+      legítimas, e a folga de 4h absorve atraso de fila do runner sem virar
+      alarme falso. Alarme que toca sozinho é alarme que se aprende a ignorar.
+    */
+    limiteHoras: 76,
+    ultimaMedicao: async () => {
+      const { prisma } = await import("@/lib/prisma");
+      const config = await prisma.prospeccaoConfig.findUnique({
+        where: { id: "singleton" },
+        select: { ultimaDescobertaAutomaticaEm: true },
+      });
+      return config?.ultimaDescobertaAutomaticaEm ?? null;
+    },
+  },
 ];
 
 function avaliar(m: MedidorVigiado, medidoEm: Date | null, agora: Date): EstadoDoMedidor {

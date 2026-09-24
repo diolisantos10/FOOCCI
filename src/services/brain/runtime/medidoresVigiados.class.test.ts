@@ -33,6 +33,10 @@ const WORKFLOWS_DIR = join(process.cwd(), ".github/workflows");
  */
 const VIGIADOS = new Set<string>([
   "quality-audit-cron.yml",
+  // A varredura de descoberta carimba a própria execução ao RESERVAR o dia
+  // (`prospeccao_config.ultimaDescobertaAutomaticaEm`) — logo é vigiável de
+  // verdade, e não uma dívida declarada.
+  "prospeccao-descoberta.yml",
 ]);
 
 /**
