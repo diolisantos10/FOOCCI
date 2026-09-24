@@ -71,6 +71,30 @@ function env(nome: string): string {
   return (process.env[nome] ?? "").trim();
 }
 
+/** As três variáveis que ligam este produto ao Portão de IA da Control Room. */
+export const VARIAVEIS_DO_PORTAO = [
+  "CONTROL_ROOM_IA_URL",
+  "CONTROL_ROOM_IA_SEGREDO",
+  "CONTROL_ROOM_IA_CRACHA",
+] as const;
+
+/**
+ * ⭐⭐ A MESMA PERGUNTA, MAS RESPONDIDA SOBRE UM AMBIENTE PASSADO DE FORA.
+ *
+ * O roteador (`AIEngineRouter.configuredProviders`) precisa saber se o
+ * laboratório está ALCANÇÁVEL para decidir o motor do cargo — e ele recebe o
+ * ambiente por parâmetro, porque a suíte o prova sem mexer no processo. Sem
+ * esta versão, o roteador teria de ler `process.env` por dentro e a prova
+ * viraria "espere o ambiente do CI estar certo", que é prova nenhuma.
+ *
+ * ⛔ Nada aqui olha `ANTHROPIC_API_KEY`. É o ponto inteiro de D-105: a chave do
+ * laboratório não existe neste produto, e o que habilita o motor Tier 1 é o
+ * ENDEREÇO DO PORTÃO mais o crachá — nunca uma credencial de laboratório.
+ */
+export function portaoDeIaConfigurado(ambiente: NodeJS.ProcessEnv = process.env): boolean {
+  return VARIAVEIS_DO_PORTAO.every((v) => (ambiente[v] ?? "").trim() !== "");
+}
+
 /** As três variáveis estão setadas? ⛔ Ausente nunca vira "chama direto". */
 export function estaConfigurado(): boolean {
   return env("CONTROL_ROOM_IA_URL") !== "" &&

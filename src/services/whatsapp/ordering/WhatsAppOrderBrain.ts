@@ -25,6 +25,7 @@
 
 import { selectEngine } from "@/services/brain/engines/AIEngineRouter";
 import { callStructuredJson } from "@/services/brain/engines/EngineDispatcher";
+import { classificarFalhaDeMotor, explicarMotivo } from "@/services/brain/engines/FalhaDeMotor";
 import type { WaMenuItem, WaOrderItem } from "./types";
 
 export type WaOrderBrainIntent =
@@ -194,7 +195,22 @@ export async function reasonOrderTurn(input: ReasonOrderTurnInput): Promise<WaOr
       shouldHandoff: parsed.shouldHandoff === true || intent === "HUMAN",
       reasoningMode: "LLM",
     };
-  } catch {
+  } catch (e) {
+    // ⭐ A QUEDA CONTINUA SENDO A MESMA — determinística, e o cliente é atendido.
+    // ⛔ O que mudou em 24/09/2026 (D-105) é que ela deixou de ser MUDA.
+    //
+    // Com o Portão de IA da Control Room no caminho, "a IA não respondeu" passou
+    // a ter causas com donos diferentes: portão fora do ar, teto de gasto da
+    // companhia atingido, chave ausente no cofre, laboratório recusando. Um
+    // `catch {}` vazio devolvia as quatro como o mesmo silêncio — e a pergunta
+    // "por que o atendimento piorou às 18h?" não teria resposta em lugar nenhum.
+    //
+    // ⚠️ Só o MOTIVO sai no log. Nada de mensagem de cliente, nada de crachá,
+    // nada que se pareça com credencial.
+    console.warn(
+      `[whatsapp-order-brain] a IA não respondeu; atendendo pela máquina determinística. ` +
+        `Motivo: ${explicarMotivo(classificarFalhaDeMotor(e))}.`,
+    );
     return fallback();
   }
 }

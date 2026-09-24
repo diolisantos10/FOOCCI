@@ -9,6 +9,9 @@
  */
 
 import type { AIEngineProvider, AIEngineSelection, AgentEngineConfig } from "./AIEngineTypes";
+// ⚠️ Import de TIPO zero e de função pura: este arquivo continua sem depender de
+// SDK de laboratório nenhum (ver services/brain/architecture.test.ts).
+import { portaoDeIaConfigurado } from "./ControlRoomEngineAdapter";
 
 /** Today's production default — DO NOT change without a BrainChangeRequest. */
 const DEFAULT_PROVIDER: AIEngineProvider = "OPENAI";
@@ -52,9 +55,13 @@ const DEFAULT_MODEL: Record<AIEngineProvider, string> = {
  * 3. PREÇO (D-102 passo 3): só desempatou entre equivalentes — $5/$25 do
  *    `claude-opus-5` contra $10/$50 do `claude-fable-5-1`. Não atravessou 1 nem 2.
  *
- * ⚠️ Sem `ANTHROPIC_API_KEY` no ambiente, `configuredProviders` não lista CLAUDE
- * e a seleção CAI para o default OPENAI/`gpt-4o-mini`. A troca só vale de fato
- * quando a chave existir no Railway.
+ * ⚠️ ATUALIZADO EM 24/09/2026 (D-105): o que liga esta escolha NÃO é mais uma
+ * `ANTHROPIC_API_KEY` neste produto — ela não deve existir aqui. É o **Portão de
+ * IA da Control Room** (`CONTROL_ROOM_IA_URL` / `_SEGREDO` / `_CRACHA`). Sem as
+ * três, `configuredProviders` não lista CLAUDE e a seleção CAI para o default
+ * OPENAI/`gpt-4o-mini` — ou seja, o cargo Tier 1 volta a ser atendido por um
+ * motor que não é classe A. ⛔ Essa queda é declarada, não silenciosa: a razão
+ * da seleção diz "não configurado".
  */
 export const AGENT_MODEL_PREFERENCES: Partial<
   Record<string, { provider: AIEngineProvider; model: string }>
@@ -65,11 +72,31 @@ export const AGENT_MODEL_PREFERENCES: Partial<
 /** Por natureza da tarefa — um agente pode usar pilotos diferentes por função. */
 export type EngineTaskProfile = "CLASSIFY" | "REASON" | "JUDGE" | "GENERATE";
 
-/** Which providers are actually configured in this runtime (no secret values logged). */
+/**
+ * ⭐⭐⭐ QUANDO O LABORATÓRIO CONTA COMO ALCANÇÁVEL — e por que CLAUDE deixou de
+ * depender de uma chave no ambiente DESTE produto (D-105, 24/09/2026).
+ *
+ * ⛔ O DEFEITO QUE ESTA FUNÇÃO TINHA, e que passava em qualquer revisão: o
+ * cargo `whatsapp` foi promovido a Tier 1 no código (`claude-opus-5`), mas
+ * `configuredProviders` só listava CLAUDE se houvesse `ANTHROPIC_API_KEY`
+ * aqui. Como D-105 manda que a chave NÃO exista neste produto, a variável nunca
+ * aparecia, o roteador caía sozinho no default `gpt-4o-mini` — **a troca estava
+ * escrita e não valia no ar**. Duas regras certas sozinhas produzindo, juntas, o
+ * motor pequeno atendendo o cliente do restaurante.
+ *
+ * ⭐ A correção diz a verdade nova: o que torna o laboratório alcançável não é
+ * mais possuir a credencial dele, é **ter caminho até quem a possui**. Se o
+ * Portão de IA da Control Room está configurado (as três CONTROL_ROOM_IA_*),
+ * CLAUDE está disponível — a chave fica lá e nunca viaja.
+ *
+ * ⚠️ `ANTHROPIC_API_KEY` continua aceita **apenas como transição**, para os
+ * ambientes antigos que ainda a têm. Ela não é o caminho preferido, e o
+ * dispatcher já prefere o portão quando os dois existem.
+ */
 export function configuredProviders(env: NodeJS.ProcessEnv = process.env): AIEngineProvider[] {
   const providers: AIEngineProvider[] = ["MOCK"]; // MOCK is always available (tests)
   if (env.OPENAI_API_KEY) providers.push("OPENAI");
-  if (env.ANTHROPIC_API_KEY) providers.push("CLAUDE");
+  if (portaoDeIaConfigurado(env) || env.ANTHROPIC_API_KEY) providers.push("CLAUDE");
   if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY) providers.push("GEMINI");
   return providers;
 }
