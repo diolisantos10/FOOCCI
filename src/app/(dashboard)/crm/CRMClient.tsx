@@ -15,13 +15,18 @@ import {
 import { parseMessagePool, phraseKey, MAX_CUSTOM_PHRASES } from "@/services/crm/crmMessagePool";
 import { appendTranscript, useVoiceInput, VoiceButton, VoiceStatus } from "@/components/voice";
 import { TIER_COUPON_CAMPAIGN_IDS } from "@/services/crm/readyMadeCampaigns";
-import { montarPainelDeCampanhas, disponiveisNaoAtivadas } from "@/services/crm/painelDeCampanhas";
+import {
+  montarCampanhasDaTela,
+  contarLigadas,
+  contarDesligadas,
+  catalogoComoEstadosDesligados,
+} from "@/services/crm/painelDeCampanhas";
 
 // Ids of the "fixed" ready-made campaigns — used to badge a row as Fixa vs Personalizada.
 const READY_MADE_ID_SET = new Set(READY_MADE_CAMPAIGNS.map((c) => c.id));
 const isFixedCampaign = (templateId: string | null | undefined): boolean =>
   !!templateId && READY_MADE_ID_SET.has(templateId);
-import { ReadyMadeCampaignsSection, type ReadyMadeState } from "./ReadyMadeCampaignsSection";
+import { type ReadyMadeState } from "./ReadyMadeCampaignsSection";
 import { CuponsTab } from "./CuponsTab";
 import { ImportModal } from "./ImportModal";
 import { OverviewTab, RevenueBlock, type DateFilterPreset } from "./OverviewTab";
@@ -3554,13 +3559,35 @@ const TEMPLATE_RECOMMENDED_TYPE: Record<string, CampaignTipo> = {
   "produto-favorito":    "Única",
   "alto-ticket":         "Única",
 };
+/**
+ * CampanhasAtivasSection — A TABELA ÚNICA das campanhas.
+ *
+ * Medido em 24/09/2026, na captura do dono do restaurante: a tela tinha DOIS
+ * blocos que se contradiziam. Em cima, "Campanhas ativas" (11 linhas, montada a
+ * partir das linhas de campanha do banco). Embaixo, o catálogo com liga/desliga
+ * (16 cards, montado a partir do estado do catálogo). "Cliente morno" aparecia
+ * `Ligada` embaixo e NÃO aparecia em cima.
+ *
+ * ⛔ Dois números discordando na mesma tela é o pior defeito possível: o leitor
+ * deixa de confiar nos dois. Por isso agora é UMA tabela só, montada por
+ * `montarCampanhasDaTela`, e a contagem do topo é a contagem DESTE array — não
+ * há como divergir do que está desenhado, porque é a mesma lista.
+ *
+ * A regra: CAMPANHA LIGADA APARECE AQUI, COM OS DADOS. Sem exceção. E a
+ * desligada não some: aparece marcada como desligada, com o caminho de ligar —
+ * que era justamente o que o bloco de baixo resolvia.
+ *
+ * ⛔ Sem dado não se mostra zero: zero é uma afirmação sobre o mundo. Campanha
+ * que nunca rodou diz "ainda não rodou".
+ * ⛔ Mostrar não é ligar: nenhum botão aqui ativa campanha — "Configurar e
+ * ligar" abre o painel de gestão, onde o dono confere e decide.
+ */
 function CampanhasAtivasSection({
   campaigns,
+  estados,
   onDetail,
   onAction,
-  limit,
-  onSeeAll,
-  restrictToIds,
+  onConfigurar,
   cartRecoveryActive,
   couponCounts,
   audiences,
@@ -3569,17 +3596,13 @@ function CampanhasAtivasSection({
   onCartRecoveryToggle,
 }: {
   campaigns: CampaignHistoryRow[];
+  /** Catálogo inteiro com o estado por restaurante (/api/crm/ready-made). */
+  estados: ReadyMadeState[];
   onDetail: (id: string) => void;
   onAction: (id: string, action: "pause" | "resume" | "cancel") => void;
-  /** When set, show only the top N by revenue (used on the dashboard overview). */
-  limit?: number;
-  /** When set, render a "Ver todas" footer linking to the full CRM panel. */
-  onSeeAll?: () => void;
-  /** When set, show ONLY these campaign ids (the currently-active ready-made ones),
-      so old/deleted manual campaigns never linger in this results panel. */
-  restrictToIds?: string[] | null;
-  /** Carrinho abandonado has no Campaign row — render it as a row when defined.
-      undefined → don't render the row (dashboard overview); boolean → on/off state. */
+  /** Abre o painel de gestão de uma campanha do catálogo. ⛔ Não liga nada. */
+  onConfigurar: (catalogoId: string, campaignId: string | null) => void;
+  /** Estado do carrinho abandonado, que não tem linha de campanha própria. */
   cartRecoveryActive?: boolean;
   /** Per-campaign coupon counts (campaignId → { sent, used }) from the wallet. */
   couponCounts?: Record<string, { sent: number; used: number }>;
@@ -3587,40 +3610,37 @@ function CampanhasAtivasSection({
   audiences?: Record<string, number>;
   /** Effective daily quota under the current distribution mode (campaignId → msgs/day). */
   dailyQuotas?: Record<string, number>;
-  /** Open the cart-recovery config modal (same as "Gerenciar" for real campaigns). */
   onCartRecoveryManage?: () => void;
-  /** Toggle cart recovery on/off (same as "Pausar"/"Ativar" for real campaigns). */
   onCartRecoveryToggle?: () => void;
 }) {
-  const allowed = restrictToIds ? new Set(restrictToIds) : null;
-  // Show every active custom campaign, plus the currently-active FIXED (ready-made)
-  // ones — this keeps stale ready-made duplicates out while never hiding a campaign
-  // the owner created themselves.
-  const active = campaigns.filter((c) => {
-    if (!ACTIVE_STATUSES.has(c.status)) return false;
-    if (!isFixedCampaign(c.templateId)) return true;      // custom → always show
-    return !allowed || allowed.has(c.id);                  // fixed → only the live row
-  });
-  // Cart recovery is a permanent fixed campaign — render its row whenever the parent
-  // provides its state (both ON and OFF), so it has the same Gerenciar + Pausar/Ativar
-  // controls as every other campaign. Hidden on the limited dashboard overview.
-  const showCartRow = cartRecoveryActive !== undefined && limit == null;
-  if (active.length === 0 && !showCartRow) return null;
-  const shown = limit != null
-    ? [...active].sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue)).slice(0, limit)
-    : active;
-  const count = active.length + (showCartRow ? 1 : 0);
+  // ⛔ Sem estado do catálogo a tela NÃO pode ficar vazia nem mostrar um número
+  // menor: cai no catálogo local (tudo desligado, que é o estado seguro), e as
+  // 16 continuam à vista.
+  const catalogo = estados.length > 0
+    ? estados
+    : (catalogoComoEstadosDesligados() as unknown as ReadyMadeState[]);
 
-  // Totals row — sums the displayed campaigns (the synthetic cart row has no
-  // per-campaign numbers, so it doesn't contribute).
-  const totals = shown.reduce(
-    (a, c) => {
+  // Carrinho abandonado não tem linha de campanha: seu estado vem do pai.
+  const catalogoComCarrinho = cartRecoveryActive === undefined
+    ? catalogo
+    : catalogo.map((e) => e.id === "carrinho-abandonado" ? { ...e, active: cartRecoveryActive } : e);
+
+  const linhas   = montarCampanhasDaTela(catalogoComCarrinho, campaigns);
+  const ligadas  = contarLigadas(linhas);
+  const paradas  = contarDesligadas(linhas);
+  const porId    = new Map(campaigns.map((c) => [c.id, c] as const));
+
+  // Totais — somam SÓ as linhas que têm dados de verdade. Campanha sem registro
+  // não entra com zero: ela não afirma nada sobre o mundo.
+  const comDados = linhas.filter((l) => l.temDados && l.campaignId && porId.has(l.campaignId));
+  const totals = comDados.reduce(
+    (a, l) => {
+      const c = porId.get(l.campaignId as string)!;
       a.revenue     += Number(c.totalRevenue) || 0;
       a.sent        += c.totalSent || 0;
       a.converted   += c.totalConverted || 0;
       a.failed      += c.totalFailed || 0;
       a.couponsUsed += couponCounts?.[c.id]?.used ?? 0;
-      // Same value the Limite/dia cell shows: effective quota, else stored limit.
       {
         const quota = dailyQuotas?.[c.id];
         a.dailyLimit += typeof quota === "number" && quota > 0
@@ -3635,14 +3655,32 @@ function CampanhasAtivasSection({
   const totalConvPct = totals.sent > 0 ? Math.round((totals.converted / totals.sent) * 100) : null;
   const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
+  const ESTADO_BADGE: Record<string, string> = {
+    ATIVA:     "bg-emerald-100 text-emerald-700",
+    PAUSADA:   "bg-[#F4F4F2] text-ink2",
+    DESLIGADA: "bg-gray-100 text-gray-500",
+  };
+
   return (
     <div data-testid="campanhas-ativas-section">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas ativas</h3>
-          <p className="mt-0.5 text-xs text-muted">Campanhas em execução, agendadas ou recorrentes.</p>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-brand-600">Campanhas</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            Todas as {linhas.length} campanhas deste restaurante. As ligadas aparecem com os números;
+            as desligadas ficam à vista, marcadas, com o caminho de ligar.
+          </p>
         </div>
-        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">{count}</span>
+        <div className="flex items-center gap-1.5">
+          <span
+            data-testid="contagem-ligadas"
+            className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700"
+          >{ligadas} ligadas</span>
+          <span
+            data-testid="contagem-desligadas"
+            className="rounded-full bg-[#F4F4F2] px-2.5 py-0.5 text-xs font-bold text-ink2"
+          >{paradas} desligadas</span>
+        </div>
       </div>
       {/* Columns: Enviados · Cupons usados · Conversão (usados÷enviados) · Falhas ·
           Receita — all from real backend data (execution totals + the coupon wallet). */}
@@ -3666,168 +3704,145 @@ function CampanhasAtivasSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {showCartRow && (
-              <tr className="bg-sky-50/40 hover:bg-sky-50/70 transition-colors">
-                <td className="py-3 pl-4 pr-2">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${cartRecoveryActive ? "bg-emerald-100 text-emerald-700" : "bg-[#F4F4F2] text-muted"}`}>
-                    {cartRecoveryActive ? "Ativa" : "Pausada"}
-                  </span>
-                </td>
-                <td className="py-3 px-2 max-w-[170px]">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-semibold text-ink truncate">🛒 Carrinho abandonado</p>
-                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-sky-700">Fixa</span>
-                  </div>
-                  <p className="text-[10px] text-muted truncate">Recupera pedidos iniciados</p>
-                </td>
-                <td className="py-3 px-2 whitespace-nowrap">
-                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE["Recorrente"]}`}>Automática</span>
-                </td>
-                <td className="py-3 px-2 max-w-[100px]"><span className="text-ink2 truncate block text-[11px]">quem abandonou</span></td>
-                {/* Audiência — cart recovery is event-based (dispara no abandono), sem pool fixo. */}
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                {/* Receita · Enviados · Limite · Cupons usados · Conversão · Falhas — cart
-                    recovery grants without a Campaign row, so these aren't attributable. */}
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-right text-muted">—</td>
-                <td className="py-3 px-2 text-[11px]"><p className="text-ink2 whitespace-nowrap">Após abandono</p><p className="text-muted whitespace-nowrap">automático</p></td>
-                <td className="py-3 pl-2 pr-4">
-                  <div className="flex items-center gap-1 justify-end">
-                    <button
-                      onClick={() => onCartRecoveryManage?.()}
-                      className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
-                    >
-                      Gerenciar
-                    </button>
-                    {cartRecoveryActive ? (
-                      <button
-                        onClick={() => onCartRecoveryToggle?.()}
-                        className="rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
-                      >Pausar</button>
-                    ) : (
-                      <button
-                        onClick={() => onCartRecoveryToggle?.()}
-                        className="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
-                      >Ativar</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )}
-            {shown.map((c) => {
-              const sc           = CAMPAIGN_STATUS_COLORS[c.status] ?? { bg: "bg-[#F4F4F2]", text: "text-ink2" };
-              const cfg          = c.scheduleConfig as ScheduleCfg | null;
-              const isRecurring  = cfg?.mode === "RECURRING";
-              const controllable = ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
-              const agenda       = campaignAgenda(c);
-              const tipo         = campaignTipo(c);
-              const failTitle    = c.totalFailed > 0 && c.failureBreakdown && Object.keys(c.failureBreakdown).length > 0
+            {linhas.map((l) => {
+              const c = l.campaignId ? porId.get(l.campaignId) ?? null : null;
+              const temDados = l.temDados && !!c;
+              const ehCarrinho = l.catalogoId === "carrinho-abandonado";
+              const fundo = l.ligada
+                ? (l.fixa ? "bg-sky-50/40 hover:bg-sky-50/70" : "bg-amber-50/30 hover:bg-amber-50/60")
+                : "hover:bg-[#FAFAF8]";
+
+              // Sem dado NÃO se mostra zero — mostra-se o estado honesto.
+              const semDado = (
+                <span className="text-muted" title={l.avisoSemDados ?? undefined}>—</span>
+              );
+
+              const cfg         = (c?.scheduleConfig as ScheduleCfg | null) ?? null;
+              const agenda      = c ? campaignAgenda(c) : null;
+              const tipo        = c ? campaignTipo(c) : "Recorrente";
+              const isRecurring = cfg?.mode === "RECURRING";
+              const failTitle   = c && c.totalFailed > 0 && c.failureBreakdown && Object.keys(c.failureBreakdown).length > 0
                 ? failureTitleText(c.failureBreakdown, isRecurring)
                 : undefined;
-              const fixed        = isFixedCampaign(c.templateId);
+              const controllable = !!c && ["ACTIVE", "SCHEDULED", "PAUSED"].includes(c.status);
 
               return (
-                <tr key={c.id} className={`transition-colors ${fixed ? "bg-sky-50/40 hover:bg-sky-50/70" : "bg-amber-50/30 hover:bg-amber-50/60"}`}>
-                  {/* Status */}
+                <tr
+                  key={l.chave}
+                  data-testid={`campanha-linha-${l.catalogoId ?? l.campaignId}`}
+                  data-ligada={l.ligada ? "sim" : "nao"}
+                  className={`transition-colors ${fundo}`}
+                >
+                  {/* Status — um só rótulo, vindo da mesma lista que a contagem do topo */}
                   <td className="py-3 pl-4 pr-2">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${sc.bg} ${sc.text}`}>
-                      {CAMPAIGN_STATUS_LABELS[c.status] ?? c.status}
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${ESTADO_BADGE[l.estado]}`}>
+                      {l.rotulo}
                     </span>
                   </td>
 
                   {/* Nome */}
                   <td className="py-3 px-2 max-w-[170px]">
                     <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-ink truncate">{c.name}</p>
-                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${fixed ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
-                        {fixed ? "Fixa" : "Personalizada"}
+                      <p className="font-semibold text-ink truncate">
+                        {l.emoji ? `${l.emoji} ` : ""}{c?.name ?? l.nome}
+                      </p>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${l.fixa ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
+                        {l.fixa ? "Fixa" : "Personalizada"}
                       </span>
                     </div>
-                    {c.objective && (
-                      <p className="text-[10px] text-muted truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
-                    )}
-                    {(() => {
+                    {c?.objective
+                      ? <p className="text-[10px] text-muted truncate">{OBJECTIVE_LABELS[c.objective] ?? c.objective}</p>
+                      : l.tagline
+                      ? <p className="text-[10px] text-muted truncate">{l.tagline}</p>
+                      : null}
+                    {c && (() => {
                       const reward = couponLabel((cfg as { coupon?: ReadyMadeCoupon | null } | null)?.coupon ?? null);
                       return reward
                         ? <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-600">🎁 {reward}</p>
                         : <p className="mt-0.5 text-[10px] text-muted/70">sem recompensa</p>;
                     })()}
+                    {/* Trava deliberada — a tela diz POR QUE esta campanha está parada.
+                        ⛔ Não apagar: sem o motivo, alguém "conserta" a pausa achando que é bug. */}
+                    {l.motivoDaPausa && (
+                      <p className="mt-1 max-w-[320px] rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] leading-snug text-amber-800">
+                        🔒 <span className="font-semibold">Pausada de propósito.</span> {l.motivoDaPausa}
+                      </p>
+                    )}
                   </td>
 
                   {/* Tipo */}
                   <td className="py-3 px-2 whitespace-nowrap">
                     <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIPO_BADGE[tipo]}`}>
-                      {tipo}
+                      {ehCarrinho ? "Automática" : tipo}
                     </span>
                   </td>
 
                   {/* Público */}
                   <td className="py-3 px-2 max-w-[100px]">
                     <span className="text-ink2 truncate block text-[11px]">
-                      {c.targetSegment ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment) : "—"}
+                      {ehCarrinho
+                        ? "quem abandonou"
+                        : c?.targetSegment
+                        ? (SEGMENT_LABELS[c.targetSegment] ?? c.targetSegment)
+                        : "—"}
                     </span>
                   </td>
 
-                  {/* Audiência — clientes elegíveis hoje (recalculada a cada carregamento) */}
+                  {/* Audiência — clientes elegíveis hoje */}
                   <td className="py-3 px-2 text-right tabular-nums" title="Clientes no segmento agora que ainda podem receber a mensagem">
-                    {(() => {
-                      const aud = audiences?.[c.id];
+                    {!temDados ? semDado : (() => {
+                      const aud = audiences?.[c!.id];
                       return aud != null && aud > 0
                         ? <span className="font-semibold text-brand-500">{aud}</span>
                         : <span className="text-muted">{aud === 0 ? "0" : "—"}</span>;
                     })()}
                   </td>
 
-                  {/* Receita — coluna mais importante, vem primeiro */}
+                  {/* Receita */}
                   <td className="py-3 px-2 text-right tabular-nums font-semibold text-green-700">
-                    {Number(c.totalRevenue) > 0
-                      ? `R$ ${Number(c.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                    {!temDados ? semDado : Number(c!.totalRevenue) > 0
+                      ? `R$ ${Number(c!.totalRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                       : <span className="text-muted font-normal">—</span>}
                   </td>
 
                   {/* Enviados */}
                   <td className="py-3 px-2 text-right tabular-nums text-blue-700">
-                    {c.totalSent > 0 ? c.totalSent : "—"}
+                    {!temDados ? semDado : (c!.totalSent > 0 ? c!.totalSent : <span className="text-muted">—</span>)}
                   </td>
 
-                  {/* Limite/dia — a cota EFETIVA sob a distribuição atual (quanto pode
-                      sair por dia de verdade); cai pro dailyLimit salvo sem cota. */}
+                  {/* Limite/dia — a cota EFETIVA sob a distribuição atual */}
                   <td className="py-3 px-2 text-right tabular-nums text-muted" title="Quanto esta campanha pode enviar por dia sob a distribuição atual do limite global">
-                    {(() => {
-                      const quota  = dailyQuotas?.[c.id];
-                      const stored = (c.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit;
+                    {!temDados ? semDado : (() => {
+                      const quota  = dailyQuotas?.[c!.id];
+                      const stored = (c!.scheduleConfig as { dailyLimit?: number } | null)?.dailyLimit;
                       const dl     = typeof quota === "number" && quota > 0 ? quota : stored;
                       return dl && dl > 0 ? `${dl}/dia` : "—";
                     })()}
                   </td>
 
-                  {/* Cupons usados — resgatados pelos clientes */}
+                  {/* Cupons usados */}
                   <td className="py-3 px-2 text-right tabular-nums">
-                    {(() => {
-                      const used = couponCounts?.[c.id]?.used ?? 0;
+                    {!temDados ? semDado : (() => {
+                      const used = couponCounts?.[c!.id]?.used ?? 0;
                       return used > 0 ? <span className="font-semibold text-green-700">{used}</span> : <span className="text-muted">—</span>;
                     })()}
                   </td>
 
-                  {/* Conversão — pedidos atribuídos ÷ mensagens enviadas */}
+                  {/* Conversão */}
                   <td className="py-3 px-2 text-right tabular-nums" title="Pedidos atribuídos após a mensagem ÷ mensagens enviadas">
-                    {c.totalSent > 0
-                      ? <span className="font-semibold text-emerald-700">{Math.round((c.totalConverted / c.totalSent) * 100)}%</span>
+                    {!temDados ? semDado : c!.totalSent > 0
+                      ? <span className="font-semibold text-emerald-700">{Math.round((c!.totalConverted / c!.totalSent) * 100)}%</span>
                       : <span className="text-muted">—</span>}
                   </td>
 
-                  {/* Falhas — hover title shows breakdown; click "Gerenciar" for full detail */}
+                  {/* Falhas */}
                   <td className="py-3 px-2 text-right" title={failTitle}>
-                    {c.totalFailed > 0 ? (
+                    {!temDados ? semDado : c!.totalFailed > 0 ? (
                       <button
-                        onClick={() => onDetail(c.id)}
+                        onClick={() => onDetail(c!.id)}
                         className="inline-flex items-center gap-0.5 font-semibold text-red-500 hover:text-red-700 transition-colors"
                       >
-                        <span className="tabular-nums">{c.totalFailed}</span>
+                        <span className="tabular-nums">{c!.totalFailed}</span>
                         {failTitle && <span className="text-[10px] leading-none">ⓘ</span>}
                       </button>
                     ) : (
@@ -3835,35 +3850,61 @@ function CampanhasAtivasSection({
                     )}
                   </td>
 
-                  {/* Agenda: time window on line 1, cadence on line 2 */}
+                  {/* Agenda */}
                   <td className="py-3 px-2 text-[11px]">
-                    <p className="text-ink2 whitespace-nowrap">{agenda.primary}</p>
-                    {agenda.secondary && (
-                      <p className="text-muted whitespace-nowrap">{agenda.secondary}</p>
+                    {ehCarrinho ? (
+                      <><p className="text-ink2 whitespace-nowrap">Após abandono</p><p className="text-muted whitespace-nowrap">automático</p></>
+                    ) : agenda ? (
+                      <><p className="text-ink2 whitespace-nowrap">{agenda.primary}</p>
+                        {agenda.secondary && <p className="text-muted whitespace-nowrap">{agenda.secondary}</p>}</>
+                    ) : (
+                      <p className="text-muted whitespace-nowrap">{l.avisoSemDados ?? "—"}</p>
                     )}
                   </td>
 
-                  {/* Ações */}
+                  {/* Ações — ⛔ nenhuma delas liga campanha aqui: abrem a gestão. */}
                   <td className="py-3 pl-2 pr-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button
-                        onClick={() => onDetail(c.id)}
-                        className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
-                      >
-                        Gerenciar
-                      </button>
-                      {controllable && (
-                        c.status === "PAUSED" ? (
+                      {ehCarrinho ? (
+                        <>
                           <button
-                            onClick={() => onAction(c.id, "resume")}
-                            className="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
-                          >Retomar</button>
-                        ) : (
+                            onClick={() => onCartRecoveryManage?.()}
+                            className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                          >Gerenciar</button>
                           <button
-                            onClick={() => onAction(c.id, "pause")}
-                            className="rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
-                          >Pausar</button>
-                        )
+                            onClick={() => onCartRecoveryToggle?.()}
+                            className={l.ligada
+                              ? "rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
+                              : "rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"}
+                          >{l.ligada ? "Pausar" : "Ativar"}</button>
+                        </>
+                      ) : c ? (
+                        <>
+                          <button
+                            onClick={() => onDetail(c.id)}
+                            className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                          >Gerenciar</button>
+                          {controllable && (
+                            c.status === "PAUSED" ? (
+                              <button
+                                onClick={() => onAction(c.id, "resume")}
+                                className="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                              >Retomar</button>
+                            ) : (
+                              <button
+                                onClick={() => onAction(c.id, "pause")}
+                                className="rounded-lg bg-[#F4F4F2] px-2 py-1 text-[10px] font-semibold text-ink2 hover:bg-line2 transition-colors"
+                              >Pausar</button>
+                            )
+                          )}
+                        </>
+                      ) : (
+                        /* Desligada e sem registro: o caminho de ligar continua à vista.
+                           ⛔ Só abre o painel de gestão — quem liga é o dono, lá dentro. */
+                        <button
+                          onClick={() => onConfigurar(l.catalogoId as string, l.campaignId)}
+                          className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+                        >Configurar e ligar</button>
                       )}
                     </div>
                   </td>
@@ -3873,7 +3914,9 @@ function CampanhasAtivasSection({
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-line bg-[#FAFAF8] font-bold text-ink">
-              <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>Totais ({shown.length})</td>
+              <td className="py-2.5 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted" colSpan={4}>
+                Totais ({comDados.length} com dados · {ligadas} ligadas de {linhas.length})
+              </td>
               <td className="py-2.5 px-2 text-right tabular-nums text-brand-500">{totals.audience > 0 ? totals.audience : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-green-700">{totals.revenue > 0 ? brl(totals.revenue) : "—"}</td>
               <td className="py-2.5 px-2 text-right tabular-nums text-blue-700">{totals.sent > 0 ? totals.sent : "—"}</td>
@@ -3886,16 +3929,6 @@ function CampanhasAtivasSection({
             </tr>
           </tfoot>
         </table>
-        {onSeeAll && active.length > shown.length && (
-          <div className="border-t border-line bg-[#FAFAF8] p-3 text-center">
-            <button
-              onClick={onSeeAll}
-              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
-            >
-              Ver todas as campanhas ({active.length}) →
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -3982,89 +4015,17 @@ function crmPeriodRange(key: CrmPeriodKey, customFrom?: string, customTo?: strin
   }
 }
 
-/**
- * CampanhasDisponiveisSection — as campanhas que EXISTEM no catálogo e ainda não
- * foram ativadas neste restaurante.
+/*
+ * ⛔ CampanhasDisponiveisSection foi REMOVIDA em 24/09/2026.
  *
- * Medido em 24/09/2026: o painel mostrava 11 campanhas de um catálogo de 16, e
- * "Cliente frio" / "Cliente morno" não apareciam em lugar nenhum — porque o
- * painel só listava campanha já instanciada no banco. Quem nunca foi ligada não
- * tinha linha, e sem linha não tinha tela.
- *
- * ⛔ Este bloco NÃO é "campanhas ativas": tem contagem própria e não soma à de
- * cima. ⛔ Nada aqui dispara: "Configurar e ligar" só abre o painel de gestão,
- * onde o dono confere mensagem, cupom e agenda antes de ligar.
+ * Ela era o bloco "Disponíveis — não ativadas", uma segunda tabela com régua
+ * própria e contagem própria. Na mesma tela, a de cima dizia 11 ativas e esta
+ * marcava "Cliente morno" como Ligada: dois números discordando, e o dono
+ * deixou de confiar nos dois. O que ela resolvia — a campanha desligada não
+ * sumir e continuar ligável — agora vive DENTRO da tabela única, em
+ * CampanhasAtivasSection. ⛔ Não recriar um segundo bloco de campanhas.
  */
-function CampanhasDisponiveisSection({
-  estados, onConfigurar,
-}: {
-  estados: ReadyMadeState[];
-  /** Abre o painel de gestão desta campanha. ⛔ Não liga nada sozinho. */
-  onConfigurar: (catalogoId: string, campaignId: string | null) => void;
-}) {
-  const painel = montarPainelDeCampanhas(estados);
-  // Carrinho abandonado já tem linha própria e permanente no painel de cima
-  // (ligado ou desligado), então nunca fica invisível — listá-lo aqui seria
-  // mostrar a mesma campanha duas vezes na mesma tela.
-  const naoAtivadas = disponiveisNaoAtivadas(painel).filter((l) => l.id !== "carrinho-abandonado");
-  if (naoAtivadas.length === 0) return null;
 
-  return (
-    <div data-testid="campanhas-disponiveis-section">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-sky-700">Disponíveis — não ativadas</h3>
-          <p className="mt-0.5 text-xs text-muted">
-            Campanhas prontas que este restaurante ainda não ligou. Não estão rodando e não entram na contagem acima.
-          </p>
-        </div>
-        <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700">{naoAtivadas.length}</span>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-sm">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-line bg-[#FAFAF8]">
-            <tr className="text-[10px] uppercase tracking-wide text-muted">
-              <th className="py-2.5 pl-4 pr-2 font-semibold">Estado</th>
-              <th className="py-2.5 px-2 font-semibold">Nome</th>
-              <th className="py-2.5 px-2 font-semibold">O que faz</th>
-              <th className="py-2.5 pl-2 pr-4 font-semibold text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {naoAtivadas.map((l) => (
-              <tr key={l.id} className="hover:bg-[#FAFAF8] transition-colors" data-testid={`campanha-disponivel-${l.id}`}>
-                <td className="py-3 pl-4 pr-2 align-top">
-                  <span className="inline-block rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-bold text-sky-700 whitespace-nowrap">
-                    {l.rotulo}
-                  </span>
-                </td>
-                <td className="py-3 px-2 align-top">
-                  <p className="font-semibold text-ink whitespace-nowrap">{l.emoji} {l.nome}</p>
-                  {l.motivoDaPausa && (
-                    <p className="mt-1 max-w-[340px] rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] leading-snug text-amber-800">
-                      🔒 <span className="font-semibold">Pausada de propósito.</span> {l.motivoDaPausa}
-                    </p>
-                  )}
-                </td>
-                <td className="py-3 px-2 align-top"><span className="text-ink2 text-[11px]">{l.tagline}</span></td>
-                <td className="py-3 pl-2 pr-4 align-top text-right">
-                  {/* ⛔ Só abre o painel de gestão — quem liga é o dono, lá dentro. */}
-                  <button
-                    onClick={() => onConfigurar(l.id, l.campaignId)}
-                    className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
-                  >
-                    Configurar e ligar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [selectedTemplate,  setSelectedTemplate]  = useState<ActionTemplate | null>(null);
@@ -4105,9 +4066,6 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
   const [period,     setPeriod]     = useState<CrmPeriodKey>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo,   setCustomTo]   = useState("");
-  // Ids of the campaigns actually turned on in "Campanhas prontas". The Ativas panel
-  // shows ONLY these, so old/deleted manual campaigns never linger there.
-  const [activeReadyMadeIds, setActiveReadyMadeIds] = useState<string[]>([]);
   // Bumped whenever a campaign changes, to refresh the ready-made cards + Ativas panel.
   const [readyMadeReload, setReadyMadeReload] = useState(0);
   // Catálogo inteiro com o estado de cada campanha — alimenta o bloco
@@ -4201,13 +4159,9 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         const cart = rm.find((c) => c.id === "carrinho-abandonado") ?? null;
         setCartRecoveryItem(cart);
         setCartRecoveryOn(!!cart?.active);
-        // Carrinho is shown as its own dedicated row, so exclude it here to avoid a
-        // duplicate row once it has a Campaign record. PAUSED rows are INCLUDED —
-        // a paused fixed campaign must stay visible (status "Pausada" + Retomar),
-        // not vanish from the table; the status filter handles the rest.
-        setActiveReadyMadeIds(
-          rm.filter((c) => c.campaignId && c.id !== "carrinho-abandonado").map((c) => c.campaignId as string),
-        );
+        // ⛔ Não há mais lista de "ids permitidos" na tabela: a tabela é montada
+        // do catálogo inteiro + das linhas do banco, então nenhuma campanha
+        // ligada pode ser filtrada para fora dela.
       })
       .catch(() => {});
   }, [readyMadeReload]);
@@ -4561,9 +4515,10 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
       {!loadingHistory && (
         <CampanhasAtivasSection
           campaigns={campaigns}
+          estados={readyMadeAll}
           onDetail={(id) => openManage(id, "overview")}
           onAction={(id, action) => { void handleCampaignAction(id, action); }}
-          restrictToIds={activeReadyMadeIds}
+          onConfigurar={(catalogoId, campaignId) => { void abrirCampanhaDisponivel(catalogoId, campaignId); }}
           cartRecoveryActive={cartRecoveryOn}
           couponCounts={couponCounts}
           audiences={audiences}
@@ -4573,19 +4528,12 @@ function CampanhasTab({ stats }: { stats: OverviewStats }) {
         />
       )}
 
-      {/* ── Disponíveis, não ativadas ────────────────────────────────────────
-          O painel de cima conta só o que está rodando. Este conta o que EXISTE e
-          ainda não foi ligado. ⛔ Estados diferentes, números que não se somam. */}
-      <CampanhasDisponiveisSection
-        estados={readyMadeAll}
-        onConfigurar={(catalogoId, campaignId) => { void abrirCampanhaDisponivel(catalogoId, campaignId); }}
-      />
-
-      {/* ── Campanhas prontas (catálogo pré-configurado, liga/desliga) ────────── */}
-      <ReadyMadeCampaignsSection
-        onManage={(campaignId) => openManage(campaignId, "message")}
-        reloadSignal={readyMadeReload}
-      />
+      {/* ⛔ Os blocos "Disponíveis, não ativadas" e "Campanhas prontas" foram
+          REMOVIDOS em 24/09/2026. Eles mostravam o mesmo mundo com outra régua e
+          contradiziam a tabela de cima: "Cliente morno" saía `Ligada` embaixo e
+          não aparecia acima. Agora é UMA tabela só — e é lá que a campanha
+          desligada continua visível e ligável. ⛔ Não reintroduzir um segundo
+          bloco de liga/desliga: dois números na mesma tela queimam os dois. */}
 
       {/* ── Histórico de campanhas (collapsed by default) ────────────────────── */}
       {!loadingHistory && (

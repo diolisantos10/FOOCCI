@@ -7957,6 +7957,17 @@ model ProspeccaoConfig {
   /// Quem disparou a última rodada automática (agendador, cron).
   ultimaRodadaAutomaticaPor String?
 
+  /// ⭐ A RESERVA DA VARREDURA DE DESCOBERTA — 24/09/2026.
+  ///
+  /// Mesmo mecanismo de `ultimaRodadaAutomaticaEm`, e separado dela de
+  /// propósito: são dois atos diferentes, em horas diferentes. A descoberta
+  /// enche a fila de manhã cedo; a rodada aborda às 9h. Um campo só faria uma
+  /// reservar o dia da outra, e a fila chegaria vazia às 9h — que é exatamente
+  /// o defeito que a descoberta existe para matar.
+  ultimaDescobertaAutomaticaEm  DateTime?
+  /// Quem reservou a varredura de hoje: o agendador interno ou o cron reserva.
+  ultimaDescobertaAutomaticaPor String?
+
   atualizadoEm  DateTime @updatedAt
   atualizadoPor String?
 

@@ -44,6 +44,18 @@ export async function callStructuredJson(input: StructuredJsonCallInput): Promis
       if (input.imageDataUrl) {
         throw new Error("Entrada de imagem ainda não suportada no piloto CLAUDE — roteie para OPENAI.");
       }
+      // ⭐⭐ D-105 (24/09/2026): quando o Portão de IA da Control Room está
+      // configurado, ele é o ÚNICO caminho — a chave da companhia é uma só e
+      // fica lá. ⛔ E NÃO existe queda para `callAnthropic` no dia ruim: cair
+      // para uma chave própria desfaria a decisão no primeiro incidente. Se o
+      // portão falhar, sobe `FalhaDeMotor` e o Brain usa o fallback
+      // determinístico, como faz para qualquer outra falha de motor.
+      //
+      // ⚠️ Enquanto as variáveis não estiverem setadas (quem seta é o CEO), o
+      // caminho antigo continua de pé — transição declarada, não vazamento.
+      const { estaConfigurado, callControlRoom } = await import("./ControlRoomEngineAdapter");
+      if (estaConfigurado()) return callControlRoom(input);
+
       const { callAnthropic } = await import("./AnthropicEngineAdapter");
       return callAnthropic(input);
     }

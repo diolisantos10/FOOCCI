@@ -1,6 +1,20 @@
 "use client";
 
 /**
+ * ⛔ REMOVIDO DA TELA em 24/09/2026 — o bloco "Campanhas prontas" não é mais
+ * renderizado. Ele era uma SEGUNDA lista de campanhas, com liga/desliga e régua
+ * própria, e contradizia a tabela de cima: "Cliente morno" saía `Ligada` aqui e
+ * não aparecia lá. Dois números discordando na mesma tela queimam os dois.
+ *
+ * O que este bloco resolvia — a campanha desligada continuar visível e ligável —
+ * vive agora DENTRO da tabela única (CampanhasAtivasSection em CRMClient.tsx).
+ * ⛔ Não voltar a renderizar este componente sem resolver a contradição.
+ *
+ * O arquivo permanece porque `ReadyMadeState` é o tipo do estado do catálogo,
+ * usado pela tabela única.
+ */
+
+/**
  * ReadyMadeCampaignsSection — the pre-built campaign catalog for the Campanhas tab.
  *
  * 8 ready-made campaigns as cards with a one-click on/off switch. Each card explains

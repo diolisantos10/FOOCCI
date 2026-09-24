@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# A VARREDURA DAS 7h — a fila que se enche sozinha.
+#
+# ⛔ O DEFEITO QUE ISTO MATA, medido em produção: a rodada de prospecção rodava
+# todo dia útil às 9h e concluía `abordados: 0, parouPor: 'filaAcabou'`. A
+# máquina de abordagem estava ligada e não tinha ninguém para abordar, porque a
+# fila só enchia quando uma PESSOA subia uma planilha na tela.
+#
+# ⚠️ ESTE ARQUIVO É O QUE FAZ A ROTA EXISTIR DE VERDADE. Rota de cron sem quem
+# a chame é a doença crônica desta casa. O caminho principal continua sendo o
+# agendador dentro do processo; isto aqui é a segunda mão no mesmo interruptor,
+# e a reserva atômica no banco garante que as duas nunca varram o mesmo dia.
+#
+# ── ⭐ POR QUE ESTE AGENDAMENTO ESTÁ LIGADO, e o da rodada não ───────────────
+#
+# A rodada das 9h está PAUSADA por ordem do CEO de 19/09/2026 — "pausa o
+# disparo de clientes frios". Esta varredura **não dispara nada**: ela descobre
+# restaurante em fonte aberta e enche a Base fria. Com a prospecção desligada, a
+# fila cheia continua sem abordar ninguém — é estoque, não disparo. Pausar a
+# descoberta não protegeria ninguém; só garantiria que, no dia do "vai" do CEO,
+# a fila estivesse vazia de novo.
+#
+# 10:00 UTC = 7h de São Paulo — ANTES das 9h da rodada, de propósito: varredura
+# que termina depois da rodada só serve no dia seguinte.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Prospecção — varredura de descoberta (7h)
+
+on:
+  schedule:
+    - cron: "0 10 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  descoberta:
+    name: "Varredura de descoberta"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Montar a URL
+        id: params
+        run: |
+          BASE_URL="${{ secrets.FOOCCI_BASE_URL }}"
+          BASE_URL="${BASE_URL%/}"
+          if [[ -z "$BASE_URL" ]]; then echo "::error::FOOCCI_BASE_URL não configurado"; exit 1; fi
+          echo "url=${BASE_URL}/api/cron/prospeccao/descoberta" >> "$GITHUB_OUTPUT"
+
+      - name: "POST descoberta"
+        env:
+          ENDPOINT_URL: ${{ steps.params.outputs.url }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --connect-timeout 20 --max-time 780 -sS -X POST "$ENDPOINT_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d '{}' -o /tmp/d.json -w "%{http_code}" > /tmp/code.txt || true
+
+          HTTP=$(cat /tmp/code.txt)
+          echo "← HTTP            : $HTTP"
+          echo "← varreu          : $(jq -r '.varreu           // "-"' /tmp/d.json)"
+          echo "← cidades         : $(jq -rc '.data.cidades    // "-"' /tmp/d.json)"
+          echo "← encontrados     : $(jq -r '.data.encontrados // "-"' /tmp/d.json)"
+          echo "← entraram na fila: $(jq -r '.data.entraramNaFila // "-"' /tmp/d.json)"
+
+          # ⭐ POR MOTIVO. Sem isto, "entraram 12 de 400" é um número sem
+          # informação — e é justamente a diferença que faz alguém desconfiar do
+          # sistema inteiro. A cobertura da fonte aberta é baixa de verdade
+          # (6% a 21% dos pontos têm telefone) e o relatório tem que mostrar isso.
+          echo "← descartes:"
+          jq -r '.data.descartes // {} | to_entries[] | "  · \(.key): \(.value)"' /tmp/d.json 2>/dev/null \
+            || echo "  (indisponível)"
+
+          echo "← cidades que falharam:"
+          jq -r '[.data.cidadesQueFalharam[]? | "  · \(.cidade): \(.detalhe)"] | .[]' /tmp/d.json 2>/dev/null \
+            || true
+
+          if [[ "$HTTP" -lt 200 || "$HTTP" -ge 300 ]]; then
+            echo "::error::a varredura não rodou (HTTP $HTTP)"; cat /tmp/d.json; exit 1
+          fi
+
+          # ⚠️ "A fonte não respondeu para NENHUMA cidade" é o modo de falha
+          # silencioso desta obra: HTTP 200, zero descobertos, e a fila vazia de
+          # novo às 9h sem ninguém ver. Reprova o job de propósito.
+          VARREU=$(jq -r '.varreu' /tmp/d.json)
+          LIDAS=$(jq -r '[.data.cidades[]?] | length' /tmp/d.json)
+          if [[ "$VARREU" == "true" && "$LIDAS" == "0" ]]; then
+            echo "::error::a fonte aberta não respondeu para nenhuma cidade — a fila NÃO foi enchida hoje"
+            exit 1
+          fi
+
+          echo "✅ varredura concluída"

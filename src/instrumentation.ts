@@ -30,6 +30,16 @@ export async function register() {
     );
     AgendadorDaProspeccao.start();
 
+    // ⭐ A VARREDURA QUE ENCHE A FILA, às 7h — ANTES da rodada das 9h.
+    //
+    // Sem ela a rodada das 9h rodava todo dia útil e concluía `abordados: 0,
+    // parouPor: 'filaAcabou'`: a máquina de abordagem ligada, e ninguém para
+    // abordar. Fábrica sem matéria-prima não é fábrica.
+    const { AgendadorDaDescoberta } = await import(
+      "./services/salaDeVendas/prospeccao/hunter/agendador"
+    );
+    AgendadorDaDescoberta.start();
+
     // A Supervisora em INTERVENTION precisa agir mesmo quando nenhuma mensagem
     // está saindo. O próprio interruptor faz os outros modos custarem quase zero.
     const { AgendadorDaSupervisora } = await import(
