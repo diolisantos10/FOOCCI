@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { channelPrice } from "@/services/menu/MenuPricingService";
+import { montarCategoriaNovidades } from "@/services/menu/menuNovidades";
 
 export async function GET(
   _req: NextRequest,
@@ -21,7 +22,10 @@ export async function GET(
 ) {
   const restaurant = await prisma.restaurant.findUnique({
     where: { slug: params.slug },
-    select: { id: true, name: true, logoUrl: true },
+    select: {
+      id: true, name: true, logoUrl: true,
+      storeProfile: { select: { novidadesDias: true } },
+    },
   });
 
   if (!restaurant) {
@@ -47,6 +51,7 @@ export async function GET(
           priceIfood: true,
           imageUrl: true,
           isAvailable: true,
+          createdAt: true,
         },
       },
     },
@@ -70,11 +75,34 @@ export async function GET(
       })),
     }));
 
+  /* ── 🆕 Novidades — vitrine automática dos últimos lançamentos ───────────────
+   * Mesma regra e mesma janela dos outros cardápios (services/menu/menuNovidades).
+   * Aqui os itens indisponíveis VÊM na resposta (com selo "Indisponível"), então
+   * a vitrine os descarta explicitamente — ela não oferece o que não se vende. */
+  const flat = new Map(visibleCategories.flatMap((c) => c.items.map((i) => [i.id, i] as const)));
+  const novidades = montarCategoriaNovidades(
+    categories
+      .flatMap((c) => c.items)
+      .filter((i) => flat.has(i.id))
+      .map((i) => ({ id: i.id, createdAt: i.createdAt, isAvailable: i.isAvailable })),
+    { dias: restaurant.storeProfile?.novidadesDias, totalDoCardapio: flat.size },
+  );
+  const novidadesCategory = novidades
+    ? [{
+        id: novidades.id,
+        name: novidades.name,
+        imageUrl: null,
+        items: novidades.items
+          .map((n) => flat.get(n.id))
+          .filter((i): i is Exclude<typeof i, undefined> => i !== undefined),
+      }]
+    : [];
+
   return NextResponse.json({
     restaurant: {
       name: restaurant.name,
       logoUrl: restaurant.logoUrl ?? null,
     },
-    categories: visibleCategories,
+    categories: [...novidadesCategory, ...visibleCategories],
   });
 }

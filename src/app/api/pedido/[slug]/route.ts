@@ -23,6 +23,7 @@ import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { ConversationLogService } from "@/services/conversation/ConversationLogService";
 import { REPEAT_ORDER_INTENT_RE, buildRepeatOrderReply } from "@/services/order/RepeatOrderService";
 import { channelPrice } from "@/services/menu/MenuPricingService";
+import { montarCategoriaNovidades } from "@/services/menu/menuNovidades";
 import { Channel } from "@prisma/client";
 
 // ── Request shape ─────────────────────────────────────────────────────────────
@@ -67,7 +68,10 @@ export async function GET(
 
     const restaurant = await prisma.restaurant.findUnique({
       where: { slug },
-      select: { id: true, name: true },
+      select: {
+        id: true, name: true,
+        storeProfile: { select: { novidadesDias: true } },
+      },
     });
     if (!restaurant) return badRequest("Restaurante não encontrado.");
 
@@ -81,28 +85,52 @@ export async function GET(
           select:  {
             id: true, name: true, price: true,
             priceDelivery: true, priceDineIn: true, priceIfood: true,
-            description: true, imageUrl: true,
+            description: true, imageUrl: true, createdAt: true,
           },
         },
       },
     });
 
+    const mapItem = (i: (typeof categories)[number]["items"][number]) => ({
+      id:          i.id,
+      name:        i.name,
+      // Delivery channel: use the delivery price when set, else base.
+      price:       channelPrice(i, "DELIVERY"),
+      description: i.description,
+      imageUrl:    i.imageUrl ?? null,
+    });
+
+    /* ── 🆕 Novidades — vitrine automática dos últimos lançamentos ─────────────
+     * Mesmo cálculo da tela e do cardápio que o agente lê (menuNovidades):
+     * mesma janela do dono, mesmo teto, sem seção vazia. */
+    const itensVisiveis = categories.flatMap((c) => c.items);
+    const novidades = montarCategoriaNovidades(
+      itensVisiveis.map((i) => ({ id: i.id, createdAt: i.createdAt })),
+      { dias: restaurant.storeProfile?.novidadesDias, totalDoCardapio: itensVisiveis.length },
+    );
+    const porId = new Map(itensVisiveis.map((i) => [i.id, i] as const));
+    const novidadesCategoria = novidades
+      ? [{
+          id:          novidades.id,
+          name:        novidades.name,
+          description: null as string | null,
+          imageUrl:    null as string | null,
+          items: novidades.items
+            .map((n) => porId.get(n.id))
+            .filter((i): i is NonNullable<typeof i> => i != null)
+            .map(mapItem),
+        }]
+      : [];
+
     return ok({
       restaurantName: restaurant.name,
-      categories: categories.map((c) => ({
+      categories: [...novidadesCategoria, ...categories.map((c) => ({
         id:          c.id,
         name:        c.name,
         description: c.description ?? null,
         imageUrl:    c.imageUrl ?? null,
-        items: c.items.map((i) => ({
-          id:          i.id,
-          name:        i.name,
-          // Delivery channel: use the delivery price when set, else base.
-          price:       channelPrice(i, "DELIVERY"),
-          description: i.description,
-          imageUrl:    i.imageUrl ?? null,
-        })),
-      })),
+        items: c.items.map(mapItem),
+      }))],
     });
   } catch (err) {
     console.error("[GET /api/pedido/[slug]]", err);

@@ -11,6 +11,7 @@ import { QRMenuClient } from "./QRMenuClient";
 import { getActiveMenuPromotions, buildPromotionMap } from "@/services/promotions/productPromotionResolver";
 import { channelPrice, resolveVariantPrice } from "@/services/menu/MenuPricingService";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
+import { montarCategoriaNovidades, NOVIDADES_CATEGORY_ID, NOVIDADES_CATEGORY_NAME } from "@/services/menu/menuNovidades";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function QRMenuPage({
     where: { slug: params.slug },
     select: {
       id: true, name: true, logoUrl: true, phone: true,
-      storeProfile: { select: { whatsappPhone: true } },
+      storeProfile: { select: { whatsappPhone: true, novidadesDias: true } },
     },
   });
 
@@ -66,6 +67,7 @@ export default async function QRMenuPage({
           priceDelivery: true, priceDineIn: true, priceIfood: true,
           imageUrl: true, images: true, carouselEnabled: true,
           isAvailable: true, ingredients: true, servingSize: true, portionInfo: true,
+          createdAt: true,
           variants: {
             where: { isAvailable: true },
             orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -154,6 +156,27 @@ export default async function QRMenuPage({
   // Build flat item lookup for best-sellers
   const allItemsFlat = new Map(categories.flatMap((c) => c.items.map((i) => [i.id, i])));
 
+  /* ── 🆕 Novidades — vitrine automática dos últimos lançamentos ───────────────
+   * Mesma regra do /pedido e do cardápio que o agente de WhatsApp lê
+   * (services/menu/menuNovidades): mesma janela do dono, mesmo teto, mesma
+   * exclusão de indisponível. Sem lançamento recente a categoria NÃO existe —
+   * seção vazia na melhor posição da tela parece defeito.
+   * O produto continua na categoria dele: isto aqui é vitrine, não é a casa dele. */
+  const novidadesEscolhidas = montarCategoriaNovidades(
+    rawCategories
+      .flatMap((c) => c.items)
+      .filter((i) => allItemsFlat.has(i.id))
+      .map((i) => ({ id: i.id, createdAt: i.createdAt, isAvailable: i.isAvailable })),
+    { dias: restaurant.storeProfile?.novidadesDias, totalDoCardapio: allItemsFlat.size },
+  );
+  const novidades = (novidadesEscolhidas?.items ?? [])
+    .map((n) => allItemsFlat.get(n.id))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined);
+  const categoriasComNovidades =
+    novidades.length > 0
+      ? [{ id: NOVIDADES_CATEGORY_ID, name: NOVIDADES_CATEGORY_NAME, description: null, items: novidades }, ...categories]
+      : categories;
+
   // Dynamic "Mais vendidos": keep only products still orderable in this menu
   // (drops unavailable/deleted), ranked by units sold then revenue, top 10.
   const featured = rankBestSellers(bestSellerRows, new Set(allItemsFlat.keys()), MENU_BESTSELLER_LIMIT)
@@ -203,7 +226,7 @@ export default async function QRMenuPage({
           restaurant.logoUrl ??
           null
         }}
-      categories={categories}
+      categories={categoriasComNovidades}
       featured={featured}
       promotedItems={promotedItems}
       promoBanner={promoBanner}

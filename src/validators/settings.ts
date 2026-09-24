@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NOVIDADES_DIAS_MIN, NOVIDADES_DIAS_MAX } from "@/services/menu/menuNovidades";
 
 // ── Store ──────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,13 @@ export const upsertStoreSchema = z.object({
   pickupEnabled:             z.boolean().optional(),
   dineInEnabled:             z.boolean().optional(),
   averagePreparationMinutes: z.number().int().min(1).max(300).nullable().optional(),
+
+  // ── Cardápio ──────────────────────────────────────────────────
+  // Por quantos dias um produto novo fica na vitrine "Novidades".
+  // A trava é AQUI, no código: zero e negativo fariam a seção sumir sem
+  // explicação, e um número grande demais transformaria "novidades" no
+  // cardápio inteiro. null = usar o padrão do sistema.
+  novidadesDias: z.number().int().min(NOVIDADES_DIAS_MIN).max(NOVIDADES_DIAS_MAX).nullable().optional(),
 });
 
 export type UpsertStoreInput = z.infer<typeof upsertStoreSchema>;

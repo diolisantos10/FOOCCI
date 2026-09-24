@@ -25,6 +25,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { montarCategoriaNovidades, NOVIDADES_CATEGORY_NAME } from "@/services/menu/menuNovidades";
 import { openai } from "@/lib/openai";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { WhatsAppMessagingService } from "@/services/whatsapp/WhatsAppMessagingService";
@@ -885,7 +886,7 @@ async function run(conversationId: string): Promise<void> {
     }),
     prisma.storeProfile.findUnique({
       where:  { restaurantId },
-      select: { street: true, streetNumber: true, neighborhood: true, city: true, state: true, deliveryEnabled: true },
+      select: { street: true, streetNumber: true, neighborhood: true, city: true, state: true, deliveryEnabled: true, novidadesDias: true },
     }),
     prisma.whatsAppAgentConfig.findUnique({
       where:  { restaurantId },
@@ -929,12 +930,13 @@ async function run(conversationId: string): Promise<void> {
         name:  true,
         items: {
           where:   { isActive: true, isAvailable: true, showInDelivery: true },
-          select:  { name: true },
+          // `id`/`createdAt` alimentam a vitrine "Novidades" (mesma regra da tela).
+          select:  { id: true, name: true, createdAt: true },
           take:    5,
           orderBy: { sortOrder: "asc" },
         },
       },
-    }).catch(() => [] as { name: string; items: { name: string }[] }[]),
+    }).catch(() => [] as { name: string; items: { id: string; name: string; createdAt: Date }[] }[]),
   ]);
 
   // Canal único: a Meta homologada. Sem credencial gravada não há por onde
@@ -946,6 +948,27 @@ async function run(conversationId: string): Promise<void> {
     );
     return;
   }
+
+  /* ── 🆕 Novidades — o atendente enxerga a MESMA vitrine da tela ─────────────
+   * Mesma regra e mesma janela do dono (services/menu/menuNovidades). Sem
+   * lançamento recente a seção não existe aqui também. */
+  const itensDoCatalogo = menuCatalogRaw.flatMap((c) => c.items);
+  const novidadesCatalogo = montarCategoriaNovidades(
+    itensDoCatalogo.map((i) => ({ id: i.id, createdAt: i.createdAt })),
+    { dias: storeProfile?.novidadesDias, totalDoCardapio: itensDoCatalogo.length },
+  );
+  const menuCatalogComNovidades: { name: string; items: { name: string }[] }[] = [
+    ...(novidadesCatalogo
+      ? [{
+          name: NOVIDADES_CATEGORY_NAME,
+          items: novidadesCatalogo.items
+            .map((n) => itensDoCatalogo.find((i) => i.id === n.id))
+            .filter((i): i is NonNullable<typeof i> => i != null)
+            .map((i) => ({ name: i.name })),
+        }]
+      : []),
+    ...menuCatalogRaw.map((c) => ({ name: c.name, items: c.items.map((i) => ({ name: i.name })) })),
+  ];
 
   const rawMenuUrl = agentCfg?.menuUrl?.trim() || (restaurant?.slug ? getPublicMenuUrl(restaurant.slug) : null);
   // waToken is only handled by /pedido/ — remap /qr/ URLs so identity is not lost
@@ -1113,7 +1136,7 @@ async function run(conversationId: string): Promise<void> {
     handoffMessage:  agentCfg?.handoffMessage  ?? "Vou deixar nossa equipe te atender. Um momento! 👋",
     agentMode,
     menuOptions:     effectiveMenuOptions,
-    menuCatalog:     menuCatalogRaw,
+    menuCatalog:     menuCatalogComNovidades,
     hoursText,
     isCurrentlyOpen: effectivelyOpen,
     closedMessage:   isPaused ? pauseMessage : closedMessage,

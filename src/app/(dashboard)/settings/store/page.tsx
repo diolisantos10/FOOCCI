@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { NOVIDADES_DIAS_PADRAO, NOVIDADES_DIAS_MIN, NOVIDADES_DIAS_MAX } from "@/services/menu/menuNovidades";
 import {
   apiFetch, Field, INPUT, SELECT, Feedback, SaveButton, PageCard, SectionHeading, Toggle,
 } from "../_shared";
@@ -61,6 +62,7 @@ type Form = {
   pickupEnabled: boolean;
   dineInEnabled: boolean;
   averagePreparationMinutes: string;
+  novidadesDias: string;
 };
 
 const EMPTY: Form = {
@@ -77,6 +79,7 @@ const EMPTY: Form = {
   managerName: "", managerRole: "", managerPhone: "", managerWhatsapp: "", managerEmail: "",
   deliveryEnabled: true, pickupEnabled: true, dineInEnabled: true,
   averagePreparationMinutes: "",
+  novidadesDias: "",
 };
 
 function fromApi(data: Record<string, unknown>): Form {
@@ -130,6 +133,7 @@ function fromApi(data: Record<string, unknown>): Form {
     dineInEnabled:   b(sp.dineInEnabled,   true),
     averagePreparationMinutes: sp.averagePreparationMinutes != null
       ? String(sp.averagePreparationMinutes) : "",
+    novidadesDias: sp.novidadesDias != null ? String(sp.novidadesDias) : "",
   };
 }
 
@@ -158,6 +162,7 @@ function toPayload(f: Form) {
     pickupEnabled:   f.pickupEnabled,
     dineInEnabled:   f.dineInEnabled,
     averagePreparationMinutes: intN(f.averagePreparationMinutes),
+    novidadesDias: intN(f.novidadesDias),
   };
 }
 
@@ -576,6 +581,21 @@ export default function StorePage() {
                 <option value="America/Rio_Branco">America/Rio_Branco (ACT)</option>
                 <option value="America/Noronha">America/Noronha (FNT)</option>
               </select>
+            </Field>
+          </div>
+
+          {/* Cardápio — a vitrine automática de lançamentos.
+              Vazio NÃO é defeito: sem número o sistema usa o padrão e a seção
+              funciona igual. O limite 1–90 é trava de código (validator +
+              serviço), não só aviso de tela. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label={`Por quantos dias um produto fica em "Novidades"`}
+              hint={`Produto novo aparece numa vitrine "Novidades" no topo do cardápio e sai sozinho depois desse prazo — continuando normalmente na categoria dele. Em branco = ${NOVIDADES_DIAS_PADRAO} dias.`}
+            >
+              <input className={INPUT} type="number" min={NOVIDADES_DIAS_MIN} max={NOVIDADES_DIAS_MAX}
+                value={form.novidadesDias} onChange={set("novidadesDias")}
+                placeholder={`Ex: ${NOVIDADES_DIAS_PADRAO}`} />
             </Field>
           </div>
 

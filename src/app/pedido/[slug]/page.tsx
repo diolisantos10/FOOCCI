@@ -20,6 +20,7 @@ import { getRepeatableOrder } from "@/services/order/RepeatOrderService";
 import { channelPrice } from "@/services/menu/MenuPricingService";
 import { PEDIDO_ITEM_SELECT, mapPedidoItem } from "@/services/menu/pedidoMenuItem";
 import { getMenuBestSellerRows, rankBestSellers, MENU_BESTSELLER_LIMIT } from "@/services/menu/menuBestSellers";
+import { montarCategoriaNovidades, NOVIDADES_CATEGORY_ID, NOVIDADES_CATEGORY_NAME } from "@/services/menu/menuNovidades";
 import { getPublicSiteUrl } from "@/lib/public-url";
 import { aiWaiterIncluded } from "@/lib/plan-features";
 import { identificacaoPodeSerPulada } from "@/lib/identificacao-loja";
@@ -91,7 +92,7 @@ export default async function PedidoPage({
       // falha fechada (ver `identificacaoPodeSerPulada`).
       isDemo: true,
       isOrderingPaused: true, orderingPausedUntil: true, orderingPausedReason: true,
-      storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true } },
+      storeProfile: { select: { whatsappPhone: true, averagePreparationMinutes: true, novidadesDias: true } },
     },
   });
 
@@ -352,7 +353,7 @@ export default async function PedidoPage({
               id: true, name: true, price: true,
               priceDelivery: true, priceDineIn: true, priceIfood: true,
               description: true, imageUrl: true,
-              categoryId: true,
+              categoryId: true, createdAt: true,
               hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
               variants: {
                 where: { isAvailable: true },
@@ -436,7 +437,27 @@ export default async function PedidoPage({
     return true;
   });
 
+  /* ── 🆕 Novidades — vitrine automática dos últimos lançamentos ───────────────
+   * Mesma regra, mesma janela e mesmo teto do cardápio do salão (/qr) e do
+   * cardápio que o agente de WhatsApp lê — services/menu/menuNovidades. Sem
+   * lançamento recente a categoria NÃO existe. O produto continua na categoria
+   * dele: aqui é vitrine, não é onde ele mora. */
+  const novidadesSelecao = montarCategoriaNovidades(
+    rawCategories
+      .flatMap((c) => c.items)
+      .filter((i) => allItemsFlat.has(i.id))
+      .map((i) => ({ id: i.id, createdAt: i.createdAt })),
+    { dias: restaurant.storeProfile?.novidadesDias, totalDoCardapio: allItemsFlat.size },
+  );
+  const novidades = (novidadesSelecao?.items ?? [])
+    .map((n) => allItemsFlat.get(n.id))
+    .filter((i): i is Exclude<typeof i, undefined> => i !== undefined);
+
   const virtualCategories: typeof categories = [];
+  // Primeira posição do cardápio — é vitrine.
+  if (novidades.length > 0) {
+    virtualCategories.push({ id: NOVIDADES_CATEGORY_ID, name: NOVIDADES_CATEGORY_NAME, description: null, imageUrl: null, items: novidades });
+  }
   if (promotedItems.length > 0) {
     virtualCategories.push({ id: "__promotions__", name: "🔥 Promoções", description: null, imageUrl: null, items: promotedItems });
   }
@@ -445,6 +466,12 @@ export default async function PedidoPage({
   }
 
   const allCategories = [...virtualCategories, ...categories];
+  /* A Loja (sem IA) já recebe "Mais vendidos" e "Promoções" por props próprias —
+   * só a vitrine de Novidades entra como categoria, e na frente. */
+  const categoriasDaLoja =
+    novidades.length > 0
+      ? [{ id: NOVIDADES_CATEGORY_ID, name: NOVIDADES_CATEGORY_NAME, description: null, imageUrl: null, items: novidades }, ...categories]
+      : categories;
 
   // Loja (sem IA): o hero replica o do QR — o promoBanner é o primeiro item em
   // promoção com foto (mesma regra de src/app/qr/[slug]/page.tsx).
@@ -575,7 +602,7 @@ gtag('config', '${ga4Id}');
           null
         }
         brandPrimaryColor={brandConfig?.brandPrimaryColor ?? null}
-        categories={categories}
+        categories={categoriasDaLoja}
         featured={bestSellers}
         promotedItems={promotedItems}
         promoBanner={lojaPromoBanner}

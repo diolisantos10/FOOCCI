@@ -20,6 +20,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { montarCategoriaNovidades, NOVIDADES_CATEGORY_ID, NOVIDADES_CATEGORY_NAME } from "@/services/menu/menuNovidades";
 import { BrandConfigService } from "@/services/ai/BrandConfigService";
 import type {
   AIContext,
@@ -185,6 +186,9 @@ export async function buildAIContext(
         description: true,
         timezone:    true,
         plan:        true,
+        // Janela da vitrine "Novidades" escolhida pelo dono — o agente precisa
+        // enxergar EXATAMENTE a mesma seção que a tela do cliente mostra.
+        storeProfile: { select: { novidadesDias: true } },
       },
     }),
     BrandConfigService.getOrDefault(restaurantId),
@@ -250,6 +254,39 @@ export async function buildAIContext(
       tags:         deriveTags(item.name, item.description),
     })),
   }));
+
+  /* ── 🆕 Novidades — a MESMA vitrine da tela do cliente ─────────────────────
+   * O cardápio que o agente lê e o cardápio da tela saem daqui com a mesma
+   * regra (services/menu/menuNovidades), a mesma janela do dono e o mesmo teto.
+   * Duas versões do cardápio é como se cria o dia em que a tela e o atendente
+   * discordam sobre o que é novidade. Sem lançamento recente a categoria não
+   * existe — e o produto continua na categoria dele, aqui também. */
+  const itensComData = categories.flatMap((cat) =>
+    (cat as { items: typeof cat.items }).items.map((i) => ({
+      id: i.id, createdAt: i.createdAt, isAvailable: i.isAvailable,
+    })),
+  );
+  const novidadesSelecao = montarCategoriaNovidades(itensComData, {
+    dias: restaurant.storeProfile?.novidadesDias,
+    totalDoCardapio: itensComData.length,
+  });
+  if (novidadesSelecao) {
+    const porId = new Map(menu.flatMap((c) => c.items.map((i) => [i.id, i] as const)));
+    const itensNovidade = novidadesSelecao.items
+      .map((n) => porId.get(n.id))
+      .filter((i): i is NonNullable<typeof i> => i != null);
+    if (itensNovidade.length > 0) {
+      menu.unshift({
+        id:             NOVIDADES_CATEGORY_ID,
+        name:           NOVIDADES_CATEGORY_NAME,
+        description:    null,
+        isAvailable:    true,
+        showInDelivery: true,
+        showInDineIn:   true,
+        items:          itensNovidade,
+      });
+    }
+  }
 
   // ── Promotions context ────────────────────────────────────────────────────
   const promotionsCtx: PromotionContext[] = promotions.map((p) => ({

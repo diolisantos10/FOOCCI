@@ -2124,6 +2124,12 @@ model StoreProfile {
   dineInEnabled             Boolean @default(true)
   averagePreparationMinutes Int?
 
+  // ── Cardápio ───────────────────────────────────────────────
+  // Por quantos dias um produto novo fica na vitrine "Novidades" do cardápio.
+  // null = nunca configurado → vale o padrão do sistema (menuNovidades.ts).
+  // Limites de sanidade (1..90) ficam na trava de código, não no aviso da tela.
+  novidadesDias             Int?
+
   // ── Quem é esse cliente (cadastro interno) ─────────────────
   //
   // Nasceu de um buraco concreto: para escrever a primeira peça de um cliente

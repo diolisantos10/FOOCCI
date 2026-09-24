@@ -35,6 +35,7 @@ const STORE_PROFILE_SELECT = {
   ownerName: true, ownerRole: true, ownerPhone: true, ownerWhatsapp: true, ownerEmail: true,
   managerName: true, managerRole: true, managerPhone: true, managerWhatsapp: true, managerEmail: true,
   deliveryEnabled: true, pickupEnabled: true, dineInEnabled: true, averagePreparationMinutes: true,
+  novidadesDias: true,
 } as const;
 
 export class RestaurantSettingsService {
@@ -120,13 +121,16 @@ export class RestaurantSettingsService {
       }),
       prisma.storeProfile.upsert({
         where:  { restaurantId },
-        create: { restaurantId, ...profileFields, ...coordsOnCreate, deliveryEnabled: input.deliveryEnabled ?? true, pickupEnabled: input.pickupEnabled ?? true, dineInEnabled: input.dineInEnabled ?? true },
+        create: { restaurantId, ...profileFields, ...coordsOnCreate, deliveryEnabled: input.deliveryEnabled ?? true, pickupEnabled: input.pickupEnabled ?? true, dineInEnabled: input.dineInEnabled ?? true, novidadesDias: input.novidadesDias ?? null },
         update: {
           ...profileFields,
           ...coordsOnUpdate,
           ...(input.deliveryEnabled !== undefined ? { deliveryEnabled: input.deliveryEnabled } : {}),
           ...(input.pickupEnabled   !== undefined ? { pickupEnabled:   input.pickupEnabled   } : {}),
           ...(input.dineInEnabled   !== undefined ? { dineInEnabled:   input.dineInEnabled   } : {}),
+          // Janela da vitrine "Novidades". Só grava quando veio no payload — um
+          // formulário que não conhece o campo não pode apagar a escolha do dono.
+          ...(input.novidadesDias   !== undefined ? { novidadesDias:   input.novidadesDias   } : {}),
         },
       }),
     ]);

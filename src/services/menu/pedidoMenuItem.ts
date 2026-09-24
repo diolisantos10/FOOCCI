@@ -36,6 +36,8 @@ export const PEDIDO_ITEM_SELECT = {
   priceDelivery: true, priceDineIn: true, priceIfood: true,
   description: true, imageUrl: true, images: true, carouselEnabled: true,
   hasVariants: true, ingredients: true, servingSize: true, portionInfo: true,
+  // Data de nascimento do produto — a vitrine "Novidades" decide por ela.
+  createdAt: true,
   variants: {
     where: { isAvailable: true },
     orderBy: { sortOrder: "asc" },
