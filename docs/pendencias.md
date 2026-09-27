@@ -12,6 +12,9 @@
   com ele o cupom), e o checkout criava um cliente novo quando o telefone
   importado estava sem o 9. Consertado em `identifyStep.ts` e em
   `CheckoutFinalizationService.resolveCustomerByPhone`.
+- **Plano de fusão pronto, aguardando o CEO:** `docs/plano-fusao-clientes-duplicados.md`
+  (contagem: `scripts/contar-clientes-duplicados.ts`, somente leitura). PR #278
+  mergeado em 114023b.
 - **Aberto — medir no banco depois do deploy** (a sessão não teve acesso de
   leitura ao Postgres): quantos clientes estão duplicados por telefone com e sem
   o 9 (esses precisam de fusão, porque o conserto só evita os próximos), e
