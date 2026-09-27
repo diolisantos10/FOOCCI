@@ -9,6 +9,7 @@ import { ok, badRequest, unauthorized, serverError } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { CrmCampaignService } from "@/services/crm/CrmCampaignService";
 import { summarizeFromReasonCounts } from "@/services/crm/crmExecutionClassification";
+import { STATUS_VIVOS, HISTORICO_RECENTE, juntarVivasEHistorico } from "@/services/crm/listaDeCampanhas";
 
 // ─── GET — campaign history ────────────────────────────────────
 
@@ -26,30 +27,46 @@ export async function GET(req: NextRequest) {
     const to   = toParam   ? new Date(toParam)   : null;
     const periodActive = !!from && !!to && !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime());
 
-    const campaigns = await prisma.campaign.findMany({
-      where:   { restaurantId: ctx.restaurantId },
-      orderBy: { createdAt: "desc" },
-      take:    50,
-      select: {
-        id:             true,
-        name:           true,
-        objective:      true,
-        channel:        true,
-        targetSegment:  true,
-        templateId:     true,
-        status:         true,
-        totalAudience:  true,
-        totalSent:      true,
-        totalFailed:    true,
-        totalResponded: true,
-        totalConverted: true,
-        totalRevenue:   true,
-        scheduledAt:    true,
-        scheduleConfig: true,
-        createdAt:      true,
-        sentAt:         true,
-      },
-    });
+    // ⛔ Campanha VIVA nunca pode cair fora da lista. Antes era só `take: 50`
+    // pelas mais recentes: restaurante com muitas campanhas antigas (disparos
+    // únicos, canceladas) empurrava para fora justamente as recorrentes ligadas
+    // há mais tempo — e a tabela única mostrava "Cliente morno" e "Cliente frio"
+    // como Ativa, "sem registro no período", com botão "Configurar e ligar".
+    // Agora: TODA campanha viva + as 50 mais recentes de histórico.
+    const campaignSelect = {
+      id:             true,
+      name:           true,
+      objective:      true,
+      channel:        true,
+      targetSegment:  true,
+      templateId:     true,
+      status:         true,
+      totalAudience:  true,
+      totalSent:      true,
+      totalFailed:    true,
+      totalResponded: true,
+      totalConverted: true,
+      totalRevenue:   true,
+      scheduledAt:    true,
+      scheduleConfig: true,
+      createdAt:      true,
+      sentAt:         true,
+    } as const;
+
+    const [vivas, recentes] = await Promise.all([
+      prisma.campaign.findMany({
+        where:   { restaurantId: ctx.restaurantId, status: { in: [...STATUS_VIVOS] as never[] } },
+        orderBy: { createdAt: "desc" },
+        select:  campaignSelect,
+      }),
+      prisma.campaign.findMany({
+        where:   { restaurantId: ctx.restaurantId },
+        orderBy: { createdAt: "desc" },
+        take:    HISTORICO_RECENTE,
+        select:  campaignSelect,
+      }),
+    ]);
+    const campaigns = juntarVivasEHistorico(vivas, recentes);
 
     // For SENDING campaigns the denormalized totalSent/totalFailed may be stale
     // (updated only after the batch completes, or lost if the process timed out).
