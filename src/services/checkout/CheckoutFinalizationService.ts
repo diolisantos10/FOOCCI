@@ -17,7 +17,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
-import { toE164 } from "@/lib/phone";
+import { toE164, phoneCandidates, CUSTOMER_LOOKUP_ORDER } from "@/lib/phone";
 import { isGuestIdentifier } from "@/lib/guest";
 import { assignOrderNumber } from "@/lib/order-number";
 import { resolveItemUpsell } from "@/lib/upsell-attribution";
@@ -94,6 +94,42 @@ export interface CreateOrderResult {
   customerId: string;
 }
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Acha o cliente pelo telefone em TODAS as formas gravadas (com e sem o 9,
+ * com e sem +55) antes de criar um novo.
+ *
+ * Por que (auditoria de 27/09/2026): a importação grava celular antigo sem o 9
+ * (+55DD8dígitos) e o checkout normaliza com o 9. O `upsert` pelo telefone
+ * exato não casava e criava um cliente NOVO minutos antes do pedido — a venda
+ * saía de quem recebeu a campanha, e "Cliente perdido" / "Converter 1º pedido"
+ * ficavam com conversão zero. É a mesma busca que o identify já fazia.
+ */
+export async function resolveCustomerByPhone(
+  tx: Tx, restaurantId: string, phone: string, rawPhone: string, name: string,
+): Promise<string> {
+  if (!isGuestIdentifier(phone)) {
+    const candidates = [...new Set([phone, ...phoneCandidates(rawPhone)])];
+    const existing = await tx.customer.findFirst({
+      where:   { restaurantId, phone: { in: candidates } },
+      orderBy: CUSTOMER_LOOKUP_ORDER,
+      select:  { id: true },
+    });
+    if (existing) {
+      await tx.customer.update({ where: { id: existing.id }, data: { name } });
+      return existing.id;
+    }
+  }
+  const upserted = await tx.customer.upsert({
+    where:  { phone_restaurantId: { phone, restaurantId } },
+    create: { restaurantId, name, phone, isGuest: isGuestIdentifier(phone) },
+    update: { name },
+    select: { id: true },
+  });
+  return upserted.id;
+}
+
 /**
  * Creates the customer, address (if delivery), and order inside a single
  * Prisma transaction. The caller is responsible for creating the Payment record
@@ -113,22 +149,10 @@ export async function createOrderRecord(input: CreateOrderInput): Promise<Create
       if (validated?.restaurantId === input.restaurantId) {
         resolvedCustomerId = validated.id;
       } else {
-        const fallback = await tx.customer.upsert({
-          where:  { phone_restaurantId: { phone, restaurantId: input.restaurantId } },
-          create: { restaurantId: input.restaurantId, name: input.customerName, phone, isGuest: isGuestIdentifier(phone) },
-          update: { name: input.customerName },
-          select: { id: true },
-        });
-        resolvedCustomerId = fallback.id;
+        resolvedCustomerId = await resolveCustomerByPhone(tx, input.restaurantId, phone, input.phone, input.customerName);
       }
     } else {
-      const upserted = await tx.customer.upsert({
-        where:  { phone_restaurantId: { phone, restaurantId: input.restaurantId } },
-        create: { restaurantId: input.restaurantId, name: input.customerName, phone, isGuest: isGuestIdentifier(phone) },
-        update: { name: input.customerName },
-        select: { id: true },
-      });
-      resolvedCustomerId = upserted.id;
+      resolvedCustomerId = await resolveCustomerByPhone(tx, input.restaurantId, phone, input.phone, input.customerName);
     }
 
     // ── Address (delivery only) ───────────────────────────────────────────

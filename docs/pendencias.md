@@ -1,5 +1,26 @@
 # Pendências — o que está aberto
 
+## 27/09/2026 — Auditoria do CRM no Sushi Cazza (PR aguardando ok do CEO)
+
+- **Morno e frio já estavam ligados.** O selo "Ativa" vem de linha no banco com
+  status ACTIVE/SCHEDULED. O que faltava eram os números: a lista do painel
+  cortava nas 50 campanhas mais recentes. Conserto em
+  `src/services/crm/listaDeCampanhas.ts`.
+- **Conversão zero em "Converter 1º pedido" e "Cliente perdido":** a atribuição
+  funciona (logs mostram vendas atribuídas a outras recorrentes). O que falha é
+  o cliente ser o mesmo. A Loja apagava o id do cliente que veio pelo link (e
+  com ele o cupom), e o checkout criava um cliente novo quando o telefone
+  importado estava sem o 9. Consertado em `identifyStep.ts` e em
+  `CheckoutFinalizationService.resolveCustomerByPhone`.
+- **Aberto — medir no banco depois do deploy** (a sessão não teve acesso de
+  leitura ao Postgres): quantos clientes estão duplicados por telefone com e sem
+  o 9 (esses precisam de fusão, porque o conserto só evita os próximos), e
+  quantas execuções morno e frio já gravaram de fato.
+- **Achado menor, não consertado:** na atribuição por cupom, a busca da
+  execução não filtra status e ordena por `sentAt desc` (nulos primeiro). A
+  conversão pode cair numa linha BLOCKED. Ela continua contando, mas suja a
+  taxa.
+
 > Última atualização: 08/09/2026, fim do dia.
 
 ## ⛔ 08/09/2026 — A prospecção para num dado só: o id da conta (WABA)

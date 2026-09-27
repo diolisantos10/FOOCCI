@@ -45,6 +45,7 @@ import { buildInstagramUrl, buildTikTokUrl, buildWhatsAppUrl } from "@/lib/socia
 import { StoreHeader } from "./StoreHeader";
 import { StoreAccountDrawer } from "./StoreAccountDrawer";
 import { CHAVE_PROVA } from "./areaDoCliente";
+import { decidirIdentify } from "./identifyStep";
 import {
   LOCKED_WALLET,
   fetchWallet,
@@ -413,27 +414,15 @@ export function LojaClient({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Não consegui validar o telefone.");
-      if (json.found) {
-        setCustId(json.customerId ?? null);
-        const resolvedName = json.name ?? custName.trim();
-        if (resolvedName) {
-          setCustName(resolvedName);
-          setIdentifiedName(resolvedName);
-          setIdentifiedPhone(fmtPhone(phone));
-          setStep("method");
-        } else {
-          // Cadastro existe mas sem nome legível — pede o nome; o reenvio corrige o cadastro.
-          setNeedName(true);
-          if (needName) setError("Digite seu nome para continuar.");
-        }
-      } else if (json.customerId) {
-        // New customer created with the provided name.
-        setCustId(json.customerId);
-        setIdentifiedName(custName.trim() || null);
+      const decisao = decidirIdentify(json, custId, custName);
+      if (decisao.acao === "seguir") {
+        setCustId(decisao.custId);
+        if (decisao.nome) setCustName(decisao.nome);
+        setIdentifiedName(decisao.nome);
         setIdentifiedPhone(fmtPhone(phone));
         setStep("method");
       } else {
-        // Phone ok but we still need a name for the order.
+        // Telefone ok, mas o pedido precisa de um nome (o reenvio corrige o cadastro).
         setNeedName(true);
         if (needName) setError("Digite seu nome para continuar.");
       }
