@@ -43,6 +43,42 @@ isso aconteça de novo, mas não conserta as fichas que já foram duplicadas.
    das conversas. Primeiro roda em modo ensaio, que só relata o que faria;
    depois vem a execução.
 
+## Cupons — revisão de 28/09, a pedido do CEO
+
+O CEO pediu para não confundir **cliente duplicado** com **"duplicação de cupom"**.
+É um erro que já aconteceu. Revisão feita no código:
+
+1. **Os duplicados da fusão são cadastros repetidos, não cupons.** A lista sai
+   só da tabela de clientes, agrupada pelo telefone (`chaveDoTelefone`). A
+   lógica de cupom nunca cria cliente: `CustomerCouponService.grant` só grava
+   na carteira.
+2. **Nenhum cupom é cancelado. Nem hoje, nem na fusão.**
+   - O cupom tem 3 estados: ativo, usado e expirado. Não existe "cancelado".
+   - Há 3 pontos no código que alteram um cupom, e os 3 só marcam "usado" ou
+     devolvem para "ativo": `markUsed`, `restoreForOrder` e o consumo no
+     checkout.
+   - Na fusão, **todos os cupons de todos os cadastros mudam de dono para a
+     ficha sobrevivente**, sem deduplicar. Se a pessoa tiver dois cupons
+     ativos da mesma campanha (um em cada ficha), fica com os dois.
+   - ⛔ **O cadastro absorvido nunca é apagado.** Apagar um cliente apaga os
+     cupons dele em cascata (`onDelete: Cascade`). É por isso que ele é
+     inativado, e não removido.
+3. **A trava de tempo só espaça o envio.** O intervalo por cliente e o teto
+   semanal (`ContactSafetyService`) seguram a MENSAGEM:
+   - a mensagem vira um bloqueio temporário e volta para a fila depois da
+     janela (`ScheduledCampaignRunnerService`, exclusões "RECENTE");
+   - o cupom só é concedido quando a mensagem sai de fato, então ele atrasa,
+     não se perde;
+   - cupons que o cliente já tem não são tocados;
+   - o cliente continua elegível a todas as campanhas (frio, Instagram,
+     várias no mesmo mês).
+   - Único limite existente: **uma campanha não dá um segundo cupom enquanto
+     o primeiro dela ainda estiver ativo** (`ALREADY_HAS`). Campanhas
+     diferentes não se bloqueiam.
+4. **Critério de aceite do ensaio:** contagem de cupons por status (ativo,
+   usado, expirado) **igual antes e depois**, somando todos os cadastros de
+   cada pessoa. Se o número divergir, a fusão não roda.
+
 ## Duas saídas
 
 **A — Fundir tudo, com ensaio antes (recomendada).**
