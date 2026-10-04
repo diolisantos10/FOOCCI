@@ -1,5 +1,34 @@
 # Pendências — o que está aberto
 
+## 04/10/2026 — Os e-mails de falha, e o que eles escondiam (varredura de produção)
+
+**As 4 rotinas, causa lida no log:**
+
+| Rotina | Por que falha | É problema real? |
+|---|---|---|
+| Meta WhatsApp — saúde | `totalConfigs: 0`: a configuração do WhatsApp do Sushi Cazza não existe mais no banco | **SIM.** Alguém clicou em "Desconectar WhatsApp" no painel em 30/09 às 21:08 UTC (IP 177.204.162.70) e de novo em 02/10 às 17:16 UTC (IP 189.46.129.116). Desde então o CRM envia 0 por dia ("capacidade ociosa GRAVE"), a recuperação de carrinho não sai e o atendente não consegue responder (`META_NOT_CONNECTED`) |
+| Instagram Token Refresh | o token do Instagram do Sushi Cazza venceu em 24/08; a renovação recusa com "Unsupported request (code 100)", que é **permissão faltando no app da Meta** | **SIM.** O Instagram está mudo desde 24/08 |
+| Manual Sync Nightly | o robô (claude-code-action) morre em 0,5 s com `is_error`, custo 0: a chave `ANTHROPIC_API_KEY` do GitHub não funciona | Rotina com função, mas a chave é de laboratório, fora do cofre. **Agendamento desligado** (continua disparável à mão) |
+| Espelho da doutrina | o repositório `diolisantos10/FOOCCI` está **PÚBLICO** e o robô se recusa a espelhar | **SIM, de segurança.** `docs/kit/` (doutrina privada: segurança, incidentes, cofre) e todo `docs/` já estão públicos |
+
+**O que foi feito (PR deste bloco):**
+- As rotinas da Meta e do Instagram, quando falham, abrem **chamado na Sala de Manutenção** da Control Room (`POST /manutencao/chamados`, `X-Service-Token`). Com o chamado aberto, a rotina termina verde e não sai e-mail. Sem token, continua falhando e o e-mail fica como reserva.
+- Espelho: com o repositório público, o robô segue rodando, mas **só renova a data** do carimbo (o kit não muda desde 30/08). Doutrina nova é bloqueada. A data foi renovada hoje, o que evita o CI de todos os PRs reprovar a partir de 05/10.
+- O vigia do WhatsApp deixou de dizer "nenhum restaurante configurado" quando o que falhou foi a leitura do banco (guardrail 1). Há teste para isso.
+
+**Também achado na varredura (48 h):**
+- 🔴 **A OpenAI está sem crédito desde 03/10 12:11 UTC** (`credit_balance_exhausted`). Toda IA do Foocci para: o agente de pedido do WhatsApp responde pela máquina determinística, o treino noturno falha e a loja deu 500 em 03/10 às 21:51.
+- O erro HTTP está baixo: 10 de 39.637 requisições (0,03%). Todos os erros são consequência dos dois itens acima.
+- Testes: 10.147 verdes, tsc limpo.
+
+**Atos do CEO (não executados):**
+1. Reconectar o WhatsApp do Sushi Cazza no painel. Antes, saber **quem desconectou e por quê** (dois IPs diferentes).
+2. No app da Meta, conceder `instagram_business_basic` e `instagram_business_manage_messages`, e reconectar o Instagram do Sushi Cazza.
+3. IA sem crédito: (A) colocar crédito na OpenAI agora, ou (B) acelerar o cofre. A Control Room tem o PR #116 aberto, que libera a porta oficial.
+4. Repositório público: (A) torná-lo privado (recomendado), ou (B) tirar `docs/kit` daqui (o histórico continua público).
+5. Emitir o token de serviço do Foocci na Control Room e cadastrar `CONTROL_ROOM_URL` e `CONTROL_ROOM_SERVICE_TOKEN` nos segredos do GitHub. Sem isso, os chamados não abrem e o e-mail continua.
+6. Robô do manual: trocar a chave própria por acesso via cofre, ou aposentar a rotina.
+
 ## 04/10/2026 — Toda IA pelo cofre: o estado real (regra do CEO de hoje)
 
 **Medido em produção (commit 114023b), só leitura.** Hoje **nenhuma** chamada de

@@ -31,6 +31,8 @@ jobs:
           echo "url=${BASE_URL}/api/cron/instagram/refresh-tokens" >> "$GITHUB_OUTPUT"
 
       - name: "Refresh tokens"
+        id: varredura
+        continue-on-error: true
         env:
           URL: ${{ steps.params.outputs.url }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -68,3 +70,33 @@ jobs:
             exit 1
           fi
           echo "✅ Instagram token refresh executado sem pendências."
+
+      # ⭐ 04/10/2026, ordem do CEO: "isso precisa parar" (a caixa de e-mail cheia
+      # de falhas). Falha desta rotina vira CHAMADO na Sala de Manutenção da
+      # Control Room, com a evidência dentro. Chamado aberto (201) → a rotina
+      # termina verde e o e-mail não sai. ⛔ Sem token ou com a porta recusando,
+      # a rotina FALHA como antes (guardrail 2: sem portão = reprovado) — o
+      # e-mail é o canal de reserva, nunca o silêncio.
+      - name: "Abrir chamado na Sala de Manutenção (em vez de só e-mail)"
+        if: always() && steps.varredura.outcome == 'failure'
+        env:
+          CR_URL: ${{ secrets.CONTROL_ROOM_URL }}
+          CR_TOKEN: ${{ secrets.CONTROL_ROOM_SERVICE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          EVID=$(jq -r '[.attention[]?] | join(" | ")' /tmp/ig-refresh.json 2>/dev/null)
+          [ -z "$EVID" ] && EVID="a rotina falhou sem lista de atenção (veja o log)"
+          if [ -z "$CR_URL" ] || [ -z "$CR_TOKEN" ]; then
+            echo "::error::Chamado NÃO aberto: falta o token de serviço do Foocci na Control Room (segredos CONTROL_ROOM_URL / CONTROL_ROOM_SERVICE_TOKEN). Emitir token é ato do CEO. A rotina falha para o aviso sair por e-mail."
+            exit 1
+          fi
+          CORPO=$(jq -n --arg p "foocci" --arg d "Instagram Token Refresh: $EVID" --arg e "$RUN_URL" \
+            '{produtoAfetado:$p, descricao:$d, gravidade:"critico", evidencia:$e}')
+          HTTP=$(curl -sS -m 20 -o /tmp/chamado.json -w "%{http_code}" -X POST "${CR_URL%/}/manutencao/chamados" \
+            -H "Content-Type: application/json" -H "X-Service-Token: $CR_TOKEN" -d "$CORPO" || echo 000)
+          if [ "$HTTP" = "201" ]; then
+            echo "::notice title=Chamado aberto na Sala de Manutenção::$(jq -r '.chamadoId' /tmp/chamado.json) — Instagram Token Refresh"
+            exit 0
+          fi
+          echo "::error::A Control Room recusou o chamado (HTTP $HTTP). A rotina falha para o aviso sair por e-mail."
+          exit 1

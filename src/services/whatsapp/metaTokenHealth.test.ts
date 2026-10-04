@@ -88,6 +88,22 @@ describe("metaTokenHealth", () => {
     expect(r.results[0].expiresInDays).toBeGreaterThan(50);
   });
 
+  it("banco que não responde NÃO vira 'nenhum restaurante configurado' (guardrail 1)", async () => {
+    findMany.mockRejectedValue(new Error("connection terminated"));
+    const r = await sweepMetaTokenHealth();
+    expect(r.needsAttention).toBe(true);
+    expect(r.attention.join(" ")).toContain("NÃO consegui ler as configurações");
+    expect(r.attention.join(" ")).toContain("connection terminated");
+    expect(r.attention.join(" ")).not.toContain("Nenhum restaurante tem WhatsApp");
+  });
+
+  it("config apagada de verdade continua dizendo que sumiu do banco", async () => {
+    findMany.mockResolvedValue([]);
+    const r = await sweepMetaTokenHealth();
+    expect(r.needsAttention).toBe(true);
+    expect(r.attention.join(" ")).toContain("Nenhum restaurante tem WhatsApp");
+  });
+
   it("credencial MORTA vira atenção com o caso concreto (guardrail 6)", async () => {
     findMany.mockResolvedValue([{ restaurantId: "sushi" }]);
     vi.stubGlobal("fetch", vi.fn(async () => respostaDebugToken({
