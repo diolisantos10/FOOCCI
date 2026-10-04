@@ -9246,3 +9246,18 @@ model AcademiaIaTentativa {
   @@index([certificacaoId])
   @@map("academia_ia_tentativas")
 }
+
+// ⭐ O segredo deste produto no cofre da Control Room (pareamento, 04/10/2026).
+// Gerado AQUI, guardado só aqui e cifrado. A Control Room conhece só o hash.
+model ProdutoNoCofre {
+  id                  String    @id // chave do produto no catálogo da Control Room ("foocci")
+  segredoCifrado      String // AES-256-GCM via src/lib/crypto.ts — nunca em log, tela ou commit
+  hash                String // sha256 hex minúsculo do segredo — o único valor que sai daqui
+  status              String    @default("novo") // novo | pendente | recusado | falhou
+  ultimaSolicitacaoEm DateTime?
+  ultimaResposta      String? // status HTTP + motivo da última solicitação (sem segredo)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@map("produto_no_cofre")
+}

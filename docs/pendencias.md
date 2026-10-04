@@ -1,5 +1,46 @@
 # Pendências — o que está aberto
 
+## 04/10/2026 (tarde) — Cofre por PAREAMENTO: o primeiro ponto migrado
+
+**Decisões do CEO hoje:**
+- O WhatsApp do Sushi Cazza continua desconectado, por decisão dele.
+- O Instagram fica parado, esperando a agência Dioli.
+- O Claude acaba em 05/10 e só volta perto de 01/11. Por isso migra **um ponto
+  só**, o que mais importa em produção, e os demais ficam desligados sem erro.
+
+**O ponto escolhido: o Garçom da loja** (`POST /api/pedido/[slug]`).
+- É o único canal de IA vivo com cliente: 335 conversas em 72 h no Sushi
+  Cazza, com o WhatsApp desconectado e o Instagram parado.
+- Ele agora fala com a IA só pela Control Room
+  (`src/services/cofre/portaDoCofre.ts`), em modo texto.
+- No canal web as ferramentas já eram só registro, e os cards seguem do motor
+  determinístico.
+- Cofre fora do ar → **resposta de reserva** que leva o cliente ao cardápio,
+  no lugar do 500 de 03/10.
+
+**Pareamento (`src/services/cofre/pareamento.ts`, tabela `produto_no_cofre`):**
+- O Foocci gera o próprio segredo e o guarda cifrado.
+- No boot, manda só o sha256 para `/api/v1/ai/pareamento/solicitar`, com
+  produto `foocci`.
+- Se a porta ainda não existe, tenta de novo a cada 6 h.
+
+**Chamados:** as rotinas da Meta e do Instagram abrem o chamado pelo próprio
+servidor, com o mesmo segredo. A rotina do GitHub só lê `chamado.aberto`.
+
+**O que falta para o Garçom responder pela IA** (até lá, ele responde com a
+mensagem de reserva):
+1. A Control Room mergear o PR #118 (pareamento).
+2. O CEO aprovar o pedido do `foocci` na tela do cofre.
+3. A Control Room criar o setup do Foocci (centro de custo, perfil de texto,
+   política), como o `garantirSetupDioliDigital`. Hoje só existe o da Dioli
+   Digital.
+4. Setar `CONTROL_ROOM_CENTRO_CUSTO_ID` no Railway. É o id do centro de custo,
+   não é segredo.
+
+**Continuam fora do cofre e sem crédito** (já caem no caminho determinístico):
+Cérebro, recepcionista, ajuda do painel, robôs noturnos, embeddings, áudio e
+foto. `OPENAI_API_KEY` continua no Railway até o último ser migrado.
+
 ## 04/10/2026 — Os e-mails de falha, e o que eles escondiam (varredura de produção)
 
 **As 4 rotinas, causa lida no log:**

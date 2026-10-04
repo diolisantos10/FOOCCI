@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { refreshExpiringInstagramTokens, refreshInstagramTokenForRestaurant } from "@/services/instagram/instagramTokenRefresh";
 import { alertInstagramAttention } from "@/services/instagram/instagramAttentionAlert";
+import { abrirChamadoQuandoPrecisa } from "@/services/cofre/chamadoDaRotina";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
     // sai para o WhatsApp do responsável. O resultado do aviso volta na resposta para o
     // Actions poder gritar "nem consegui avisar", que é pior ainda.
     const alert = await alertInstagramAttention(result.attention);
-    return NextResponse.json({ ok: true, ...result, alertSent: alert.sent, alertReason: alert.reason }, { status: 200 });
+    const chamado = await abrirChamadoQuandoPrecisa("Instagram Token Refresh", result.needsAttention, result.attention);
+    return NextResponse.json({ ok: true, ...result, alertSent: alert.sent, alertReason: alert.reason, chamado }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 200) : "erro desconhecido";
     return NextResponse.json({ ok: false, error: message }, { status: 200 });

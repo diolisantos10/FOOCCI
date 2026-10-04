@@ -20,6 +20,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { openai } from "@/lib/openai";
+import { executarTextoNoCofre, FalhaDoCofre, type MensagemDoCofre } from "@/services/cofre/portaDoCofre";
 import { MetaConfigService } from "@/services/whatsapp/MetaConfigService";
 import { sendWhatsAppText } from "@/services/whatsapp/activeProvider";
 import { BrandConfigService } from "./BrandConfigService";
@@ -267,6 +268,26 @@ async function loadActiveKnowledge(
 }
 
 // ─── web turn (unified pipeline, stateless HTTP) ──────────────
+
+/** Texto de quando o cofre não atende: leva o cliente ao cardápio, sem prometer nada. */
+export const RESPOSTA_DE_RESERVA_DO_GARCOM =
+  "Desculpe, não consegui responder agora. Você pode montar seu pedido direto pelo cardápio aqui na tela — e, se quiser, me pergunte de novo em instantes.";
+
+/** Converte o histórico do formato da OpenAI para o da porta do cofre (só texto). */
+export function paraMensagensDoCofre(msgs: OpenAI.Chat.ChatCompletionMessageParam[]): MensagemDoCofre[] {
+  const out: MensagemDoCofre[] = [];
+  for (const m of msgs) {
+    if (m.role !== "system" && m.role !== "user" && m.role !== "assistant") continue;
+    const c = m.content;
+    const texto = typeof c === "string"
+      ? c
+      : Array.isArray(c)
+      ? c.map((p) => ("text" in p && typeof p.text === "string" ? p.text : "")).join("")
+      : "";
+    if (texto.trim()) out.push({ role: m.role, content: texto });
+  }
+  return out;
+}
 
 async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutput> {
   const {
@@ -559,71 +580,22 @@ async function runWebTurnInternal(input: AIWebTurnInput): Promise<AIWebTurnOutpu
   let finalResponse = "";
   let suggestedItemName: string | undefined;
   const aiCards: string[] = [];  // product IDs collected from suggest_upsell calls
-  let addItemAttempts = 0;
-
-  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    const response = await openai.chat.completions.create({
-      model: brandConfig.aiModel,
-      messages: loopMessages,
-      tools: AI_TOOL_DEFINITIONS,
-      tool_choice: "auto",
-      max_tokens: resolveMaxTokens(salesProfile),
-      temperature: 0.3,
+  // ⭐ COFRE (regra do CEO de 04/10/2026): o Garçom da loja fala com a IA pela
+  // Control Room, com o segredo do pareamento — nunca com chave própria de
+  // laboratório. A porta do cofre faz TEXTO, sem ferramentas; no canal web as
+  // ferramentas já eram só registro ("processada pelo cliente"), e os cards
+  // continuam vindo do motor determinístico. Cofre fora → resposta de reserva,
+  // nunca erro 500 para o cliente.
+  try {
+    finalResponse = await executarTextoNoCofre({
+      papel: "dioli.foocci.atendimento.garcom",
+      maxTokens: resolveMaxTokens(salesProfile),
+      mensagens: paraMensagensDoCofre(loopMessages),
     });
-
-    const choice = response.choices[0];
-    if (!choice) break;
-
-    const { finish_reason, message: assistantMsg } = choice;
-    loopMessages.push(assistantMsg);
-
-    if (finish_reason === "stop" || finish_reason === "length") {
-      finalResponse = assistantMsg.content ?? "";
-      break;
-    }
-
-    if (finish_reason === "tool_calls" && assistantMsg.tool_calls) {
-      const functionCalls = assistantMsg.tool_calls.filter(
-        (tc): tc is Extract<typeof tc, { type: "function"; function: { name: string; arguments: string } }> =>
-          tc.type === "function" && "function" in tc
-      );
-
-      for (const toolCall of functionCalls) {
-        const toolName = toolCall.function.name;
-        let toolResult: { success: boolean; message: string; data?: unknown };
-
-        if (toolName === "add_item") {
-          addItemAttempts++;
-          if (addItemAttempts > 2) {
-            toolResult = {
-              success: false,
-              message: "PARAR: limite de tentativas add_item atingido neste turno. " +
-                       "Responda ao cliente diretamente sem chamar add_item novamente.",
-            };
-            loopMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
-            continue;
-          }
-        }
-
-        if (toolName === "suggest_upsell") {
-          const args = safeJson(toolCall.function.arguments) as Record<string, unknown>;
-          const itemId = args.menuItemId as string | undefined;
-          // Collect card ID from suggest_upsell (V2 cards)
-          if (itemId && !aiCards.includes(itemId)) aiCards.push(itemId);
-          const hit = upsellResult.suggestions.find((s) => s.menuItemId === itemId);
-          if (hit) suggestedItemName = hit.name;
-          toolResult = { success: true, message: `Sugestão registrada: ${hit?.name ?? itemId}` };
-        } else {
-          toolResult = { success: true, message: "Ação registrada — processada pelo cliente." };
-        }
-
-        loopMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(toolResult) });
-      }
-      continue;
-    }
-
-    finalResponse = assistantMsg.content ?? "";
-    break;
+  } catch (e) {
+    const motivo = e instanceof FalhaDoCofre ? e.motivo : "desconhecido";
+    console.warn(`[waiter] cofre não atendeu (${motivo}) — resposta de reserva`, { restaurantId });
+    finalResponse = RESPOSTA_DE_RESERVA_DO_GARCOM;
   }
 
   // ── Post-AI validation ──────────────────────────────────────────────────────
