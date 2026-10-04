@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAdminRequest } from "@/lib/admin-auth";
 import { sweepMetaTokenHealth, TOKEN_WARN_DAYS } from "@/services/whatsapp/metaTokenHealth";
 import { alertMetaTokenAttention } from "@/services/whatsapp/metaTokenAlert";
+import { abrirChamadoQuandoPrecisa } from "@/services/cofre/chamadoDaRotina";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,9 +35,10 @@ export async function POST(req: NextRequest) {
 
     const result = await sweepMetaTokenHealth(warnDays);
     const alert  = await alertMetaTokenAttention(result.attention);
+    const chamado = await abrirChamadoQuandoPrecisa("Meta WhatsApp — saúde da credencial", result.needsAttention, result.attention);
 
     return NextResponse.json(
-      { ok: true, warnDays, ...result, alertSent: alert.sent, alertReason: alert.reason },
+      { ok: true, warnDays, ...result, alertSent: alert.sent, alertReason: alert.reason, chamado },
       { status: 200 },
     );
   } catch (err) {

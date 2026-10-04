@@ -47,6 +47,30 @@ export async function register() {
     );
     AgendadorDaSupervisora.start();
 
+    // ⭐ COFRE (04/10/2026): o Foocci pede o próprio pareamento à Control Room
+    // no boot — gera o segredo se ainda não existir, guarda cifrado e manda só
+    // o hash. Idempotente (pedido novo substitui o pendente). Só em produção;
+    // nunca derruba o boot e nunca escreve o segredo em log.
+    if (process.env.NODE_ENV === "production" && process.env.RAILWAY_ENVIRONMENT_NAME === "production") {
+      // Se a porta ainda não existir (a Control Room sobe a dela em paralelo),
+      // tenta de novo a cada 6 h até o pedido ser aceito — sem laço apertado.
+      const pedir = async (): Promise<boolean> => {
+        const { solicitarPareamento } = await import("./services/cofre/pareamento");
+        const r = await solicitarPareamento();
+        console.info("[cofre] pareamento", r.ok ? `pedido: ${r.status}` : `não pedido: ${r.motivo}`);
+        return r.ok;
+      };
+      pedir()
+        .then((ok) => {
+          if (ok) return;
+          const t = setInterval(() => {
+            pedir().then((foi) => { if (foi) clearInterval(t); }).catch(() => {});
+          }, 6 * 60 * 60 * 1000);
+          t.unref?.();
+        })
+        .catch((e) => console.warn("[cofre] pareamento não rodou", e instanceof Error ? e.message : String(e)));
+    }
+
     // Antes daqui saía um re-registro do webhook da Evolution a cada deploy. A
     // Evolution foi eliminada em 04/08/2026 e a Meta NÃO precisa disso: o webhook
     // é registrado uma vez no aplicativo e não é marcado como falho por downtime.

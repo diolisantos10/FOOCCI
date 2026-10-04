@@ -89,6 +89,10 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910210000_backfill_importacoes_legadas/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260911120000_base_fria_campos_completos/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260914100000_modelos_de_vendas_envio/migration.sql
+          # 24/09: a reserva da descoberta automática também mexe em prospeccao_config.
+          # Ficou fora desta lista e o job reprovou em 04/10 com "column
+          # ultimaDescobertaAutomaticaEm does not exist" — a tabela é recriada acima.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260924183000_reserva_da_descoberta_automatica/migration.sql
           echo "✅ As migrations da prospecção e da seleção de templates aplicaram sobre banco realista."
 
       - name: Percorrer as Jornadas 1, 2 e 3
