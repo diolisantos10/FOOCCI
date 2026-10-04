@@ -81,6 +81,41 @@ cinza; ele leu a página inteira em dez segundos porque só precisou procurar
 laranja. Cada item tem um título curto e **uma** linha dizendo o que acontece se
 ficar parado. Consequência é o que faz ele decidir; descrição de tarefa, não.
 
+### ⭐ Toda IA passa pelo cofre — ordem do CEO, 04/10/2026
+
+> *"Todos os produtos ligados ao cofre, essa é a regra."*
+
+**Nenhuma chave de IA mora no Foocci.** Toda chamada de IA — texto, atendimento,
+Cérebro, recepcionista, ajuda do painel, robôs noturnos, embeddings, transcrição
+de áudio, imagem — passa pela **Control Room** (a porta oficial é
+`POST /api/v1/ai/gateway/execute`, com `X-Service-Token` do produto). O Foocci
+não chama laboratório (OpenAI, Anthropic, Gemini…) direto, e **nunca cai para uma
+chave própria quando o cofre falha**: falha do cofre vira o caminho determinístico,
+não um atalho.
+
+- Código novo que fale com laboratório direto **está errado por definição**,
+  mesmo que "funcione".
+- O estado real da migração, ponto a ponto, vive em `docs/pendencias.md`
+  (bloco de 04/10/2026). Enquanto ele não estiver zerado, esta regra é meta,
+  não fato — e o relatório ao CEO diz isso com todas as letras.
+
+### ⭐ O CEO não aprova mais merge — ordem dele, 04/10/2026
+
+**Desenho aprovado segue até o fim.** O PR entra quando tem **checagem verde e
+teste de ponta a ponta** da mudança; o Diretor faz o merge e o CEO vê o resultado
+no final. Pedir "ok para o merge" ao CEO passou a ser ruído.
+
+**Continuam sendo ato SÓ do CEO** — e nenhum desenho aprovado autoriza estes por
+tabela:
+
+- credenciais e chaves (criar, trocar, emitir token, remover variável);
+- abrir trava de segurança;
+- apagar dados;
+- gastar dinheiro.
+
+Mudança que precise de um desses atos **para no ponto do ato** e sobe com as duas
+saídas da regra de 14/08.
+
 ### ⭐ Problema nunca sobe sozinho — ordem do CEO, 14/08/2026
 
 > *"Sempre que me trouxer um problema, traga junto, no mínimo, duas soluções.
