@@ -11,6 +11,20 @@
 
 ---
 
+## 2026-10-04 — Toda IA pelo cofre, e o merge deixa de subir ao CEO
+
+**Decidido por:** CEO, no chat central. **Registrado por:** Diretor do Foocci.
+
+1. **Cofre.** Nenhuma chave de IA no produto; toda IA pela Control Room
+   (`POST /api/v1/ai/gateway/execute` + `X-Service-Token`). Sem queda para chave
+   própria. Regra em `CLAUDE.md`; estado da migração em `docs/pendencias.md`.
+2. **Merge.** Desenho aprovado segue até o fim: PR com checagem verde e teste de
+   ponta a ponta entra pelas mãos do Diretor. Continuam só do CEO: credenciais e
+   chaves, abrir trava de segurança, apagar dados, gastar dinheiro.
+
+**O que atravessa domínios:** a regra 1 toca `cerebro`, `garcom`, `canais`, `crm`,
+`manual` e `operacao` (todos chamam IA hoje); a regra 2 muda o fluxo de todo PR.
+
 ## 2026-09-08 — O portão do envio é escolhido pela ORIGEM do lead
 
 **Decisão do Diretor Geral**, executada com três travas e revisada de forma

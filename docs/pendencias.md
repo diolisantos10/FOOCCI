@@ -1,5 +1,50 @@
 # Pendências — o que está aberto
 
+## 04/10/2026 — Toda IA pelo cofre: o estado real (regra do CEO de hoje)
+
+**Medido em produção (commit 114023b), só leitura.** Hoje **nenhuma** chamada de
+IA do Foocci passa pela Control Room:
+- o servidor consultou `api.openai.com` hoje;
+- nos registros de DNS disponíveis (desde 25/09), **zero** consultas ao
+  endereço da Control Room;
+- `OPENAI_API_KEY` está setada (o `/api/health` confirma).
+
+| Ponto | Por onde passa hoje |
+|---|---|
+| Atendimento / pedido (`AIOrderService`) | OpenAI direto (chat com ferramentas) |
+| Cérebro e agentes roteados (`EngineDispatcher`: Garçom, CRM drafter, variação de frase) | OpenAI direto. Só o ramo CLAUDE tem desvio para a Control Room, e ele não é escolhido em produção |
+| Recepcionista do WhatsApp | OpenAI direto |
+| Ajuda do painel (manual) | OpenAI direto (embeddings) |
+| Robôs noturnos (simulador, ChatSim) | OpenAI direto |
+| Transcrição de áudio, conhecimento (embeddings), melhoria de foto | OpenAI direto |
+
+**Porta:**
+- O adaptador do Foocci usa a porta ANTIGA, `/api/ia/chamada`, com
+  `x-dioli-connect-secret`. Ela está viva (testada hoje, sem custo).
+- A porta OFICIAL, `POST /api/v1/ai/gateway/execute`, responde **403 "Esta
+  ação é do CEO"** mesmo com `X-Service-Token`. Motivo: a trava geral de acesso
+  da Control Room (`src/auth/acesso.ts`) protege por omissão toda rota sem
+  declaração, e a isenção dessa rota fica num gancho de escopo que a trava não
+  enxerga. Liberar a rota é **abrir trava de segurança**: ato do CEO, no
+  repositório da Control Room.
+
+**Para ficar 100% no cofre:**
+1. Liberar a porta oficial. Ato do CEO na Control Room.
+2. Emitir o `X-Service-Token` do Foocci e cadastrar o centro de custo.
+   Credencial: ato do CEO.
+3. A porta oficial só faz **texto** (mensagens role/content). Faltam do lado da
+   Control Room: embeddings, transcrição de áudio, imagem (editar foto),
+   chamada de ferramenta (o pedido usa) e imagem como entrada.
+4. Migrar os pontos da tabela, nesta ordem: texto (Cérebro, recepcionista,
+   CRM, robôs) → pedido com ferramentas → embeddings, áudio e foto.
+5. Só então remover `OPENAI_API_KEY` (e `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`,
+   se existirem). Remover variável é ato do CEO.
+
+**Prazo estimado (do lado do Foocci, depois de 1 e 2):**
+- texto: 2–3 dias;
+- pedido com ferramentas: 2 dias, depois de a porta suportar ferramentas;
+- embeddings, áudio e foto: dependem de a Control Room ganhar esses tipos.
+
 ## 27/09/2026 — Auditoria do CRM no Sushi Cazza (PR aguardando ok do CEO)
 
 - **Morno e frio já estavam ligados.** O selo "Ativa" vem de linha no banco com
@@ -12,6 +57,9 @@
   com ele o cupom), e o checkout criava um cliente novo quando o telefone
   importado estava sem o 9. Consertado em `identifyStep.ts` e em
   `CheckoutFinalizationService.resolveCustomerByPhone`.
+- **Plano de fusão pronto, aguardando o CEO:** `docs/plano-fusao-clientes-duplicados.md`
+  (contagem: `scripts/contar-clientes-duplicados.ts`, somente leitura). PR #278
+  mergeado em 114023b.
 - **Aberto — medir no banco depois do deploy** (a sessão não teve acesso de
   leitura ao Postgres): quantos clientes estão duplicados por telefone com e sem
   o 9 (esses precisam de fusão, porque o conserto só evita os próximos), e
