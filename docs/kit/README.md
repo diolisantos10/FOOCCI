@@ -23,7 +23,7 @@ repositório quando a sessão abre.
 | Kit | `diolisantos10/dioli-brain-kit` (branch `main`) |
 | Commit espelhado | `20abdeff6daecf9a2624df198c75ac784db1b9eb` |
 | Data do commit do kit | 2026-08-30T14:31:46+00:00 |
-| Última conferência | 2026-09-07T11:00:38.630Z |
+| Última conferência | 2026-10-04T14:03:15.302Z |
 | Documentos espelhados | 38 |
 | Gerado por | `.github/workflows/kit-espelho.yml → scripts/espelhar-kit.ts` |
 

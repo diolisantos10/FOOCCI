@@ -28,10 +28,13 @@
 name: Manual Sync Nightly
 
 on:
-  schedule:
-    # Diário às 06:07 UTC = 03:07 Brasília (minuto 07 de propósito — evita o
-    # pico global de :00 nos runners do GitHub)
-    - cron: "7 6 * * *"
+  # ⛔ AGENDAMENTO DESLIGADO em 04/10/2026. O robô roda com uma chave
+  # PRÓPRIA da Anthropic (segredo ANTHROPIC_API_KEY do GitHub), e ela morre em
+  # 0,5 s sem gastar nada desde 30/09 (is_error, custo 0) — falhou todo dia.
+  # Além disso, chave de laboratório fora do cofre contraria a regra do CEO de
+  # 04/10 ("todos os produtos ligados ao cofre"). Continua disparável à mão
+  # (workflow_dispatch). Religar = trocar a chave por acesso via Control Room.
+  # Era: schedule: - cron: "7 6 * * *"
 
   workflow_dispatch: {}
 

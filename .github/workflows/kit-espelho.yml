@@ -68,6 +68,7 @@ jobs:
       # que confere a visibilidade no momento de rodar, toda vez. Se um dia o
       # repositório voltar a ser público por engano, o robô para sozinho.
       - name: "Conferir que este repositório é privado"
+        id: visibilidade
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -78,13 +79,17 @@ jobs:
                  | jq -r '.visibility // "desconhecida"')
           echo "Visibilidade de ${{ github.repository }}: $VIS"
 
+          # ⭐ 04/10/2026: com o repositório PÚBLICO o robô não para mais o dia
+          # inteiro em vermelho. Ele segue, mas SÓ pode renovar a data do
+          # carimbo (kit sem mudança). Doutrina nova nunca é escrita aqui
+          # enquanto o repositório for público — a etapa "Trava do repositório
+          # público" abaixo desfaz e reprova se o conteúdo mudar.
           if [ "$VIS" != "private" ]; then
-            echo "::error title=Repositorio publico - espelho bloqueado::O dioli-brain-kit e privado e ${{ github.repository }} esta como '$VIS'. Espelhar a doutrina aqui a tornaria publica: escada de governanca, processo de cofre de credencial, historico de incidentes com cliente citado pelo nome e o quadro de sessoes. O proprio kit proibe (docs/04-seguranca.md). Decisao do CEO: ou o repositorio vira privado, ou o espelho nao roda aqui. O robo parou sem escrever nada."
-            exit 1
+            echo "publico=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Repositorio publico::${{ github.repository }} esta '$VIS'. O espelho so renova a data do carimbo; doutrina nova fica bloqueada ate o repositorio virar privado (decisao do CEO)."
+            exit 0
           fi
-
-          # "desconhecida" também cai no if acima: não conseguir medir a
-          # visibilidade nunca pode valer como "é privado".
+          echo "publico=false" >> "$GITHUB_OUTPUT"
           echo "Repositório privado. Seguindo."
 
       # ── PORTÃO 1: o segredo existe? ─────────────────────────────────────────
@@ -148,6 +153,17 @@ jobs:
       # ── PORTÃO 2: o espelho recém-gerado passa no próprio teste? ────────────
       # Nada é commitado antes disto. Espelho quebrado no repositório é pior que
       # espelho velho: o velho pelo menos era verdade uma vez.
+      - name: "Trava do repositório público"
+        if: steps.visibilidade.outputs.publico == 'true'
+        run: |
+          set -e
+          MUDOU=$(git status --porcelain -- docs/kit | awk '{print $2}' | grep -vE '^docs/kit/(README\.md|_ESPELHO\.json)$' || true)
+          if [ -n "$MUDOU" ] || [ "${{ steps.gerar.outputs.mudou_conteudo }}" = "true" ]; then
+            git checkout -- docs/kit && git clean -fdq -- docs/kit
+            echo "::error title=Doutrina nova bloqueada::O kit mudou e o repositorio e publico. Nada foi escrito. Arquivos que mudariam: $MUDOU"
+            exit 1
+          fi
+          echo "Kit sem mudança de conteúdo: só a data do carimbo será renovada."
       - name: "Conferir o espelho gerado"
         run: npx vitest run src/services/doutrina/kitEspelho.test.ts
 

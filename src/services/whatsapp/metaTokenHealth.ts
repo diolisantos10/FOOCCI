@@ -247,12 +247,26 @@ export async function inspectMetaToken(
  * Nunca lança. Nunca desconecta nada.
  */
 export async function sweepMetaTokenHealth(warnDays = TOKEN_WARN_DAYS): Promise<MetaTokenHealthSweep> {
+  // ⛔ Antes, um erro do banco virava lista vazia e a varredura dizia "nenhum
+  // restaurante configurado" — a mesma frase de quando a config foi apagada de
+  // verdade (04/10/2026: era o caso, mas não havia como distinguir). Ausência
+  // de leitura não é ausência de dado (guardrail 1): o erro sobe com o motivo.
+  let leituraFalhou: string | null = null;
   const rows = await prisma.metaWhatsAppConfig
     .findMany({ select: { restaurantId: true } })
-    .catch(() => [] as Array<{ restaurantId: string }>);
+    .catch((e: unknown) => {
+      leituraFalhou = e instanceof Error ? e.message : String(e);
+      return [] as Array<{ restaurantId: string }>;
+    });
 
   const results: MetaTokenHealthOne[] = [];
   const attention: string[] = [];
+  if (leituraFalhou !== null) {
+    attention.push(
+      `NÃO consegui ler as configurações de WhatsApp do banco — ${String(leituraFalhou).slice(0, 200)}.`
+      + " Isto não quer dizer que elas sumiram: a varredura não chegou a olhar.",
+    );
+  }
 
   for (const row of rows) {
     const cfg = await MetaConfigService.getResolved(row.restaurantId).catch(() => null);
@@ -324,7 +338,7 @@ export async function sweepMetaTokenHealth(warnDays = TOKEN_WARN_DAYS): Promise<
 
   // O WhatsApp é o produto no ar. Zero configuração aqui não é "ninguém usa" —
   // é o canal do restaurante ter sumido do banco, e isso alguém precisa saber.
-  if (rows.length === 0) {
+  if (rows.length === 0 && leituraFalhou === null) {
     attention.push(
       "Nenhum restaurante tem WhatsApp da Meta configurado. Se algum deveria estar atendendo,"
       + " a configuração dele sumiu do banco.",
